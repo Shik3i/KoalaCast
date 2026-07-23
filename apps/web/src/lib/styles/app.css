@@ -1,0 +1,81 @@
+/* KoalaCast Forest Green Design System */
+
+:root {
+	--font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+	
+	/* Light Mode: Warm Neutral Light with Forest Green Accent */
+	--bg-primary: #f8f9fa;
+	--bg-surface: #ffffff;
+	--bg-elevated: #edf2f0;
+	--border-subtle: #d6e2dd;
+	
+	--text-primary: #192a23;
+	--text-secondary: #4a6358;
+	--text-muted: #728c81;
+	
+	--accent-green: #2d6a4f;
+	--accent-green-hover: #1b4332;
+	--accent-light: #d8f3dc;
+	
+	--player-bg: #1e3a2b;
+	--player-text: #f8f9fa;
+	
+	--focus-ring: #52b788;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		/* Dark Mode: Deep Forest Green & Dark Surfaces */
+		--bg-primary: #0b1411;
+		--bg-surface: #13221c;
+		--bg-elevated: #1b2e26;
+		--border-subtle: #274237;
+		
+		--text-primary: #e8f5f0;
+		--text-secondary: #a3c4b5;
+		--text-muted: #6e9483;
+		
+		--accent-green: #40916c;
+		--accent-green-hover: #52b788;
+		--accent-light: #1b4332;
+		
+		--player-bg: #09100d;
+		--player-text: #e8f5f0;
+		
+		--focus-ring: #74c69d;
+	}
+}
+
+*, *::before, *::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html, body {
+	height: 100%;
+	font-family: var(--font-sans);
+	background-color: var(--bg-primary);
+	color: var(--text-primary);
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--accent-green);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+button {
+	font-family: inherit;
+	cursor: pointer;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus-ring);
+	outline-offset: 2px;
+}

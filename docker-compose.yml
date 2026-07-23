@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - web
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - LOG_LEVEL=info
+      - DATABASE_PATH=/app/data/koalacast.db
+      - KC_REGISTRATION_ENABLED=${KC_REGISTRATION_ENABLED:-true}
+      - SESSION_SECRET=${SESSION_SECRET:-default-dev-secret-change-in-production}
+      - PODCAST_INDEX_KEY=${PODCAST_INDEX_KEY:-}
+      - PODCAST_INDEX_SECRET=${PODCAST_INDEX_SECRET:-}
+    volumes:
+      - koala_data:/app/data
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.web
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+
+volumes:
+  koala_data:

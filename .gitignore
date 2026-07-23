@@ -1,0 +1,39 @@
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Node dependencies & builds
+node_modules/
+.svelte-kit/
+build/
+dist/
+.env
+.env.local
+.env.*.local
+
+# Go builds & binaries
+bin/
+*.exe
+*.exe?
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+services/api/koalacast-api
+
+# SQLite data & WAL files
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/

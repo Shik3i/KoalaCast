@@ -1,0 +1,20 @@
+:8080 {
+	# API routes forwarded to Go backend service
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Health check routes forwarded to Go backend service
+	handle /healthz {
+		reverse_proxy api:8080
+	}
+
+	handle /readyz {
+		reverse_proxy api:8080
+	}
+
+	# All other requests served by SvelteKit Web Application
+	handle {
+		reverse_proxy web:3000
+	}
+}

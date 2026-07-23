@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: KoalaCast REST API
+  description: Privacy-first podcast player REST API for web and native cross-device synchronization.
+  version: 1.0.0
+servers:
+  - url: /api/v1
+    description: Production Same-Origin API v1
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness Probe
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /readyz:
+    get:
+      summary: Readiness Probe
+      responses:
+        '200':
+          description: Service and database are ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /auth/register:
+    post:
+      summary: User Registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful, returns recovery code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '403':
+          description: Registration is disabled
+
+  /auth/login:
+    post:
+      summary: Web Session Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful, sets HttpOnly session cookie
+
+  /sync:
+    get:
+      summary: Incremental Sync Pull
+      parameters:
+        - name: since_cursor
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Incremental changesets returned
+        '410':
+          description: Full resync required
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: 1.0.0
+
+    ReadinessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ready
+        database:
+          type: string
+          example: connected
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+        password:
+          type: string
+          minLength: 8
+
+    RegisterResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        recovery_code:
+          type: string
+          description: Base32 formatted recovery code presented once upon registration
+          example: AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string

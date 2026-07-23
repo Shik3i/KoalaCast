@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>KoalaCast Tech Talk</title>
+    <link>https://example.com/podcast</link>
+    <description>A podcast about open-source audio software and calm engineering.</description>
+    <language>en-us</language>
+    <copyright>© 2026 KoalaCast Team</copyright>
+    <itunes:author>KoalaCast</itunes:author>
+    <itunes:explicit>no</itunes:explicit>
+    <itunes:image href="https://example.com/artwork.jpg"/>
+    
+    <item>
+      <title>Episode 1: Building a Privacy-First Podcast Player</title>
+      <guid isPermaLink="false">koalacast-ep-001</guid>
+      <pubDate>Mon, 20 Jul 2026 12:00:00 GMT</pubDate>
+      <description>In this episode we discuss Go, SQLite, Svelte 5, and cross-device sync without tracking.</description>
+      <enclosure url="https://example.com/audio/ep001.mp3" length="34567890" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+      <itunes:episode>1</itunes:episode>
+      <itunes:season>1</itunes:season>
+      <itunes:explicit>no</itunes:explicit>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,116 @@
+package config
+
+import (
+	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
+	"strings"
+)
+
+type Config struct {
+	Port                     string
+	PublicBaseURL            string
+	APIBaseURL               string
+	LogLevel                 slog.Level
+	DatabasePath             string
+	SessionSecret            string
+	RegistrationEnabledEnv   *bool // nil if unset (allows DB admin setting), non-nil acts as hard override
+	TrustedProxies           []string
+	SecureCookies            bool
+	PodcastIndexKey          string
+	PodcastIndexSecret       string
+	FeedWorkerConcurrency    int
+	FeedRequestTimeoutMS     int
+	FeedMaxResponseBytes     int64
+	AllowedCORSOrigins       []string
+}
+
+func LoadConfig() (*Config, error) {
+	cfg := &Config{
+		Port:                  getEnv("PORT", "8080"),
+		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:8080/api/v1"),
+		DatabasePath:          getEnv("DATABASE_PATH", "./data/koalacast.db"),
+		SessionSecret:         getEnv("SESSION_SECRET", "default-dev-secret-change-in-production"),
+		PodcastIndexKey:       os.Getenv("PODCAST_INDEX_KEY"),
+		PodcastIndexSecret:    os.Getenv("PODCAST_INDEX_SECRET"),
+		FeedWorkerConcurrency: getEnvInt("FEED_WORKER_CONCURRENCY", 5),
+		FeedRequestTimeoutMS:  getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
+		FeedMaxResponseBytes:  int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),
+		SecureCookies:         getEnvBool("SECURE_COOKIES", false),
+	}
+
+	// Parse LogLevel
+	levelStr := strings.ToLower(getEnv("LOG_LEVEL", "info"))
+	switch levelStr {
+	case "debug":
+		cfg.LogLevel = slog.LevelDebug
+	case "warn":
+		cfg.LogLevel = slog.LevelWarn
+	case "error":
+		cfg.LogLevel = slog.LevelError
+	default:
+		cfg.LogLevel = slog.LevelInfo
+	}
+
+	// KC_REGISTRATION_ENABLED override check
+	if valStr, exists := os.LookupEnv("KC_REGISTRATION_ENABLED"); exists && valStr != "" {
+		b, err := strconv.ParseBool(valStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid KC_REGISTRATION_ENABLED value: %w", err)
+		}
+		cfg.RegistrationEnabledEnv = &b
+	}
+
+	// Parse Trusted Proxies
+	if proxies := os.Getenv("TRUSTED_PROXIES"); proxies != "" {
+		cfg.TrustedProxies = splitClean(proxies, ",")
+	} else {
+		cfg.TrustedProxies = []string{"127.0.0.1", "::1"}
+	}
+
+	// Parse CORS Origins
+	if cors := os.Getenv("ALLOWED_CORS_ORIGINS"); cors != "" {
+		cfg.AllowedCORSOrigins = splitClean(cors, ",")
+	}
+
+	return cfg, nil
+}
+
+func getEnv(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if valStr := os.Getenv(key); valStr != "" {
+		if val, err := strconv.Atoi(valStr); err == nil {
+			return val
+		}
+	}
+	return defaultVal
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	if valStr := os.Getenv(key); valStr != "" {
+		if val, err := strconv.ParseBool(valStr); err == nil {
+			return val
+		}
+	}
+	return defaultVal
+}
+
+func splitClean(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
+}

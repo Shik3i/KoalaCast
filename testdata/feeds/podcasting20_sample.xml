@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" 
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:podcast="https://podcastindex.org/podcast1.0">
+  <channel>
+    <title>Podcasting 2.0 Feature Show</title>
+    <link>https://example.com/p20</link>
+    <description>Demonstrating Podcasting 2.0 namespace tag support.</description>
+    <language>en</language>
+    <itunes:author>KoalaCast Developers</itunes:author>
+    <podcast:guid>917393e0-651e-5172-ac14-25e227092102</podcast:guid>
+    <podcast:funding url="https://example.com/donate">Support Open Source</podcast:funding>
+
+    <item>
+      <title>P20 Episode: Chapters and Transcripts</title>
+      <guid isPermaLink="false">p20-ep-101</guid>
+      <pubDate>Wed, 22 Jul 2026 15:30:00 GMT</pubDate>
+      <description>Testing chapters, transcripts, and location tags.</description>
+      <enclosure url="https://example.com/audio/p20_101.mp3" length="45000000" type="audio/mpeg"/>
+      <itunes:duration>2700</itunes:duration>
+      <podcast:chapters url="https://example.com/chapters/p20_101.json" type="application/json+chapters"/>
+      <podcast:transcript url="https://example.com/transcripts/p20_101.vtt" type="text/vtt"/>
+    </item>
+  </channel>
+</rss>
