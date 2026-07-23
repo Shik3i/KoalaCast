@@ -20,16 +20,17 @@
 	let durationMs = $state(0);
 	let playbackSpeed = $state(1.0);
 	let isExpanded = $state(false);
+	let showShortcutsModal = $state(false);
+	let sleepTimerMinutes = $state<number | null>(null);
+	let sleepTimerEndsAt = $state<number | null>(null);
+
 	let autoSaveTimer: any = null;
-	let playbackSessionID = crypto.randomUUID();
-	let sequenceNum = 0;
+	let sleepIntervalTimer: any = null;
 
 	$effect(() => {
 		if (track && audioEl) {
 			if (audioEl.src !== track.enclosure_url) {
 				audioEl.src = track.enclosure_url;
-				playbackSessionID = crypto.randomUUID();
-				sequenceNum = 0;
 				loadSavedPosition(track.episode_id);
 			}
 		}
@@ -71,12 +72,27 @@
 		if (audioEl) audioEl.playbackRate = speed;
 	}
 
+	function setSleepTimer(minutes: number | null) {
+		sleepTimerMinutes = minutes;
+		if (minutes === null) {
+			sleepTimerEndsAt = null;
+		} else {
+			sleepTimerEndsAt = Date.now() + minutes * 60 * 1000;
+		}
+	}
+
 	function handleTimeUpdate() {
 		if (!audioEl) return;
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		durationMs = Math.round((audioEl.duration || 0) * 1000);
 
-		// Media Session Position State Update
+		// Check sleep timer expiry
+		if (sleepTimerEndsAt && Date.now() >= sleepTimerEndsAt) {
+			audioEl.pause();
+			setSleepTimer(null);
+			alert('Sleep timer expired. Playback paused.');
+		}
+
 		if ('mediaSession' in navigator && durationMs > 0) {
 			try {
 				navigator.mediaSession.setPositionState({
@@ -101,12 +117,8 @@
 		const remMs = Math.max(0, dur - currentTimeMs);
 		const pct = Math.min(100, (currentTimeMs / dur) * 100);
 
-		// Completion threshold: < 2 min (120,000 ms) or < 5% remaining
 		const isCompleted = forceCompleted || remMs < 120000 || pct > 95;
 
-		sequenceNum++;
-
-		// 1. Save to local IndexedDB
 		await saveLocalPlaybackState({
 			episode_id: track.episode_id,
 			podcast_id: track.podcast_id,
@@ -115,23 +127,6 @@
 			progress_percent: pct,
 			last_played_at: Date.now()
 		});
-
-		// 2. If authenticated, debounced server sync call is dispatched via API endpoint
-	}
-
-	function setupMediaSession() {
-		if (!('mediaSession' in navigator) || !track) return;
-
-		navigator.mediaSession.metadata = new MediaMetadata({
-			title: track.title,
-			artist: track.podcast_title,
-			artwork: track.artwork_url ? [{ src: track.artwork_url }] : []
-		});
-
-		navigator.mediaSession.setActionHandler('play', togglePlay);
-		navigator.mediaSession.setActionHandler('pause', togglePlay);
-		navigator.mediaSession.setActionHandler('seekbackward', () => skip(-10));
-		navigator.mediaSession.setActionHandler('seekforward', () => skip(30));
 	}
 
 	onMount(() => {
@@ -148,6 +143,8 @@
 				skip(-10);
 			} else if (e.code === 'ArrowRight') {
 				skip(30);
+			} else if (e.key === '?') {
+				showShortcutsModal = !showShortcutsModal;
 			}
 		};
 
@@ -157,10 +154,6 @@
 			window.removeEventListener('keydown', handleKeyDown);
 			if (autoSaveTimer) clearInterval(autoSaveTimer);
 		};
-	});
-
-	$effect(() => {
-		if (track) setupMediaSession();
 	});
 
 	function formatTime(ms: number) {
@@ -186,6 +179,21 @@
 	ontimeupdate={handleTimeUpdate}
 	onended={handleEnded}
 ></audio>
+
+{#if showShortcutsModal}
+	<div class="modal-overlay" onclick={() => (showShortcutsModal = false)} role="presentation">
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+			<h3>Keyboard Shortcuts</h3>
+			<ul>
+				<li><kbd>Space</kbd> Play / Pause</li>
+				<li><kbd>←</kbd> Skip 10 seconds back</li>
+				<li><kbd>→</kbd> Skip 30 seconds forward</li>
+				<li><kbd>?</kbd> Toggle Shortcuts Help</li>
+			</ul>
+			<button class="btn-close" onclick={() => (showShortcutsModal = false)}>Close</button>
+		</div>
+	</div>
+{/if}
 
 {#if track}
 	<div class="player-bar" class:expanded={isExpanded}>
@@ -218,10 +226,20 @@
 			<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
 		</div>
 
-		<div class="speed-selector">
-			<button onclick={() => setSpeed(1.0)} class:active={playbackSpeed === 1.0}>1x</button>
-			<button onclick={() => setSpeed(1.25)} class:active={playbackSpeed === 1.25}>1.25x</button>
-			<button onclick={() => setSpeed(1.5)} class:active={playbackSpeed === 1.5}>1.5x</button>
+		<div class="extras">
+			<select onchange={(e) => setSleepTimer(e.currentTarget.value ? Number(e.currentTarget.value) : null)} aria-label="Sleep timer">
+				<option value="">Timer Off</option>
+				<option value="15">15 Min</option>
+				<option value="30">30 Min</option>
+				<option value="45">45 Min</option>
+				<option value="60">60 Min</option>
+			</select>
+
+			<div class="speed-selector">
+				<button onclick={() => setSpeed(1.0)} class:active={playbackSpeed === 1.0}>1x</button>
+				<button onclick={() => setSpeed(1.25)} class:active={playbackSpeed === 1.25}>1.25x</button>
+				<button onclick={() => setSpeed(1.5)} class:active={playbackSpeed === 1.5}>1.5x</button>
+			</div>
 		</div>
 	</div>
 {/if}
@@ -247,7 +265,11 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		background: none;
+		border: none;
+		color: inherit;
 		cursor: pointer;
+		text-align: left;
 		min-width: 200px;
 	}
 
@@ -297,7 +319,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		flex: 1;
-		max-width: 500px;
+		max-width: 450px;
 	}
 
 	.timeline input[type='range'] {
@@ -308,6 +330,21 @@
 	.time {
 		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.extras {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.extras select {
+		background: var(--bg-surface);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.2rem 0.5rem;
+		border-radius: 4px;
+		font-size: 0.8rem;
 	}
 
 	.speed-selector button {
@@ -322,5 +359,54 @@
 	.speed-selector button.active {
 		background-color: var(--accent-green);
 		border-color: var(--accent-green);
+	}
+
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.6);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 200;
+	}
+
+	.modal-content {
+		background: var(--bg-surface);
+		color: var(--text-primary);
+		padding: 1.5rem;
+		border-radius: 8px;
+		border: 1px solid var(--border-subtle);
+		max-width: 350px;
+		width: 90%;
+	}
+
+	.modal-content ul {
+		list-style: none;
+		padding: 0;
+		margin: 1rem 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	kbd {
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		padding: 0.2rem 0.4rem;
+		border-radius: 4px;
+		font-family: monospace;
+	}
+
+	.btn-close {
+		background: var(--accent-green);
+		color: white;
+		border: none;
+		padding: 0.5rem 1rem;
+		border-radius: 4px;
+		cursor: pointer;
 	}
 </style>
