@@ -6,7 +6,7 @@
 
 ## Product Principles
 
-1. **100% Free and Open Source**: Licensed under [AGPL-3.0](LICENSE).
+1. **100% Free and Open Source**: Licensed under the [MIT License](LICENSE).
 2. **No Ads, No Tracking, No Premium Tier**: Zero behavioral analytics or commercial restrictions.
 3. **Local-First Capabilities**: Use the app completely without an account in Local Browser Mode.
 4. **Optional Cross-Device Sync**: Accounts exist solely for synchronizing subscriptions, queue, favorites, and playback progress across browsers and future Android clients.
@@ -79,4 +79,4 @@ npm run dev
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0). See [LICENSE](LICENSE) for full details.
+This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for full details.
