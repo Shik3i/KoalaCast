@@ -16,6 +16,16 @@
 
 ---
 
+## Project Status
+
+KoalaCast is currently in **Phase 1 / Phase 2 early development**.
+- Core Go backend foundation, SQLite database engine, SSRF-safe network transport, RSS/Atom parser, and SvelteKit web app scaffold are **implemented and verified**.
+- Authentication, cross-device sync engine, and full player UI controls are fully **specified** in documentation and scheduled for implementation in upcoming phases.
+
+For a detailed feature breakdown, see [docs/current-status.md](docs/current-status.md).
+
+---
+
 ## Architecture Overview
 
 ```text

@@ -1,0 +1,99 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-test:
+    name: Go Backend Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: services/api/go.sum
+
+      - name: Verify Go Formatting
+        run: |
+          if [ -n "$(gofmt -l services/api/)" ]; then
+            echo "The following Go files are not formatted properly:"
+            gofmt -l services/api/
+            exit 1
+          fi
+
+      - name: Run Go Vet
+        run: |
+          cd services/api
+          go vet ./...
+
+      - name: Run Go Unit & Race Tests
+        run: |
+          cd services/api
+          go test -v -race ./...
+
+  frontend-test:
+    name: SvelteKit Frontend Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/web
+          npm ci
+
+      - name: Run Type Checks
+        run: |
+          cd apps/web
+          npm run check
+
+      - name: Run Production Build
+        run: |
+          cd apps/web
+          npm run build
+
+  openapi-lint:
+    name: OpenAPI Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Lint OpenAPI Spec
+        run: |
+          npx -y @redocly/cli lint packages/openapi/openapi.yaml
+
+  docker-build:
+    name: Docker & Compose Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose Config
+        run: |
+          docker compose config
+
+      - name: Build Docker Images
+        run: |
+          docker compose build

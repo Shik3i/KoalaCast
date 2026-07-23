@@ -21,8 +21,8 @@ services:
       - PORT=8080
       - LOG_LEVEL=info
       - DATABASE_PATH=/app/data/koalacast.db
-      - KC_REGISTRATION_ENABLED=${KC_REGISTRATION_ENABLED:-true}
-      - SESSION_SECRET=${SESSION_SECRET:-default-dev-secret-change-in-production}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - KC_REGISTRATION_ENABLED=${KC_REGISTRATION_ENABLED:-}
       - PODCAST_INDEX_KEY=${PODCAST_INDEX_KEY:-}
       - PODCAST_INDEX_SECRET=${PODCAST_INDEX_SECRET:-}
     volumes:

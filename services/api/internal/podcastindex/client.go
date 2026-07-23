@@ -14,9 +14,9 @@ import (
 )
 
 type Client struct {
-	apiKey    string
-	apiSecret string
-	baseURL   string
+	apiKey     string
+	apiSecret  string
+	baseURL    string
 	httpClient *http.Client
 }
 
@@ -40,10 +40,12 @@ type SearchResponse struct {
 
 func NewClient(apiKey, apiSecret string) *Client {
 	return &Client{
-		apiKey:     apiKey,
-		apiSecret:  apiSecret,
-		baseURL:    "https://api.podcastindex.org/api/1.0",
-		httpClient: rss.SafeHTTPClient(10 * time.Second),
+		apiKey:    apiKey,
+		apiSecret: apiSecret,
+		baseURL:   "https://api.podcastindex.org/api/1.0",
+		httpClient: rss.NewSafeHTTPClient(rss.SafeTransportConfig{
+			ConnectTimeout: 10 * time.Second,
+		}),
 	}
 }
 

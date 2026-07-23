@@ -12,6 +12,7 @@ import (
 )
 
 type ParsedFeed struct {
+	FeedType    string // "rss" or "atom"
 	Title       string
 	Description string
 	Author      string
@@ -26,10 +27,13 @@ type ParsedFeed struct {
 type ParsedEpisode struct {
 	GUID            string
 	FallbackHash    string
+	StableKey       string
 	Title           string
 	Description     string
+	ContentEncoded  string
 	PubDate         time.Time
-	DurationMS      int64 // Stored strictly in integer milliseconds
+	HasPubDate      bool
+	DurationMS      int64 // Integer milliseconds
 	EnclosureURL    string
 	EnclosureType   string
 	EnclosureLength int64
@@ -39,36 +43,42 @@ type ParsedEpisode struct {
 	Explicit        bool
 	Link            string
 	ChaptersURL     string
-	TranscriptURL   string
+	Transcripts     []TranscriptRef
 }
 
-// RSS XML structs
+type TranscriptRef struct {
+	URL  string
+	Type string
+}
+
+// Structs for RSS 2.0
 type rssDocument struct {
 	XMLName xml.Name   `xml:"rss"`
 	Channel rssChannel `xml:"channel"`
 }
 
 type rssChannel struct {
-	Title       string    `xml:"title"`
-	Link        string    `xml:"link"`
-	Description string    `xml:"description"`
-	Language    string    `xml:"language"`
-	Copyright   string    `xml:"copyright"`
-	Author      string    `xml:"author"`
-	ItunesAuthor string   `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd author"`
-	ItunesImage struct {
+	Title        string `xml:"title"`
+	Link         string `xml:"link"`
+	Description  string `xml:"description"`
+	Language     string `xml:"language"`
+	Copyright    string `xml:"copyright"`
+	Author       string `xml:"author"`
+	ItunesAuthor string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd author"`
+	ItunesImage  struct {
 		Href string `xml:"href,attr"`
 	} `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
-	ItunesExplicit string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
+	ItunesExplicit string    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
 	Items          []rssItem `xml:"item"`
 }
 
 type rssItem struct {
-	Title       string `xml:"title"`
+	Title       string  `xml:"title"`
 	GUID        rssGUID `xml:"guid"`
-	PubDate     string `xml:"pubDate"`
-	Description string `xml:"description"`
-	Link        string `xml:"link"`
+	PubDate     string  `xml:"pubDate"`
+	Description string  `xml:"description"`
+	Content     string  `xml:"http://purl.org/rss/1.0/modules/content/ encoded"`
+	Link        string  `xml:"link"`
 	Enclosure   struct {
 		URL    string `xml:"url,attr"`
 		Type   string `xml:"type,attr"`
@@ -84,8 +94,9 @@ type rssItem struct {
 	PodcastChapters struct {
 		URL string `xml:"url,attr"`
 	} `xml:"https://podcastindex.org/podcast1.0 chapters"`
-	PodcastTranscript struct {
-		URL string `xml:"url,attr"`
+	PodcastTranscripts []struct {
+		URL  string `xml:"url,attr"`
+		Type string `xml:"type,attr"`
 	} `xml:"https://podcastindex.org/podcast1.0 transcript"`
 }
 
@@ -93,11 +104,59 @@ type rssGUID struct {
 	Value string `xml:",chardata"`
 }
 
+// Structs for Atom 1.0
+type atomFeed struct {
+	XMLName  xml.Name    `xml:"feed"`
+	Title    string      `xml:"title"`
+	Subtitle string      `xml:"subtitle"`
+	Rights   string      `xml:"rights"`
+	Links    []atomLink  `xml:"link"`
+	Author   atomAuthor  `xml:"author"`
+	Entries  []atomEntry `xml:"entry"`
+}
+
+type atomEntry struct {
+	ID        string     `xml:"id"`
+	Title     string     `xml:"title"`
+	Summary   string     `xml:"summary"`
+	Content   string     `xml:"content"`
+	Updated   string     `xml:"updated"`
+	Published string     `xml:"published"`
+	Links     []atomLink `xml:"link"`
+	Author    atomAuthor `xml:"author"`
+}
+
+type atomLink struct {
+	Rel    string `xml:"rel,attr"`
+	Href   string `xml:"href,attr"`
+	Type   string `xml:"type,attr"`
+	Length int64  `xml:"length,attr"`
+}
+
+type atomAuthor struct {
+	Name string `xml:"name"`
+}
+
+// ParseFeedXML detects whether the XML is RSS 2.0 or Atom 1.0 and parses metadata deterministically.
 func ParseFeedXML(r io.Reader) (*ParsedFeed, error) {
-	decoder := xml.NewDecoder(r)
+	buf, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read feed content: %w", err)
+	}
+
+	rawStr := string(buf)
+
+	if strings.Contains(rawStr, "<feed") && strings.Contains(rawStr, "http://www.w3.org/2005/Atom") {
+		return parseAtom(buf)
+	}
+
+	return parseRSS(buf)
+}
+
+func parseRSS(buf []byte) (*ParsedFeed, error) {
 	var doc rssDocument
-	if err := decoder.Decode(&doc); err != nil {
-		return nil, fmt.Errorf("failed to parse RSS XML: %w", err)
+	if err := xml.Unmarshal(buf, &doc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal RSS XML: %w", err)
 	}
 
 	ch := doc.Channel
@@ -109,6 +168,7 @@ func ParseFeedXML(r io.Reader) (*ParsedFeed, error) {
 	explicit := strings.EqualFold(ch.ItunesExplicit, "yes") || strings.EqualFold(ch.ItunesExplicit, "true")
 
 	feed := &ParsedFeed{
+		FeedType:    "rss",
 		Title:       strings.TrimSpace(ch.Title),
 		Description: strings.TrimSpace(ch.Description),
 		Author:      strings.TrimSpace(author),
@@ -119,25 +179,62 @@ func ParseFeedXML(r io.Reader) (*ParsedFeed, error) {
 		Explicit:    explicit,
 	}
 
+	seenKeys := make(map[string]int)
+
 	for _, item := range ch.Items {
 		guid := strings.TrimSpace(item.GUID.Value)
-		pubDate := parseRFC822(item.PubDate)
+		pubDate, hasPubDate := parseDate(item.PubDate)
 		durationMS := parseDurationToMS(item.ItunesDuration)
 
-		fallbackRaw := fmt.Sprintf("%s|%s|%d", item.Enclosure.URL, item.Title, pubDate.Unix())
-		hash := sha256.Sum256([]byte(fallbackRaw))
-		fallbackHash := hex.EncodeToString(hash[:])
+		enclosureURL := strings.TrimSpace(item.Enclosure.URL)
+		title := strings.TrimSpace(item.Title)
+
+		// Stable Identity Resolution Rules
+		stableKey := guid
+		if stableKey == "" {
+			if enclosureURL != "" {
+				stableKey = "url:" + strings.ToLower(enclosureURL)
+			} else {
+				var dateUnix int64
+				if hasPubDate {
+					dateUnix = pubDate.Unix()
+				}
+				raw := fmt.Sprintf("%s|%s|%d", title, enclosureURL, dateUnix)
+				h := sha256.Sum256([]byte(raw))
+				stableKey = "hash:" + hex.EncodeToString(h[:])
+			}
+		}
+
+		// Handle duplicate GUIDs within the same feed explicitly
+		count := seenKeys[stableKey]
+		seenKeys[stableKey] = count + 1
+		if count > 0 {
+			stableKey = fmt.Sprintf("%s#dup%d", stableKey, count)
+		}
+
+		fallbackRaw := fmt.Sprintf("%s|%s", title, enclosureURL)
+		fbHash := sha256.Sum256([]byte(fallbackRaw))
+
+		var transcripts []TranscriptRef
+		for _, tr := range item.PodcastTranscripts {
+			if tr.URL != "" {
+				transcripts = append(transcripts, TranscriptRef{URL: tr.URL, Type: tr.Type})
+			}
+		}
 
 		epExplicit := strings.EqualFold(item.ItunesExplicit, "yes") || strings.EqualFold(item.ItunesExplicit, "true")
 
 		ep := ParsedEpisode{
 			GUID:            guid,
-			FallbackHash:    fallbackHash,
-			Title:           strings.TrimSpace(item.Title),
+			FallbackHash:    hex.EncodeToString(fbHash[:]),
+			StableKey:       stableKey,
+			Title:           title,
 			Description:     strings.TrimSpace(item.Description),
+			ContentEncoded:  strings.TrimSpace(item.Content),
 			PubDate:         pubDate,
+			HasPubDate:      hasPubDate,
 			DurationMS:      durationMS,
-			EnclosureURL:    strings.TrimSpace(item.Enclosure.URL),
+			EnclosureURL:    enclosureURL,
 			EnclosureType:   strings.TrimSpace(item.Enclosure.Type),
 			EnclosureLength: item.Enclosure.Length,
 			ArtworkURL:      strings.TrimSpace(item.ItunesImage.Href),
@@ -146,7 +243,103 @@ func ParseFeedXML(r io.Reader) (*ParsedFeed, error) {
 			Explicit:        epExplicit,
 			Link:            strings.TrimSpace(item.Link),
 			ChaptersURL:     strings.TrimSpace(item.PodcastChapters.URL),
-			TranscriptURL:   strings.TrimSpace(item.PodcastTranscript.URL),
+			Transcripts:     transcripts,
+		}
+
+		feed.Episodes = append(feed.Episodes, ep)
+	}
+
+	return feed, nil
+}
+
+func parseAtom(buf []byte) (*ParsedFeed, error) {
+	var feedDoc atomFeed
+	if err := xml.Unmarshal(buf, &feedDoc); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Atom XML: %w", err)
+	}
+
+	var feedLink string
+	for _, l := range feedDoc.Links {
+		if l.Rel == "alternate" || l.Rel == "" {
+			feedLink = l.Href
+			break
+		}
+	}
+
+	feed := &ParsedFeed{
+		FeedType:    "atom",
+		Title:       strings.TrimSpace(feedDoc.Title),
+		Description: strings.TrimSpace(feedDoc.Subtitle),
+		Author:      strings.TrimSpace(feedDoc.Author.Name),
+		Link:        strings.TrimSpace(feedLink),
+		Copyright:   strings.TrimSpace(feedDoc.Rights),
+	}
+
+	seenKeys := make(map[string]int)
+
+	for _, entry := range feedDoc.Entries {
+		id := strings.TrimSpace(entry.ID)
+		dateStr := entry.Published
+		if dateStr == "" {
+			dateStr = entry.Updated
+		}
+		pubDate, hasPubDate := parseDate(dateStr)
+
+		var enclosureURL, enclosureType, epLink string
+		var enclosureLength int64
+
+		for _, l := range entry.Links {
+			if l.Rel == "enclosure" {
+				enclosureURL = l.Href
+				enclosureType = l.Type
+				enclosureLength = l.Length
+			} else if l.Rel == "alternate" || l.Rel == "" {
+				epLink = l.Href
+			}
+		}
+
+		title := strings.TrimSpace(entry.Title)
+		desc := strings.TrimSpace(entry.Summary)
+		content := strings.TrimSpace(entry.Content)
+
+		stableKey := id
+		if stableKey == "" {
+			if enclosureURL != "" {
+				stableKey = "url:" + strings.ToLower(enclosureURL)
+			} else {
+				var dateUnix int64
+				if hasPubDate {
+					dateUnix = pubDate.Unix()
+				}
+				raw := fmt.Sprintf("%s|%s|%d", title, enclosureURL, dateUnix)
+				h := sha256.Sum256([]byte(raw))
+				stableKey = "hash:" + hex.EncodeToString(h[:])
+			}
+		}
+
+		count := seenKeys[stableKey]
+		seenKeys[stableKey] = count + 1
+		if count > 0 {
+			stableKey = fmt.Sprintf("%s#dup%d", stableKey, count)
+		}
+
+		fallbackRaw := fmt.Sprintf("%s|%s", title, enclosureURL)
+		fbHash := sha256.Sum256([]byte(fallbackRaw))
+
+		ep := ParsedEpisode{
+			GUID:            id,
+			FallbackHash:    hex.EncodeToString(fbHash[:]),
+			StableKey:       stableKey,
+			Title:           title,
+			Description:     desc,
+			ContentEncoded:  content,
+			PubDate:         pubDate,
+			HasPubDate:      hasPubDate,
+			DurationMS:      0,
+			EnclosureURL:    strings.TrimSpace(enclosureURL),
+			EnclosureType:   strings.TrimSpace(enclosureType),
+			EnclosureLength: enclosureLength,
+			Link:            strings.TrimSpace(epLink),
 		}
 
 		feed.Episodes = append(feed.Episodes, ep)
@@ -161,12 +354,12 @@ func parseDurationToMS(durationStr string) int64 {
 		return 0
 	}
 
-	// Case 1: Pure seconds string (e.g. "1800")
+	// Pure seconds or ms
 	if sec, err := strconv.ParseInt(durationStr, 10, 64); err == nil {
 		return sec * 1000
 	}
 
-	// Case 2: HH:MM:SS or MM:SS format
+	// HH:MM:SS or MM:SS format
 	parts := strings.Split(durationStr, ":")
 	if len(parts) == 3 {
 		h, _ := strconv.ParseInt(parts[0], 10, 64)
@@ -182,26 +375,30 @@ func parseDurationToMS(durationStr string) int64 {
 	return 0
 }
 
-func parseRFC822(dateStr string) time.Time {
+func parseDate(dateStr string) (time.Time, bool) {
 	dateStr = strings.TrimSpace(dateStr)
 	if dateStr == "" {
-		return time.Now()
+		return time.Time{}, false // Zero time, deterministic
 	}
 
 	formats := []string{
+		time.RFC3339,
+		time.RFC3339Nano,
 		time.RFC1123Z,
 		time.RFC1123,
 		time.RFC822Z,
 		time.RFC822,
 		"Mon, 2 Jan 2006 15:04:05 -0700",
 		"Mon, 2 Jan 2006 15:04:05 MST",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02",
 	}
 
 	for _, fmtStr := range formats {
 		if t, err := time.Parse(fmtStr, dateStr); err == nil {
-			return t
+			return t, true
 		}
 	}
 
-	return time.Now()
+	return time.Time{}, false // Malformed date returns zero time
 }

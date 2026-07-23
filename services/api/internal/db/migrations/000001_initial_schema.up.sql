@@ -1,13 +1,14 @@
--- Initial Schema Migration for KoalaCast
+-- Initial Schema Migration for KoalaCast with strict SQLite CHECK constraints and stable identity keys
 
 -- Users Table
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
-    username TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL,
+    normalized_username TEXT NOT NULL UNIQUE CHECK (length(normalized_username) >= 3),
     password_hash TEXT NOT NULL,
     recovery_code_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',
-    is_suspended INTEGER NOT NULL DEFAULT 0,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    is_suspended INTEGER NOT NULL DEFAULT 0 CHECK (is_suspended IN (0, 1)),
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
--- Revocable Device Credentials Table (For API & Native Mobile Clients)
+-- Revocable Device Credentials Table (API & Native Mobile Clients)
 CREATE TABLE IF NOT EXISTS device_credentials (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -38,7 +39,7 @@ CREATE TABLE IF NOT EXISTS device_credentials (
     client_schema_version INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
     last_sync_at INTEGER NOT NULL,
-    is_revoked INTEGER NOT NULL DEFAULT 0,
+    is_revoked INTEGER NOT NULL DEFAULT 0 CHECK (is_revoked IN (0, 1)),
     UNIQUE(user_id, device_id)
 );
 
@@ -52,7 +53,7 @@ CREATE TABLE IF NOT EXISTS podcasts (
     artwork_url TEXT NOT NULL DEFAULT '',
     link TEXT NOT NULL DEFAULT '',
     language TEXT NOT NULL DEFAULT '',
-    explicit INTEGER NOT NULL DEFAULT 0,
+    explicit INTEGER NOT NULL DEFAULT 0 CHECK (explicit IN (0, 1)),
     copyright TEXT NOT NULL DEFAULT '',
     update_frequency_ms INTEGER NOT NULL DEFAULT 86400000,
     last_fetch_attempt_at INTEGER NOT NULL DEFAULT 0,
@@ -75,15 +76,18 @@ CREATE TABLE IF NOT EXISTS podcast_aliases (
     created_at INTEGER NOT NULL
 );
 
--- Episodes Table
+-- Episodes Table with Persisted Stable Identity Key
 CREATE TABLE IF NOT EXISTS episodes (
     id TEXT PRIMARY KEY,
     podcast_id TEXT NOT NULL REFERENCES podcasts(id) ON DELETE CASCADE,
+    stable_identity_key TEXT NOT NULL,
     guid TEXT NOT NULL DEFAULT '',
     fallback_hash TEXT NOT NULL DEFAULT '',
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    content_encoded TEXT NOT NULL DEFAULT '',
     pub_date INTEGER NOT NULL DEFAULT 0,
+    has_pub_date INTEGER NOT NULL DEFAULT 0 CHECK (has_pub_date IN (0, 1)),
     duration_ms INTEGER NOT NULL DEFAULT 0,
     enclosure_url TEXT NOT NULL,
     enclosure_type TEXT NOT NULL DEFAULT '',
@@ -92,9 +96,10 @@ CREATE TABLE IF NOT EXISTS episodes (
     episode_number INTEGER NOT NULL DEFAULT 0,
     season_number INTEGER NOT NULL DEFAULT 0,
     episode_type TEXT NOT NULL DEFAULT 'full',
-    explicit INTEGER NOT NULL DEFAULT 0,
+    explicit INTEGER NOT NULL DEFAULT 0 CHECK (explicit IN (0, 1)),
     link TEXT NOT NULL DEFAULT '',
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    UNIQUE(podcast_id, stable_identity_key)
 );
 CREATE INDEX IF NOT EXISTS idx_episodes_podcast_pubdate ON episodes(podcast_id, pub_date DESC);
 
@@ -104,7 +109,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     podcast_id TEXT NOT NULL REFERENCES podcasts(id) ON DELETE CASCADE,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0,
+    is_deleted INTEGER NOT NULL DEFAULT 0 CHECK (is_deleted IN (0, 1)),
     sync_version INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, podcast_id)
 );
@@ -113,10 +118,10 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE TABLE IF NOT EXISTS playback_states (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     episode_id TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
-    position_ms INTEGER NOT NULL DEFAULT 0,
-    completed INTEGER NOT NULL DEFAULT 0,
-    progress_percent REAL NOT NULL DEFAULT 0.0,
-    event_type TEXT NOT NULL DEFAULT 'PROGRESS_TICK',
+    position_ms INTEGER NOT NULL DEFAULT 0 CHECK (position_ms >= 0),
+    completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
+    progress_percent REAL NOT NULL DEFAULT 0.0 CHECK (progress_percent >= 0.0 AND progress_percent <= 100.0),
+    event_type TEXT NOT NULL DEFAULT 'PROGRESS_TICK' CHECK (event_type IN ('PROGRESS_TICK', 'SEEK', 'RESTART', 'MARK_PLAYED', 'MARK_UNPLAYED')),
     playback_session_id TEXT NOT NULL DEFAULT '',
     device_id TEXT NOT NULL DEFAULT '',
     per_session_seq INTEGER NOT NULL DEFAULT 0,
@@ -131,20 +136,21 @@ CREATE TABLE IF NOT EXISTS favorites (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     episode_id TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
     created_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0,
+    is_deleted INTEGER NOT NULL DEFAULT 0 CHECK (is_deleted IN (0, 1)),
     sync_version INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, episode_id)
 );
 
--- Queue Items Table
+-- Queue Items Table with Materialized Fractional Indexing Order
 CREATE TABLE IF NOT EXISTS queue_items (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     episode_id TEXT NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
     position_order REAL NOT NULL DEFAULT 0.0,
     added_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0,
-    sync_version INTEGER NOT NULL DEFAULT 0
+    is_deleted INTEGER NOT NULL DEFAULT 0 CHECK (is_deleted IN (0, 1)),
+    sync_version INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, episode_id)
 );
 CREATE INDEX IF NOT EXISTS idx_queue_user_order ON queue_items(user_id, position_order ASC);
 
@@ -163,7 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_history_user_played ON history_entries(user_id, p
 CREATE TABLE IF NOT EXISTS per_podcast_settings (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     podcast_id TEXT NOT NULL REFERENCES podcasts(id) ON DELETE CASCADE,
-    playback_speed REAL NOT NULL DEFAULT 1.0,
+    playback_speed REAL NOT NULL DEFAULT 1.0 CHECK (playback_speed >= 0.25 AND playback_speed <= 4.0),
     sync_version INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, podcast_id)
 );
@@ -175,10 +181,13 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at INTEGER NOT NULL
 );
 
--- User Sync Cursors Table
+-- User Sync Cursors & Server Protocol Metadata Table
 CREATE TABLE IF NOT EXISTS user_sync_cursors (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    current_cursor INTEGER NOT NULL DEFAULT 0
+    current_cursor INTEGER NOT NULL DEFAULT 0,
+    min_retained_cursor INTEGER NOT NULL DEFAULT 0,
+    protocol_version INTEGER NOT NULL DEFAULT 1,
+    client_schema_version INTEGER NOT NULL DEFAULT 1
 );
 
 -- Sync Log Table (Append-Only Sync Mutation Log with Operation Deduplication)

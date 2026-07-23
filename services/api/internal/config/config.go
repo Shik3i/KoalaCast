@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -9,30 +11,42 @@ import (
 )
 
 type Config struct {
-	Port                     string
-	PublicBaseURL            string
-	APIBaseURL               string
-	LogLevel                 slog.Level
-	DatabasePath             string
-	SessionSecret            string
-	RegistrationEnabledEnv   *bool // nil if unset (allows DB admin setting), non-nil acts as hard override
-	TrustedProxies           []string
-	SecureCookies            bool
-	PodcastIndexKey          string
-	PodcastIndexSecret       string
-	FeedWorkerConcurrency    int
-	FeedRequestTimeoutMS     int
-	FeedMaxResponseBytes     int64
-	AllowedCORSOrigins       []string
+	AppEnv                 string
+	Port                   string
+	PublicBaseURL          string
+	APIBaseURL             string
+	LogLevel               slog.Level
+	DatabasePath           string
+	SessionSecret          string
+	RegistrationEnabledEnv *bool // nil if unset/empty (defer to DB admin setting), non-nil acts as hard override
+	TrustedProxies         []string
+	SecureCookies          bool
+	PodcastIndexKey        string
+	PodcastIndexSecret     string
+	FeedWorkerConcurrency  int
+	FeedRequestTimeoutMS   int
+	FeedMaxResponseBytes   int64
+	AllowedCORSOrigins     []string
+}
+
+var knownInsecureSecrets = []string{
+	"default-dev-secret-change-in-production",
+	"secret",
+	"password",
+	"change-me",
+	"12345678901234567890123456789012",
 }
 
 func LoadConfig() (*Config, error) {
+	appEnv := strings.ToLower(getEnv("APP_ENV", "production"))
+
 	cfg := &Config{
+		AppEnv:                appEnv,
 		Port:                  getEnv("PORT", "8080"),
 		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
 		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:8080/api/v1"),
 		DatabasePath:          getEnv("DATABASE_PATH", "./data/koalacast.db"),
-		SessionSecret:         getEnv("SESSION_SECRET", "default-dev-secret-change-in-production"),
+		SessionSecret:         os.Getenv("SESSION_SECRET"),
 		PodcastIndexKey:       os.Getenv("PODCAST_INDEX_KEY"),
 		PodcastIndexSecret:    os.Getenv("PODCAST_INDEX_SECRET"),
 		FeedWorkerConcurrency: getEnvInt("FEED_WORKER_CONCURRENCY", 5),
@@ -54,11 +68,33 @@ func LoadConfig() (*Config, error) {
 		cfg.LogLevel = slog.LevelInfo
 	}
 
-	// KC_REGISTRATION_ENABLED override check
-	if valStr, exists := os.LookupEnv("KC_REGISTRATION_ENABLED"); exists && valStr != "" {
-		b, err := strconv.ParseBool(valStr)
+	// Session Secret Validation
+	if cfg.SessionSecret == "" {
+		if appEnv == "development" || appEnv == "dev" {
+			// Generate ephemeral development secret
+			randomBytes := make([]byte, 32)
+			_, _ = rand.Read(randomBytes)
+			cfg.SessionSecret = hex.EncodeToString(randomBytes)
+			slog.Warn("SESSION_SECRET is unset in development mode; generated ephemeral runtime secret")
+		} else {
+			return nil, fmt.Errorf("SESSION_SECRET environment variable is required in production mode and must be at least 32 characters long")
+		}
+	} else {
+		if len(cfg.SessionSecret) < 32 {
+			return nil, fmt.Errorf("SESSION_SECRET is too short (%d chars); minimum required length is 32 characters", len(cfg.SessionSecret))
+		}
+		for _, known := range knownInsecureSecrets {
+			if strings.EqualFold(cfg.SessionSecret, known) {
+				return nil, fmt.Errorf("SESSION_SECRET matches a known insecure placeholder; please set a strong unique secret")
+			}
+		}
+	}
+
+	// KC_REGISTRATION_ENABLED environment override check
+	if valStr, exists := os.LookupEnv("KC_REGISTRATION_ENABLED"); exists && strings.TrimSpace(valStr) != "" {
+		b, err := strconv.ParseBool(strings.TrimSpace(valStr))
 		if err != nil {
-			return nil, fmt.Errorf("invalid KC_REGISTRATION_ENABLED value: %w", err)
+			return nil, fmt.Errorf("invalid KC_REGISTRATION_ENABLED value (%s): %w", valStr, err)
 		}
 		cfg.RegistrationEnabledEnv = &b
 	}

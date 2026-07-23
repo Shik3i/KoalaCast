@@ -1,38 +1,90 @@
 openapi: 3.0.3
 info:
   title: KoalaCast REST API
-  description: Privacy-first podcast player REST API for web and native cross-device synchronization.
+  description: Privacy-first podcast player REST API for web and cross-device synchronization.
   version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
 servers:
-  - url: /api/v1
-    description: Production Same-Origin API v1
+  - url: /
+    description: "Server Root (Operational Probes & Versioned API)"
+
+security: []
 
 paths:
   /healthz:
     get:
-      summary: Liveness Probe
+      operationId: getHealthz
+      summary: "Liveness Probe (Status: Implemented)"
+      description: "Returns operational liveness status of the API server."
       responses:
         '200':
-          description: Service is healthy
+          description: "Service is healthy"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+        '400':
+          description: "Bad request"
+        '500':
+          description: "Internal server error"
 
   /readyz:
     get:
-      summary: Readiness Probe
+      operationId: getReadyz
+      summary: "Readiness Probe (Status: Implemented)"
+      description: "Returns operational readiness status of the API server and SQLite database connection."
       responses:
         '200':
-          description: Service and database are ready
+          description: "Service and database are ready"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReadinessResponse'
+        '400':
+          description: "Bad request"
+        '503':
+          description: "Database or service is unavailable"
 
-  /auth/register:
+  /api/v1/healthz:
+    get:
+      operationId: getApiV1Healthz
+      summary: "Versioned Liveness Probe (Status: Implemented)"
+      responses:
+        '200':
+          description: "Service is healthy"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400':
+          description: "Bad request"
+        '500':
+          description: "Internal server error"
+
+  /api/v1/readyz:
+    get:
+      operationId: getApiV1Readyz
+      summary: "Versioned Readiness Probe (Status: Implemented)"
+      responses:
+        '200':
+          description: "Service and database are ready"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '400':
+          description: "Bad request"
+        '503':
+          description: "Database or service is unavailable"
+
+  /api/v1/auth/register:
     post:
-      summary: User Registration
+      operationId: postApiV1AuthRegister
+      summary: "User Registration (Status: Specified / Planned)"
+      description: "Registers a new user account and presents a 32-byte Base32 recovery code."
       requestBody:
         required: true
         content:
@@ -41,17 +93,21 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: Registration successful, returns recovery code
+          description: "Registration successful"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: "Invalid registration payload"
         '403':
-          description: Registration is disabled
+          description: "Registration is disabled"
 
-  /auth/login:
+  /api/v1/auth/login:
     post:
-      summary: Web Session Login
+      operationId: postApiV1AuthLogin
+      summary: "Web Session Login (Status: Specified / Planned)"
+      description: "Authenticates user credentials and sets a same-origin HttpOnly session cookie."
       requestBody:
         required: true
         content:
@@ -60,11 +116,20 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Login successful, sets HttpOnly session cookie
+          description: "Login successful"
+        '400':
+          description: "Bad request"
+        '401':
+          description: "Invalid credentials"
 
-  /sync:
+  /api/v1/sync:
     get:
-      summary: Incremental Sync Pull
+      operationId: getApiV1Sync
+      summary: "Incremental Sync Pull (Status: Specified / Planned)"
+      description: "Returns incremental changesets since the specified server cursor."
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
       parameters:
         - name: since_cursor
           in: query
@@ -74,34 +139,54 @@ paths:
             default: 0
       responses:
         '200':
-          description: Incremental changesets returned
+          description: "Incremental changesets returned"
+        '400':
+          description: "Bad request"
+        '401':
+          description: "Unauthorized"
         '410':
-          description: Full resync required
+          description: "Full resync required"
 
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: koalacast_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+
   schemas:
     HealthResponse:
       type: object
+      required:
+        - status
+        - timestamp
+        - version
       properties:
         status:
           type: string
-          example: ok
+          example: "ok"
         timestamp:
           type: string
           format: date-time
         version:
           type: string
-          example: 1.0.0
+          example: "1.0.0"
 
     ReadinessResponse:
       type: object
+      required:
+        - status
+        - database
       properties:
         status:
           type: string
-          example: ready
+          example: "ready"
         database:
           type: string
-          example: connected
+          example: "connected"
 
     RegisterRequest:
       type: object
@@ -119,6 +204,10 @@ components:
 
     RegisterResponse:
       type: object
+      required:
+        - user_id
+        - username
+        - recovery_code
       properties:
         user_id:
           type: string
@@ -127,8 +216,7 @@ components:
           type: string
         recovery_code:
           type: string
-          description: Base32 formatted recovery code presented once upon registration
-          example: AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH
+          example: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH"
 
     LoginRequest:
       type: object
