@@ -40,6 +40,7 @@ type ParsedEpisode struct {
 	ArtworkURL      string
 	EpisodeNumber   int
 	SeasonNumber    int
+	EpisodeType     string
 	Explicit        bool
 	Link            string
 	ChaptersURL     string
@@ -85,9 +86,10 @@ type rssItem struct {
 		Length int64  `xml:"length,attr"`
 	} `xml:"enclosure"`
 	ItunesDuration string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd duration"`
-	ItunesEpisode  int    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd episode"`
-	ItunesSeason   int    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd season"`
-	ItunesExplicit string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
+	ItunesEpisode     int    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd episode"`
+	ItunesSeason      int    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd season"`
+	ItunesEpisodeType string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd episodeType"`
+	ItunesExplicit    string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
 	ItunesImage    struct {
 		Href string `xml:"href,attr"`
 	} `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
@@ -223,6 +225,10 @@ func parseRSS(buf []byte) (*ParsedFeed, error) {
 		}
 
 		epExplicit := strings.EqualFold(item.ItunesExplicit, "yes") || strings.EqualFold(item.ItunesExplicit, "true")
+		epType := item.ItunesEpisodeType
+		if epType == "" {
+			epType = "full"
+		}
 
 		ep := ParsedEpisode{
 			GUID:            guid,

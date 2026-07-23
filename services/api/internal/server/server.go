@@ -9,6 +9,7 @@ import (
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
+	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
 )
 
 type Server struct {
@@ -16,8 +17,8 @@ type Server struct {
 	logger     *slog.Logger
 }
 
-func NewServer(cfg *config.Config, database *db.DB, logger *slog.Logger) *Server {
-	handler := NewRouter(cfg, database, logger)
+func NewServer(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorker, logger *slog.Logger) *Server {
+	handler := NewRouter(cfg, database, feedWorker, logger)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

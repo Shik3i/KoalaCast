@@ -11,6 +11,7 @@ import (
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/server"
+	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
 )
 
 func main() {
@@ -32,7 +33,15 @@ func main() {
 	}
 	defer database.Close()
 
-	srv := server.NewServer(cfg, database, logger)
+	// Initialize background feed worker pool
+	feedWorker := worker.NewFeedWorker(database, cfg, logger)
+	ctxWorker, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
+
+	feedWorker.Start(ctxWorker)
+	defer feedWorker.Stop()
+
+	srv := server.NewServer(cfg, database, feedWorker, logger)
 
 	// Graceful shutdown channel
 	stopChan := make(chan os.Signal, 1)
