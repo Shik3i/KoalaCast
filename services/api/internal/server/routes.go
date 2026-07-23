@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -68,11 +69,15 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.Get("/podcasts/{id}/episodes", podcastHandler.GetEpisodes)
 		r.Get("/episodes/{id}", podcastHandler.GetEpisode)
 
-		// Authentication & Recovery
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
-		r.Post("/auth/device/login", authHandler.DeviceLogin)
-		r.Post("/auth/recovery/verify", authHandler.VerifyRecoveryCode)
+		// Authentication & Recovery with Rate Limiting
+		authLimiter := customMiddleware.NewRateLimiter(10, 1*time.Minute)
+		r.Group(func(r chi.Router) {
+			r.Use(authLimiter.Limit)
+			r.Post("/auth/register", authHandler.Register)
+			r.Post("/auth/login", authHandler.Login)
+			r.Post("/auth/device/login", authHandler.DeviceLogin)
+			r.Post("/auth/recovery/verify", authHandler.VerifyRecoveryCode)
+		})
 
 		// Authenticated Routes
 		r.Group(func(r chi.Router) {
