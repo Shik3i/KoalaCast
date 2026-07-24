@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
+	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
@@ -18,6 +19,7 @@ import (
 type PodcastHandler struct {
 	DB            *db.DB
 	PodcastIndex  *podcastindex.Client
+	ITunes        *itunes.ITunesClient
 	Worker        *worker.FeedWorker
 	MaxResponseB  int64
 }
@@ -69,18 +71,19 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.PodcastIndex.IsConfigured() {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"search_available": false,
-			"message":          "Podcast Index search API credentials are not configured. You can still add podcasts directly by pasting an RSS feed URL.",
-			"results":          []interface{}{},
-		})
-		return
+	var results interface{}
+	var err error
+
+	if h.PodcastIndex.IsConfigured() {
+		results, err = h.PodcastIndex.Search(q)
+	} else {
+		// iTunes Search API fallback (access to millions of podcasts with HD artwork)
+		if h.ITunes == nil {
+			h.ITunes = itunes.NewITunesClient()
+		}
+		results, err = h.ITunes.SearchPodcasts(q, 50)
 	}
 
-	results, err := h.PodcastIndex.Search(q)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -93,6 +96,49 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"search_available": true,
 		"results":          results,
+	})
+}
+
+func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
+	if h.ITunes == nil {
+		h.ITunes = itunes.NewITunesClient()
+	}
+
+	topPodcasts, err := h.ITunes.FetchTopPodcasts(60)
+	if err != nil || len(topPodcasts) == 0 {
+		var dbPods []PodcastResponse
+		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT 60")
+		if errDB == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var p PodcastResponse
+				var lastFetch sql.NullInt64
+				_ = rows.Scan(&p.ID, &p.FeedURL, &p.Title, &p.Description, &p.Author, &p.ArtworkURL, &p.Link, &p.Language, &p.Explicit, &p.Copyright, &lastFetch)
+				if lastFetch.Valid {
+					p.LastSuccessfulFetchAt = lastFetch.Int64
+				}
+				dbPods = append(dbPods, p)
+			}
+		}
+		topPodcasts = make([]itunes.PodcastResult, 0, len(dbPods))
+		for _, p := range dbPods {
+			topPodcasts = append(topPodcasts, itunes.PodcastResult{
+				ID:          p.ID,
+				Title:       p.Title,
+				Author:      p.Author,
+				FeedURL:     p.FeedURL,
+				ArtworkURL:  p.ArtworkURL,
+				Description: p.Description,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "ok",
+		"results": topPodcasts,
+		"total":   len(topPodcasts),
 	})
 }
 

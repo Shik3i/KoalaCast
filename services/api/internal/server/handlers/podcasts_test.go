@@ -35,8 +35,8 @@ func TestPodcastHandler_SearchUnconfigured(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if resp["search_available"] != false {
-		t.Errorf("expected search_available to be false when unconfigured")
+	if resp["search_available"] != true {
+		t.Errorf("expected search_available to be true via iTunes search fallback")
 	}
 }
 

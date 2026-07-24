@@ -63,6 +63,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.Get("/readyz", healthHandler.Readyz)
 
 		// Podcasts & Discovery
+		r.Get("/podcasts/discover", podcastHandler.Discover)
 		r.Get("/podcasts/search", podcastHandler.Search)
 		r.Post("/podcasts/feed", podcastHandler.AddFeed)
 		r.Get("/podcasts/{id}", podcastHandler.GetPodcast)

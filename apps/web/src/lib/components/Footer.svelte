@@ -5,14 +5,14 @@
 				<span class="logo-icon">🌿</span>
 				<span class="brand-title">KoalaCast</span>
 			</div>
-			<p class="tagline">Completely free, open-source, privacy-first podcast player with cross-device synchronization.</p>
+			<p class="tagline">Next-generation, privacy-first podcast player with cross-device sync.</p>
 		</div>
 
 		<div class="footer-links">
 			<div class="link-column">
 				<h4>Legal & Privacy</h4>
 				<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">
-					<i class="ph ph-scales" aria-hidden="true"></i> Legal Notice (koalastuff.net/legal)
+					<i class="ph ph-scales" aria-hidden="true"></i> Legal Notice
 				</a>
 				<a href="/settings#privacy">
 					<i class="ph ph-shield-check" aria-hidden="true"></i> Privacy Policy
@@ -22,7 +22,7 @@
 			<div class="link-column">
 				<h4>Open Source</h4>
 				<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer">
-					<i class="ph ph-github-logo" aria-hidden="true"></i> GitHub Repository
+					<i class="ph ph-github-logo" aria-hidden="true"></i> GitHub
 				</a>
 				<a href="https://github.com/Shik3i/KoalaCast/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
 					<i class="ph ph-file-text" aria-hidden="true"></i> MIT License
@@ -32,16 +32,17 @@
 	</div>
 
 	<div class="footer-bottom">
-		<p>© 2026 KoalaCast Contributors • Timo Schmidt (Shik3i)</p>
+		<p>© 2026 KoalaCast • Timo Schmidt (Shik3i)</p>
 	</div>
 </footer>
 
 <style>
 	.app-footer {
-		background-color: var(--bg-surface);
+		background-color: rgba(19, 34, 28, 0.8);
 		border-top: 1px solid var(--border-subtle);
 		padding: 3rem 2rem 2rem;
-		margin-top: 4rem;
+		margin-top: 5rem;
+		backdrop-filter: blur(12px);
 	}
 
 	.footer-container {
@@ -90,11 +91,11 @@
 	}
 
 	.link-column h4 {
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: var(--text-primary);
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--text-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.08em;
 	}
 
 	.link-column a {
@@ -103,6 +104,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		transition: color 0.2s ease;
 	}
 
 	.link-column a:hover {
@@ -112,7 +114,7 @@
 
 	.footer-bottom {
 		max-width: 1200px;
-		margin: 2rem auto 0;
+		margin: 2.5rem auto 0;
 		padding-top: 1.5rem;
 		border-top: 1px solid var(--border-subtle);
 		text-align: center;
