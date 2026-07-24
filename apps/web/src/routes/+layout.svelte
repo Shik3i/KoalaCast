@@ -50,6 +50,17 @@
 	</main>
 
 	<Footer />
+
+	<!-- Mobile bottom tab bar (thumb-reachable); hidden on larger screens. -->
+	<nav class="bottom-nav" class:has-player={player.isActive} aria-label="Primary">
+		{#each links as link}
+			<a href={link.href} class:active={isActive(link.href)} aria-current={isActive(link.href) ? 'page' : undefined}>
+				<i class="ph {link.icon}" aria-hidden="true"></i>
+				<span>{link.label}</span>
+			</a>
+		{/each}
+	</nav>
+
 	<Player />
 	<Toast />
 </div>
@@ -158,10 +169,43 @@
 		padding-bottom: 130px;
 	}
 
+	/* Bottom tab bar — mobile only. */
+	.bottom-nav {
+		display: none;
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		z-index: 60;
+		justify-content: space-around;
+		align-items: stretch;
+		padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+		background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+		border-top: 1px solid var(--border-subtle);
+		backdrop-filter: blur(16px) saturate(140%);
+		-webkit-backdrop-filter: blur(16px) saturate(140%);
+	}
+	.bottom-nav a {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.15rem;
+		padding: 0.35rem 0;
+		border-radius: 10px;
+		color: var(--text-muted);
+		font-size: 0.68rem;
+		font-weight: 600;
+	}
+	.bottom-nav a :global(.ph) { font-size: 1.45rem; }
+	.bottom-nav a.active { color: var(--accent-green); }
+	.bottom-nav a:hover { text-decoration: none; }
+
 	@media (max-width: 640px) {
 		.navbar { padding: 0.75rem 1rem; }
-		.nav-label { display: none; }
-		.nav-links a { padding: 0.5rem 0.7rem; }
-		.main-content { padding: 1.5rem 1rem; }
+		.nav-links { display: none; }
+		.main-content { padding: 1.5rem 1rem; padding-bottom: 5rem; }
+		.main-content.has-player { padding-bottom: 200px; }
+		.bottom-nav { display: flex; }
 	}
 </style>

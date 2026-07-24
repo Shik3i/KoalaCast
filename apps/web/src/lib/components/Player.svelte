@@ -1109,6 +1109,11 @@
 		.extras { display: none; }
 	}
 
+	/* Sit the floating mini-player above the mobile bottom tab bar. */
+	@media (max-width: 640px) {
+		.player-shell { bottom: calc(54px + env(safe-area-inset-bottom, 0px)); padding-bottom: 0.5rem; }
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.player-shell { animation: none; }
 		.bar { animation: none; height: 60% !important; }
