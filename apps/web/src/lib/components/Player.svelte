@@ -26,60 +26,32 @@
 	let showVolume = $state(false);
 	let lastToken = 0;
 
-	// Web Audio API & Smart Audio Processing
+	import { audioEngine } from '$lib/audio/engine';
+
 	let volumeBoost = $state(false);
 	let skipSilence = $state(false);
 	let activeTab = $state<'player' | 'chapters' | 'transcript'>('player');
-
-	let audioCtx: AudioContext | null = null;
-	let sourceNode: MediaElementAudioSourceNode | null = null;
-	let gainNode: GainNode | null = null;
-	let compressorNode: DynamicsCompressorNode | null = null;
-	let analyserNode: AnalyserNode | null = null;
 
 	let chapters = $state<any[]>([]);
 	let transcriptCues = $state<any[]>([]);
 	let loadingChapters = $state(false);
 	let loadingTranscript = $state(false);
 
-	function initWebAudio() {
-		if (!audioEl || audioCtx) return;
-		try {
-			const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-			if (!AudioContextClass) return;
-			audioCtx = new AudioContextClass();
-			sourceNode = audioCtx.createMediaElementSource(audioEl);
-			gainNode = audioCtx.createGain();
-			compressorNode = audioCtx.createDynamicsCompressor();
-			analyserNode = audioCtx.createAnalyser();
-			analyserNode.fftSize = 256;
-
-			sourceNode.connect(gainNode);
-			gainNode.connect(compressorNode);
-			compressorNode.connect(analyserNode);
-			analyserNode.connect(audioCtx.destination);
-		} catch (err) {
-			console.warn('Web Audio API not supported:', err);
-		}
-	}
-
 	function toggleVolumeBoost() {
 		volumeBoost = !volumeBoost;
-		initWebAudio();
-		if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-		if (gainNode && audioCtx) {
-			gainNode.gain.setValueAtTime(volumeBoost ? 2.2 : 1.0, audioCtx.currentTime);
-		}
+		if (audioEl) audioEngine.init(audioEl);
+		audioEngine.setVolumeBoost(volumeBoost);
 		toast.success(volumeBoost ? 'Volume Boost Enabled (2.2x)' : 'Volume Boost Off');
 	}
 
 	function toggleSkipSilence() {
 		skipSilence = !skipSilence;
+		audioEngine.skipSilence = skipSilence;
 		if (!skipSilence && audioEl) {
 			audioEl.playbackRate = playbackSpeed;
 		}
-		initWebAudio();
-		if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+		if (audioEl) audioEngine.init(audioEl);
+		audioEngine.resume();
 		toast.success(skipSilence ? 'Skip Silence Enabled' : 'Skip Silence Off');
 	}
 
@@ -168,17 +140,10 @@
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		durationMs = Math.round((audioEl.duration || 0) * 1000);
 
-		if (skipSilence && analyserNode && isPlaying) {
-			const data = new Uint8Array(analyserNode.frequencyBinCount);
-			analyserNode.getByteFrequencyData(data);
-			let sum = 0;
-			for (let i = 0; i < data.length; i++) sum += data[i];
-			const avg = sum / data.length;
-			if (avg < 4) {
-				audioEl.playbackRate = Math.min(3.0, playbackSpeed * 2.0);
-			} else {
-				audioEl.playbackRate = playbackSpeed;
-			}
+		if (skipSilence && isPlaying && audioEngine.isSilent()) {
+			audioEl.playbackRate = Math.min(3.0, playbackSpeed * 2.0);
+		} else if (audioEl.playbackRate !== playbackSpeed) {
+			audioEl.playbackRate = playbackSpeed;
 		}
 
 		if (sleepTimerEndsAt && Date.now() >= sleepTimerEndsAt) {

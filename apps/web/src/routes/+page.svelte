@@ -14,6 +14,7 @@
 	import { reveal } from '$lib/actions/reveal';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Onboarding from '$lib/components/Onboarding.svelte';
+	import PodcastCard from '$lib/components/PodcastCard.svelte';
 	import { GENRES } from '$lib/genres';
 
 	interface PodcastItem {
