@@ -118,7 +118,7 @@
 
 				<div class="action-buttons">
 					<button class="btn-play" onclick={handlePlay}>
-						<i class="ph {isCurrent ? 'ph-waveform' : 'ph-play-fill'}" aria-hidden="true"></i>
+						<i class="ph-fill {isCurrent ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
 						{isCurrent ? 'Now Playing' : 'Play Episode'}
 					</button>
 					<button class="btn-secondary" onclick={handleAddToQueue}>

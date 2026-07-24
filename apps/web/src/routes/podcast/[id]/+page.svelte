@@ -125,7 +125,7 @@
 				{#each episodes as ep}
 					<div class="episode-row" class:current={player.current?.episode_id === ep.id}>
 						<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label="Play episode">
-							<i class="ph {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play-fill'}" aria-hidden="true"></i>
+							<i class="ph-fill {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
 						</button>
 
 						<div class="ep-info">

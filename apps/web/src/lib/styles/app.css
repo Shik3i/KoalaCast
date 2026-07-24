@@ -159,17 +159,22 @@ button:disabled {
 	opacity: 0.55;
 }
 
-/* Phosphor icons: give every icon a springy micro-interaction on hover/press. */
-.ph {
+/* Phosphor icons: give every icon a springy micro-interaction on hover/press.
+   Covers both the regular (.ph) and fill (.ph-fill) weight base classes. */
+.ph, .ph-fill, .ph-bold, .ph-duotone {
 	display: inline-block;
 	transition: transform 0.22s var(--ease-spring), color 0.2s ease;
 }
 button:hover > .ph,
-a:hover > .ph {
+button:hover > .ph-fill,
+a:hover > .ph,
+a:hover > .ph-fill {
 	transform: scale(1.15);
 }
 button:active > .ph,
-a:active > .ph {
+button:active > .ph-fill,
+a:active > .ph,
+a:active > .ph-fill {
 	transform: scale(0.9);
 }
 

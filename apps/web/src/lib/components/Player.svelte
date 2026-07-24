@@ -10,6 +10,7 @@
 	let playbackSpeed = $state(1.0);
 	let showShortcutsModal = $state(false);
 	let sleepTimerEndsAt = $state<number | null>(null);
+	let loadError = $state(false);
 	let lastToken = 0;
 
 	let autoSaveTimer: any = null;
@@ -25,6 +26,7 @@
 		if (!t || !audioEl) return;
 
 		if (audioEl.src !== t.enclosure_url) {
+			loadError = false;
 			audioEl.src = t.enclosure_url;
 			currentTimeMs = 0;
 			loadSavedPosition(t.episode_id);
@@ -190,10 +192,19 @@
 
 <audio
 	bind:this={audioEl}
-	onplay={() => (isPlaying = true)}
+	preload="metadata"
+	onplay={() => {
+		isPlaying = true;
+		loadError = false;
+	}}
+	oncanplay={() => (loadError = false)}
 	onpause={() => {
 		isPlaying = false;
 		saveProgress('PROGRESS_TICK');
+	}}
+	onerror={() => {
+		isPlaying = false;
+		loadError = true;
 	}}
 	ontimeupdate={handleTimeUpdate}
 	onended={handleEnded}
@@ -241,12 +252,18 @@
 			</div>
 
 			<div class="center">
+				{#if loadError}
+					<div class="load-error" role="alert">
+						<i class="ph ph-warning-circle" aria-hidden="true"></i>
+						Audio konnte nicht geladen werden — evtl. blockiert ein Tracking-/Werbeblocker die Datei.
+					</div>
+				{/if}
 				<div class="controls">
 					<button class="ctrl" onclick={() => skip(-10)} aria-label="Skip backward 10 seconds">
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
 					</button>
 					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
-						<i class="ph {isPlaying ? 'ph-pause-fill' : 'ph-play-fill'}" aria-hidden="true"></i>
+						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
 					<button class="ctrl" onclick={() => skip(30)} aria-label="Skip forward 30 seconds">
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
@@ -383,6 +400,16 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+	}
+
+	.load-error {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.78rem;
+		color: #ffb4b4;
+		max-width: 460px;
+		text-align: center;
 	}
 
 	.ctrl {

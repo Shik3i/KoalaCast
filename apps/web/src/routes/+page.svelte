@@ -173,7 +173,7 @@
 							/>
 							<div class="cover-overlay">
 								<span class="btn-play-overlay">
-									<i class="ph ph-play-fill" aria-hidden="true"></i> View Episodes
+									<i class="ph-fill ph-play" aria-hidden="true"></i> View Episodes
 								</span>
 							</div>
 							{#if pod.category}
