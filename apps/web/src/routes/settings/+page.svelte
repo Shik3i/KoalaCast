@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { clearAllLocalData, saveLocalSubscription } from '$lib/idb/db';
+	import { onMount } from 'svelte';
+	import { clearAllLocalData } from '$lib/idb/db';
+	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');
@@ -10,10 +12,22 @@
 	let authError = $state('');
 	let sessions = $state<any[]>([]);
 
+	// Theme state
+	let currentTheme = $state<ThemeMode>('system');
+
 	// OPML Import States
 	let isImportingOpml = $state(false);
 	let opmlReport = $state<any>(null);
 	let opmlError = $state('');
+
+	onMount(() => {
+		currentTheme = getStoredTheme();
+	});
+
+	function handleThemeChange(mode: ThemeMode) {
+		currentTheme = mode;
+		setTheme(mode);
+	}
 
 	async function handleRegister(e: Event) {
 		e.preventDefault();
@@ -110,15 +124,6 @@
 			}
 
 			opmlReport = report;
-
-			// Also seed imported podcasts into local IndexedDB
-			if (report.failures) {
-				// Save successfully imported feeds into IndexedDB
-				for (const fail of report.failures) {
-					if (fail.reason.includes('already subscribed')) continue;
-				}
-			}
-
 			alert(`OPML Import Complete! Found ${report.total_found} podcasts. ${report.imported} imported, ${report.skipped} skipped.`);
 		} catch (err: any) {
 			opmlError = 'Error reading or processing OPML XML file.';
@@ -130,7 +135,39 @@
 </script>
 
 <div class="settings-page">
-	<h2>Settings & Account Management</h2>
+	<h2>Settings & Configuration</h2>
+
+	<!-- Theme Selection Card -->
+	<section class="card">
+		<h3>Appearance & Theme</h3>
+		<p class="subtitle">Select your preferred color theme or automatically follow your operating system settings.</p>
+
+		<div class="theme-selector">
+			<button
+				class="theme-btn"
+				class:active={currentTheme === 'system'}
+				onclick={() => handleThemeChange('system')}
+			>
+				<i class="ph ph-desktop" aria-hidden="true"></i> System (Auto)
+			</button>
+
+			<button
+				class="theme-btn"
+				class:active={currentTheme === 'dark'}
+				onclick={() => handleThemeChange('dark')}
+			>
+				<i class="ph ph-moon" aria-hidden="true"></i> Dark
+			</button>
+
+			<button
+				class="theme-btn"
+				class:active={currentTheme === 'light'}
+				onclick={() => handleThemeChange('light')}
+			>
+				<i class="ph ph-sun" aria-hidden="true"></i> Light
+			</button>
+		</div>
+	</section>
 
 	<section class="card">
 		<h3>Privacy & Mode Explanation</h3>
@@ -240,6 +277,37 @@
 	.subtitle {
 		color: var(--text-secondary);
 		font-size: 0.95rem;
+	}
+
+	.theme-selector {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-top: 0.5rem;
+	}
+
+	.theme-btn {
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.75rem 1.25rem;
+		border-radius: 8px;
+		font-weight: 700;
+		font-size: 0.95rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: all 0.2s ease;
+	}
+
+	.theme-btn:hover {
+		border-color: var(--accent-green);
+	}
+
+	.theme-btn.active {
+		background: var(--accent-green);
+		color: white;
+		border-color: var(--accent-green);
 	}
 
 	.privacy-box {
