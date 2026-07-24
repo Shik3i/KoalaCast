@@ -209,7 +209,7 @@
 {#if track}
 	<div class="player-bar" class:expanded={isExpanded}>
 		<button type="button" class="track-info" onclick={() => (isExpanded = !isExpanded)}>
-			<img src={track.artwork_url || '/favicon.png'} alt={track.title} class="artwork" />
+			<img src={track.artwork_url || '/placeholder.svg'} alt={track.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 			<div class="meta">
 				<span class="track-title">{track.title}</span>
 				<span class="podcast-title">{track.podcast_title}</span>

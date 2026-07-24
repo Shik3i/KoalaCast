@@ -74,6 +74,20 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 		Failures:   make([]OPMLImportError, 0),
 	}
 
+	// Bound the fan-out: each URL triggers a server-side fetch (up to
+	// MaxResponseB bytes) plus DB writes, all sequentially within one request.
+	// Without a cap a single OPML upload could pin the server on outbound I/O for
+	// minutes and blow the server write timeout.
+	const maxImportFeeds = 500
+	if len(feedURLs) > maxImportFeeds {
+		report.Failures = append(report.Failures, OPMLImportError{
+			URL:    "",
+			Reason: fmt.Sprintf("OPML contains %d feeds; only the first %d were processed", len(feedURLs), maxImportFeeds),
+		})
+		report.Skipped += len(feedURLs) - maxImportFeeds
+		feedURLs = feedURLs[:maxImportFeeds]
+	}
+
 	client := rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second})
 
 	for _, rawURL := range feedURLs {

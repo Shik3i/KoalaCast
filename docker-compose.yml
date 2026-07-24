@@ -1,16 +1,40 @@
 services:
+  # Reverse proxy / single entry point. Serves the whole app on one origin so the
+  # web app's relative /api calls reach the Go backend (fixes /api/* 404s).
+  # Browse the app at http://localhost:3000
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
   api:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.api
     restart: unless-stopped
+    expose:
+      - "8080"
     ports:
-      - "8080:8080"
+      # Bound to loopback only: direct backend access is for local debugging and
+      # must not be reachable off-host. Normal traffic goes through the proxy.
+      - "127.0.0.1:8080:8080"
     environment:
       - PORT=8080
       - LOG_LEVEL=info
       - DATABASE_PATH=/app/data/koalacast.db
       - SESSION_SECRET=${SESSION_SECRET}
+      # Local demo is served over plain HTTP via the proxy, so Secure cookies are
+      # disabled here. Set to true for any HTTPS deployment.
+      - SECURE_COOKIES=${SECURE_COOKIES:-false}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-172.16.0.0/12,127.0.0.1,::1}
       - KC_REGISTRATION_ENABLED=${KC_REGISTRATION_ENABLED:-}
       - PODCAST_INDEX_KEY=${PODCAST_INDEX_KEY:-}
       - PODCAST_INDEX_SECRET=${PODCAST_INDEX_SECRET:-}
@@ -22,8 +46,9 @@ services:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.web
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # No published port: reached only through the proxy at http://localhost:3000
+    expose:
+      - "3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
@@ -31,3 +56,5 @@ services:
 
 volumes:
   koala_data:
+  caddy_data:
+  caddy_config:

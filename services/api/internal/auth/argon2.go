@@ -26,6 +26,29 @@ var DefaultArgon2Params = Argon2Params{
 	KeyLength:   32,
 }
 
+// dummyHash is a valid Argon2id encoded hash of a random password, generated
+// once at startup. Login handlers run VerifyPassword against it when the
+// username does not exist so that the request spends the same CPU time as a
+// real verification, closing the user-enumeration timing side channel.
+var dummyHash = mustDummyHash()
+
+func mustDummyHash() string {
+	buf := make([]byte, 16)
+	_, _ = rand.Read(buf)
+	h, err := HashPassword(base64.RawStdEncoding.EncodeToString(buf))
+	if err != nil {
+		// Fall back to a static valid hash; the goal is timing parity, not secrecy.
+		return "$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	}
+	return h
+}
+
+// DummyVerify performs an Argon2id verification against a throwaway hash to
+// equalize response time on the "user not found" path. The result is discarded.
+func DummyVerify(password string) {
+	_, _ = VerifyPassword(password, dummyHash)
+}
+
 func HashPassword(password string) (string, error) {
 	params := DefaultArgon2Params
 	salt := make([]byte, params.SaltLength)

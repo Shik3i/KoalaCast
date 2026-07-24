@@ -1,0 +1,30 @@
+name: 💡 Feature Request
+description: Suggest an idea or improvement for KoalaCast
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem are you trying to solve? Describe the need, not just the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: Alignment with project principles
+      description: KoalaCast is free, private, local-first, and ad/tracker-free.
+      options:
+        - label: This request is consistent with KoalaCast's privacy-first, no-tracking principles
+          required: true

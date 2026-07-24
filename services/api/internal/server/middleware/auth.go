@@ -118,8 +118,8 @@ func authenticateDeviceToken(ctx context.Context, database *db.DB, token string)
 		SELECT u.id, u.username, u.normalized_username, u.role, u.is_suspended, d.device_id, d.client_type, d.is_revoked
 		FROM device_credentials d
 		JOIN users u ON d.user_id = u.id
-		WHERE d.token_hash = ?
-	`, tokenHash).Scan(&user.ID, &user.Username, &user.NormalizedUsername, &user.Role, &isSuspended, &user.DeviceID, &user.ClientType, &isRevoked)
+		WHERE d.token_hash = ? AND (d.expires_at = 0 OR d.expires_at > ?)
+	`, tokenHash, nowMs).Scan(&user.ID, &user.Username, &user.NormalizedUsername, &user.Role, &isSuspended, &user.DeviceID, &user.ClientType, &isRevoked)
 
 	if err != nil || isSuspended == 1 || isRevoked == 1 {
 		return nil, err

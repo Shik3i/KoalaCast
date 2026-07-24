@@ -59,3 +59,17 @@ services/api/data/
 logs/
 scratch/
 tmp/
+
+# AI Assistants & Agent Tooling
+.claude/
+.antigravity/
+.opencode/
+.codex/
+.cursor/
+.aider*
+.continue/
+.windsurf/
+.gemini/
+CLAUDE.local.md
+GEMINI.md
+.mcp.json

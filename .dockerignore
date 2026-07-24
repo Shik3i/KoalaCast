@@ -1,28 +1,74 @@
-# Git & OS
+# Git & CI
 .git
 .gitignore
+.gitattributes
 .github
-.DS_Store
-Thumbs.db
 
-# Node dependencies and build output
+# OS cruft
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Node dependencies & build output
 **/node_modules
 **/.svelte-kit
 **/build
 **/dist
-**/.env*
+**/npm-debug.log*
+**/yarn-*.log*
+**/pnpm-debug.log*
 
-# Go binaries and data
+# Go binaries, coverage & test artifacts
 **/koalacast-api
+services/api/cmd/server/server
+**/*.exe
+**/*.test
+**/*.out
+**/coverage.html
+**/coverage.txt
+
+# Databases & runtime data (scoped so it never matches src/lib/data)
 **/*.db
 **/*.db-wal
 **/*.db-shm
-**/data
-**/*.out
-**/coverage.txt
+/data
+services/api/data
 
-# Documentation & IDE
+# Environment & secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Documentation & project meta
 *.md
+docs
+LICENSE
+testdata
+
+# Tooling & IDE
 .vscode
 .idea
 Makefile
+docker-compose.yml
+**/*.swp
+**/*.swo
+
+# AI assistants & agent tooling
+.claude
+.antigravity
+.opencode
+.codex
+.cursor
+.aider*
+.continue
+.windsurf
+.gemini
+.mcp.json
+
+# Logs & temp
+**/*.log
+logs
+scratch
+tmp

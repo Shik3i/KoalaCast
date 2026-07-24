@@ -28,10 +28,12 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 
 func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := TruncateIP(r.RemoteAddr)
-		if ip == "" {
-			ip = r.RemoteAddr
-		}
+		// Key on the client host IP only. r.RemoteAddr is "host:port"; keying on the
+		// raw value would bucket every ephemeral source port separately, so the limit
+		// would almost never trigger for a real client. Strip the port. When a
+		// RealIP middleware runs first, r.RemoteAddr already carries the resolved
+		// client IP for requests arriving via a trusted proxy.
+		ip := ClientHostIP(r.RemoteAddr)
 
 		rl.mu.Lock()
 		now := time.Now()

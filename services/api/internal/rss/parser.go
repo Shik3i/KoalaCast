@@ -85,12 +85,12 @@ type rssItem struct {
 		Type   string `xml:"type,attr"`
 		Length int64  `xml:"length,attr"`
 	} `xml:"enclosure"`
-	ItunesDuration string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd duration"`
+	ItunesDuration    string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd duration"`
 	ItunesEpisode     int    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd episode"`
 	ItunesSeason      int    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd season"`
 	ItunesEpisodeType string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd episodeType"`
 	ItunesExplicit    string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
-	ItunesImage    struct {
+	ItunesImage       struct {
 		Href string `xml:"href,attr"`
 	} `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
 	PodcastChapters struct {

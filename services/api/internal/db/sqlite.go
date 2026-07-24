@@ -34,6 +34,14 @@ func OpenDB(dbPath string, logger *slog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
+	// SQLite allows only a single writer. With a multi-connection pool, concurrent
+	// writes (feed worker pool + sync handlers) race for the write lock and can
+	// surface intermittent "database is locked" errors even with busy_timeout.
+	// Serializing on one connection is the idiomatic fix for an embedded SQLite
+	// writer and eliminates that class of failures. All query loops here are
+	// scan-only (no query issued while rows are open), so this cannot deadlock.
+	sqlDB.SetMaxOpenConns(1)
+
 	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping sqlite database: %w", err)
 	}

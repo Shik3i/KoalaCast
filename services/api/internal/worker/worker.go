@@ -44,6 +44,29 @@ func NewFeedWorker(database *db.DB, cfg *config.Config, logger *slog.Logger) *Fe
 	}
 }
 
+// Metrics is an immutable snapshot of the worker's runtime counters, safe to
+// read outside the worker's lock.
+type Metrics struct {
+	LastRunAt       time.Time
+	SuccessCount    int64
+	FailureCount    int64
+	IsWorkerRunning bool
+}
+
+// Snapshot returns the current worker metrics read under the mutex. Callers
+// (e.g. the admin status handler) must use this instead of reading the exported
+// fields directly, which would race with the worker goroutines.
+func (w *FeedWorker) Snapshot() Metrics {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return Metrics{
+		LastRunAt:       w.LastRunAt,
+		SuccessCount:    w.SuccessCount,
+		FailureCount:    w.FailureCount,
+		IsWorkerRunning: w.IsWorkerRunning,
+	}
+}
+
 func (w *FeedWorker) Start(ctx context.Context) {
 	w.mu.Lock()
 	w.IsWorkerRunning = true
@@ -104,11 +127,11 @@ func (w *FeedWorker) RefreshScheduledFeeds(ctx context.Context) {
 	defer rows.Close()
 
 	type podcastItem struct {
-		id            string
-		feedURL       string
-		etag          string
-		lastModified  string
-		errorCount    int
+		id           string
+		feedURL      string
+		etag         string
+		lastModified string
+		errorCount   int
 	}
 
 	var toFetch []podcastItem

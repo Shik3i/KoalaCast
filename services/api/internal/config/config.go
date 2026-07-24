@@ -52,7 +52,10 @@ func LoadConfig() (*Config, error) {
 		FeedWorkerConcurrency: getEnvInt("FEED_WORKER_CONCURRENCY", 5),
 		FeedRequestTimeoutMS:  getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
 		FeedMaxResponseBytes:  int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),
-		SecureCookies:         getEnvBool("SECURE_COOKIES", false),
+		// Secure cookies default ON in production; a deployment terminating TLS
+		// elsewhere (e.g. plain-HTTP local demo behind a proxy) can opt out with
+		// SECURE_COOKIES=false.
+		SecureCookies: getEnvBool("SECURE_COOKIES", appEnv == "production"),
 	}
 
 	// Parse LogLevel

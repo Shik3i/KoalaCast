@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { browser } from '$app/environment';
+	import DOMPurify from 'dompurify';
 	import { getLocalPlaybackState, saveLocalPlaybackState, type LocalQueueItem, addToLocalQueue } from '$lib/idb/db';
 
 	let episodeId = $state('');
@@ -62,9 +64,17 @@
 	}
 
 	function sanitizeHTML(html: string) {
-		if (!html) return '';
-		// Basic HTML sanitization escaping dangerous script tags while keeping formatting
-		return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+		// Feed show-notes are attacker-controlled (anyone can add an arbitrary feed),
+		// so they must go through a real allowlist sanitizer before {@html}. DOMPurify
+		// needs a DOM, and this block only ever renders in the browser (episode is
+		// populated client-side), so we no-op during SSR.
+		if (!html || !browser) return '';
+		return DOMPurify.sanitize(html, {
+			USE_PROFILES: { html: true },
+			ADD_ATTR: ['target'],
+			FORBID_TAGS: ['style', 'form', 'input', 'button'],
+			FORBID_ATTR: ['style']
+		});
 	}
 </script>
 
@@ -73,7 +83,7 @@
 {:else if episode}
 	<div class="episode-page">
 		<div class="episode-header">
-			<img src={episode.artwork_url || podcast?.artwork_url || '/favicon.png'} alt={episode.title} class="artwork" />
+			<img src={episode.artwork_url || podcast?.artwork_url || '/placeholder.svg'} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 
 			<div class="meta">
 				<h2>{episode.title}</h2>

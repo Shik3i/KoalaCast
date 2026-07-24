@@ -164,7 +164,13 @@
 				{#each filteredPodcasts as pod}
 					<div class="podcast-card" onclick={() => openPodcastShow(pod)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openPodcastShow(pod)}>
 						<div class="cover-wrapper">
-							<img src={pod.artwork_url || '/favicon.png'} alt={pod.title} class="cover-art" loading="lazy" />
+							<img
+								src={pod.artwork_url || '/placeholder.svg'}
+								alt={pod.title}
+								class="cover-art"
+								loading="lazy"
+								onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+							/>
 							<div class="cover-overlay">
 								<span class="btn-play-overlay">
 									<i class="ph ph-play-fill" aria-hidden="true"></i> View Episodes

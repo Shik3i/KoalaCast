@@ -33,15 +33,18 @@
 				}
 			}
 
-			const [podRes, epRes] = await Promise.all([
-				fetch(`/api/v1/podcasts/${targetId}`),
-				fetch(`/api/v1/podcasts/${targetId}/episodes`)
-			]);
-
-			if (podRes.ok) podcast = await podRes.json();
-			if (epRes.ok) {
-				const epData = await epRes.json();
-				episodes = epData.episodes || [];
+			// Fetch the podcast first: a numeric iTunes ID is resolved & ingested
+			// server-side and comes back with its canonical (UUID) id. Episodes are
+			// stored under that id, so they must be fetched with podcast.id — not the
+			// original numeric id, which would return zero rows.
+			const podRes = await fetch(`/api/v1/podcasts/${targetId}`);
+			if (podRes.ok) {
+				podcast = await podRes.json();
+				const epRes = await fetch(`/api/v1/podcasts/${podcast.id}/episodes`);
+				if (epRes.ok) {
+					const epData = await epRes.json();
+					episodes = epData.episodes || [];
+				}
 			}
 		} catch (err) {
 			console.error(err);
@@ -86,7 +89,12 @@
 	<div class="podcast-page">
 		<!-- Podcast Cover & Meta Header -->
 		<header class="podcast-header">
-			<img src={podcast.artwork_url || '/favicon.png'} alt={podcast.title} class="artwork" />
+			<img
+				src={podcast.artwork_url || '/placeholder.svg'}
+				alt={podcast.title}
+				class="artwork"
+				onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+			/>
 			<div class="meta">
 				<span class="badge">Podcast Show</span>
 				<h2>{podcast.title}</h2>

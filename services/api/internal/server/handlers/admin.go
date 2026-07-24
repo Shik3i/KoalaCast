@@ -253,19 +253,23 @@ func (h *AdminHandler) SystemStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Read worker metrics through a mutex-guarded snapshot to avoid a data race
+	// with the worker goroutines that update these counters.
+	metrics := h.Worker.Snapshot()
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"version":                        "1.0.0",
-		"database_path":                  filepath.Base(h.Config.DatabasePath),
-		"database_size_bytes":            dbSizeBytes,
-		"user_count":                     userCount,
-		"podcast_count":                  podcastCount,
-		"episode_count":                  episodeCount,
-		"worker_running":                 h.Worker.IsWorkerRunning,
-		"worker_last_run":                h.Worker.LastRunAt,
-		"worker_success_count":           h.Worker.SuccessCount,
-		"worker_failure_count":           h.Worker.FailureCount,
+		"version":                       "1.0.0",
+		"database_path":                 filepath.Base(h.Config.DatabasePath),
+		"database_size_bytes":           dbSizeBytes,
+		"user_count":                    userCount,
+		"podcast_count":                 podcastCount,
+		"episode_count":                 episodeCount,
+		"worker_running":                metrics.IsWorkerRunning,
+		"worker_last_run":               metrics.LastRunAt,
+		"worker_success_count":          metrics.SuccessCount,
+		"worker_failure_count":          metrics.FailureCount,
 		"registration_enabled_override": regEnabledEnv,
 	})
 }

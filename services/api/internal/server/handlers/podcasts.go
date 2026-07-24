@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -17,11 +20,11 @@ import (
 )
 
 type PodcastHandler struct {
-	DB            *db.DB
-	PodcastIndex  *podcastindex.Client
-	ITunes        *itunes.ITunesClient
-	Worker        *worker.FeedWorker
-	MaxResponseB  int64
+	DB           *db.DB
+	PodcastIndex *podcastindex.Client
+	ITunes       *itunes.ITunesClient
+	Worker       *worker.FeedWorker
+	MaxResponseB int64
 }
 
 type AddFeedRequest struct {
@@ -29,18 +32,18 @@ type AddFeedRequest struct {
 }
 
 type PodcastResponse struct {
-	ID                     string `json:"id"`
-	FeedURL                string `json:"feed_url"`
-	Title                  string `json:"title"`
-	Description            string `json:"description"`
-	Author                 string `json:"author"`
-	ArtworkURL             string `json:"artwork_url"`
-	Link                   string `json:"link"`
-	Language               string `json:"language"`
-	Explicit               bool   `json:"explicit"`
-	Copyright              string `json:"copyright"`
-	LastSuccessfulFetchAt  int64  `json:"last_successful_fetch_at"`
-	EpisodeCount           int    `json:"episode_count"`
+	ID                    string `json:"id"`
+	FeedURL               string `json:"feed_url"`
+	Title                 string `json:"title"`
+	Description           string `json:"description"`
+	Author                string `json:"author"`
+	ArtworkURL            string `json:"artwork_url"`
+	Link                  string `json:"link"`
+	Language              string `json:"language"`
+	Explicit              bool   `json:"explicit"`
+	Copyright             string `json:"copyright"`
+	LastSuccessfulFetchAt int64  `json:"last_successful_fetch_at"`
+	EpisodeCount          int    `json:"episode_count"`
 }
 
 type EpisodeResponse struct {
@@ -142,6 +145,17 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ingestError carries an HTTP status code alongside a message so callers can
+// translate a failed feed ingestion into the right response.
+type ingestError struct {
+	Status int
+	Msg    string
+}
+
+func (e *ingestError) Error() string { return e.Msg }
+
+var numericIDPattern = regexp.MustCompile(`^\d+$`)
+
 func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 	var req AddFeedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FeedURL == "" {
@@ -149,55 +163,69 @@ func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate URL & SSRF checks
-	if err := rss.ValidateURL(req.FeedURL); err != nil {
+	podcastID, err := h.ingestFeedURL(r.Context(), req.FeedURL)
+	if err != nil {
+		var ie *ingestError
+		status := http.StatusInternalServerError
+		if errors.As(err, &ie) {
+			status = ie.Status
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
 
-	ctx := r.Context()
+	h.getAndReturnPodcast(w, r, podcastID)
+}
 
-	// Check if feed already exists in podcasts or podcast_aliases
+// ingestFeedURL validates, fetches, parses and persists a feed (with its
+// episodes), returning the stored podcast ID. A feed that is already stored
+// *with* episodes is returned as-is without a re-fetch; one that exists but has
+// zero episodes (e.g. a prior partial or transient-failure ingest) is re-fetched
+// and backfilled rather than being served as an empty shell forever.
+// Errors are *ingestError with an HTTP status hint.
+func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (string, error) {
+	// Validate URL & SSRF checks
+	if err := rss.ValidateURL(feedURL); err != nil {
+		return "", &ingestError{Status: http.StatusBadRequest, Msg: err.Error()}
+	}
+
+	// Look for an existing record; only short-circuit if it already has episodes.
 	var existingID string
-	err := h.DB.SQL.QueryRowContext(ctx, "SELECT id FROM podcasts WHERE feed_url = ?", req.FeedURL).Scan(&existingID)
-	if err == nil {
-		h.getAndReturnPodcast(w, r, existingID)
-		return
+	if err := h.DB.SQL.QueryRowContext(ctx, "SELECT id FROM podcasts WHERE feed_url = ?", feedURL).Scan(&existingID); err == nil {
+		var epCount int
+		_ = h.DB.SQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM episodes WHERE podcast_id = ?", existingID).Scan(&epCount)
+		if epCount > 0 {
+			return existingID, nil
+		}
 	}
 
 	// Fetch & Parse RSS/Atom Feed using Safe HTTP Client
 	client := rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second})
-	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, req.FeedURL, nil)
+	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	httpReq.Header.Set("User-Agent", "KoalaCast/1.0 (+https://github.com/Shik3i/KoalaCast)")
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to fetch feed: " + err.Error()})
-		return
+		return "", &ingestError{Status: http.StatusBadRequest, Msg: "failed to fetch feed: " + err.Error()}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "feed URL returned status " + strconv.Itoa(resp.StatusCode)})
-		return
+		return "", &ingestError{Status: http.StatusBadRequest, Msg: "feed URL returned status " + strconv.Itoa(resp.StatusCode)}
 	}
 
 	limitReader := rss.LimitResponseBody(resp.Body, h.MaxResponseB)
 	parsedFeed, err := rss.ParseFeedXML(limitReader)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to parse feed XML: " + err.Error()})
-		return
+		return "", &ingestError{Status: http.StatusBadRequest, Msg: "failed to parse feed XML: " + err.Error()}
 	}
 
-	podcastID := uuid.New().String()
+	podcastID := existingID
+	if podcastID == "" {
+		podcastID = uuid.New().String()
+	}
 	nowMs := time.Now().UnixMilli()
 
 	explicitInt := 0
@@ -207,25 +235,33 @@ func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.DB.SQL.BeginTx(ctx, nil)
 	if err != nil {
-		http.Error(w, `{"error":"database transaction error"}`, http.StatusInternalServerError)
-		return
+		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "database transaction error"}
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO podcasts (
-			id, feed_url, title, description, author, artwork_url, link, language,
-			explicit, copyright, update_frequency_ms, last_fetch_attempt_at,
-			last_successful_fetch_at, next_scheduled_fetch_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, podcastID, req.FeedURL, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author,
-		parsedFeed.ArtworkURL, parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright,
-		86400000, nowMs, nowMs, nowMs+86400000, nowMs, nowMs)
+	if existingID == "" {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO podcasts (
+				id, feed_url, title, description, author, artwork_url, link, language,
+				explicit, copyright, update_frequency_ms, last_fetch_attempt_at,
+				last_successful_fetch_at, next_scheduled_fetch_at, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, podcastID, feedURL, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author,
+			parsedFeed.ArtworkURL, parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright,
+			86400000, nowMs, nowMs, nowMs+86400000, nowMs, nowMs)
+	} else {
+		// Refresh metadata on the existing (previously episode-less) record.
+		_, err = tx.ExecContext(ctx, `
+			UPDATE podcasts SET title = ?, description = ?, author = ?, artwork_url = ?,
+				link = ?, language = ?, explicit = ?, copyright = ?,
+				last_successful_fetch_at = ?, updated_at = ?
+			WHERE id = ?
+		`, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author, parsedFeed.ArtworkURL,
+			parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright,
+			nowMs, nowMs, podcastID)
+	}
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to save podcast: " + err.Error()})
-		return
+		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to save podcast: " + err.Error()}
 	}
 
 	// Insert Episodes
@@ -247,7 +283,7 @@ func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 
 		epID := uuid.New().String()
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO episodes (
+			INSERT OR IGNORE INTO episodes (
 				id, podcast_id, stable_identity_key, guid, fallback_hash, title, description,
 				content_encoded, pub_date, has_pub_date, duration_ms, enclosure_url,
 				enclosure_type, enclosure_length, artwork_url, episode_number, season_number,
@@ -264,16 +300,38 @@ func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, `{"error":"failed to commit transaction"}`, http.StatusInternalServerError)
-		return
+		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to commit transaction"}
 	}
 
-	h.getAndReturnPodcast(w, r, podcastID)
+	return podcastID, nil
 }
 
 func (h *PodcastHandler) GetPodcast(w http.ResponseWriter, r *http.Request) {
 	podcastID := chi.URLParam(r, "id")
 	h.getAndReturnPodcast(w, r, podcastID)
+}
+
+// resolveITunesID turns a numeric iTunes collection ID into a stored podcast ID
+// by looking up its feed URL and ingesting it. Returns false for non-numeric IDs
+// or when resolution/ingestion fails.
+func (h *PodcastHandler) resolveITunesID(ctx context.Context, id string) (string, bool) {
+	if !numericIDPattern.MatchString(id) {
+		return "", false
+	}
+	if h.ITunes == nil {
+		h.ITunes = itunes.NewITunesClient()
+	}
+
+	feedURL, err := h.ITunes.LookupFeedURL(id)
+	if err != nil || feedURL == "" {
+		return "", false
+	}
+
+	podcastID, err := h.ingestFeedURL(ctx, feedURL)
+	if err != nil {
+		return "", false
+	}
+	return podcastID, true
 }
 
 func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Request, id string) {
@@ -292,6 +350,13 @@ func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Requ
 	)
 
 	if err == sql.ErrNoRows {
+		// A numeric ID is an iTunes collection ID from Discover/Top Charts, which
+		// carries no feed URL. Resolve it to a feed via the iTunes Lookup API and
+		// ingest it on demand, then serve the freshly stored podcast.
+		if resolvedID, ok := h.resolveITunesID(r.Context(), id); ok {
+			h.getAndReturnPodcast(w, r, resolvedID)
+			return
+		}
 		http.Error(w, `{"error":"podcast not found"}`, http.StatusNotFound)
 		return
 	} else if err != nil {

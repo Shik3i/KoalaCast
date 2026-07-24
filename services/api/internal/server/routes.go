@@ -19,6 +19,9 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	r := chi.NewRouter()
 
 	// Middlewares
+	r.Use(customMiddleware.RealIP(cfg.TrustedProxies))
+	r.Use(customMiddleware.SecurityHeaders)
+	r.Use(customMiddleware.CORS(cfg.AllowedCORSOrigins))
 	r.Use(customMiddleware.RequestID)
 	r.Use(customMiddleware.Logger(logger))
 	r.Use(middleware.Recoverer)
@@ -65,10 +68,17 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		// Podcasts & Discovery
 		r.Get("/podcasts/discover", podcastHandler.Discover)
 		r.Get("/podcasts/search", podcastHandler.Search)
-		r.Post("/podcasts/feed", podcastHandler.AddFeed)
 		r.Get("/podcasts/{id}", podcastHandler.GetPodcast)
 		r.Get("/podcasts/{id}/episodes", podcastHandler.GetEpisodes)
 		r.Get("/episodes/{id}", podcastHandler.GetEpisode)
+
+		// AddFeed triggers an unauthenticated server-side fetch + DB writes, so it
+		// is throttled per client IP to bound outbound-fetch and DB-growth abuse.
+		feedLimiter := customMiddleware.NewRateLimiter(20, 1*time.Minute)
+		r.Group(func(r chi.Router) {
+			r.Use(feedLimiter.Limit)
+			r.Post("/podcasts/feed", podcastHandler.AddFeed)
+		})
 
 		// Authentication & Recovery with Rate Limiting
 		authLimiter := customMiddleware.NewRateLimiter(10, 1*time.Minute)

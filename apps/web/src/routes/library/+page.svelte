@@ -42,7 +42,7 @@
 			<div class="podcast-grid">
 				{#each subscriptions as sub}
 					<div class="podcast-card">
-						<img src={sub.artwork_url || '/favicon.png'} alt={sub.title} class="artwork" />
+						<img src={sub.artwork_url || '/placeholder.svg'} alt={sub.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<div class="details">
 							<h3>{sub.title}</h3>
 							<div class="actions">

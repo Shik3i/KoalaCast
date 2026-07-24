@@ -101,6 +101,39 @@ func (c *ITunesClient) FetchTopPodcasts(limit int) ([]PodcastResult, error) {
 	return results, nil
 }
 
+// LookupFeedURL resolves an iTunes collection/track ID to its RSS feed URL via
+// the iTunes Lookup API. Used to turn a Top Charts entry (which carries no feed
+// URL) into an ingestible feed on demand.
+func (c *ITunesClient) LookupFeedURL(id string) (string, error) {
+	reqURL := fmt.Sprintf("https://itunes.apple.com/lookup?id=%s&entity=podcast", url.QueryEscape(id))
+
+	resp, err := c.httpClient.Get(reqURL)
+	if err != nil {
+		return "", fmt.Errorf("iTunes lookup failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("iTunes lookup HTTP error status %d", resp.StatusCode)
+	}
+
+	var lookupResp struct {
+		Results []struct {
+			FeedURL string `json:"feedUrl"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&lookupResp); err != nil {
+		return "", fmt.Errorf("failed to decode iTunes lookup JSON: %w", err)
+	}
+
+	for _, r := range lookupResp.Results {
+		if r.FeedURL != "" {
+			return r.FeedURL, nil
+		}
+	}
+	return "", fmt.Errorf("no feed URL found for iTunes ID %s", id)
+}
+
 // SearchPodcasts queries iTunes Search API for podcasts matching query term
 func (c *ITunesClient) SearchPodcasts(query string, limit int) ([]PodcastResult, error) {
 	if limit <= 0 || limit > 50 {

@@ -168,10 +168,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	`, normalizedUsername).Scan(&userID, &username, &pwdHash, &role, &isSuspended)
 
 	if err == sql.ErrNoRows {
+		// Spend the same CPU as a real verification so response time does not
+		// reveal whether the username exists.
+		auth.DummyVerify(req.Password)
 		http.Error(w, `{"error":"invalid username or password"}`, http.StatusUnauthorized)
 		return
 	} else if err != nil || isSuspended == 1 {
-		http.Error(w, `{"error":"account suspended or database error"}`, http.StatusUnauthorized)
+		http.Error(w, `{"error":"invalid username or password"}`, http.StatusUnauthorized)
 		return
 	}
 
@@ -244,7 +247,11 @@ func (h *AuthHandler) DeviceLogin(w http.ResponseWriter, r *http.Request) {
 		WHERE normalized_username = ?
 	`, normalizedUsername).Scan(&userID, &username, &pwdHash, &role, &isSuspended)
 
-	if err == sql.ErrNoRows || isSuspended == 1 {
+	if err == sql.ErrNoRows {
+		auth.DummyVerify(req.Password)
+		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
+		return
+	} else if err != nil || isSuspended == 1 {
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
 	}
@@ -275,10 +282,11 @@ func (h *AuthHandler) DeviceLogin(w http.ResponseWriter, r *http.Request) {
 	_, _ = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM device_credentials WHERE user_id = ? AND device_id = ?", userID, req.DeviceID)
 
 	deviceID := uuid.New().String()
+	expiresAtMs := nowMs + (90 * 86400 * 1000) // 90 days
 	_, err = h.DB.SQL.ExecContext(r.Context(), `
-		INSERT INTO device_credentials (id, user_id, device_id, name, token_hash, client_type, client_schema_version, created_at, last_sync_at, is_revoked)
-		VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 0)
-	`, deviceID, userID, req.DeviceID, req.DeviceName, tokenHash, req.ClientType, nowMs, nowMs)
+		INSERT INTO device_credentials (id, user_id, device_id, name, token_hash, client_type, client_schema_version, created_at, last_sync_at, is_revoked, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 0, ?)
+	`, deviceID, userID, req.DeviceID, req.DeviceName, tokenHash, req.ClientType, nowMs, nowMs, expiresAtMs)
 	if err != nil {
 		http.Error(w, `{"error":"failed to issue device credentials"}`, http.StatusInternalServerError)
 		return
@@ -415,6 +423,9 @@ func (h *AuthHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request)
 	err := h.DB.SQL.QueryRowContext(r.Context(), "SELECT id, recovery_code_hash FROM users WHERE normalized_username = ?", normalizedUsername).Scan(&userID, &storedRecoveryHash)
 	if err == sql.ErrNoRows {
 		http.Error(w, `{"error":"invalid recovery code or username"}`, http.StatusUnauthorized)
+		return
+	} else if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
 		return
 	}
 

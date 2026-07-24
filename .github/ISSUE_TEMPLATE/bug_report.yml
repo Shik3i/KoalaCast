@@ -1,0 +1,54 @@
+name: 🐛 Bug Report
+description: Report a reproducible problem in KoalaCast
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please search existing issues first.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including expected vs. actual behavior.
+      placeholder: When I click a discovered podcast, I see "Podcast details not found"...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / console output
+      description: Backend logs, browser console errors, or network responses.
+      render: shell
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Web frontend (apps/web)
+        - Go API (services/api)
+        - Docker / infrastructure
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: v0.1.0 or commit sha
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, browser, Docker version, self-hosted vs. local dev

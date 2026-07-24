@@ -32,15 +32,15 @@ type SyncPushRequest struct {
 }
 
 type PlaybackStatePayload struct {
-	EpisodeID            string `json:"episode_id"`
-	PositionMS           int64  `json:"position_ms"`
-	Completed            bool   `json:"completed"`
-	ProgressPercent      float64`json:"progress_percent"`
-	EventType            string `json:"event_type"` // "PROGRESS_TICK", "SEEK", "RESTART", "MARK_PLAYED", "MARK_UNPLAYED"
-	PlaybackSessionID    string `json:"playback_session_id"`
-	DeviceID             string `json:"device_id"`
-	PerSessionSeq        int64  `json:"per_session_seq"`
-	ClientTimestamp      int64  `json:"client_timestamp"`
+	EpisodeID         string  `json:"episode_id"`
+	PositionMS        int64   `json:"position_ms"`
+	Completed         bool    `json:"completed"`
+	ProgressPercent   float64 `json:"progress_percent"`
+	EventType         string  `json:"event_type"` // "PROGRESS_TICK", "SEEK", "RESTART", "MARK_PLAYED", "MARK_UNPLAYED"
+	PlaybackSessionID string  `json:"playback_session_id"`
+	DeviceID          string  `json:"device_id"`
+	PerSessionSeq     int64   `json:"per_session_seq"`
+	ClientTimestamp   int64   `json:"client_timestamp"`
 }
 
 type QueueOperationPayload struct {

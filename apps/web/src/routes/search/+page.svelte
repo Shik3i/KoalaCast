@@ -195,7 +195,7 @@
 		<div class="results-grid">
 			{#each searchResults as pod}
 				<div class="result-card" onclick={() => openPodcastShow(pod)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openPodcastShow(pod)}>
-					<img src={pod.artwork_url || pod.artworkUrl600 || '/favicon.png'} alt={pod.title || pod.trackName} class="artwork" />
+					<img src={pod.artwork_url || pod.artworkUrl600 || '/placeholder.svg'} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 					<div class="info">
 						<h4>{pod.title || pod.trackName}</h4>
 						<p class="author">{pod.author || pod.artistName}</p>
