@@ -1,0 +1,28 @@
+# Git & OS
+.git
+.gitignore
+.github
+.DS_Store
+Thumbs.db
+
+# Node dependencies and build output
+**/node_modules
+**/.svelte-kit
+**/build
+**/dist
+**/.env*
+
+# Go binaries and data
+**/koalacast-api
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/data
+**/*.out
+**/coverage.txt
+
+# Documentation & IDE
+*.md
+.vscode
+.idea
+Makefile

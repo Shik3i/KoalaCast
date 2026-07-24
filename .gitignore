@@ -1,17 +1,28 @@
-# Operating System
+# Operating System & Environment
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
 
-# Node dependencies & builds
+# Node.js & SvelteKit
 node_modules/
 .svelte-kit/
 build/
 dist/
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Go builds & binaries
+# Go Binaries, Builds & Test Artifacts
 bin/
 *.exe
 *.exe?
@@ -20,20 +31,31 @@ bin/
 *.dylib
 *.test
 *.out
+coverage.html
+coverage.txt
 services/api/koalacast-api
+services/api/cmd/server/server
 
-# SQLite data & WAL files
+# SQLite Data & Databases
 *.db
 *.db-wal
 *.db-shm
 data/
+services/api/data/
+/data/
 
-# IDE & Editors
-.vscode/
+# IDE & Editor Configuration
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
-# Logs
+# Logs & Temporary Task Artifacts
 *.log
 logs/
+scratch/
+tmp/
