@@ -219,6 +219,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (openMenuId = null)} />
+
 {#if isLoading}
 	<div class="podcast-page">
 		<header class="podcast-header">

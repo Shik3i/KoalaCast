@@ -24,12 +24,39 @@
 		return subscribedIds.includes(pod.id) || (!!feed && subscribedFeeds.includes(feed));
 	}
 
+	let recentSearches = $state<string[]>([]);
+	const HISTORY_KEY = 'koalacast_search_history';
+
 	onMount(async () => {
 		const subs = await getLocalSubscriptions();
 		subscribedIds = subs.map((s) => s.podcast_id);
 		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);
+		try {
+			recentSearches = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+		} catch (_) {}
 		executeSearch('technology');
 	});
+
+	function rememberSearch(query: string) {
+		const q = query.trim();
+		if (q.length < 2) return;
+		recentSearches = [q, ...recentSearches.filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+		try {
+			localStorage.setItem(HISTORY_KEY, JSON.stringify(recentSearches));
+		} catch (_) {}
+	}
+
+	function clearHistory() {
+		recentSearches = [];
+		try {
+			localStorage.removeItem(HISTORY_KEY);
+		} catch (_) {}
+	}
+
+	function runRecent(q: string) {
+		searchQuery = q;
+		executeSearch(q);
+	}
 
 	$effect(() => {
 		const q = searchQuery;
@@ -62,10 +89,12 @@
 
 	function handleSearchSubmit(e: Event) {
 		e.preventDefault();
+		rememberSearch(searchQuery);
 		executeSearch(searchQuery);
 	}
 
 	async function openPodcastShow(pod: any) {
+		rememberSearch(searchQuery);
 		const feedUrl = pod.feed_url || pod.feedUrl;
 		if (feedUrl) {
 			try {
@@ -180,6 +209,18 @@
 				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}Search{/if}
 			</button>
 		</form>
+
+		{#if !searchQuery.trim() && recentSearches.length > 0}
+			<div class="recent-row" transition:slide={{ duration: 180 }}>
+				<span class="recent-label">Recent</span>
+				{#each recentSearches as q}
+					<button class="recent-chip" onclick={() => runRecent(q)}>{q}</button>
+				{/each}
+				<button class="recent-clear" onclick={clearHistory} aria-label="Clear search history">
+					<i class="ph ph-x" aria-hidden="true"></i>
+				</button>
+			</div>
+		{/if}
 
 		<!-- Collapsed by default: advanced "add by RSS" affordance. -->
 		<div class="rss-toggle-row">
@@ -359,6 +400,40 @@
 		animation: spin 0.7s linear infinite;
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
+
+	.recent-row {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.recent-label {
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: var(--text-muted);
+		margin-right: 0.2rem;
+	}
+	.recent-chip {
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		padding: 0.3rem 0.75rem;
+		border-radius: 999px;
+		font-size: 0.82rem;
+		font-weight: 600;
+	}
+	.recent-chip:hover { border-color: var(--accent-green); color: var(--accent-green); }
+	.recent-clear {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		display: grid;
+		place-items: center;
+	}
+	.recent-clear:hover { background: var(--bg-elevated); color: var(--text-primary); }
 
 	/* Collapsed RSS affordance — no wasted space until the user wants it. */
 	.rss-toggle-row { display: flex; }

@@ -149,10 +149,46 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	if l, convErr := strconv.Atoi(r.URL.Query().Get("limit")); convErr == nil && l > 0 {
 		limit = l
 	}
-	genreID := itunes.GenreIDForCategory(category)
+	var topPodcasts []itunes.PodcastResult
 
-	topPodcasts, err := h.ITunes.FetchTopChart(region, genreID, limit)
-	if err != nil || len(topPodcasts) == 0 {
+	// Prefer Podcast Index trending when configured (broader, fresher than the
+	// iTunes storefront charts), then fall back to iTunes charts, then the DB.
+	if h.PodcastIndex.IsConfigured() {
+		piCat := category
+		if piCat == "All" {
+			piCat = ""
+		}
+		if piResults, piErr := h.PodcastIndex.Trending(piCat, limit); piErr == nil {
+			for _, p := range piResults {
+				art := p.Artwork
+				if art == "" {
+					art = p.Image
+				}
+				feed := p.URL
+				if feed == "" {
+					feed = p.OriginalURL
+				}
+				topPodcasts = append(topPodcasts, itunes.PodcastResult{
+					ID:          strconv.FormatInt(p.ID, 10),
+					Title:       p.Title,
+					Author:      p.Author,
+					FeedURL:     feed,
+					ArtworkURL:  art,
+					Category:    category,
+					Description: p.Description,
+				})
+			}
+		}
+	}
+
+	if len(topPodcasts) == 0 {
+		genreID := itunes.GenreIDForCategory(category)
+		if tp, err := h.ITunes.FetchTopChart(region, genreID, limit); err == nil {
+			topPodcasts = tp
+		}
+	}
+
+	if len(topPodcasts) == 0 {
 		var dbPods []PodcastResponse
 		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT ?", limit)
 		if errDB == nil {
@@ -167,7 +203,6 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 				dbPods = append(dbPods, p)
 			}
 		}
-		topPodcasts = make([]itunes.PodcastResult, 0, len(dbPods))
 		for _, p := range dbPods {
 			topPodcasts = append(topPodcasts, itunes.PodcastResult{
 				ID:          p.ID,
@@ -178,6 +213,10 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 				Description: p.Description,
 			})
 		}
+	}
+
+	if topPodcasts == nil {
+		topPodcasts = []itunes.PodcastResult{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

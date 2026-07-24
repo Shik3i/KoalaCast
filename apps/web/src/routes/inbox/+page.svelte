@@ -159,6 +159,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (openMenuId = null)} />
+
 <div class="inbox-page">
 	<div class="head">
 		<div>
