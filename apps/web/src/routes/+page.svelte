@@ -16,6 +16,7 @@
 	import Onboarding from '$lib/components/Onboarding.svelte';
 	import PodcastCard from '$lib/components/PodcastCard.svelte';
 	import { GENRES } from '$lib/genres';
+	import { optimizeArtwork } from '$lib/artwork';
 
 	interface PodcastItem {
 		id: string;
@@ -372,8 +373,10 @@
 				<button class="featured-card" use:reveal onclick={() => openPodcastShow(featured)}>
 					<div class="featured-art">
 						<img
-							src={featured.artwork_url || '/placeholder.svg'}
+							src={optimizeArtwork(featured.artwork_url, 300)}
 							alt={featured.title}
+							width="220"
+							height="220"
 							loading="eager"
 							fetchpriority="high"
 							decoding="async"
@@ -399,10 +402,13 @@
 						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title}`}></button>
 						<div class="cover-wrapper">
 							<img
-								src={pod.artwork_url || '/placeholder.svg'}
+								src={optimizeArtwork(pod.artwork_url, 220)}
 								alt={pod.title}
+								width="220"
+								height="220"
 								class="cover-art"
 								loading="lazy"
+								decoding="async"
 								onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
 							/>
 							<div class="cover-overlay">
