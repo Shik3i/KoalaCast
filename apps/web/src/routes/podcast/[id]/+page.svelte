@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { saveLocalSubscription } from '$lib/idb/db';
+	import { player } from '$lib/stores/player.svelte';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -75,8 +76,16 @@
 	}
 
 	function playEpisode(ep: any) {
-		// Dispatch audio event or navigate to episode
-		window.location.href = `/episode/${ep.id}`;
+		if (!podcast) return;
+		player.play({
+			episode_id: ep.id,
+			podcast_id: podcast.id,
+			title: ep.title,
+			podcast_title: podcast.title,
+			artwork_url: ep.artwork_url || podcast.artwork_url || '',
+			enclosure_url: ep.enclosure_url,
+			duration_ms: ep.duration_ms
+		});
 	}
 </script>
 
@@ -114,9 +123,9 @@
 			<h3>Episodes ({episodes.length})</h3>
 			<div class="episode-list">
 				{#each episodes as ep}
-					<div class="episode-row">
-						<button class="btn-play" onclick={() => playEpisode(ep)} aria-label="Play episode">
-							<i class="ph ph-play-fill" aria-hidden="true"></i>
+					<div class="episode-row" class:current={player.current?.episode_id === ep.id}>
+						<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label="Play episode">
+							<i class="ph {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play-fill'}" aria-hidden="true"></i>
 						</button>
 
 						<div class="ep-info">
@@ -265,6 +274,16 @@
 		justify-content: center;
 		font-size: 1.4rem;
 		flex-shrink: 0;
+		transition: transform 0.2s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)), background 0.2s ease;
+	}
+	.btn-play:hover { transform: scale(1.1); background: var(--accent-green-hover); }
+	.btn-play.playing { animation: pulse-ring 1.8s ease-in-out infinite; }
+
+	.episode-row.current { border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface)); }
+
+	@keyframes pulse-ring {
+		0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-green) 45%, transparent); }
+		50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent-green) 0%, transparent); }
 	}
 
 	.ep-info {

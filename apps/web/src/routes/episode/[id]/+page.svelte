@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import DOMPurify from 'dompurify';
 	import { getLocalPlaybackState, saveLocalPlaybackState, type LocalQueueItem, addToLocalQueue } from '$lib/idb/db';
+	import { player } from '$lib/stores/player.svelte';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -36,6 +37,21 @@
 			isLoading = false;
 		}
 	}
+
+	function handlePlay() {
+		if (!episode) return;
+		player.play({
+			episode_id: episode.id,
+			podcast_id: episode.podcast_id,
+			title: episode.title,
+			podcast_title: podcast?.title || '',
+			artwork_url: episode.artwork_url || podcast?.artwork_url || '',
+			enclosure_url: episode.enclosure_url,
+			duration_ms: episode.duration_ms
+		});
+	}
+
+	const isCurrent = $derived(player.current?.episode_id === episode?.id);
 
 	async function handleAddToQueue() {
 		if (!episode) return;
@@ -101,7 +117,13 @@
 				</div>
 
 				<div class="action-buttons">
-					<button class="btn-primary" onclick={handleAddToQueue}>+ Add to Queue</button>
+					<button class="btn-play" onclick={handlePlay}>
+						<i class="ph {isCurrent ? 'ph-waveform' : 'ph-play-fill'}" aria-hidden="true"></i>
+						{isCurrent ? 'Now Playing' : 'Play Episode'}
+					</button>
+					<button class="btn-secondary" onclick={handleAddToQueue}>
+						<i class="ph ph-plus" aria-hidden="true"></i> Add to Queue
+					</button>
 				</div>
 			</div>
 		</div>
@@ -122,88 +144,144 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2rem;
+		animation: page-in 0.4s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
 	}
 
 	.episode-header {
 		display: flex;
-		gap: 1.5rem;
-		background: var(--bg-surface);
+		gap: 2rem;
+		background:
+			radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-green) 14%, transparent), transparent 60%),
+			var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
-		padding: 1.5rem;
+		border-radius: var(--radius-lg, 18px);
+		padding: 2rem;
 	}
 
 	.artwork {
-		width: 160px;
-		height: 160px;
-		border-radius: 8px;
+		width: 200px;
+		height: 200px;
+		border-radius: 16px;
 		object-fit: cover;
+		flex-shrink: 0;
+		box-shadow: var(--shadow-lg, 0 12px 30px rgba(0, 0, 0, 0.25));
 	}
 
 	.meta {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 0.6rem;
+		min-width: 0;
 	}
 
 	.meta h2 {
-		font-size: 1.5rem;
-		font-weight: 700;
+		font-size: clamp(1.5rem, 3vw, 2.1rem);
+		font-weight: 800;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
 	}
 
 	.podcast-link a {
 		color: var(--accent-green);
-		font-weight: 600;
+		font-weight: 700;
 	}
 
 	.badges {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
-		margin-top: 0.5rem;
+		margin-top: 0.35rem;
 	}
 
 	.badge {
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
-		padding: 0.25rem 0.6rem;
-		border-radius: 4px;
-		font-size: 0.8rem;
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		font-size: 0.78rem;
+		font-weight: 600;
 	}
 
 	.badge.explicit {
-		background: #f8d7da;
-		color: #721c24;
+		background: color-mix(in srgb, #e5484d 18%, transparent);
+		color: #e5484d;
 	}
 
 	.action-buttons {
 		margin-top: 1rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
 	}
 
-	.btn-primary {
+	.btn-play {
 		background: var(--accent-green);
-		color: white;
+		color: #fff;
 		border: none;
-		padding: 0.6rem 1.2rem;
-		border-radius: 6px;
-		font-weight: 600;
-
-		cursor: pointer;
+		padding: 0.7rem 1.5rem;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.95rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-green) 40%, transparent);
 	}
+	.btn-play:hover { background: var(--accent-green-hover); transform: translateY(-2px); }
+	.btn-play :global(.ph) { font-size: 1.15rem; }
+
+	.btn-secondary {
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.7rem 1.3rem;
+		border-radius: 12px;
+		font-weight: 600;
+		font-size: 0.95rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.btn-secondary:hover { border-color: var(--accent-green); color: var(--accent-green); transform: translateY(-2px); }
 
 	.description-card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
-		padding: 1.5rem;
+		border-radius: var(--radius-lg, 18px);
+		padding: 2rem;
 	}
 
 	.description-card h3 {
-		font-size: 1.2rem;
+		font-size: 1.25rem;
 		margin-bottom: 1rem;
+		font-weight: 700;
 	}
 
 	.html-content {
-		line-height: 1.6;
-		color: var(--text-primary);
+		line-height: 1.7;
+		color: var(--text-secondary);
+		overflow-wrap: anywhere;
+	}
+	.html-content :global(a) { color: var(--accent-green); font-weight: 600; }
+	.html-content :global(img) { max-width: 100%; height: auto; border-radius: 10px; }
+	.html-content :global(p) { margin-bottom: 0.85rem; }
+
+	.loading, .error {
+		padding: 4rem 2rem;
+		text-align: center;
+		color: var(--text-muted);
+	}
+
+	@keyframes page-in {
+		from { opacity: 0; transform: translateY(10px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@media (max-width: 640px) {
+		.episode-header { flex-direction: column; gap: 1.25rem; padding: 1.25rem; }
+		.artwork { width: 140px; height: 140px; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.episode-page { animation: none; }
 	}
 </style>

@@ -21,7 +21,23 @@
 	--player-text: #f8f9fa;
 	
 	--focus-ring: #52b788;
-	--transition-smooth: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+
+	/* Motion */
+	--ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+	--transition-smooth: all 0.2s var(--ease-spring);
+
+	/* Elevation */
+	--shadow-sm: 0 1px 2px rgba(16, 32, 26, 0.06), 0 2px 6px rgba(16, 32, 26, 0.05);
+	--shadow-md: 0 6px 16px rgba(16, 32, 26, 0.1);
+	--shadow-lg: 0 12px 30px rgba(16, 32, 26, 0.14);
+	--shadow-xl: 0 24px 55px rgba(16, 32, 26, 0.2);
+
+	/* Radii */
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 18px;
+	--radius-xl: 26px;
 }
 
 /* Automatic System Dark Mode */
@@ -95,6 +111,11 @@
 	padding: 0;
 }
 
+html {
+	scroll-behavior: smooth;
+	color-scheme: light dark;
+}
+
 html, body {
 	height: 100%;
 	font-family: var(--font-sans);
@@ -102,6 +123,15 @@ html, body {
 	color: var(--text-primary);
 	line-height: 1.5;
 	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+/* Subtle ambient background wash so surfaces read as layered, not flat. */
+body {
+	background-image:
+		radial-gradient(60% 55% at 100% 0%, color-mix(in srgb, var(--accent-green) 10%, transparent), transparent 60%),
+		radial-gradient(55% 50% at 0% 0%, color-mix(in srgb, var(--focus-ring) 8%, transparent), transparent 55%);
+	background-attachment: fixed;
 }
 
 a {
@@ -124,16 +154,75 @@ button:active {
 	transform: scale(0.97);
 }
 
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+/* Phosphor icons: give every icon a springy micro-interaction on hover/press. */
+.ph {
+	display: inline-block;
+	transition: transform 0.22s var(--ease-spring), color 0.2s ease;
+}
+button:hover > .ph,
+a:hover > .ph {
+	transform: scale(1.15);
+}
+button:active > .ph,
+a:active > .ph {
+	transform: scale(0.9);
+}
+
 .card, .podcast-card, .grid-card, .result-card {
-	transition: var(--transition-smooth);
+	transition: transform 0.28s var(--ease-spring), box-shadow 0.28s var(--ease-out), border-color 0.2s ease;
 }
 
 .card:hover, .podcast-card:hover, .grid-card:hover, .result-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+	transform: translateY(-3px);
+	box-shadow: var(--shadow-lg);
 }
 
 :focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--accent-green) 30%, transparent);
+	color: var(--text-primary);
+}
+
+/* Themed slim scrollbars */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border-subtle) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+	background: var(--border-subtle);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: var(--text-muted);
+	background-clip: content-box;
+}
+
+/* Smooth cross-page transitions where supported. */
+@media (prefers-reduced-motion: no-preference) {
+	@view-transition {
+		navigation: auto;
+	}
+}
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+	html { scroll-behavior: auto; }
+	*, *::before, *::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+	}
 }
