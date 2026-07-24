@@ -5,9 +5,11 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { reveal } from '$lib/actions/reveal';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { slide, fade } from 'svelte/transition';
 
 	let searchQuery = $state('');
 	let rssUrlInput = $state('');
+	let showRss = $state(false);
 	let isSearching = $state(false);
 	let isAddingRss = $state(false);
 	let errorMessage = $state('');
@@ -156,46 +158,54 @@
 </script>
 
 <div class="search-experience">
-	<div class="header-row">
-		<h2>Search & Discover Podcasts</h2>
-	</div>
+	<div class="search-hero">
+		<h2>Search podcasts</h2>
 
-	<div class="search-grid-top">
-		<!-- Live Search Form -->
-		<form onsubmit={handleSearchSubmit} class="search-box-card">
-			<h3>Search Millions of Shows</h3>
-			<div class="input-row">
-				<input
-					type="text"
-					placeholder="Type to search (live debounced)..."
-					bind:value={searchQuery}
-					required
-				/>
-				<button type="submit" disabled={isSearching}>
-					{isSearching ? 'Searching...' : 'Search'}
+		<form onsubmit={handleSearchSubmit} class="search-field" class:searching={isSearching}>
+			<i class="ph ph-magnifying-glass lead" aria-hidden="true"></i>
+			<input
+				type="text"
+				placeholder="Search millions of shows by title, author, or topic…"
+				bind:value={searchQuery}
+				aria-label="Search podcasts"
+			/>
+			{#if searchQuery}
+				<button type="button" class="clear" onclick={() => (searchQuery = '')} aria-label="Clear search" transition:fade={{ duration: 120 }}>
+					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
-			</div>
+			{/if}
+			<button type="submit" class="go" disabled={isSearching}>
+				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}Search{/if}
+			</button>
 		</form>
 
-		<!-- Direct RSS Form -->
-		<form onsubmit={handleAddDirectRss} class="rss-box-card">
-			<h3>Add Podcast by Direct RSS URL</h3>
-			<div class="input-row">
+		<!-- Collapsed by default: advanced "add by RSS" affordance. -->
+		<div class="rss-toggle-row">
+			<button class="rss-toggle" class:open={showRss} onclick={() => (showRss = !showRss)} aria-expanded={showRss}>
+				<i class="ph ph-rss" aria-hidden="true"></i>
+				Add a podcast by RSS URL
+				<i class="ph ph-caret-down chev" aria-hidden="true"></i>
+			</button>
+		</div>
+
+		{#if showRss}
+			<form onsubmit={handleAddDirectRss} class="rss-field" transition:slide={{ duration: 260 }}>
+				<i class="ph ph-link lead" aria-hidden="true"></i>
 				<input
 					type="url"
 					placeholder="https://example.com/feed.xml"
 					bind:value={rssUrlInput}
 					required
 				/>
-				<button type="submit" disabled={isAddingRss}>
-					{isAddingRss ? 'Adding...' : 'Add RSS'}
+				<button type="submit" class="go" disabled={isAddingRss}>
+					{isAddingRss ? 'Adding…' : 'Add'}
 				</button>
-			</div>
-		</form>
+			</form>
+		{/if}
 	</div>
 
 	{#if errorMessage}
-		<div class="alert error">{errorMessage}</div>
+		<div class="alert error" transition:slide={{ duration: 200 }}>{errorMessage}</div>
 	{/if}
 
 	<!-- Results Grid -->
@@ -253,60 +263,131 @@
 		gap: 2rem;
 	}
 
-	h2 {
-		font-size: 2rem;
-		font-weight: 800;
-	}
-
-	.search-grid-top {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-		gap: 1.5rem;
-	}
-
-	.search-box-card, .rss-box-card {
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
-		padding: 1.5rem;
+	.search-hero {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 0.9rem;
+	}
+	.search-hero h2 {
+		font-size: clamp(1.6rem, 3vw, 2.1rem);
+		font-weight: 800;
+		letter-spacing: -0.02em;
 	}
 
-	.search-box-card h3, .rss-box-card h3 {
-		font-size: 1.1rem;
-		font-weight: 700;
-	}
-
-	.input-row {
+	/* Prominent single search field with a soft focus glow. */
+	.search-field {
 		display: flex;
+		align-items: center;
 		gap: 0.5rem;
+		background: var(--bg-surface);
+		border: 1.5px solid var(--border-subtle);
+		border-radius: 16px;
+		padding: 0.5rem 0.5rem 0.5rem 1.1rem;
+		box-shadow: var(--shadow-sm);
+		transition: border-color 0.2s ease, box-shadow 0.25s ease, transform 0.2s ease;
 	}
-
-	input {
+	.search-field:focus-within {
+		border-color: var(--focus-ring);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus-ring) 20%, transparent), var(--shadow-md);
+	}
+	.search-field .lead { font-size: 1.35rem; color: var(--text-muted); flex-shrink: 0; }
+	.search-field input {
 		flex: 1;
-		padding: 0.75rem 1rem;
-		border: 1px solid var(--border-subtle);
+		border: none;
+		background: none;
+		outline: none;
+		color: var(--text-primary);
+		font-size: 1.05rem;
+		padding: 0.5rem 0;
+		min-width: 0;
+	}
+	.search-field input::placeholder { color: var(--text-muted); }
+
+	.clear {
+		display: grid;
+		place-items: center;
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 1.05rem;
+		flex-shrink: 0;
+	}
+	.clear:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+	.go {
+		flex-shrink: 0;
+		min-width: 92px;
+		height: 44px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		padding: 0 1.3rem;
+		background: var(--accent-green);
+		color: #fff;
+		border: none;
+		border-radius: 12px;
+		font-weight: 700;
+		font-size: 0.95rem;
+		transition: filter 0.2s ease, transform 0.15s ease;
+	}
+	.go:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+	.go:disabled { opacity: 0.8; }
+
+	.spinner-sm {
+		width: 16px;
+		height: 16px;
+		border: 2px solid rgba(255, 255, 255, 0.45);
+		border-top-color: #fff;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+	}
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	/* Collapsed RSS affordance — no wasted space until the user wants it. */
+	.rss-toggle-row { display: flex; }
+	.rss-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 0.9rem;
+		font-weight: 600;
+		padding: 0.3rem 0.2rem;
 		border-radius: 8px;
-		background: var(--bg-primary);
+	}
+	.rss-toggle:hover { color: var(--accent-green); }
+	.rss-toggle .chev { transition: transform 0.28s var(--ease-spring, ease); font-size: 0.95rem; }
+	.rss-toggle.open .chev { transform: rotate(180deg); }
+	.rss-toggle.open { color: var(--accent-green); }
+
+	.rss-field {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: 14px;
+		padding: 0.4rem 0.4rem 0.4rem 1rem;
+	}
+	.rss-field .lead { color: var(--text-muted); font-size: 1.15rem; flex-shrink: 0; }
+	.rss-field input {
+		flex: 1;
+		border: none;
+		background: none;
+		outline: none;
 		color: var(--text-primary);
 		font-size: 0.95rem;
-		outline: none;
+		padding: 0.55rem 0;
+		min-width: 0;
 	}
-
-	input:focus {
-		border-color: var(--focus-ring);
-	}
-
-	button[type="submit"] {
-		padding: 0.75rem 1.25rem;
-		background: var(--accent-green);
-		color: white;
-		border: none;
-		border-radius: 8px;
-		font-weight: 700;
-	}
+	.rss-field input::placeholder { color: var(--text-muted); }
+	.rss-field .go { height: 40px; min-width: 72px; }
 
 	.alert.error {
 		padding: 1rem;
