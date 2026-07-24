@@ -33,6 +33,8 @@ func main() {
 	}
 	defer database.Close()
 
+	database.SeedDefaultPodcasts(context.Background(), logger)
+
 	// Initialize background feed worker pool
 	feedWorker := worker.NewFeedWorker(database, cfg, logger)
 	ctxWorker, cancelWorker := context.WithCancel(context.Background())
