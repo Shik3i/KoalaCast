@@ -504,12 +504,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		background: var(--accent-green);
-		color: white;
+		background: #52b788;
+		color: #0b1411;
 		padding: 0.3rem 0.85rem;
 		border-radius: 30px;
 		font-size: 0.8rem;
-		font-weight: 700;
+		font-weight: 800;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		width: fit-content;
@@ -592,9 +592,10 @@
 	}
 
 	.cat-pill:hover, .cat-pill.active {
-		background: var(--accent-green);
-		color: white;
-		border-color: var(--accent-green);
+		background: #52b788;
+		color: #0b1411;
+		font-weight: 800;
+		border-color: #52b788;
 	}
 
 	.catalog-section {
@@ -659,10 +660,10 @@
 		align-items: center;
 		gap: 0.35rem;
 		width: fit-content;
-		background: var(--accent-green);
-		color: #fff;
+		background: #52b788;
+		color: #0b1411;
 		font-size: 0.72rem;
-		font-weight: 800;
+		font-weight: 900;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: 0.25rem 0.7rem;

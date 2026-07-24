@@ -54,10 +54,10 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		background: var(--accent-green);
-		color: #fff;
+		background: #52b788;
+		color: #0b1411;
 		font-size: 0.72rem;
-		font-weight: 800;
+		font-weight: 900;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: 0.25rem 0.7rem;
