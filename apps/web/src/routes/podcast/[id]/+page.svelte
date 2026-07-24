@@ -3,13 +3,15 @@
 	import {
 		saveLocalSubscription,
 		removeLocalSubscription,
-		getLocalSubscriptions
+		getLocalSubscriptions,
+		getCompletedEpisodeIds,
+		setEpisodePlayed
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { reveal } from '$lib/actions/reveal';
 	import { dominantColor } from '$lib/color';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { slide } from 'svelte/transition';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -17,6 +19,41 @@
 	let isLoading = $state(true);
 	let isSubscribed = $state(false);
 	let showAccent = $state<string | null>(null);
+	let playedIds = $state<Set<string>>(new Set());
+	let collapsedTiers = $state<Set<string>>(new Set());
+
+	const DAY = 86400;
+	// Recency tiers, newest first. Anything older than a year collapses by default.
+	const TIERS = [
+		{ key: 'week', label: 'This week', maxAgeDays: 7 },
+		{ key: 'month', label: 'This month', maxAgeDays: 30 },
+		{ key: 'year', label: 'Earlier this year', maxAgeDays: 365 },
+		{ key: 'older', label: 'Older than a year', maxAgeDays: Infinity }
+	];
+
+	// Group episodes into recency tiers based on pub_date (unix seconds).
+	const groupedEpisodes = $derived.by(() => {
+		const nowSec = Date.now() / 1000;
+		const buckets: Record<string, any[]> = { week: [], month: [], year: [], older: [], undated: [] };
+		for (const ep of episodes) {
+			if (!ep.pub_date) {
+				buckets.undated.push(ep);
+				continue;
+			}
+			const ageDays = (nowSec - ep.pub_date) / DAY;
+			const tier = TIERS.find((t) => ageDays <= t.maxAgeDays) ?? TIERS[TIERS.length - 1];
+			buckets[tier.key].push(ep);
+		}
+		const out = TIERS.map((t) => ({ ...t, episodes: buckets[t.key] })).filter(
+			(g) => g.episodes.length > 0
+		);
+		if (buckets.undated.length > 0) {
+			out.push({ key: 'undated', label: 'Undated', maxAgeDays: Infinity, episodes: buckets.undated });
+		}
+		return out;
+	});
+
+	const unplayedCount = $derived(episodes.filter((ep) => !playedIds.has(ep.id)).length);
 
 	const accentVars = $derived(
 		showAccent
@@ -70,6 +107,9 @@
 				}
 				const subs = await getLocalSubscriptions();
 				isSubscribed = subs.some((s) => s.podcast_id === podcast.id);
+				playedIds = await getCompletedEpisodeIds();
+				// Collapse the "older than a year" tier by default.
+				collapsedTiers = new Set(['older']);
 			}
 		} catch (err) {
 			console.error(err);
@@ -121,6 +161,50 @@
 			enclosure_url: ep.enclosure_url,
 			duration_ms: ep.duration_ms
 		});
+	}
+
+	function epMeta(ep: any) {
+		return {
+			episode_id: ep.id,
+			podcast_id: podcast.id,
+			title: ep.title,
+			podcast_title: podcast.title,
+			artwork_url: ep.artwork_url || podcast.artwork_url || '',
+			enclosure_url: ep.enclosure_url,
+			duration_ms: ep.duration_ms
+		};
+	}
+
+	async function togglePlayed(ep: any) {
+		const played = !playedIds.has(ep.id);
+		await setEpisodePlayed(epMeta(ep), played);
+		const next = new Set(playedIds);
+		if (played) next.add(ep.id);
+		else next.delete(ep.id);
+		playedIds = next;
+	}
+
+	// Mark a batch (a tier, or all episodes) played/unplayed at once.
+	async function markManyPlayed(list: any[], played: boolean) {
+		await Promise.all(list.map((ep) => setEpisodePlayed(epMeta(ep), played)));
+		const next = new Set(playedIds);
+		for (const ep of list) {
+			if (played) next.add(ep.id);
+			else next.delete(ep.id);
+		}
+		playedIds = next;
+		toast.success(
+			played
+				? `Marked ${list.length} episode${list.length === 1 ? '' : 's'} as played.`
+				: `Marked ${list.length} episode${list.length === 1 ? '' : 's'} as unplayed.`
+		);
+	}
+
+	function toggleTier(key: string) {
+		const next = new Set(collapsedTiers);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		collapsedTiers = next;
 	}
 </script>
 
@@ -182,29 +266,70 @@
 			</div>
 		</header>
 
-		<!-- Episode List -->
+		<!-- Episode List, grouped by recency -->
 		<section class="episodes-section">
-			<h3>Episodes ({episodes.length})</h3>
-			<div class="episode-list">
-				{#each episodes as ep, i (ep.id)}
-					<div class="episode-row" use:reveal={{ delay: Math.min(i * 30, 300) }} class:current={player.current?.episode_id === ep.id}>
-						<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label="Play episode">
-							<i class="ph-fill {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
-						</button>
-
-						<div class="ep-info">
-							<h4><a href={`/episode/${ep.id}`}>{ep.title}</a></h4>
-							<p class="ep-desc">{ep.description ? ep.description.replace(/<[^>]*>?/gm, '').slice(0, 160) + '...' : ''}</p>
-							<span class="ep-meta">
-								{ep.pub_date ? new Date(ep.pub_date * 1000).toLocaleDateString() : 'No Date'}
-								{#if ep.duration_ms}
-									• {formatDuration(ep.duration_ms)}
-								{/if}
-							</span>
-						</div>
+			<div class="episodes-head">
+				<h3>Episodes ({episodes.length})</h3>
+				{#if episodes.length > 0}
+					<div class="ep-head-actions">
+						<span class="unplayed-pill">{unplayedCount} unplayed</span>
+						{#if unplayedCount > 0}
+							<button class="mark-all-btn" onclick={() => markManyPlayed(episodes, true)}>
+								<i class="ph ph-checks" aria-hidden="true"></i> Mark all played
+							</button>
+						{:else}
+							<button class="mark-all-btn" onclick={() => markManyPlayed(episodes, false)}>
+								<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Mark all unplayed
+							</button>
+						{/if}
 					</div>
-				{/each}
+				{/if}
 			</div>
+
+			{#each groupedEpisodes as group (group.key)}
+				{@const allPlayed = group.episodes.every((e) => playedIds.has(e.id))}
+				{@const open = !collapsedTiers.has(group.key)}
+				<div class="tier">
+					<div class="tier-head">
+						<button class="tier-toggle" onclick={() => toggleTier(group.key)} aria-expanded={open}>
+							<i class="ph ph-caret-right chev" class:open aria-hidden="true"></i>
+							<span class="tier-label">{group.label}</span>
+							<span class="tier-count">{group.episodes.length}</span>
+						</button>
+						<button class="tier-mark" onclick={() => markManyPlayed(group.episodes, !allPlayed)}>
+							{allPlayed ? 'Mark unplayed' : 'Mark all played'}
+						</button>
+					</div>
+
+					{#if open}
+						<div class="episode-list" transition:slide={{ duration: 240 }}>
+							{#each group.episodes as ep (ep.id)}
+								<div class="episode-row" class:current={player.current?.episode_id === ep.id} class:played={playedIds.has(ep.id)}>
+									<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label="Play episode">
+										<i class="ph-fill {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
+									</button>
+
+									<div class="ep-info">
+										<h4><a href={`/episode/${ep.id}`}>{ep.title}</a></h4>
+										<p class="ep-desc">{ep.description ? ep.description.replace(/<[^>]*>?/gm, '').slice(0, 160) + '...' : ''}</p>
+										<span class="ep-meta">
+											{ep.pub_date ? new Date(ep.pub_date * 1000).toLocaleDateString() : 'No Date'}
+											{#if ep.duration_ms}
+												• {formatDuration(ep.duration_ms)}
+											{/if}
+											{#if playedIds.has(ep.id)}<span class="played-tag">Played</span>{/if}
+										</span>
+									</div>
+
+									<button class="btn-mark" class:done={playedIds.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={playedIds.has(ep.id)} aria-label={playedIds.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'} title={playedIds.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'}>
+										<i class="{playedIds.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
+									</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/each}
 		</section>
 	</div>
 {:else}
@@ -329,11 +454,81 @@
 		color: var(--show-accent, var(--accent-green));
 	}
 
+	.episodes-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-bottom: 1.25rem;
+	}
 	.episodes-section h3 {
 		font-size: 1.5rem;
 		font-weight: 800;
-		margin-bottom: 1.25rem;
 	}
+	.ep-head-actions { display: flex; align-items: center; gap: 0.6rem; }
+	.unplayed-pill {
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		background: var(--bg-elevated);
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+	}
+	.mark-all-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		color: var(--text-secondary);
+		padding: 0.45rem 0.9rem;
+		border-radius: 10px;
+		font-weight: 600;
+		font-size: 0.85rem;
+	}
+	.mark-all-btn:hover { border-color: var(--show-accent, var(--accent-green)); color: var(--show-accent, var(--accent-green)); }
+
+	/* Recency tier */
+	.tier { margin-bottom: 1.25rem; }
+	.tier-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+	.tier-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		background: none;
+		border: none;
+		color: var(--text-primary);
+		font-weight: 700;
+		font-size: 1rem;
+		padding: 0.25rem 0;
+	}
+	.tier-toggle .chev { transition: transform 0.25s var(--ease-spring, ease); color: var(--text-muted); font-size: 1.1rem; }
+	.tier-toggle .chev.open { transform: rotate(90deg); }
+	.tier-count {
+		font-size: 0.72rem;
+		font-weight: 800;
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		padding: 0.05rem 0.5rem;
+		border-radius: 999px;
+	}
+	.tier-mark {
+		margin-left: auto;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		font-weight: 600;
+		padding: 0.25rem 0.4rem;
+		border-radius: 6px;
+	}
+	.tier-mark:hover { color: var(--show-accent, var(--accent-green)); background: var(--bg-elevated); }
 
 	.episode-list {
 		display: flex;
@@ -399,10 +594,42 @@
 	}
 
 	.ep-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-wrap: wrap;
 		font-size: 0.8rem;
 		color: var(--text-muted);
 		font-weight: 600;
 	}
+	.played-tag {
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 16%, transparent);
+		color: var(--show-accent, var(--accent-green));
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		font-size: 0.7rem;
+		font-weight: 700;
+	}
+
+	/* Dim played episodes so unplayed ones stand out. */
+	.episode-row.played { opacity: 0.6; }
+	.episode-row.played:hover { opacity: 1; }
+
+	.btn-mark {
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		display: grid;
+		place-items: center;
+		font-size: 1.5rem;
+		transition: transform 0.2s var(--ease-spring, ease), color 0.2s ease;
+	}
+	.btn-mark:hover { color: var(--show-accent, var(--accent-green)); background: var(--bg-elevated); transform: scale(1.05); }
+	.btn-mark.done { color: var(--show-accent, var(--accent-green)); }
 
 	.error-state {
 		padding: 5rem 2rem;

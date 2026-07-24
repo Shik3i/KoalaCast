@@ -136,6 +136,40 @@ export async function getCompletedEpisodeIds(): Promise<Set<string>> {
 	return new Set(all.filter((s) => s.completed).map((s) => s.episode_id));
 }
 
+// Manually mark an episode played/unplayed without listening. Preserves any
+// existing position; played => completed + 100%, unplayed => reset to 0%.
+export async function setEpisodePlayed(
+	meta: {
+		episode_id: string;
+		podcast_id: string;
+		title?: string;
+		podcast_title?: string;
+		artwork_url?: string;
+		enclosure_url?: string;
+		duration_ms?: number;
+	},
+	played: boolean
+): Promise<void> {
+	const db = await getLocalDB();
+	const existing = (await db.get('playback_states', meta.episode_id)) as
+		| LocalPlaybackState
+		| undefined;
+	await db.put('playback_states', {
+		...existing,
+		episode_id: meta.episode_id,
+		podcast_id: meta.podcast_id,
+		position_ms: played ? existing?.position_ms ?? 0 : 0,
+		completed: played,
+		progress_percent: played ? 100 : 0,
+		last_played_at: Date.now(),
+		title: meta.title ?? existing?.title,
+		podcast_title: meta.podcast_title ?? existing?.podcast_title,
+		artwork_url: meta.artwork_url ?? existing?.artwork_url,
+		enclosure_url: meta.enclosure_url ?? existing?.enclosure_url,
+		duration_ms: meta.duration_ms ?? existing?.duration_ms
+	});
+}
+
 // Recently played, still-in-progress episodes for the "Continue Listening" shelf.
 // Most-recent first; completed episodes and untouched (0%) ones are filtered out.
 export async function getRecentPlaybackStates(limit = 12): Promise<LocalPlaybackState[]> {
