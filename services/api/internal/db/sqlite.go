@@ -118,6 +118,15 @@ func OpenDB(dbPath string, logger *slog.Logger) (*DB, error) {
 }
 
 func (db *DB) Migrate(logger *slog.Logger) error {
+	// Track applied migrations so each .up.sql runs exactly once. Without this,
+	// every startup re-ran all migrations, which breaks any non-idempotent step
+	// (e.g. ALTER TABLE ADD COLUMN) as soon as the database has persisted data.
+	if _, err := db.SQL.Exec(
+		`CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`,
+	); err != nil {
+		return fmt.Errorf("failed to ensure schema_migrations table: %w", err)
+	}
+
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("failed to read migrations dir: %w", err)
@@ -132,6 +141,16 @@ func (db *DB) Migrate(logger *slog.Logger) error {
 	sort.Strings(upFiles)
 
 	for _, file := range upFiles {
+		var applied int
+		if err := db.SQL.QueryRow(
+			`SELECT COUNT(1) FROM schema_migrations WHERE version = ?`, file,
+		).Scan(&applied); err != nil {
+			return fmt.Errorf("failed to read migration state for %s: %w", file, err)
+		}
+		if applied > 0 {
+			continue
+		}
+
 		content, err := migrationsFS.ReadFile("migrations/" + file)
 		if err != nil {
 			return fmt.Errorf("failed to read migration file %s: %w", file, err)
@@ -139,11 +158,34 @@ func (db *DB) Migrate(logger *slog.Logger) error {
 
 		logger.Info("executing migration", "file", file)
 		if _, err := db.SQL.Exec(string(content)); err != nil {
-			return fmt.Errorf("failed to execute migration %s: %w", file, err)
+			// Self-heal databases that predate migration tracking: the schema
+			// change may already be present from an earlier un-tracked run. Treat
+			// "already exists" style errors as applied instead of crash-looping.
+			if isAlreadyAppliedErr(err) {
+				logger.Warn("migration already applied to existing schema; recording as done",
+					"file", file, "detail", err.Error())
+			} else {
+				return fmt.Errorf("failed to execute migration %s: %w", file, err)
+			}
+		}
+
+		if _, err := db.SQL.Exec(
+			`INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
+			file, time.Now().UnixMilli(),
+		); err != nil {
+			return fmt.Errorf("failed to record migration %s: %w", file, err)
 		}
 	}
 
 	return nil
+}
+
+// isAlreadyAppliedErr reports whether a migration error just means the change is
+// already present (e.g. re-adding a column/table on a pre-tracking database).
+func isAlreadyAppliedErr(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate column name") ||
+		strings.Contains(msg, "already exists")
 }
 
 // Close runs a final optimize pass (cheap, uses the stats gathered this session)
