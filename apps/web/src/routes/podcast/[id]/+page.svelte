@@ -21,6 +21,7 @@
 	let showAccent = $state<string | null>(null);
 	let playedIds = $state<Set<string>>(new Set());
 	let collapsedTiers = $state<Set<string>>(new Set());
+	let openMenuId = $state<string | null>(null);
 
 	const DAY = 86400;
 	// Recency tiers, newest first. Anything older than a year collapses by default.
@@ -206,6 +207,15 @@
 		else next.add(key);
 		collapsedTiers = next;
 	}
+
+	// "Mark this and everything older as played/unplayed" — episodes come back
+	// newest-first, so this episode plus all following ones are the older set.
+	async function markThisAndOlder(ep: any, played: boolean) {
+		openMenuId = null;
+		const idx = episodes.findIndex((e) => e.id === ep.id);
+		if (idx < 0) return;
+		await markManyPlayed(episodes.slice(idx), played);
+	}
 </script>
 
 {#if isLoading}
@@ -286,6 +296,10 @@
 				{/if}
 			</div>
 
+			{#if openMenuId}
+				<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label="Close menu" tabindex="-1"></button>
+			{/if}
+
 			{#each groupedEpisodes as group (group.key)}
 				{@const allPlayed = group.episodes.every((e) => playedIds.has(e.id))}
 				{@const open = !collapsedTiers.has(group.key)}
@@ -324,6 +338,21 @@
 									<button class="btn-mark" class:done={playedIds.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={playedIds.has(ep.id)} aria-label={playedIds.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'} title={playedIds.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'}>
 										<i class="{playedIds.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
 									</button>
+								<div class="row-menu">
+									<button class="btn-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label="More actions">
+										<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
+									</button>
+									{#if openMenuId === ep.id}
+										<div class="menu" role="menu">
+											<button role="menuitem" onclick={() => markThisAndOlder(ep, true)}>
+												<i class="ph ph-arrow-line-down" aria-hidden="true"></i> Mark this &amp; older as played
+											</button>
+											<button role="menuitem" onclick={() => markThisAndOlder(ep, false)}>
+												<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Mark this &amp; older as unplayed
+											</button>
+										</div>
+									{/if}
+								</div>
 								</div>
 							{/each}
 						</div>
@@ -630,6 +659,66 @@
 	}
 	.btn-mark:hover { color: var(--show-accent, var(--accent-green)); background: var(--bg-elevated); transform: scale(1.05); }
 	.btn-mark.done { color: var(--show-accent, var(--accent-green)); }
+
+	.row-menu { position: relative; flex-shrink: 0; }
+	.btn-kebab {
+		width: 36px;
+		height: 40px;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		display: grid;
+		place-items: center;
+		font-size: 1.35rem;
+		border-radius: 8px;
+	}
+	.btn-kebab:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+	.menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: transparent;
+		border: none;
+		cursor: default;
+	}
+	.menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		z-index: 50;
+		min-width: 250px;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		box-shadow: var(--shadow-lg);
+		padding: 0.35rem;
+		display: flex;
+		flex-direction: column;
+		animation: menu-in 0.16s var(--ease-out, ease);
+	}
+	.menu button {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+		background: none;
+		border: none;
+		text-align: left;
+		color: var(--text-primary);
+		font-size: 0.88rem;
+		font-weight: 500;
+		padding: 0.6rem 0.7rem;
+		border-radius: 8px;
+	}
+	.menu button :global(.ph) { font-size: 1.1rem; color: var(--text-muted); }
+	.menu button:hover { background: var(--bg-elevated); }
+	.menu button:hover :global(.ph) { color: var(--show-accent, var(--accent-green)); }
+
+	@keyframes menu-in {
+		from { opacity: 0; transform: translateY(-4px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
 
 	.error-state {
 		padding: 5rem 2rem;
