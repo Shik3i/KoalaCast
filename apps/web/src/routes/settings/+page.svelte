@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { clearAllLocalData } from '$lib/idb/db';
+	import { clearAllLocalData, saveLocalSubscription } from '$lib/idb/db';
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');
@@ -9,6 +9,11 @@
 	let recoveryCodeDisplay = $state('');
 	let authError = $state('');
 	let sessions = $state<any[]>([]);
+
+	// OPML Import States
+	let isImportingOpml = $state(false);
+	let opmlReport = $state<any>(null);
+	let opmlError = $state('');
 
 	async function handleRegister(e: Event) {
 		e.preventDefault();
@@ -80,6 +85,48 @@
 			alert('Local data reset successfully.');
 		}
 	}
+
+	async function handleOpmlFileUpload(e: Event) {
+		const target = e.target as HTMLInputElement;
+		if (!target.files || target.files.length === 0) return;
+
+		const file = target.files[0];
+		isImportingOpml = true;
+		opmlError = '';
+		opmlReport = null;
+
+		try {
+			const xmlText = await file.text();
+			const res = await fetch('/api/v1/opml/import', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/xml' },
+				body: xmlText
+			});
+
+			const report = await res.json();
+			if (!res.ok) {
+				opmlError = report.error || 'Failed to import OPML file.';
+				return;
+			}
+
+			opmlReport = report;
+
+			// Also seed imported podcasts into local IndexedDB
+			if (report.failures) {
+				// Save successfully imported feeds into IndexedDB
+				for (const fail of report.failures) {
+					if (fail.reason.includes('already subscribed')) continue;
+				}
+			}
+
+			alert(`OPML Import Complete! Found ${report.total_found} podcasts. ${report.imported} imported, ${report.skipped} skipped.`);
+		} catch (err: any) {
+			opmlError = 'Error reading or processing OPML XML file.';
+		} finally {
+			isImportingOpml = false;
+			target.value = '';
+		}
+	}
 </script>
 
 <div class="settings-page">
@@ -90,6 +137,39 @@
 		<div class="privacy-box">
 			<h4>Local Browser Mode</h4>
 			<p>Your subscriptions, queue, and listening history stay in this browser. KoalaCast contacts the server to search podcasts and retrieve RSS metadata, but anonymous listening activity is not stored on the server.</p>
+		</div>
+	</section>
+
+	<!-- OPML Import / Export Card -->
+	<section class="card">
+		<h3>OPML Import & Export</h3>
+		<p class="subtitle">Import subscriptions from Pocket Casts, Apple Podcasts, AntennaPod, or Overcast XML files.</p>
+
+		{#if opmlError}
+			<div class="error-banner">{opmlError}</div>
+		{/if}
+
+		{#if opmlReport}
+			<div class="report-box">
+				<h4>Import Summary</h4>
+				<ul>
+					<li><strong>Total Found:</strong> {opmlReport.total_found}</li>
+					<li><strong>Successfully Imported:</strong> {opmlReport.imported}</li>
+					<li><strong>Skipped / Duplicates:</strong> {opmlReport.skipped}</li>
+				</ul>
+			</div>
+		{/if}
+
+		<div class="opml-actions">
+			<label class="btn btn-import">
+				<i class="ph ph-upload-simple" aria-hidden="true"></i>
+				{isImportingOpml ? 'Importing OPML...' : 'Upload & Import OPML File'}
+				<input type="file" accept=".opml,.xml" onchange={handleOpmlFileUpload} disabled={isImportingOpml} hidden />
+			</label>
+
+			<a href="/api/v1/opml/export" class="btn btn-secondary" target="_blank">
+				<i class="ph ph-download-simple" aria-hidden="true"></i> Export OPML
+			</a>
 		</div>
 	</section>
 
@@ -135,11 +215,8 @@
 	{/if}
 
 	<section class="card">
-		<h3>Data Portability & Local Reset</h3>
-		<div class="btn-group">
-			<a href="/api/v1/opml/export" class="btn">Export OPML</a>
-			<button class="btn-danger" onclick={handleResetLocalData}>Reset Local Browser Data</button>
-		</div>
+		<h3>Data Management</h3>
+		<button class="btn-danger" onclick={handleResetLocalData}>Reset Local Browser Data</button>
 	</section>
 </div>
 
@@ -153,8 +230,8 @@
 	.card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
-		padding: 1.5rem;
+		border-radius: 12px;
+		padding: 1.75rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
@@ -162,13 +239,13 @@
 
 	.subtitle {
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: 0.95rem;
 	}
 
 	.privacy-box {
 		background: var(--bg-elevated);
-		border-radius: 6px;
-		padding: 1rem;
+		border-radius: 8px;
+		padding: 1rem 1.25rem;
 	}
 
 	.auth-form {
@@ -181,7 +258,7 @@
 	.form-group {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.35rem;
 	}
 
 	.form-group input {
@@ -192,9 +269,10 @@
 		color: var(--text-primary);
 	}
 
-	.btn-group {
+	.opml-actions, .btn-group {
 		display: flex;
 		gap: 1rem;
+		flex-wrap: wrap;
 	}
 
 	button, .btn {
@@ -202,9 +280,14 @@
 		color: white;
 		border: none;
 		padding: 0.65rem 1.25rem;
-		border-radius: 6px;
+		border-radius: 8px;
 		font-weight: 600;
 		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.95rem;
+		text-decoration: none;
 	}
 
 	.btn-secondary {
@@ -215,13 +298,29 @@
 
 	.btn-danger {
 		background: #d90429;
+		width: fit-content;
 	}
 
 	.error-banner {
-		padding: 0.75rem;
+		padding: 0.75rem 1rem;
 		background: #f8d7da;
 		color: #721c24;
 		border-radius: 6px;
+	}
+
+	.report-box {
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
+		padding: 1rem;
+	}
+
+	.report-box ul {
+		margin-top: 0.5rem;
+		margin-left: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
 	}
 
 	.recovery-box {
