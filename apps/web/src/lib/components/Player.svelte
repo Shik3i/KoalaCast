@@ -18,10 +18,12 @@
 	let playbackSpeed = $state(1.0);
 	let showShortcutsModal = $state(false);
 	let sleepTimerEndsAt = $state<number | null>(null);
+	let sleepAtEpisodeEnd = $state(false);
 	let loadError = $state(false);
 	let expanded = $state(false);
 	let showAccent = $state<string | null>(null);
 	let isFav = $state(false);
+	let showVolume = $state(false);
 	let lastToken = 0;
 
 	let autoSaveTimer: any = null;
@@ -76,6 +78,15 @@
 		saveProgress('SEEK');
 	}
 
+	function cycleSpeed() {
+		const idx = speeds.indexOf(playbackSpeed);
+		setSpeed(speeds[(idx + 1) % speeds.length] ?? 1.0);
+	}
+
+	const volIcon = $derived(
+		player.volume === 0 ? 'ph-speaker-simple-x' : player.volume < 0.5 ? 'ph-speaker-simple-low' : 'ph-speaker-simple-high'
+	);
+
 	function setSpeed(speed: number) {
 		playbackSpeed = speed;
 		if (audioEl) audioEl.playbackRate = speed;
@@ -84,8 +95,11 @@
 		} catch (_) {}
 	}
 
-	function setSleepTimer(minutes: number | null) {
-		sleepTimerEndsAt = minutes === null ? null : Date.now() + minutes * 60 * 1000;
+	function setSleepTimer(value: string) {
+		sleepAtEpisodeEnd = value === 'episode';
+		if (value === '' ) sleepTimerEndsAt = null;
+		else if (value === 'episode') sleepTimerEndsAt = null;
+		else sleepTimerEndsAt = Date.now() + Number(value) * 60 * 1000;
 	}
 
 	const progressPercent = $derived(
@@ -99,7 +113,7 @@
 
 		if (sleepTimerEndsAt && Date.now() >= sleepTimerEndsAt) {
 			audioEl.pause();
-			setSleepTimer(null);
+			sleepTimerEndsAt = null;
 		}
 
 		if ('mediaSession' in navigator && durationMs > 0) {
@@ -113,9 +127,16 @@
 		}
 	}
 
-	function handleEnded() {
+	async function handleEnded() {
 		isPlaying = false;
-		saveProgress('MARK_PLAYED', true);
+		await saveProgress('MARK_PLAYED', true);
+		// Stop here if a "sleep at end of episode" timer is armed.
+		if (sleepAtEpisodeEnd) {
+			sleepAtEpisodeEnd = false;
+			return;
+		}
+		// Otherwise autoplay the next queued episode, if any.
+		await player.playNext();
 	}
 
 	async function saveProgress(eventType = 'PROGRESS_TICK', forceCompleted = false) {
@@ -218,6 +239,11 @@
 			: '--show-accent:var(--accent-green);--show-accent-soft:color-mix(in srgb, var(--accent-green) 22%, transparent);'
 	);
 
+	// Keep the audio element's volume in sync with the store.
+	$effect(() => {
+		if (audioEl) audioEl.volume = player.volume;
+	});
+
 	onMount(() => {
 		try {
 			const saved = localStorage.getItem('koalacast_playback_speed');
@@ -225,7 +251,11 @@
 				const spd = parseFloat(saved);
 				if (spd > 0 && spd <= 3) setSpeed(spd);
 			}
+			const vol = localStorage.getItem('koalacast_volume');
+			if (vol !== null) player.volume = Math.max(0, Math.min(1, parseFloat(vol)));
 		} catch (_) {}
+
+		player.loadQueue();
 
 		autoSaveTimer = setInterval(() => {
 			if (isPlaying) saveProgress('PROGRESS_TICK');
@@ -267,7 +297,7 @@
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
-	const speeds = [1.0, 1.25, 1.5, 2.0];
+	const speeds = [0.8, 1.0, 1.2, 1.5, 1.75, 2.0];
 </script>
 
 <audio
@@ -370,13 +400,20 @@
 			</div>
 
 			<div class="extras">
-				<div class="speed-selector">
-					{#each speeds as spd}
-						<button onclick={() => setSpeed(spd)} class:active={playbackSpeed === spd}>{spd}x</button>
-					{/each}
+				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label="Playback speed">{playbackSpeed}×</button>
+				<div class="vol-wrap">
+					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label="Volume">
+						<i class="ph {volIcon}" aria-hidden="true"></i>
+					</button>
+					{#if showVolume}
+						<div class="vol-pop">
+							<input type="range" min="0" max="1" step="0.05" value={player.volume} oninput={(e) => player.setVolume(Number((e.target as HTMLInputElement).value))} aria-label="Volume level" />
+						</div>
+					{/if}
 				</div>
-				<select onchange={(e) => setSleepTimer(e.currentTarget.value ? Number(e.currentTarget.value) : null)} aria-label="Sleep timer">
+				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label="Sleep timer">
 					<option value="">💤 Off</option>
+					<option value="episode">End of episode</option>
 					<option value="15">15 min</option>
 					<option value="30">30 min</option>
 					<option value="45">45 min</option>
@@ -438,6 +475,11 @@
 					</button>
 				</div>
 
+				<div class="np-volume">
+					<i class="ph {volIcon}" aria-hidden="true"></i>
+					<input type="range" min="0" max="1" step="0.05" value={player.volume} oninput={(e) => player.setVolume(Number((e.target as HTMLInputElement).value))} aria-label="Volume level" />
+				</div>
+
 				<div class="np-extras">
 					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
@@ -447,14 +489,23 @@
 							<button onclick={() => setSpeed(spd)} class:active={playbackSpeed === spd}>{spd}x</button>
 						{/each}
 					</div>
-					<select onchange={(e) => setSleepTimer(e.currentTarget.value ? Number(e.currentTarget.value) : null)} aria-label="Sleep timer">
+					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label="Sleep timer">
 						<option value="">💤 Sleep off</option>
+						<option value="episode">End of episode</option>
 						<option value="15">15 min</option>
 						<option value="30">30 min</option>
 						<option value="45">45 min</option>
 						<option value="60">60 min</option>
 					</select>
 				</div>
+
+				{#if player.upNext}
+					<button class="np-upnext" onclick={() => player.upNext && player.playFromQueue(player.upNext)}>
+						<span class="upnext-label"><i class="ph ph-queue" aria-hidden="true"></i> Up next</span>
+						<span class="upnext-title">{player.upNext.title}</span>
+						<i class="ph ph-play" aria-hidden="true"></i>
+					</button>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -685,6 +736,30 @@
 		font-family: inherit;
 	}
 	.extras select option { color: #111; }
+
+	.speed-cycle {
+		width: auto;
+		min-width: 40px;
+		padding: 0 0.5rem;
+		font-size: 0.8rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.vol-wrap { position: relative; display: flex; }
+	.vol-pop {
+		position: absolute;
+		bottom: calc(100% + 8px);
+		left: 50%;
+		transform: translateX(-50%);
+		background: color-mix(in srgb, var(--player-bg) 92%, transparent);
+		border: 1px solid color-mix(in srgb, var(--player-text) 15%, transparent);
+		border-radius: 10px;
+		padding: 0.6rem 0.5rem;
+		box-shadow: var(--shadow-lg);
+		backdrop-filter: blur(12px);
+	}
+	.vol-pop input[type='range'] { width: 100px; accent-color: var(--show-accent, var(--accent-green)); }
 
 	.speed-selector {
 		display: flex;
@@ -951,6 +1026,54 @@
 		font-family: inherit;
 	}
 	.np-extras select option { color: #111; }
+
+	.np-volume {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: min(80vw, 320px);
+		color: color-mix(in srgb, var(--player-text) 75%, transparent);
+		font-size: 1.15rem;
+	}
+	.np-volume input[type='range'] {
+		flex: 1;
+		accent-color: var(--show-accent, var(--accent-green));
+		height: 4px;
+	}
+
+	.np-upnext {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: min(88vw, 380px);
+		padding: 0.7rem 0.9rem;
+		border-radius: 12px;
+		border: 1px solid color-mix(in srgb, var(--player-text) 14%, transparent);
+		background: color-mix(in srgb, var(--player-text) 7%, transparent);
+		color: var(--player-text);
+		text-align: left;
+	}
+	.np-upnext:hover { background: color-mix(in srgb, var(--player-text) 12%, transparent); }
+	.np-upnext .upnext-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: color-mix(in srgb, var(--player-text) 65%, transparent);
+		flex-shrink: 0;
+	}
+	.np-upnext .upnext-title {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 
 	@keyframes np-in {
 		from { opacity: 0; transform: translateY(3%); }

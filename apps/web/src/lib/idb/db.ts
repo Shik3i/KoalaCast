@@ -35,11 +35,26 @@ export interface LocalQueueItem {
 	episode_id: string;
 	podcast_id: string;
 	title: string;
+	podcast_title?: string;
 	artwork_url: string;
 	enclosure_url: string;
 	duration_ms: number;
 	position_order: number;
 	added_at: number;
+}
+
+// Persist a new queue order (drag-to-reorder). Rewrites position_order to match
+// the given episode_id sequence.
+export async function reorderLocalQueue(orderedIds: string[]): Promise<void> {
+	const db = await getLocalDB();
+	const items: LocalQueueItem[] = await db.getAll('queue');
+	const byEpisode = new Map(items.map((i) => [i.episode_id, i]));
+	const tx = db.transaction('queue', 'readwrite');
+	orderedIds.forEach((epId, idx) => {
+		const item = byEpisode.get(epId);
+		if (item) tx.store.put({ ...item, position_order: idx });
+	});
+	await tx.done;
 }
 
 export interface LocalFavorite {

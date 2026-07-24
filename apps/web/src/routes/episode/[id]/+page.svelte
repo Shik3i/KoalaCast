@@ -5,8 +5,6 @@
 	import {
 		getLocalPlaybackState,
 		saveLocalPlaybackState,
-		type LocalQueueItem,
-		addToLocalQueue,
 		isLocalFavorite,
 		addLocalFavorite,
 		removeLocalFavorite
@@ -98,18 +96,15 @@
 
 	async function handleAddToQueue() {
 		if (!episode) return;
-		const queueItem: LocalQueueItem = {
-			id: crypto.randomUUID(),
+		await player.addToQueue({
 			episode_id: episode.id,
 			podcast_id: episode.podcast_id,
 			title: episode.title,
+			podcast_title: podcast?.title || '',
 			artwork_url: episode.artwork_url || podcast?.artwork_url || '',
 			enclosure_url: episode.enclosure_url,
-			duration_ms: episode.duration_ms,
-			position_order: Date.now(),
-			added_at: Date.now()
-		};
-		await addToLocalQueue(queueItem);
+			duration_ms: episode.duration_ms
+		});
 		toast.success('Added to queue.');
 	}
 

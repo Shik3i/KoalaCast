@@ -4,31 +4,30 @@
 		getLocalSubscriptions,
 		removeLocalSubscription,
 		getRecentPlaybackStates,
-		getLocalQueue,
-		removeFromLocalQueue,
-		clearLocalQueue,
+		reorderLocalQueue,
 		getLocalFavorites,
 		removeLocalFavorite,
 		type LocalSubscription,
 		type LocalPlaybackState,
-		type LocalQueueItem,
 		type LocalFavorite
 	} from '$lib/idb/db';
-	import { player } from '$lib/stores/player.svelte';
+	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { reveal } from '$lib/actions/reveal';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
-	let queue = $state<LocalQueueItem[]>([]);
+	let queue = $state<CurrentTrack[]>([]);
 	let favorites = $state<LocalFavorite[]>([]);
 	let activeTab = $state<'subscriptions' | 'episodes' | 'queue' | 'favorites'>('subscriptions');
+	let dragIndex = $state<number | null>(null);
 
 	onMount(async () => {
 		subscriptions = await getLocalSubscriptions();
 		recentEpisodes = await getRecentPlaybackStates(30);
-		queue = await getLocalQueue();
+		await player.loadQueue();
+		queue = [...player.queue];
 		favorites = await getLocalFavorites();
 	});
 
@@ -53,30 +52,42 @@
 		favorites = favorites.filter((f) => f.episode_id !== episode_id);
 	}
 
-	function playQueueItem(item: LocalQueueItem) {
-		player.play({
-			episode_id: item.episode_id,
-			podcast_id: item.podcast_id,
-			title: item.title || 'Episode',
-			podcast_title: '',
-			artwork_url: item.artwork_url || '',
-			enclosure_url: item.enclosure_url,
-			duration_ms: item.duration_ms || 0
-		});
+	async function playQueueItem(item: CurrentTrack) {
+		await player.playFromQueue(item);
+		queue = [...player.queue];
 	}
 
-	async function removeQueueItem(id: string) {
-		await removeFromLocalQueue(id);
-		queue = queue.filter((q) => q.id !== id);
+	async function removeQueueItem(episode_id: string) {
+		await player.removeFromQueue(episode_id);
+		queue = [...player.queue];
 	}
 
 	async function emptyQueue() {
 		if (!queue.length) return;
 		if (confirm('Clear the entire queue?')) {
-			await clearLocalQueue();
+			await player.clearQueue();
 			queue = [];
 			toast.success('Queue cleared.');
 		}
+	}
+
+	// Drag-to-reorder.
+	function onDragStart(i: number) {
+		dragIndex = i;
+	}
+	function onDragOver(e: DragEvent, i: number) {
+		e.preventDefault();
+		if (dragIndex === null || dragIndex === i) return;
+		const next = [...queue];
+		const [moved] = next.splice(dragIndex, 1);
+		next.splice(i, 0, moved);
+		queue = next;
+		dragIndex = i;
+	}
+	async function onDrop() {
+		dragIndex = null;
+		await reorderLocalQueue(queue.map((q) => q.episode_id));
+		await player.loadQueue();
 	}
 
 	async function handleUnsubscribe(id: string) {
@@ -181,22 +192,33 @@
 			</div>
 		{:else}
 			<div class="queue-head">
+				<span class="queue-hint">Drag to reorder</span>
 				<button class="btn-clear" onclick={emptyQueue}>
 					<i class="ph ph-trash" aria-hidden="true"></i> Clear queue
 				</button>
 			</div>
 			<div class="episode-list">
-				{#each queue as item (item.id)}
-					<div class="ep-row">
+				{#each queue as item, i (item.episode_id)}
+					<div
+						class="ep-row"
+						role="listitem"
+						class:dragging={dragIndex === i}
+						draggable="true"
+						ondragstart={() => onDragStart(i)}
+						ondragover={(e) => onDragOver(e, i)}
+						ondragend={onDrop}
+						ondrop={onDrop}
+					>
+						<span class="drag-handle" aria-hidden="true"><i class="ph ph-dots-six-vertical"></i></span>
 						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label="Play episode">
 							<img src={item.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
 							<a class="ep-title" href={`/episode/${item.episode_id}`}>{item.title || 'Episode'}</a>
-							<span class="ep-sub">Queued</span>
+							<span class="ep-sub">{item.podcast_title || 'Queued'}</span>
 						</div>
-						<button class="ep-remove" onclick={() => removeQueueItem(item.id)} aria-label="Remove from queue">
+						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label="Remove from queue">
 							<i class="ph ph-x" aria-hidden="true"></i>
 						</button>
 					</div>
@@ -426,7 +448,12 @@
 	.ep-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-green-hover)); }
 	.ep-pct { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); flex-shrink: 0; }
 
-	.queue-head { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+	.queue-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+	.queue-hint { font-size: 0.8rem; color: var(--text-muted); }
+	.drag-handle { color: var(--text-muted); font-size: 1.3rem; cursor: grab; flex-shrink: 0; display: grid; place-items: center; }
+	.drag-handle:active { cursor: grabbing; }
+	.ep-row[draggable='true'] { cursor: default; }
+	.ep-row.dragging { opacity: 0.5; border-color: var(--accent-green); }
 	.btn-clear {
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
