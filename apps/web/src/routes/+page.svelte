@@ -114,6 +114,12 @@
 		})
 	);
 
+	// Spotlight the #1 chart entry as a wide featured card (only in the default,
+	// unfiltered chart view with enough results to spare one).
+	const showFeatured = $derived(!isLoading && !searchQuery.trim() && filteredPodcasts.length >= 5);
+	const featured = $derived(showFeatured ? filteredPodcasts[0] : null);
+	const gridPodcasts = $derived(showFeatured ? filteredPodcasts.slice(1) : filteredPodcasts);
+
 	async function openPodcastShow(pod: PodcastItem) {
 		if (pod.feed_url) {
 			// Resolve or add feed via API first
@@ -283,8 +289,31 @@
 				<p>No podcasts found matching "{searchQuery}". Try another search term!</p>
 			</div>
 		{:else}
+			{#if featured}
+				<button class="featured-card" use:reveal onclick={() => openPodcastShow(featured)}>
+					<div class="featured-art">
+						<img
+							src={featured.artwork_url || '/placeholder.svg'}
+							alt={featured.title}
+							loading="lazy"
+							onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+						/>
+					</div>
+					<div class="featured-info">
+						<span class="featured-tag">
+							<i class="ph-fill ph-trend-up" aria-hidden="true"></i>
+							#1 {selectedCategory === 'All' ? 'Trending' : selectedCategory}
+						</span>
+						<h3>{featured.title}</h3>
+						<span class="featured-author">{featured.author}</span>
+						{#if featured.description}<p class="featured-desc">{featured.description}</p>{/if}
+						<span class="featured-cta"><i class="ph-fill ph-play" aria-hidden="true"></i> View episodes</span>
+					</div>
+				</button>
+			{/if}
+
 			<div class="podcast-grid">
-				{#each filteredPodcasts as pod, i (pod.id)}
+				{#each gridPodcasts as pod, i (pod.id)}
 					<article class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
 						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title}`}></button>
 						<div class="cover-wrapper">
@@ -513,6 +542,78 @@
 		padding: 0.25rem 0.75rem;
 		border-radius: 12px;
 		font-weight: 600;
+	}
+
+	/* Wide featured spotlight card */
+	.featured-card {
+		width: 100%;
+		display: grid;
+		grid-template-columns: 220px 1fr;
+		gap: 1.75rem;
+		text-align: left;
+		background:
+			radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-green) 16%, transparent), transparent 60%),
+			var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 20px;
+		padding: 1.5rem;
+		margin-bottom: 1.75rem;
+		overflow: hidden;
+		transition: transform 0.3s var(--ease-spring), box-shadow 0.3s ease, border-color 0.2s ease;
+	}
+	.featured-card:hover {
+		transform: translateY(-4px);
+		box-shadow: var(--shadow-lg);
+		border-color: var(--accent-green);
+	}
+	.featured-art {
+		aspect-ratio: 1;
+		border-radius: 14px;
+		overflow: hidden;
+		box-shadow: var(--shadow-md);
+	}
+	.featured-art img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
+	.featured-card:hover .featured-art img { transform: scale(1.05); }
+	.featured-info { display: flex; flex-direction: column; justify-content: center; gap: 0.55rem; min-width: 0; }
+	.featured-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		width: fit-content;
+		background: var(--accent-green);
+		color: #fff;
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 0.25rem 0.7rem;
+		border-radius: 999px;
+	}
+	.featured-info h3 { font-size: clamp(1.4rem, 2.6vw, 2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
+	.featured-author { color: var(--text-secondary); font-weight: 600; }
+	.featured-desc {
+		color: var(--text-muted);
+		font-size: 0.92rem;
+		line-height: 1.55;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.featured-cta {
+		margin-top: 0.35rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		color: var(--accent-green);
+		font-weight: 700;
+		font-size: 0.9rem;
+	}
+
+	@media (max-width: 640px) {
+		.featured-card { grid-template-columns: 1fr; }
+		.featured-art { max-width: 180px; }
 	}
 
 	.podcast-grid {

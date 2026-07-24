@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { saveLocalSubscription } from '$lib/idb/db';
+	import {
+		saveLocalSubscription,
+		removeLocalSubscription,
+		getLocalSubscriptions
+	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { reveal } from '$lib/actions/reveal';
@@ -11,6 +15,7 @@
 	let podcast = $state<any>(null);
 	let episodes = $state<any[]>([]);
 	let isLoading = $state(true);
+	let isSubscribed = $state(false);
 	let showAccent = $state<string | null>(null);
 
 	const accentVars = $derived(
@@ -63,6 +68,8 @@
 					const epData = await epRes.json();
 					episodes = epData.episodes || [];
 				}
+				const subs = await getLocalSubscriptions();
+				isSubscribed = subs.some((s) => s.podcast_id === podcast.id);
 			}
 		} catch (err) {
 			console.error(err);
@@ -73,14 +80,25 @@
 
 	async function handleSubscribe() {
 		if (!podcast) return;
-		await saveLocalSubscription({
-			podcast_id: podcast.id,
-			feed_url: podcast.feed_url,
-			title: podcast.title,
-			artwork_url: podcast.artwork_url,
-			added_at: Date.now()
-		});
-		toast.success(`Subscribed to ${podcast.title}`);
+		if (isSubscribed) {
+			await removeLocalSubscription(podcast.id);
+			isSubscribed = false;
+			toast.success(`Unsubscribed from ${podcast.title}`);
+		} else {
+			await saveLocalSubscription({
+				podcast_id: podcast.id,
+				feed_url: podcast.feed_url,
+				title: podcast.title,
+				artwork_url: podcast.artwork_url,
+				added_at: Date.now()
+			});
+			isSubscribed = true;
+			toast.success(`Subscribed to ${podcast.title}`);
+		}
+	}
+
+	function playLatest() {
+		if (episodes.length > 0) playEpisode(episodes[0]);
 	}
 
 	function formatDuration(ms: number) {
@@ -148,8 +166,17 @@
 				<p class="desc">{podcast.description}</p>
 
 				<div class="actions">
-					<button class="btn-subscribe" onclick={handleSubscribe}>
-						<i class="ph ph-plus" aria-hidden="true"></i> Subscribe to Show
+					{#if episodes.length > 0}
+						<button class="btn-play-latest" onclick={playLatest}>
+							<i class="ph-fill ph-play" aria-hidden="true"></i> Play latest
+						</button>
+					{/if}
+					<button class="btn-subscribe" class:subscribed={isSubscribed} onclick={handleSubscribe}>
+						{#if isSubscribed}
+							<i class="ph ph-check" aria-hidden="true"></i> Subscribed
+						{:else}
+							<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
+						{/if}
 					</button>
 				</div>
 			</div>
@@ -260,14 +287,17 @@
 	}
 
 	.actions {
-		margin-top: 0.5rem;
+		margin-top: 0.75rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
 	}
 
-	.btn-subscribe {
+	.btn-play-latest {
 		background: var(--show-accent, var(--accent-green));
-		color: white;
+		color: #fff;
 		border: none;
-		padding: 0.65rem 1.5rem;
+		padding: 0.65rem 1.4rem;
 		border-radius: 8px;
 		font-weight: 700;
 		font-size: 0.95rem;
@@ -277,7 +307,27 @@
 		box-shadow: 0 8px 22px var(--show-accent-soft, transparent);
 		transition: transform 0.15s ease, filter 0.2s ease;
 	}
-	.btn-subscribe:hover { filter: brightness(1.08); transform: translateY(-2px); }
+	.btn-play-latest:hover { filter: brightness(1.08); transform: translateY(-2px); }
+
+	.btn-subscribe {
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.65rem 1.5rem;
+		border-radius: 8px;
+		font-weight: 700;
+		font-size: 0.95rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: transform 0.15s ease, border-color 0.2s ease, color 0.2s ease;
+	}
+	.btn-subscribe:hover { border-color: var(--show-accent, var(--accent-green)); color: var(--show-accent, var(--accent-green)); transform: translateY(-2px); }
+	.btn-subscribe.subscribed {
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 14%, var(--bg-surface));
+		border-color: var(--show-accent, var(--accent-green));
+		color: var(--show-accent, var(--accent-green));
+	}
 
 	.episodes-section h3 {
 		font-size: 1.5rem;
