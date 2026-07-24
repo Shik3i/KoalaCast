@@ -13,16 +13,23 @@ import (
 )
 
 type ParsedFeed struct {
-	FeedType    string // "rss" or "atom"
-	Title       string
-	Description string
-	Author      string
-	Link        string
-	Language    string
-	Copyright   string
-	ArtworkURL  string
-	Explicit    bool
-	Episodes    []ParsedEpisode
+	FeedType       string // "rss" or "atom"
+	Title          string
+	Description    string
+	Author         string
+	Link           string
+	Language       string
+	Copyright      string
+	ArtworkURL     string
+	Explicit       bool
+	FundingURL     string
+	FundingText    string
+	ValueType      string
+	ValueMethod    string
+	ValueRecipient string
+	IsLive         bool
+	LiveURL        string
+	Episodes       []ParsedEpisode
 }
 
 type ParsedEpisode struct {
@@ -70,8 +77,30 @@ type rssChannel struct {
 	ItunesImage  struct {
 		Href string `xml:"href,attr"`
 	} `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
-	ItunesExplicit string    `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
-	Items          []rssItem `xml:"item"`
+	ItunesExplicit string `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd explicit"`
+	PodcastFunding struct {
+		URL  string `xml:"url,attr"`
+		Text string `xml:",chardata"`
+	} `xml:"https://podcastindex.org/namespace/1.0 funding"`
+	PodcastValue struct {
+		Type       string `xml:"type,attr"`
+		Method     string `xml:"method,attr"`
+		Recipients []struct {
+			Name    string `xml:"name,attr"`
+			Type    string `xml:"type,attr"`
+			Address string `xml:"address,attr"`
+			Split   int    `xml:"split,attr"`
+		} `xml:"https://podcastindex.org/namespace/1.0 valueRecipient"`
+	} `xml:"https://podcastindex.org/namespace/1.0 value"`
+	PodcastLiveItem struct {
+		Status    string `xml:"status,attr"`
+		Start     string `xml:"start,attr"`
+		End       string `xml:"end,attr"`
+		Enclosure struct {
+			URL string `xml:"url,attr"`
+		} `xml:"enclosure"`
+	} `xml:"https://podcastindex.org/namespace/1.0 liveItem"`
+	Items []rssItem `xml:"item"`
 }
 
 type rssItem struct {
@@ -191,16 +220,30 @@ func parseRSS(buf []byte) (*ParsedFeed, error) {
 
 	explicit := strings.EqualFold(ch.ItunesExplicit, "yes") || strings.EqualFold(ch.ItunesExplicit, "true")
 
+	var valRecipient string
+	if len(ch.PodcastValue.Recipients) > 0 {
+		valRecipient = ch.PodcastValue.Recipients[0].Address
+	}
+
+	isLive := strings.EqualFold(ch.PodcastLiveItem.Status, "live")
+
 	feed := &ParsedFeed{
-		FeedType:    "rss",
-		Title:       strings.TrimSpace(ch.Title),
-		Description: strings.TrimSpace(ch.Description),
-		Author:      strings.TrimSpace(author),
-		Link:        strings.TrimSpace(ch.Link),
-		Language:    strings.TrimSpace(ch.Language),
-		Copyright:   strings.TrimSpace(ch.Copyright),
-		ArtworkURL:  strings.TrimSpace(ch.ItunesImage.Href),
-		Explicit:    explicit,
+		FeedType:       "rss",
+		Title:          strings.TrimSpace(ch.Title),
+		Description:    strings.TrimSpace(ch.Description),
+		Author:         strings.TrimSpace(author),
+		Link:           strings.TrimSpace(ch.Link),
+		Language:       strings.TrimSpace(ch.Language),
+		Copyright:      strings.TrimSpace(ch.Copyright),
+		ArtworkURL:     strings.TrimSpace(ch.ItunesImage.Href),
+		Explicit:       explicit,
+		FundingURL:     strings.TrimSpace(ch.PodcastFunding.URL),
+		FundingText:    strings.TrimSpace(ch.PodcastFunding.Text),
+		ValueType:      strings.TrimSpace(ch.PodcastValue.Type),
+		ValueMethod:    strings.TrimSpace(ch.PodcastValue.Method),
+		ValueRecipient: strings.TrimSpace(valRecipient),
+		IsLive:         isLive,
+		LiveURL:        strings.TrimSpace(ch.PodcastLiveItem.Enclosure.URL),
 	}
 
 	seenKeys := make(map[string]int)

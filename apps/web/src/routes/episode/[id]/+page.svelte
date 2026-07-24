@@ -119,9 +119,37 @@
 		return `${m}m`;
 	}
 
+	let showChapters = $state(false);
+	let chaptersLoading = $state(false);
+	let chaptersError = $state('');
+	let chaptersList = $state<any[]>([]);
+	let chaptersLoaded = $state(false);
+
+	async function toggleChapters() {
+		showChapters = !showChapters;
+		if (!showChapters || chaptersLoaded || !episode?.chapters_url) return;
+		chaptersLoading = true;
+		chaptersError = '';
+		try {
+			const res = await fetch(`/api/v1/proxy/chapters?url=${encodeURIComponent(episode.chapters_url)}`);
+			if (res.ok) {
+				const data = await res.json();
+				chaptersList = data.chapters || [];
+				chaptersLoaded = true;
+			} else {
+				chaptersError = 'Chapters could not be loaded.';
+			}
+		} catch (_) {
+			chaptersError = 'Chapters could not be loaded.';
+		} finally {
+			chaptersLoading = false;
+		}
+	}
+
 	let showTranscript = $state(false);
 	let transcriptLoading = $state(false);
 	let transcriptError = $state('');
+	let transcriptCues = $state<any[]>([]);
 	let transcriptHtml = $state(''); // sanitized, for html-type transcripts
 	let transcriptText = $state(''); // plain text, for vtt/srt/json/plain
 	let transcriptLoaded = $state(false);
@@ -132,6 +160,18 @@
 		transcriptLoading = true;
 		transcriptError = '';
 		try {
+			const transcriptUrl = episode.transcripts?.[0]?.url;
+			if (transcriptUrl) {
+				const res = await fetch(`/api/v1/proxy/transcript?url=${encodeURIComponent(transcriptUrl)}`);
+				if (res.ok) {
+					const data = await res.json();
+					transcriptCues = data.cues || [];
+					transcriptLoaded = true;
+					return;
+				}
+			}
+
+			// Fallback to internal API endpoint if proxy is not used
 			const res = await fetch(`/api/v1/episodes/${episode.id}/transcript?i=0`);
 			if (!res.ok) {
 				transcriptError = 'Transcript could not be loaded.';
@@ -155,6 +195,14 @@
 		} finally {
 			transcriptLoading = false;
 		}
+	}
+
+	function seekToCue(seconds: number) {
+		handlePlay();
+		setTimeout(() => {
+			const audio = document.querySelector('audio');
+			if (audio) audio.currentTime = seconds;
+		}, 100);
 	}
 
 	// Strip WEBVTT/SRT cue numbers + timestamp lines down to readable text.
@@ -229,6 +277,11 @@
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? 'Favorited' : 'Favorite'}
 					</button>
+					{#if episode.chapters_url}
+						<button class="btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
+							<i class="ph ph-list-numbers" aria-hidden="true"></i> Chapters
+						</button>
+					{/if}
 					{#if episode.transcripts && episode.transcripts.length > 0}
 						<button class="btn-secondary" class:active={showTranscript} onclick={toggleTranscript} aria-expanded={showTranscript}>
 							<i class="ph ph-article" aria-hidden="true"></i> Transcript
@@ -238,6 +291,30 @@
 			</div>
 		</div>
 
+		{#if showChapters}
+			<section class="chapters-card" transition:slide={{ duration: 220 }}>
+				<h3><i class="ph ph-list-numbers" aria-hidden="true"></i> Episode Chapters</h3>
+				{#if chaptersLoading}
+					<p class="transcript-status">Loading chapters…</p>
+				{:else if chaptersError}
+					<p class="transcript-status">{chaptersError}</p>
+				{:else if chaptersList.length > 0}
+					<div class="chapters-list">
+						{#each chaptersList as ch, i}
+							<button class="chapter-row" onclick={() => seekToCue(ch.startTime)}>
+								<span class="ch-time">{formatDuration(ch.startTime * 1000)}</span>
+								{#if ch.img}<img src={ch.img} alt="" class="ch-img" />{/if}
+								<span class="ch-title">{ch.title || `Chapter ${i + 1}`}</span>
+								<i class="ph-fill ph-play ch-play" aria-hidden="true"></i>
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<p class="transcript-status">No chapter markers found.</p>
+				{/if}
+			</section>
+		{/if}
+
 		{#if showTranscript}
 			<section class="transcript-card" transition:slide={{ duration: 220 }}>
 				<h3><i class="ph ph-article" aria-hidden="true"></i> Transcript</h3>
@@ -245,6 +322,15 @@
 					<p class="transcript-status">Loading transcript…</p>
 				{:else if transcriptError}
 					<p class="transcript-status">{transcriptError}</p>
+				{:else if transcriptCues.length > 0}
+					<div class="cue-list">
+						{#each transcriptCues as cue}
+							<button class="cue-row" onclick={() => seekToCue(cue.start)}>
+								<span class="cue-time">{formatDuration(cue.start * 1000)}</span>
+								<span class="cue-text">{cue.text}</span>
+							</button>
+						{/each}
+					</div>
 				{:else if transcriptHtml}
 					<div class="html-content transcript-body">{@html transcriptHtml}</div>
 				{:else}
@@ -390,15 +476,57 @@
 	.btn-fav.active :global(.ph-fill) { transform: scale(1.1); }
 
 	.description-card,
-	.transcript-card {
+	.transcript-card,
+	.chapters-card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg, 18px);
 		padding: 2rem;
 	}
+	.chapters-card h3,
 	.transcript-card h3 { display: flex; align-items: center; gap: 0.5rem; }
+	.chapters-card h3 :global(.ph),
 	.transcript-card h3 :global(.ph) { color: var(--show-accent, var(--accent-green)); }
 	.transcript-status { color: var(--text-muted); margin-top: 1rem; }
+
+	.chapters-list, .cue-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-top: 1.25rem;
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+
+	.chapter-row, .cue-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 12px;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
+		text-align: left;
+		transition: all 0.2s ease;
+		cursor: pointer;
+	}
+	.chapter-row:hover, .cue-row:hover {
+		border-color: var(--show-accent, var(--accent-green));
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 10%, var(--bg-surface));
+	}
+	.ch-time, .cue-time {
+		font-family: monospace;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: var(--show-accent, var(--accent-green));
+		flex-shrink: 0;
+		min-width: 60px;
+	}
+	.ch-img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+	.ch-title, .cue-text { flex: 1; font-weight: 500; font-size: 0.92rem; }
+	.ch-play { color: var(--text-muted); font-size: 0.95rem; }
+	.chapter-row:hover .ch-play { color: var(--show-accent, var(--accent-green)); }
 	.transcript-body {
 		margin-top: 1rem;
 		max-height: 60vh;

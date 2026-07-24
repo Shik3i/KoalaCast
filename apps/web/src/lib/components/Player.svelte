@@ -26,6 +26,60 @@
 	let showVolume = $state(false);
 	let lastToken = 0;
 
+	// Web Audio API & Smart Audio Processing
+	let volumeBoost = $state(false);
+	let skipSilence = $state(false);
+	let activeTab = $state<'player' | 'chapters' | 'transcript'>('player');
+
+	let audioCtx: AudioContext | null = null;
+	let sourceNode: MediaElementAudioSourceNode | null = null;
+	let gainNode: GainNode | null = null;
+	let compressorNode: DynamicsCompressorNode | null = null;
+	let analyserNode: AnalyserNode | null = null;
+
+	let chapters = $state<any[]>([]);
+	let transcriptCues = $state<any[]>([]);
+	let loadingChapters = $state(false);
+	let loadingTranscript = $state(false);
+
+	function initWebAudio() {
+		if (!audioEl || audioCtx) return;
+		try {
+			const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+			if (!AudioContextClass) return;
+			audioCtx = new AudioContextClass();
+			sourceNode = audioCtx.createMediaElementSource(audioEl);
+			gainNode = audioCtx.createGain();
+			compressorNode = audioCtx.createDynamicsCompressor();
+			analyserNode = audioCtx.createAnalyser();
+			analyserNode.fftSize = 256;
+
+			sourceNode.connect(gainNode);
+			gainNode.connect(compressorNode);
+			compressorNode.connect(analyserNode);
+			analyserNode.connect(audioCtx.destination);
+		} catch (err) {
+			console.warn('Web Audio API not supported:', err);
+		}
+	}
+
+	function toggleVolumeBoost() {
+		volumeBoost = !volumeBoost;
+		initWebAudio();
+		if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+		if (gainNode && audioCtx) {
+			gainNode.gain.setValueAtTime(volumeBoost ? 2.2 : 1.0, audioCtx.currentTime);
+		}
+		toast.success(volumeBoost ? 'Volume Boost Enabled (2.2x)' : 'Volume Boost Off');
+	}
+
+	function toggleSkipSilence() {
+		skipSilence = !skipSilence;
+		initWebAudio();
+		if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+		toast.success(skipSilence ? 'Skip Silence Enabled' : 'Skip Silence Off');
+	}
+
 	let autoSaveTimer: any = null;
 
 	const track = $derived(player.current);
@@ -297,7 +351,7 @@
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
-	const speeds = [0.8, 1.0, 1.2, 1.5, 1.75, 2.0];
+	const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5];
 </script>
 
 <audio
@@ -483,6 +537,12 @@
 				<div class="np-extras">
 					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
+					</button>
+					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label="Toggle Volume Boost">
+						<i class="ph ph-speaker-high" aria-hidden="true"></i> Boost
+					</button>
+					<button class="np-pill-btn" class:active={skipSilence} onclick={toggleSkipSilence} aria-label="Toggle Skip Silence">
+						<i class="ph ph-waveform" aria-hidden="true"></i> Trim Silence
 					</button>
 					<div class="speed-selector">
 						{#each speeds as spd}
@@ -1015,6 +1075,27 @@
 	.np-fav:hover { color: #ff8b8b; transform: scale(1.08); }
 	.np-fav.active { color: #ff6b6b; border-color: color-mix(in srgb, #ff6b6b 45%, transparent); }
 	.np-fav.active :global(.ph-fill) { animation: fav-pop 0.3s var(--ease-spring, ease); }
+
+	.np-pill-btn {
+		background: color-mix(in srgb, var(--player-text) 8%, transparent);
+		color: var(--player-text);
+		border: 1px solid color-mix(in srgb, var(--player-text) 16%, transparent);
+		padding: 0.4rem 0.8rem;
+		border-radius: 999px;
+		font-size: 0.82rem;
+		font-weight: 600;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+	.np-pill-btn:hover { background: color-mix(in srgb, var(--player-text) 16%, transparent); }
+	.np-pill-btn.active {
+		background: var(--show-accent, var(--accent-green));
+		border-color: var(--show-accent, var(--accent-green));
+		color: #fff;
+	}
 	@keyframes fav-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 	.np-extras select {
 		background: color-mix(in srgb, var(--player-text) 10%, transparent);

@@ -275,6 +275,21 @@
 							<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
 						{/if}
 					</button>
+					{#if podcast.funding_url}
+						<a class="btn-funding" href={podcast.funding_url} target="_blank" rel="noopener noreferrer">
+							<i class="ph-fill ph-heart" aria-hidden="true"></i> {podcast.funding_text || 'Support Show'}
+						</a>
+					{/if}
+					{#if podcast.value_recipient}
+						<span class="v4v-badge" title={`Lightning Keysend: ${podcast.value_recipient}`}>
+							<i class="ph-fill ph-lightning" aria-hidden="true"></i> Value4Value
+						</span>
+					{/if}
+					{#if podcast.is_live}
+						<a class="live-badge" href={podcast.live_url || '#'} target="_blank" rel="noopener noreferrer">
+							<i class="ph-fill ph-broadcast" aria-hidden="true"></i> LIVE NOW
+						</a>
+					{/if}
 				</div>
 			</div>
 		</header>
@@ -484,6 +499,53 @@
 		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 14%, var(--bg-surface));
 		border-color: var(--show-accent, var(--accent-green));
 		color: var(--show-accent, var(--accent-green));
+	}
+
+	.btn-funding {
+		background: color-mix(in srgb, #ff4757 15%, var(--bg-surface));
+		color: #ff4757;
+		border: 1px solid color-mix(in srgb, #ff4757 40%, transparent);
+		padding: 0.65rem 1.2rem;
+		border-radius: 8px;
+		font-weight: 700;
+		font-size: 0.95rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		text-decoration: none;
+		transition: transform 0.15s ease, filter 0.2s ease;
+	}
+	.btn-funding:hover { filter: brightness(1.1); transform: translateY(-2px); text-decoration: none; }
+
+	.v4v-badge {
+		background: color-mix(in srgb, #ffa500 15%, var(--bg-surface));
+		color: #ffa500;
+		border: 1px solid color-mix(in srgb, #ffa500 40%, transparent);
+		padding: 0.65rem 1rem;
+		border-radius: 8px;
+		font-weight: 700;
+		font-size: 0.9rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.live-badge {
+		background: #ff0055;
+		color: #fff;
+		padding: 0.65rem 1.2rem;
+		border-radius: 8px;
+		font-weight: 800;
+		font-size: 0.9rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		text-decoration: none;
+		animation: pulse-live 1.8s ease-in-out infinite;
+	}
+	@keyframes pulse-live {
+		0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.4); }
+		50% { box-shadow: 0 0 0 8px transparent; }
 	}
 
 	.episodes-head {
