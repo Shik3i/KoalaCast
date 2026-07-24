@@ -16,9 +16,6 @@
 			<a href="/library" aria-label="Library page"><i class="ph ph-books" aria-hidden="true"></i> Library</a>
 			<a href="/search" aria-label="Search podcasts"><i class="ph ph-magnifying-glass" aria-hidden="true"></i> Search</a>
 			<a href="/settings" aria-label="Settings page"><i class="ph ph-gear" aria-hidden="true"></i> Settings</a>
-			<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer" aria-label="GitHub Repository" class="github-link">
-				<i class="ph ph-github-logo" aria-hidden="true"></i> GitHub
-			</a>
 		</nav>
 	</header>
 
@@ -72,14 +69,6 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-	}
-
-	.github-link {
-		padding: 0.35rem 0.75rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: 6px;
-		background: var(--bg-elevated);
-		color: var(--text-primary);
 	}
 
 	.main-content {
