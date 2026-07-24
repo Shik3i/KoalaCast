@@ -1,10 +1,8 @@
 <script lang="ts">
-	// Self-hosted fonts + icons (no render-blocking third-party requests).
+	// Self-hosted fonts
 	import '@fontsource/outfit/400.css';
 	import '@fontsource/outfit/600.css';
 	import '@fontsource/outfit/800.css';
-	import '@phosphor-icons/web/regular';
-	import '@phosphor-icons/web/fill';
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';
 	import Footer from '$lib/components/Footer.svelte';
@@ -27,15 +25,18 @@
 		isAdmin ? [...baseLinks, { href: '/admin', icon: 'ph-shield-star', label: 'Admin' }] : baseLinks
 	);
 
-	onMount(async () => {
+	onMount(() => {
+		// Non-blocking asynchronous load of Phosphor icon fonts
+		import('@phosphor-icons/web/regular');
+		import('@phosphor-icons/web/fill');
+
 		// Reveal the Admin entry only for signed-in admins.
-		try {
-			const res = await fetch('/api/v1/auth/me');
-			if (res.ok) {
-				const me = await res.json();
-				isAdmin = me?.role === 'admin';
-			}
-		} catch (_) {}
+		fetch('/api/v1/auth/me')
+			.then((res) => (res.ok ? res.json() : null))
+			.then((me) => {
+				if (me?.role === 'admin') isAdmin = true;
+			})
+			.catch(() => {});
 	});
 
 	const path = $derived($page.url.pathname);

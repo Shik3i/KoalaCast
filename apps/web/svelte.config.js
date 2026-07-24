@@ -5,6 +5,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: {
+		inlineStyleThreshold: 65536,
 		adapter: adapter({
 			out: 'build',
 			precompress: true

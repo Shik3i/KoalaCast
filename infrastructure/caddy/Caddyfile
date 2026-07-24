@@ -1,4 +1,10 @@
 :8080 {
+	# Enable Gzip and Zstd compression for high mobile performance
+	encode zstd gzip
+
+	# Cache immutable SvelteKit static assets (CSS, JS, fonts)
+	header /_app/immutable/* Cache-Control "public, max-age=31536000, immutable"
+
 	# API routes forwarded to Go backend service
 	handle /api/* {
 		reverse_proxy api:8080
