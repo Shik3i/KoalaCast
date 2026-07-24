@@ -33,8 +33,8 @@ type ChapterItem struct {
 
 func (h *ProxyHandler) GetChapters(w http.ResponseWriter, r *http.Request) {
 	url := strings.TrimSpace(r.URL.Query().Get("url"))
-	if url == "" {
-		http.Error(w, `{"error":"url parameter required"}`, http.StatusBadRequest)
+	if url == "" || (!strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://")) {
+		http.Error(w, `{"error":"valid http/https url parameter required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -92,8 +92,8 @@ type TranscriptCue struct {
 
 func (h *ProxyHandler) GetTranscript(w http.ResponseWriter, r *http.Request) {
 	url := strings.TrimSpace(r.URL.Query().Get("url"))
-	if url == "" {
-		http.Error(w, `{"error":"url parameter required"}`, http.StatusBadRequest)
+	if url == "" || (!strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://")) {
+		http.Error(w, `{"error":"valid http/https url parameter required"}`, http.StatusBadRequest)
 		return
 	}
 

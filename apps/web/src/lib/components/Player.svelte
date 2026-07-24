@@ -75,6 +75,9 @@
 
 	function toggleSkipSilence() {
 		skipSilence = !skipSilence;
+		if (!skipSilence && audioEl) {
+			audioEl.playbackRate = playbackSpeed;
+		}
 		initWebAudio();
 		if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
 		toast.success(skipSilence ? 'Skip Silence Enabled' : 'Skip Silence Off');
@@ -165,6 +168,19 @@
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		durationMs = Math.round((audioEl.duration || 0) * 1000);
 
+		if (skipSilence && analyserNode && isPlaying) {
+			const data = new Uint8Array(analyserNode.frequencyBinCount);
+			analyserNode.getByteFrequencyData(data);
+			let sum = 0;
+			for (let i = 0; i < data.length; i++) sum += data[i];
+			const avg = sum / data.length;
+			if (avg < 4) {
+				audioEl.playbackRate = Math.min(3.0, playbackSpeed * 2.0);
+			} else {
+				audioEl.playbackRate = playbackSpeed;
+			}
+		}
+
 		if (sleepTimerEndsAt && Date.now() >= sleepTimerEndsAt) {
 			audioEl.pause();
 			sleepTimerEndsAt = null;
@@ -174,7 +190,7 @@
 			try {
 				navigator.mediaSession.setPositionState({
 					duration: durationMs / 1000,
-					playbackRate: playbackSpeed,
+					playbackRate: audioEl.playbackRate,
 					position: currentTimeMs / 1000
 				});
 			} catch (_) {}
