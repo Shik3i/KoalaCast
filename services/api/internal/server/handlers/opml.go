@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -33,6 +34,9 @@ type opmlOutline struct {
 	Text     string        `xml:"text,attr"`
 	Title    string        `xml:"title,attr"`
 	XmlUrl   string        `xml:"xmlUrl,attr"`
+	XmlUrl2  string        `xml:"xmlurl,attr"`
+	XmlUrl3  string        `xml:"XMLURL,attr"`
+	URL      string        `xml:"url,attr"`
 	Outlines []opmlOutline `xml:"outline"`
 }
 
@@ -151,14 +155,24 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = xml.NewEncoder(w).Encode(report)
+	_ = json.NewEncoder(w).Encode(report)
 }
 
 func extractOutlines(outlines []opmlOutline) []string {
 	var urls []string
 	for _, o := range outlines {
-		if o.XmlUrl != "" {
-			urls = append(urls, o.XmlUrl)
+		u := strings.TrimSpace(o.XmlUrl)
+		if u == "" {
+			u = strings.TrimSpace(o.XmlUrl2)
+		}
+		if u == "" {
+			u = strings.TrimSpace(o.XmlUrl3)
+		}
+		if u == "" {
+			u = strings.TrimSpace(o.URL)
+		}
+		if u != "" {
+			urls = append(urls, u)
 		}
 		if len(o.Outlines) > 0 {
 			urls = append(urls, extractOutlines(o.Outlines)...)

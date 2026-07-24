@@ -11,10 +11,10 @@
 			<span class="brand-title">KoalaCast</span>
 		</div>
 		<nav class="nav-links">
-			<a href="/">Home</a>
-			<a href="/library">Library</a>
-			<a href="/search">Search</a>
-			<a href="/settings">Settings</a>
+			<a href="/" aria-label="Home page"><i class="ph ph-house" aria-hidden="true"></i> Home</a>
+			<a href="/library" aria-label="Library page"><i class="ph ph-books" aria-hidden="true"></i> Library</a>
+			<a href="/search" aria-label="Search podcasts"><i class="ph ph-magnifying-glass" aria-hidden="true"></i> Search</a>
+			<a href="/settings" aria-label="Settings page"><i class="ph ph-gear" aria-hidden="true"></i> Settings</a>
 		</nav>
 	</header>
 
@@ -58,11 +58,9 @@
 
 	.nav-links a {
 		font-weight: 500;
-		color: var(--text-secondary);
-	}
-
-	.nav-links a:hover {
-		color: var(--accent-green);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
 	}
 
 	.main-content {
@@ -71,5 +69,6 @@
 		max-width: 1200px;
 		width: 100%;
 		margin: 0 auto;
+		padding-bottom: 100px;
 	}
 </style>

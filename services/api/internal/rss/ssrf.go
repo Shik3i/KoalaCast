@@ -79,6 +79,7 @@ type SafeTransportConfig struct {
 	Dialer          NetworkDialer
 	ConnectTimeout  time.Duration
 	ResponseTimeout time.Duration
+	AllowLoopback   bool // Set true ONLY in unit tests targeting httptest.NewServer
 }
 
 // NewSafeHTTPClient creates a secure http.Client with custom DialContext that validates DNS resolution at connect time.
@@ -115,7 +116,7 @@ func NewSafeHTTPClient(cfg SafeTransportConfig) *http.Client {
 
 		// If host is an IP literal, validate directly
 		if ip := net.ParseIP(host); ip != nil {
-			if IsIPBlocked(ip) {
+			if !cfg.AllowLoopback && IsIPBlocked(ip) {
 				return nil, fmt.Errorf("connection to restricted IP address blocked: %s", ip.String())
 			}
 			return cfg.Dialer.DialContext(ctx, network, addr)
@@ -133,7 +134,7 @@ func NewSafeHTTPClient(cfg SafeTransportConfig) *http.Client {
 
 		// Validate ALL resolved IP addresses for the hostname
 		for _, ip := range ips {
-			if IsIPBlocked(ip) {
+			if !cfg.AllowLoopback && IsIPBlocked(ip) {
 				return nil, fmt.Errorf("host %s resolved to restricted IP %s", host, ip.String())
 			}
 		}
