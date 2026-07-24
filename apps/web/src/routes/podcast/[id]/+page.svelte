@@ -13,6 +13,7 @@
 	import { dominantColor } from '$lib/color';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide } from 'svelte/transition';
+	import { optimizeArtwork } from '$lib/artwork';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -270,7 +271,7 @@
 		<!-- Podcast Cover & Meta Header -->
 		<header class="podcast-header">
 			<img
-				src={podcast.artwork_url || '/placeholder.svg'}
+				src={optimizeArtwork(podcast.artwork_url, 300)}
 				alt={podcast.title}
 				class="artwork"
 				loading="eager"

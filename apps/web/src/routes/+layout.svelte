@@ -1,8 +1,10 @@
 <script lang="ts">
-	// Self-hosted fonts
+	// Self-hosted fonts & icons
 	import '@fontsource/outfit/400.css';
 	import '@fontsource/outfit/600.css';
 	import '@fontsource/outfit/800.css';
+	import '@phosphor-icons/web/regular/style.css';
+	import '@phosphor-icons/web/fill/style.css';
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';
 	import Footer from '$lib/components/Footer.svelte';
@@ -26,10 +28,6 @@
 	);
 
 	onMount(() => {
-		// Non-blocking asynchronous load of Phosphor icon fonts
-		import('@phosphor-icons/web/regular');
-		import('@phosphor-icons/web/fill');
-
 		// Reveal the Admin entry only for signed-in admins.
 		fetch('/api/v1/auth/me')
 			.then((res) => (res.ok ? res.json() : null))

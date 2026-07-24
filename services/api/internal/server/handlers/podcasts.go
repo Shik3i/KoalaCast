@@ -99,7 +99,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	var err error
 	provider := "itunes"
 
-	if h.PodcastIndex.IsConfigured() {
+	if h.PodcastIndex != nil && h.PodcastIndex.IsConfigured() {
 		provider = "podcastindex"
 		var piResults []podcastindex.SearchResult
 		piResults, err = h.PodcastIndex.Search(q)
@@ -163,7 +163,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 
 	// Prefer Podcast Index trending when configured (broader, fresher than the
 	// iTunes storefront charts), then fall back to iTunes charts, then the DB.
-	if h.PodcastIndex.IsConfigured() {
+	if h.PodcastIndex != nil && h.PodcastIndex.IsConfigured() {
 		piCat := category
 		if piCat == "All" {
 			piCat = ""
@@ -197,14 +197,14 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(topPodcasts) == 0 {
+	if len(topPodcasts) == 0 && h.ITunes != nil {
 		genreID := itunes.GenreIDForCategory(category)
 		if tp, err := h.ITunes.FetchTopChart(region, genreID, limit); err == nil {
 			topPodcasts = tp
 		}
 	}
 
-	if len(topPodcasts) == 0 {
+	if len(topPodcasts) == 0 && h.DB != nil {
 		var dbPods []PodcastResponse
 		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT ?", limit)
 		if errDB == nil {

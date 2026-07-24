@@ -2,8 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
@@ -93,5 +97,46 @@ Enjoy your podcast experience.
 	}
 	if resp.Cues[0].Text != "Welcome to KoalaCast!" {
 		t.Errorf("expected first cue text 'Welcome to KoalaCast!', got %q", resp.Cues[0].Text)
+	}
+}
+
+func TestProxyHandler_GetImageProxy(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		}
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.WriteHeader(http.StatusOK)
+		_ = jpeg.Encode(w, img, nil)
+	}))
+	defer ts.Close()
+
+	proxy := NewProxyHandler()
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/image?url="+ts.URL+"&w=50", nil)
+	rec := httptest.NewRecorder()
+
+	proxy.GetImageProxy(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if contentType := rec.Header().Get("Content-Type"); contentType != "image/jpeg" {
+		t.Errorf("expected Content-Type image/jpeg, got %q", contentType)
+	}
+	if cacheCtrl := rec.Header().Get("Cache-Control"); !strings.Contains(cacheCtrl, "max-age=") {
+		t.Errorf("expected Cache-Control header, got %q", cacheCtrl)
+	}
+
+	// Test cache hit on second request
+	rec2 := httptest.NewRecorder()
+	proxy.GetImageProxy(rec2, req)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected cached hit status 200, got %d", rec2.Code)
 	}
 }

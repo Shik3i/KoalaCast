@@ -1,15 +1,25 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"image"
+	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
+	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 type ProxyHandler struct {
@@ -20,8 +30,110 @@ func NewProxyHandler() *ProxyHandler {
 	return &ProxyHandler{
 		httpClient: rss.NewSafeHTTPClient(rss.SafeTransportConfig{
 			ConnectTimeout: 10 * time.Second,
+			AllowLoopback:  true,
 		}),
 	}
+}
+
+// GetImageProxy fetches an external image, resizes it, converts/compresses it to optimized JPEG,
+// and caches it permanently on disk to guarantee 100% privacy (no direct client requests to 3rd parties)
+// and high performance.
+func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
+	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
+		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
+		return
+	}
+
+	targetW := 300
+	if wStr := r.URL.Query().Get("w"); wStr != "" {
+		if parsedW, err := strconv.Atoi(wStr); err == nil && parsedW > 0 && parsedW <= 1200 {
+			targetW = parsedW
+		}
+	}
+
+	hHasher := sha256.New()
+	hHasher.Write([]byte(rawURL + "_" + strconv.Itoa(targetW)))
+	cacheKey := hex.EncodeToString(hHasher.Sum(nil))
+
+	cacheDir := os.Getenv("IMAGE_CACHE_DIR")
+	if cacheDir == "" {
+		cacheDir = "/tmp/koalacast_img_cache"
+	}
+	_ = os.MkdirAll(cacheDir, 0755)
+
+	cacheFile := filepath.Join(cacheDir, cacheKey+".jpg")
+
+	if info, err := os.Stat(cacheFile); err == nil && info.Size() > 0 {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		http.ServeFile(w, r, cacheFile)
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
+		return
+	}
+	req.Header.Set("User-Agent", "KoalaCast/1.0")
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch remote image"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, `{"error":"remote image non-200"}`, http.StatusBadGateway)
+		return
+	}
+
+	limitReader := io.LimitReader(resp.Body, 15*1024*1024)
+	img, _, err := image.Decode(limitReader)
+	if err != nil {
+		http.Error(w, `{"error":"failed to decode image"}`, http.StatusUnprocessableEntity)
+		return
+	}
+
+	bounds := img.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+	if srcW == 0 || srcH == 0 {
+		http.Error(w, `{"error":"invalid image dimensions"}`, http.StatusUnprocessableEntity)
+		return
+	}
+
+	dstW := targetW
+	dstH := (srcH * dstW) / srcW
+	if dstH < 1 {
+		dstH = 1
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
+
+	tmpFile := cacheFile + ".tmp"
+	f, err := os.Create(tmpFile)
+	if err != nil {
+		http.Error(w, `{"error":"cache write failed"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := jpeg.Encode(f, dst, &jpeg.Options{Quality: 82}); err != nil {
+		f.Close()
+		_ = os.Remove(tmpFile)
+		http.Error(w, `{"error":"encode failed"}`, http.StatusInternalServerError)
+		return
+	}
+	f.Close()
+
+	_ = os.Rename(tmpFile, cacheFile)
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeFile(w, r, cacheFile)
 }
 
 type ChapterItem struct {

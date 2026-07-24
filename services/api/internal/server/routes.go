@@ -67,9 +67,10 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.Get("/healthz", healthHandler.Healthz)
 		r.Get("/readyz", healthHandler.Readyz)
 
-		// Proxy endpoints for CORS-safe Chapters and Transcripts
+		// Proxy endpoints for CORS-safe Chapters, Transcripts, and Privacy-Safe Cached Images
 		r.Get("/proxy/chapters", proxyHandler.GetChapters)
 		r.Get("/proxy/transcript", proxyHandler.GetTranscript)
+		r.Get("/proxy/image", proxyHandler.GetImageProxy)
 
 		// Podcasts & Discovery
 		r.Get("/podcasts/discover", podcastHandler.Discover)
