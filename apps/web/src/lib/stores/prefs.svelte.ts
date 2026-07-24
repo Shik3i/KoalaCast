@@ -5,19 +5,101 @@
 export type DateFormat = 'absolute' | 'relative';
 
 const KEY = 'koalacast_date_format';
+const INTERESTS_KEY = 'koalacast_interests';
+const HIDDEN_KEY = 'koalacast_hidden_genres';
+const ONBOARDED_KEY = 'koalacast_onboarded';
 
 function initialFormat(): DateFormat {
 	if (typeof localStorage === 'undefined') return 'absolute';
 	return localStorage.getItem(KEY) === 'relative' ? 'relative' : 'absolute';
 }
 
+function initialInterests(): string[] {
+	if (typeof localStorage === 'undefined') return [];
+	try {
+		const v = JSON.parse(localStorage.getItem(INTERESTS_KEY) || '[]');
+		return Array.isArray(v) ? v : [];
+	} catch (_) {
+		return [];
+	}
+}
+
+function initialHidden(): string[] {
+	if (typeof localStorage === 'undefined') return [];
+	try {
+		const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]');
+		return Array.isArray(v) ? v : [];
+	} catch (_) {
+		return [];
+	}
+}
+
+function initialOnboarded(): boolean {
+	if (typeof localStorage === 'undefined') return true; // never block SSR
+	return localStorage.getItem(ONBOARDED_KEY) === '1';
+}
+
 class Prefs {
 	dateFormat = $state<DateFormat>(initialFormat());
+	// Chosen genre interests (explicit personalization seed). Also editable later
+	// in Settings; kept on-device for privacy.
+	interests = $state<string[]>(initialInterests());
+	// Vetoed genres — podcasts in these are hidden from discover and search.
+	hiddenGenres = $state<string[]>(initialHidden());
+	onboarded = $state<boolean>(initialOnboarded());
 
 	setDateFormat(mode: DateFormat) {
 		this.dateFormat = mode;
 		try {
 			localStorage.setItem(KEY, mode);
+		} catch (_) {}
+	}
+
+	#persistInterests() {
+		try {
+			localStorage.setItem(INTERESTS_KEY, JSON.stringify(this.interests));
+		} catch (_) {}
+	}
+
+	toggleInterest(genre: string) {
+		const has = this.interests.includes(genre);
+		this.interests = has ? this.interests.filter((g) => g !== genre) : [...this.interests, genre];
+		// A genre can't be both an interest and hidden.
+		if (!has && this.hiddenGenres.includes(genre)) {
+			this.hiddenGenres = this.hiddenGenres.filter((g) => g !== genre);
+			this.#persistHidden();
+		}
+		this.#persistInterests();
+	}
+
+	#persistHidden() {
+		try {
+			localStorage.setItem(HIDDEN_KEY, JSON.stringify(this.hiddenGenres));
+		} catch (_) {}
+	}
+
+	toggleHidden(genre: string) {
+		this.hiddenGenres = this.hiddenGenres.includes(genre)
+			? this.hiddenGenres.filter((g) => g !== genre)
+			: [...this.hiddenGenres, genre];
+		if (this.interests.includes(genre)) {
+			this.interests = this.interests.filter((g) => g !== genre);
+			this.#persistInterests();
+		}
+		this.#persistHidden();
+	}
+
+	// True if a podcast's categories intersect the hidden set.
+	isHidden(categories: string[] | undefined): boolean {
+		if (!categories || this.hiddenGenres.length === 0) return false;
+		const lower = this.hiddenGenres.map((g) => g.toLowerCase());
+		return categories.some((c) => lower.includes((c || '').toLowerCase()));
+	}
+
+	completeOnboarding() {
+		this.onboarded = true;
+		try {
+			localStorage.setItem(ONBOARDED_KEY, '1');
 		} catch (_) {}
 	}
 

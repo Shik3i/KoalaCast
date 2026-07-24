@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
 	import { reveal } from '$lib/actions/reveal';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide, fade } from 'svelte/transition';
@@ -23,6 +24,14 @@
 		const feed = pod.feed_url || pod.feedUrl;
 		return subscribedIds.includes(pod.id) || (!!feed && subscribedFeeds.includes(feed));
 	}
+
+	function podCategories(pod: any): string[] {
+		if (Array.isArray(pod.categories) && pod.categories.length) return pod.categories;
+		return pod.category ? [pod.category] : [];
+	}
+
+	// Hide vetoed genres from results.
+	const visibleResults = $derived(searchResults.filter((pod) => !prefs.isHidden(podCategories(pod))));
 
 	let recentSearches = $state<string[]>([]);
 	const HISTORY_KEY = 'koalacast_search_history';
@@ -258,7 +267,7 @@
 				{#if isSearching}
 					Searching live catalog...
 				{:else}
-					Results ({searchResults.length})
+					Results ({visibleResults.length})
 				{/if}
 			</h3>
 			{#if provider && searchResults.length > 0}
@@ -283,7 +292,7 @@
 					</div>
 				{/each}
 			{:else}
-				{#each searchResults as pod, i (pod.id ?? i)}
+				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
 						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title || pod.trackName}`}></button>
 						<img src={pod.artwork_url || pod.artworkUrl600 || '/placeholder.svg'} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />

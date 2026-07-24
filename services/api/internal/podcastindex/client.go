@@ -27,10 +27,25 @@ type SearchResult struct {
 	URL         string `json:"url"`
 	OriginalURL string `json:"originalUrl"`
 	Description string `json:"description"`
-	Author      string `json:"author"`
-	Artwork     string `json:"artwork"`
-	Image       string `json:"image"`
-	Explicit    bool   `json:"explicit"`
+	Author      string            `json:"author"`
+	Artwork     string            `json:"artwork"`
+	Image       string            `json:"image"`
+	Categories  map[string]string `json:"categories"`
+	Explicit    bool              `json:"explicit"`
+}
+
+// CategoryList returns the podcast's category names as a slice.
+func (r SearchResult) CategoryList() []string {
+	if len(r.Categories) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(r.Categories))
+	for _, v := range r.Categories {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 type SearchResponse struct {
@@ -73,6 +88,14 @@ func NewClient(apiKey, apiSecret string) *Client {
 			ConnectTimeout: 10 * time.Second,
 		}),
 	}
+}
+
+func (c *Client) SetBaseURL(url string) {
+	c.baseURL = url
+}
+
+func (c *Client) SetHTTPClient(client *http.Client) {
+	c.httpClient = client
 }
 
 func (c *Client) IsConfigured() bool {

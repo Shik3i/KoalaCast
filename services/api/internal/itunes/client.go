@@ -15,12 +15,30 @@ import (
 // request genre-specific top charts so Discover isn't limited to the single
 // overall chart (which skews to a handful of genres).
 var genreIDs = map[string]int{
-	"technology": 1318,
-	"news":       1489,
-	"business":   1321,
-	"science":    1533,
-	"comedy":     1303,
-	"society":    1324,
+	"arts":                    1301,
+	"business":                1321,
+	"comedy":                  1303,
+	"education":               1304,
+	"fiction":                  1483,
+	"government":               1511,
+	"health & fitness":        1512,
+	"health":                  1512,
+	"history":                 1487,
+	"kids & family":           1305,
+	"kids":                    1305,
+	"leisure":                 1502,
+	"music":                   1310,
+	"news":                    1489,
+	"religion & spirituality": 1314,
+	"religion":                1314,
+	"science":                 1533,
+	"society & culture":       1324,
+	"society":                 1324,
+	"sports":                  1545,
+	"technology":              1318,
+	"true crime":              1488,
+	"tv & film":               1309,
+	"tv":                      1309,
 }
 
 // GenreIDForCategory maps a UI category label to an Apple podcast genre id.
@@ -49,13 +67,14 @@ type ITunesClient struct {
 }
 
 type PodcastResult struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Author      string `json:"author"`
-	FeedURL     string `json:"feed_url"`
-	ArtworkURL  string `json:"artwork_url"`
-	Category    string `json:"category"`
-	Description string `json:"description"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Author      string   `json:"author"`
+	FeedURL     string   `json:"feed_url"`
+	ArtworkURL  string   `json:"artwork_url"`
+	Category    string   `json:"category"`
+	Categories  []string `json:"categories,omitempty"`
+	Description string   `json:"description"`
 }
 
 func NewITunesClient() *ITunesClient {
@@ -134,13 +153,19 @@ func (c *ITunesClient) FetchTopChart(region string, genreID, limit int) ([]Podca
 			artURL = entry.Images[len(entry.Images)-1].Label // Highest resolution artwork
 		}
 
+		cat := entry.Category.Attributes.Label
+		var cats []string
+		if cat != "" {
+			cats = []string{cat}
+		}
 		results = append(results, PodcastResult{
 			ID:          entry.ID.Attributes.ID,
 			Title:       entry.Title.Label,
 			Author:      entry.Artist.Label,
 			FeedURL:     "", // Will be resolved on demand or via lookup
 			ArtworkURL:  artURL,
-			Category:    entry.Category.Attributes.Label,
+			Category:    cat,
+			Categories:  cats,
 			Description: entry.Summary.Label,
 		})
 	}
@@ -225,6 +250,10 @@ func (c *ITunesClient) SearchPodcasts(query string, limit int) ([]PodcastResult,
 			art = item.ArtworkUrl100
 		}
 
+		var cats []string
+		if item.PrimaryGenre != "" {
+			cats = []string{item.PrimaryGenre}
+		}
 		results = append(results, PodcastResult{
 			ID:         fmt.Sprintf("%d", item.TrackID),
 			Title:      item.TrackName,
@@ -232,6 +261,7 @@ func (c *ITunesClient) SearchPodcasts(query string, limit int) ([]PodcastResult,
 			FeedURL:    item.FeedURL,
 			ArtworkURL: art,
 			Category:   item.PrimaryGenre,
+			Categories: cats,
 		})
 	}
 

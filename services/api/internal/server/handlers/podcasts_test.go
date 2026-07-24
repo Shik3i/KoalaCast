@@ -12,7 +12,9 @@ import (
 	"testing"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
+	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
+	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 )
 
 func TestPodcastHandler_SearchUnconfigured(t *testing.T) {
@@ -72,3 +74,115 @@ func TestPodcastHandler_AddFeed_SSRFValidation(t *testing.T) {
 		t.Errorf("expected status 400 for loopback RSS feed URL, got %d", rec.Code)
 	}
 }
+
+func TestPodcastHandler_Search_WithPodcastIndexCategories(t *testing.T) {
+	mockResp := `{
+		"status": "true",
+		"feeds": [
+			{
+				"id": 42,
+				"title": "Tech Talk",
+				"url": "https://example.com/feed.xml",
+				"author": "Techie",
+				"artwork": "https://example.com/art.jpg",
+				"description": "A tech podcast",
+				"categories": {"102": "Technology", "105": "Science"}
+			}
+		],
+		"count": 1
+	}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(mockResp))
+	}))
+	defer ts.Close()
+
+	idxClient := podcastindex.NewClient("key", "secret")
+	idxClient.SetBaseURL(ts.URL)
+	idxClient.SetHTTPClient(rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true}))
+	handler := &PodcastHandler{
+		PodcastIndex: idxClient,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/podcasts/search?q=Tech", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Search(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Results []searchResultDTO `json:"results"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode search response: %v", err)
+	}
+
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
+	}
+	if len(resp.Results[0].Categories) == 0 {
+		t.Errorf("expected categories in DTO result, got none")
+	}
+}
+
+func TestPodcastHandler_Discover_WithPodcastIndexCategories(t *testing.T) {
+	mockResp := `{
+		"status": "true",
+		"feeds": [
+			{
+				"id": 99,
+				"title": "Science Daily",
+				"url": "https://example.com/science.xml",
+				"author": "Researcher",
+				"artwork": "https://example.com/science.jpg",
+				"description": "Daily science news",
+				"categories": {"105": "Science"}
+			}
+		],
+		"count": 1
+	}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(mockResp))
+	}))
+	defer ts.Close()
+
+	idxClient := podcastindex.NewClient("key", "secret")
+	idxClient.SetBaseURL(ts.URL)
+	idxClient.SetHTTPClient(rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true}))
+	handler := &PodcastHandler{
+		PodcastIndex: idxClient,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/podcasts/discover?category=Science", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Discover(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Results []itunes.PodcastResult `json:"results"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode discover response: %v", err)
+	}
+
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resp.Results))
+	}
+	if len(resp.Results[0].Categories) == 0 || resp.Results[0].Categories[0] != "Science" {
+		t.Errorf("expected category Science in discover result, got %v", resp.Results[0].Categories)
+	}
+}
+
+

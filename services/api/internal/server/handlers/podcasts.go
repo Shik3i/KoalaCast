@@ -79,12 +79,13 @@ type transcriptItem struct {
 // search backends (Podcast Index and the iTunes fallback) look identical to the
 // frontend (which keys off feed_url / artwork_url).
 type searchResultDTO struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Author      string `json:"author"`
-	FeedURL     string `json:"feed_url"`
-	ArtworkURL  string `json:"artwork_url"`
-	Description string `json:"description"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Author      string   `json:"author"`
+	FeedURL     string   `json:"feed_url"`
+	ArtworkURL  string   `json:"artwork_url"`
+	Categories  []string `json:"categories,omitempty"`
+	Description string   `json:"description"`
 }
 
 func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +116,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 					Author:      p.Author,
 					FeedURL:     feedURL,
 					ArtworkURL:  p.Artwork,
+					Categories:  p.CategoryList(),
 					Description: p.Description,
 				})
 			}
@@ -176,13 +178,19 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 				if feed == "" {
 					feed = p.OriginalURL
 				}
+				cats := p.CategoryList()
+				cat := category
+				if len(cats) > 0 {
+					cat = cats[0]
+				}
 				topPodcasts = append(topPodcasts, itunes.PodcastResult{
 					ID:          strconv.FormatInt(p.ID, 10),
 					Title:       p.Title,
 					Author:      p.Author,
 					FeedURL:     feed,
 					ArtworkURL:  art,
-					Category:    category,
+					Category:    cat,
+					Categories:  cats,
 					Description: p.Description,
 				})
 			}

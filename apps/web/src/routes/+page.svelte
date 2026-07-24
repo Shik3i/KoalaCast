@@ -10,8 +10,11 @@
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
 	import { reveal } from '$lib/actions/reveal';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import Onboarding from '$lib/components/Onboarding.svelte';
+	import { GENRES } from '$lib/genres';
 
 	interface PodcastItem {
 		id: string;
@@ -20,8 +23,12 @@
 		feed_url: string;
 		artwork_url: string;
 		category?: string;
+		categories?: string[];
 		description?: string;
 	}
+
+	let mounted = $state(false);
+	let forYou = $state<PodcastItem[]>([]);
 
 	const PAGE_SIZE = 60;
 
@@ -37,7 +44,7 @@
 	let limit = $state(PAGE_SIZE);
 	let reachedEnd = $state(false);
 
-	const categories = ['All', 'Technology', 'News', 'Business', 'Science', 'Comedy', 'Society'];
+	const categories = ['All', ...GENRES.map((g) => g.name)];
 
 	// Discover now pulls a genre-specific top chart from the server (per selected
 	// category) instead of client-filtering one flat overall chart — so each
@@ -93,6 +100,7 @@
 	}
 
 	onMount(async () => {
+		mounted = true;
 		const subs = await getLocalSubscriptions();
 		subscribedIds = subs.map((s) => s.podcast_id);
 		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);
@@ -102,10 +110,51 @@
 		isLoading = false;
 	});
 
+	// Build a "For You" rail from the user's interest genres (Podcast Index trending
+	// per genre, interleaved + deduped). Re-runs whenever interests change (e.g.
+	// after onboarding). Everything stays on-device; only category trending is fetched.
+	async function loadForYou(picks: string[]) {
+		if (!mounted || picks.length === 0) {
+			forYou = [];
+			return;
+		}
+		const lists = await Promise.all(
+			picks.slice(0, 4).map(async (g) => {
+				try {
+					const res = await fetch(`/api/v1/podcasts/discover?category=${encodeURIComponent(g)}&limit=10`);
+					const data = await res.json();
+					return (data.results ?? []) as PodcastItem[];
+				} catch (_) {
+					return [] as PodcastItem[];
+				}
+			})
+		);
+		const seen = new Set<string>();
+		const merged: PodcastItem[] = [];
+		const maxLen = Math.max(0, ...lists.map((l) => l.length));
+		for (let i = 0; i < maxLen; i++) {
+			for (const l of lists) {
+				const p = l[i];
+				if (!p) continue;
+				const key = p.feed_url || p.id;
+				if (seen.has(key) || prefs.isHidden(p.categories)) continue;
+				seen.add(key);
+				merged.push(p);
+			}
+		}
+		forYou = merged.slice(0, 15);
+	}
+
+	$effect(() => {
+		loadForYou(prefs.interests);
+	});
+
 	// Category is now resolved server-side; the hero search box stays a quick
-	// client-side text filter over the currently loaded chart.
+	// client-side text filter over the currently loaded chart. Vetoed genres are
+	// hidden everywhere.
 	let filteredPodcasts = $derived(
 		discoverPodcasts.filter((pod) => {
+			if (prefs.isHidden(pod.categories)) return false;
 			return (
 				!searchQuery.trim() ||
 				pod.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -195,6 +244,10 @@
 	}
 </script>
 
+{#if mounted && !prefs.onboarded}
+	<Onboarding />
+{/if}
+
 <div class="discover-experience">
 	<!-- Clean Hero Header -->
 	<section class="hero-section">
@@ -244,6 +297,31 @@
 								<span class="cc-progress-fill" style="width:{Math.round(item.progress_percent)}%"></span>
 							</span>
 						</div>
+					</button>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
+	<!-- For You (from chosen interest genres) -->
+	{#if forYou.length > 0}
+		<section class="foryou-section" use:reveal>
+			<div class="section-title-row">
+				<h2><i class="ph-fill ph-sparkle" aria-hidden="true"></i> For You</h2>
+				<a class="foryou-edit" href="/settings#interests">Edit interests</a>
+			</div>
+			<div class="foryou-rail">
+				{#each forYou as pod (pod.feed_url || pod.id)}
+					<button class="foryou-card" onclick={() => openPodcastShow(pod)}>
+						<img
+							class="fy-art"
+							src={pod.artwork_url || '/placeholder.svg'}
+							alt={pod.title}
+							loading="lazy"
+							onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+						/>
+						<span class="fy-title" title={pod.title}>{pod.title}</span>
+						<span class="fy-author">{pod.author}</span>
 					</button>
 				{/each}
 			</div>
@@ -818,6 +896,64 @@
 	}
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	/* For You rail */
+	.foryou-section { display: flex; flex-direction: column; gap: 1rem; }
+	.foryou-section h2 {
+		font-size: 1.35rem;
+		font-weight: 800;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.foryou-section h2 :global(.ph-fill) { color: var(--accent-green); }
+	.foryou-edit { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+	.foryou-edit:hover { color: var(--accent-green); text-decoration: none; }
+	.foryou-rail {
+		display: flex;
+		gap: 1rem;
+		overflow-x: auto;
+		padding-bottom: 0.5rem;
+		scroll-snap-type: x mandatory;
+		scrollbar-width: none;
+	}
+	.foryou-rail::-webkit-scrollbar { display: none; }
+	.foryou-card {
+		scroll-snap-align: start;
+		flex: 0 0 auto;
+		width: 150px;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		background: none;
+		border: none;
+		text-align: left;
+		padding: 0;
+	}
+	.fy-art {
+		width: 150px;
+		height: 150px;
+		border-radius: 14px;
+		object-fit: cover;
+		border: 1px solid var(--border-subtle);
+		transition: transform 0.25s var(--ease-spring), box-shadow 0.25s ease;
+	}
+	.foryou-card:hover .fy-art { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+	.fy-title {
+		font-weight: 700;
+		font-size: 0.88rem;
+		color: var(--text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.fy-author {
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	/* Continue Listening rail */

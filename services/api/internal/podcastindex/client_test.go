@@ -62,3 +62,54 @@ func TestPodcastIndexClient_Search(t *testing.T) {
 		t.Errorf("expected title 'Test Podcast', got '%s'", results[0].Title)
 	}
 }
+
+func TestSearchResult_CategoryList(t *testing.T) {
+	tests := []struct {
+		name       string
+		categories map[string]string
+		want       []string
+	}{
+		{
+			name:       "nil categories",
+			categories: nil,
+			want:       nil,
+		},
+		{
+			name:       "empty categories",
+			categories: map[string]string{},
+			want:       nil,
+		},
+		{
+			name: "valid categories",
+			categories: map[string]string{
+				"102": "Technology",
+				"105": "Science",
+			},
+			want: []string{"Technology", "Science"},
+		},
+		{
+			name: "ignore empty values",
+			categories: map[string]string{
+				"102": "Technology",
+				"103": "",
+			},
+			want: []string{"Technology"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := SearchResult{Categories: tt.categories}
+			got := res.CategoryList()
+			if len(got) != len(tt.want) {
+				t.Fatalf("CategoryList() returned %d items, want %d", len(got), len(tt.want))
+			}
+			for i, v := range got {
+				if v != tt.want[i] {
+					t.Errorf("CategoryList()[%d] = %q, want %q", i, v, tt.want[i])
+				}
+			}
+		})
+	}
+}
+

@@ -4,6 +4,24 @@
 	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
+	import { GENRES } from '$lib/genres';
+
+	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
+	function cycleGenre(name: string) {
+		if (prefs.interests.includes(name)) {
+			prefs.toggleInterest(name); // → neutral
+			prefs.toggleHidden(name); // → hidden
+		} else if (prefs.hiddenGenres.includes(name)) {
+			prefs.toggleHidden(name); // → neutral
+		} else {
+			prefs.toggleInterest(name); // → interested
+		}
+	}
+	function genreState(name: string): 'like' | 'hide' | 'neutral' {
+		if (prefs.interests.includes(name)) return 'like';
+		if (prefs.hiddenGenres.includes(name)) return 'hide';
+		return 'neutral';
+	}
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');
@@ -198,6 +216,25 @@
 		</div>
 	</section>
 
+	<section class="card" id="interests">
+		<h3><i class="ph ph-sparkle" aria-hidden="true"></i> Your interests</h3>
+		<p class="subtitle">Tap once to prefer a genre (shown in “For You”), tap again to hide it everywhere, tap a third time to reset. Stays on your device.</p>
+		<div class="genre-grid">
+			{#each GENRES as g (g.name)}
+				<button class="genre-chip {genreState(g.name)}" onclick={() => cycleGenre(g.name)}>
+					<i class="ph {g.icon}" aria-hidden="true"></i>
+					<span>{g.name}</span>
+					{#if genreState(g.name) === 'like'}<i class="ph-fill ph-heart state-ic" aria-hidden="true"></i>
+					{:else if genreState(g.name) === 'hide'}<i class="ph-fill ph-eye-slash state-ic" aria-hidden="true"></i>{/if}
+				</button>
+			{/each}
+		</div>
+		<div class="genre-legend">
+			<span><span class="dot like"></span> Preferred</span>
+			<span><span class="dot hide"></span> Hidden</span>
+		</div>
+	</section>
+
 	<section class="card">
 		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> Privacy</h3>
 		<div class="privacy-box">
@@ -364,6 +401,46 @@
 		color: #fff;
 	}
 	.theme-btn.active:hover { background: var(--accent-green); }
+
+	.genre-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+		gap: 0.6rem;
+		margin-top: 0.25rem;
+	}
+	.genre-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.85rem;
+		border-radius: 12px;
+		border: 1.5px solid var(--border-subtle);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-weight: 600;
+		font-size: 0.88rem;
+		transition: all 0.18s var(--ease-spring, ease);
+	}
+	.genre-chip > span { flex: 1; text-align: left; }
+	.genre-chip :global(.ph) { font-size: 1.15rem; }
+	.genre-chip .state-ic { font-size: 0.95rem; }
+	.genre-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
+	.genre-chip.like {
+		background: color-mix(in srgb, var(--accent-green) 15%, var(--bg-surface));
+		border-color: var(--accent-green);
+		color: var(--accent-green);
+	}
+	.genre-chip.hide {
+		background: color-mix(in srgb, var(--color-danger) 12%, var(--bg-surface));
+		border-color: var(--color-danger-border);
+		color: var(--color-danger);
+		text-decoration: line-through;
+	}
+	.genre-legend { display: flex; gap: 1.25rem; margin-top: 0.9rem; font-size: 0.82rem; color: var(--text-muted); }
+	.genre-legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+	.genre-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+	.genre-legend .dot.like { background: var(--accent-green); }
+	.genre-legend .dot.hide { background: var(--color-danger); }
 
 	.privacy-box {
 		background: var(--bg-elevated);
