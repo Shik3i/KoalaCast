@@ -4,11 +4,15 @@
 		getLocalSubscriptions,
 		getCompletedEpisodeIds,
 		setSubscriptionInboxMode,
+		setEpisodePlayed,
 		type LocalSubscription,
 		type InboxMode
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
 	import { reveal } from '$lib/actions/reveal';
+	import { slide } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 
 	interface InboxEpisode {
@@ -31,9 +35,12 @@
 	let modes = $state<Record<string, InboxMode>>({});
 	let rawEpisodes = $state<InboxEpisode[]>([]);
 	let completed = $state<Set<string>>(new Set());
-	let unplayedOnly = $state(false);
+	// The Inbox is a "what's new" view, so played episodes are hidden by default;
+	// the toggle lets you reveal them again.
+	let unplayedOnly = $state(true);
 	let showSettings = $state(false);
 	let isLoading = $state(true);
+	let openMenuId = $state<string | null>(null);
 
 	onMount(async () => {
 		const subs = await getLocalSubscriptions();
@@ -88,6 +95,46 @@
 	async function setMode(podcast_id: string, mode: InboxMode) {
 		modes = { ...modes, [podcast_id]: mode };
 		await setSubscriptionInboxMode(podcast_id, mode);
+	}
+
+	function epMeta(ep: InboxEpisode) {
+		return {
+			episode_id: ep.id,
+			podcast_id: ep.podcast_id,
+			title: ep.title,
+			podcast_title: ep.podcast_title,
+			artwork_url: ep.artwork_url || '',
+			enclosure_url: ep.enclosure_url,
+			duration_ms: ep.duration_ms
+		};
+	}
+
+	async function togglePlayed(ep: InboxEpisode) {
+		const played = !completed.has(ep.id);
+		await setEpisodePlayed(epMeta(ep), played);
+		const next = new Set(completed);
+		if (played) next.add(ep.id);
+		else next.delete(ep.id);
+		completed = next; // when unplayedOnly is on, played rows auto-hide
+	}
+
+	// "I've caught up to here" — mark this episode plus everything older in the
+	// current (newest-first) feed as played/unplayed.
+	async function markThisAndOlder(ep: InboxEpisode, played: boolean) {
+		openMenuId = null;
+		const idx = feed.findIndex((e) => e.id === ep.id);
+		if (idx < 0) return;
+		const list = feed.slice(idx);
+		await Promise.all(list.map((e) => setEpisodePlayed(epMeta(e), played)));
+		const next = new Set(completed);
+		for (const e of list) {
+			if (played) next.add(e.id);
+			else next.delete(e.id);
+		}
+		completed = next;
+		toast.success(
+			`Marked ${list.length} episode${list.length === 1 ? '' : 's'} as ${played ? 'played' : 'unplayed'}.`
+		);
 	}
 
 	function play(ep: InboxEpisode) {
@@ -182,9 +229,12 @@
 			<p>{unplayedOnly ? "You're all caught up — nothing unplayed." : 'No recent episodes found.'}</p>
 		</div>
 	{:else}
+		{#if openMenuId}
+			<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label="Close menu" tabindex="-1"></button>
+		{/if}
 		<div class="episode-list">
 			{#each feed as ep, i (ep.id)}
-				<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} class:current={player.current?.episode_id === ep.id}>
+				<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
 					<button class="ep-play" onclick={() => play(ep)} aria-label="Play episode">
 						<img src={ep.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
@@ -197,6 +247,26 @@
 							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
 							{#if completed.has(ep.id)}<span class="played-tag">Played</span>{/if}
 						</span>
+					</div>
+
+					<button class="ep-mark" class:done={completed.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={completed.has(ep.id)} aria-label={completed.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'} title={completed.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'}>
+						<i class="{completed.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
+					</button>
+
+					<div class="row-menu">
+						<button class="ep-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label="More actions">
+							<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
+						</button>
+						{#if openMenuId === ep.id}
+							<div class="menu" role="menu">
+								<button role="menuitem" onclick={() => markThisAndOlder(ep, true)}>
+									<i class="ph ph-arrow-line-down" aria-hidden="true"></i> Mark this &amp; older as played
+								</button>
+								<button role="menuitem" onclick={() => markThisAndOlder(ep, false)}>
+									<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Mark this &amp; older as unplayed
+								</button>
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/each}
@@ -284,6 +354,70 @@
 	}
 	.ep-row:hover { border-color: var(--accent-green); transform: translateX(3px); }
 	.ep-row.current { border-color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface)); }
+	.ep-row.played { opacity: 0.6; }
+	.ep-row.played:hover { opacity: 1; }
+
+	.ep-mark {
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		display: grid;
+		place-items: center;
+		font-size: 1.45rem;
+		transition: transform 0.2s var(--ease-spring, ease), color 0.2s ease;
+	}
+	.ep-mark:hover { color: var(--accent-green); background: var(--bg-elevated); transform: scale(1.05); }
+	.ep-mark.done { color: var(--accent-green); }
+
+	.row-menu { position: relative; flex-shrink: 0; }
+	.ep-kebab {
+		width: 34px;
+		height: 40px;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		display: grid;
+		place-items: center;
+		font-size: 1.3rem;
+		border-radius: 8px;
+	}
+	.ep-kebab:hover { color: var(--text-primary); background: var(--bg-elevated); }
+	.menu-backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; border: none; }
+	.menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		z-index: 50;
+		min-width: 250px;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		box-shadow: var(--shadow-lg);
+		padding: 0.35rem;
+		display: flex;
+		flex-direction: column;
+	}
+	.menu button {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		width: 100%;
+		background: none;
+		border: none;
+		text-align: left;
+		color: var(--text-primary);
+		font-size: 0.88rem;
+		font-weight: 500;
+		padding: 0.6rem 0.7rem;
+		border-radius: 8px;
+	}
+	.menu button :global(.ph) { font-size: 1.1rem; color: var(--text-muted); }
+	.menu button:hover { background: var(--bg-elevated); }
+	.menu button:hover :global(.ph) { color: var(--accent-green); }
 
 	.ep-play {
 		position: relative;
