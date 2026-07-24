@@ -150,11 +150,14 @@
 </script>
 
 <div class="settings-page">
-	<h2>Settings & Configuration</h2>
+	<div class="settings-head">
+		<h2><i class="ph-fill ph-gear-six" aria-hidden="true"></i> Settings</h2>
+		<p class="page-sub">Appearance, privacy, import/export and your optional sync account.</p>
+	</div>
 
 	<!-- Theme Selection Card -->
 	<section class="card">
-		<h3>Appearance & Theme</h3>
+		<h3><i class="ph ph-palette" aria-hidden="true"></i> Appearance &amp; Theme</h3>
 		<p class="subtitle">Select your preferred color theme or automatically follow your operating system settings.</p>
 
 		<div class="theme-selector">
@@ -185,7 +188,7 @@
 	</section>
 
 	<section class="card">
-		<h3>Privacy & Mode Explanation</h3>
+		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> Privacy &amp; Mode Explanation</h3>
 		<div class="privacy-box">
 			<h4>Local Browser Mode</h4>
 			<p>Your subscriptions, queue, and listening history stay in this browser. KoalaCast contacts the server to search podcasts and retrieve RSS metadata, but anonymous listening activity is not stored on the server.</p>
@@ -194,7 +197,7 @@
 
 	<!-- OPML Import / Export Card -->
 	<section class="card">
-		<h3>OPML Import & Export</h3>
+		<h3><i class="ph ph-arrows-down-up" aria-hidden="true"></i> OPML Import &amp; Export</h3>
 		<p class="subtitle">Import subscriptions from Pocket Casts, Apple Podcasts, AntennaPod, or Overcast XML files.</p>
 
 		{#if opmlError}
@@ -227,7 +230,7 @@
 
 	{#if !authUser}
 		<section class="card">
-			<h3>Account Sign In / Registration</h3>
+			<h3><i class="ph ph-user-circle" aria-hidden="true"></i> Account Sign In / Registration</h3>
 			<p class="subtitle">Accounts allow you to synchronize subscriptions and progress across devices without email or tracking.</p>
 
 			{#if authError}
@@ -260,14 +263,14 @@
 		</section>
 	{:else}
 		<section class="card">
-			<h3>Active Account</h3>
+			<h3><i class="ph ph-user-circle-check" aria-hidden="true"></i> Active Account</h3>
 			<p>Logged in as <strong>{authUser.username}</strong> ({authUser.role})</p>
 			<button onclick={handleLogout}>Sign Out</button>
 		</section>
 	{/if}
 
 	<section class="card">
-		<h3>Data Management</h3>
+		<h3><i class="ph ph-database" aria-hidden="true"></i> Data Management</h3>
 		<button class="btn-danger" onclick={handleResetLocalData}>Reset Local Browser Data</button>
 	</section>
 </div>
@@ -276,39 +279,64 @@
 	.settings-page {
 		display: flex;
 		flex-direction: column;
-		gap: 2rem;
+		gap: 1.5rem;
 	}
+
+	.settings-head h2 {
+		font-size: clamp(1.6rem, 3vw, 2.1rem);
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+	}
+	.settings-head h2 :global(.ph-fill) { color: var(--accent-green); }
+	.settings-head .page-sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
 
 	.card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
-		padding: 1.75rem;
+		border-radius: 14px;
+		padding: 1.6rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
 	}
+	.card h3 {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		font-size: 1.1rem;
+		font-weight: 700;
+	}
+	.card h3 :global(.ph) { color: var(--accent-green); font-size: 1.2rem; }
 
 	.subtitle {
 		color: var(--text-secondary);
 		font-size: 0.95rem;
+		margin-top: -0.4rem;
 	}
 
+	/* Segmented control */
 	.theme-selector {
-		display: flex;
-		gap: 1rem;
+		display: inline-flex;
+		gap: 4px;
 		flex-wrap: wrap;
-		margin-top: 0.5rem;
+		background: var(--bg-elevated);
+		padding: 4px;
+		border-radius: 12px;
+		width: fit-content;
+		margin-top: 0.25rem;
 	}
 
 	.theme-btn {
-		background: var(--bg-elevated);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		padding: 0.75rem 1.25rem;
-		border-radius: 8px;
+		background: transparent;
+		color: var(--text-secondary);
+		border: none;
+		padding: 0.6rem 1.1rem;
+		border-radius: 9px;
 		font-weight: 700;
-		font-size: 0.95rem;
+		font-size: 0.9rem;
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -316,14 +344,15 @@
 	}
 
 	.theme-btn:hover {
-		border-color: var(--accent-green);
+		color: var(--text-primary);
+		background: color-mix(in srgb, var(--text-primary) 6%, transparent);
 	}
 
 	.theme-btn.active {
 		background: var(--accent-green);
-		color: white;
-		border-color: var(--accent-green);
+		color: #fff;
 	}
+	.theme-btn.active:hover { background: var(--accent-green); }
 
 	.privacy-box {
 		background: var(--bg-elevated);

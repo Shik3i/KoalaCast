@@ -14,6 +14,7 @@
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
+	import { reveal } from '$lib/actions/reveal';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
@@ -78,20 +79,23 @@
 </script>
 
 <div class="library-page">
-	<h2>Library</h2>
+	<div class="lib-head">
+		<h2><i class="ph-fill ph-books" aria-hidden="true"></i> Library</h2>
+		<p class="sub">Your shows, in-progress episodes and queue — all on this device.</p>
+	</div>
 
-	<div class="tabs">
-		<button class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
-			Subscriptions ({subscriptions.length})
+	<div class="tabs" role="tablist">
+		<button role="tab" aria-selected={activeTab === 'subscriptions'} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
+			<i class="ph ph-books" aria-hidden="true"></i> Subscriptions <span class="count">{subscriptions.length}</span>
 		</button>
-		<button class:active={activeTab === 'episodes'} onclick={() => (activeTab = 'episodes')}>
-			In Progress ({recentEpisodes.length})
+		<button role="tab" aria-selected={activeTab === 'episodes'} class:active={activeTab === 'episodes'} onclick={() => (activeTab = 'episodes')}>
+			<i class="ph ph-hourglass-medium" aria-hidden="true"></i> In Progress <span class="count">{recentEpisodes.length}</span>
 		</button>
-		<button class:active={activeTab === 'queue'} onclick={() => (activeTab = 'queue')}>
-			Queue ({queue.length})
+		<button role="tab" aria-selected={activeTab === 'queue'} class:active={activeTab === 'queue'} onclick={() => (activeTab = 'queue')}>
+			<i class="ph ph-list-plus" aria-hidden="true"></i> Queue <span class="count">{queue.length}</span>
 		</button>
-		<button class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')}>
-			Favorites
+		<button role="tab" aria-selected={activeTab === 'favorites'} class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')}>
+			<i class="ph ph-heart" aria-hidden="true"></i> Favorites
 		</button>
 	</div>
 
@@ -103,8 +107,8 @@
 			</div>
 		{:else}
 			<div class="podcast-grid">
-				{#each subscriptions as sub}
-					<div class="podcast-card">
+				{#each subscriptions as sub, i (sub.podcast_id)}
+					<div class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
 						<img src={sub.artwork_url || '/placeholder.svg'} alt={sub.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<div class="details">
 							<h3>{sub.title}</h3>
@@ -187,26 +191,61 @@
 		gap: 1.5rem;
 	}
 
+	.lib-head h2 {
+		font-size: clamp(1.6rem, 3vw, 2.1rem);
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+	}
+	.lib-head h2 :global(.ph-fill) { color: var(--accent-green); }
+	.lib-head .sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
+
 	.tabs {
 		display: flex;
-		gap: 1rem;
-		border-bottom: 1px solid var(--border-subtle);
-		padding-bottom: 0.5rem;
+		gap: 0.5rem;
+		overflow-x: auto;
+		padding-bottom: 0.25rem;
+		scrollbar-width: none;
 	}
+	.tabs::-webkit-scrollbar { display: none; }
 
 	.tabs button {
-		background: none;
-		border: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
 		font-weight: 600;
-		font-size: 1rem;
+		font-size: 0.9rem;
 		color: var(--text-secondary);
 		padding: 0.5rem 1rem;
-		border-bottom: 2px solid transparent;
+		border-radius: 999px;
+		white-space: nowrap;
+		transition: all 0.22s var(--ease-spring, ease);
 	}
+	.tabs button :global(.ph) { font-size: 1.05rem; }
+	.tabs button:hover { border-color: var(--accent-green); color: var(--text-primary); }
 
 	.tabs button.active {
-		color: var(--accent-green);
-		border-bottom-color: var(--accent-green);
+		background: var(--accent-green);
+		border-color: var(--accent-green);
+		color: #fff;
+	}
+	.tabs .count {
+		font-size: 0.72rem;
+		font-weight: 800;
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		min-width: 1.4em;
+		text-align: center;
+	}
+	.tabs button.active .count {
+		background: rgba(255, 255, 255, 0.25);
+		color: #fff;
 	}
 
 	.empty-state {
