@@ -1,6 +1,7 @@
 package rss
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
@@ -146,13 +147,34 @@ func ParseFeedXML(r io.Reader) (*ParsedFeed, error) {
 		return nil, fmt.Errorf("failed to read feed content: %w", err)
 	}
 
-	rawStr := string(buf)
-
-	if strings.Contains(rawStr, "<feed") && strings.Contains(rawStr, "http://www.w3.org/2005/Atom") {
+	if detectFeedType(buf) == "atom" {
 		return parseAtom(buf)
 	}
-
 	return parseRSS(buf)
+}
+
+// detectFeedType decides the feed dialect from the document's actual root
+// element instead of substring-matching the whole payload. The old heuristic
+// ("<feed" + the Atom namespace both appear somewhere) misfired on the very
+// common case of an RSS feed that declares xmlns:atom for its <atom:link> self
+// reference, or that merely contains the text "<feed" in show notes — routing a
+// valid <rss> feed to the Atom parser and failing to ingest it. Defaults to
+// "rss" when the root can't be determined.
+func detectFeedType(buf []byte) string {
+	dec := xml.NewDecoder(bytes.NewReader(buf))
+	dec.Strict = false
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return "rss"
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			if strings.EqualFold(se.Name.Local, "feed") {
+				return "atom"
+			}
+			return "rss"
+		}
+	}
 }
 
 func parseRSS(buf []byte) (*ParsedFeed, error) {
