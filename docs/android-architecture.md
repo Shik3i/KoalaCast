@@ -16,5 +16,8 @@ While the initial MVP focuses on the SvelteKit web application and Go REST API, 
 Unlike the browser web player (which uses same-origin HttpOnly session cookies), native Android clients authenticate via scoped device tokens:
 1. Android app registers device name and client type (`android`) via `POST /api/v1/auth/device/login`.
 2. Server returns a revocable `device_token` associated with a record in `device_credentials`.
-3. Requests to `/api/v1/sync` include `Authorization: Bearer <device_token>`.
-4. Users can inspect, rename, or revoke active Android device tokens at any time via the web settings interface.
+3. Requests to `/api/v1/sync` (and any authed endpoint) include `Authorization: Bearer <device_token>`.
+4. Users can **inspect and revoke** active device tokens: `GET /api/v1/auth/sessions` lists both web
+   sessions and device credentials (each carries a `kind` of `"session"` or `"device"`), and
+   `DELETE /api/v1/auth/sessions/{id}` revokes either kind. `POST /api/v1/auth/logout` from a native
+   client revokes that device's own token. (Renaming a device is not yet exposed via the API.)

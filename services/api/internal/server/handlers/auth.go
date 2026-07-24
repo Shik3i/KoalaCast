@@ -305,7 +305,14 @@ func (h *AuthHandler) DeviceLogin(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	authUser := customMiddleware.GetAuthUser(r.Context())
 	if authUser != nil && authUser.SessionID != "" {
+		// Web client: drop the browser session row.
 		_, _ = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE id = ?", authUser.SessionID)
+	} else if authUser != nil && authUser.DeviceID != "" {
+		// Native client (Bearer device token): revoke this device's credential so
+		// the token stops working immediately instead of lingering until expiry.
+		_, _ = h.DB.SQL.ExecContext(r.Context(),
+			"DELETE FROM device_credentials WHERE user_id = ? AND device_id = ?",
+			authUser.ID, authUser.DeviceID)
 	}
 
 	// Clear session cookie
@@ -348,20 +355,11 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.DB.SQL.QueryContext(r.Context(), `
-		SELECT id, device_name, device_type, truncated_ip, sanitized_user_agent, created_at, last_used_at
-		FROM sessions
-		WHERE user_id = ? AND expires_at > ?
-		ORDER BY last_used_at DESC
-	`, authUser.ID, time.Now().UnixMilli())
-	if err != nil {
-		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+	nowMs := time.Now().UnixMilli()
 
 	type SessionItem struct {
 		ID                 string `json:"id"`
+		Kind               string `json:"kind"` // "session" (web) | "device" (native)
 		DeviceName         string `json:"device_name"`
 		DeviceType         string `json:"device_type"`
 		TruncatedIP        string `json:"truncated_ip"`
@@ -372,13 +370,51 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessions := make([]SessionItem, 0)
+
+	// Web browser sessions.
+	rows, err := h.DB.SQL.QueryContext(r.Context(), `
+		SELECT id, device_name, device_type, truncated_ip, sanitized_user_agent, created_at, last_used_at
+		FROM sessions
+		WHERE user_id = ? AND expires_at > ?
+		ORDER BY last_used_at DESC
+	`, authUser.ID, nowMs)
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 	for rows.Next() {
 		var item SessionItem
 		if err := rows.Scan(&item.ID, &item.DeviceName, &item.DeviceType, &item.TruncatedIP, &item.SanitizedUserAgent, &item.CreatedAt, &item.LastUsedAt); err == nil {
+			item.Kind = "session"
 			item.IsCurrent = (item.ID == authUser.SessionID)
 			sessions = append(sessions, item)
 		}
 	}
+	rows.Close()
+
+	// Native device credentials (Bearer tokens).
+	dRows, err := h.DB.SQL.QueryContext(r.Context(), `
+		SELECT id, device_id, name, client_type, created_at, last_sync_at
+		FROM device_credentials
+		WHERE user_id = ? AND is_revoked = 0 AND (expires_at = 0 OR expires_at > ?)
+		ORDER BY last_sync_at DESC
+	`, authUser.ID, nowMs)
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+	for dRows.Next() {
+		var item SessionItem
+		var deviceID string
+		if err := dRows.Scan(&item.ID, &deviceID, &item.DeviceName, &item.DeviceType, &item.CreatedAt, &item.LastUsedAt); err == nil {
+			item.Kind = "device"
+			// A device credential authenticated the current request when its
+			// device_id matches the one the middleware resolved from the token.
+			item.IsCurrent = (authUser.SessionID == "" && deviceID == authUser.DeviceID)
+			sessions = append(sessions, item)
+		}
+	}
+	dRows.Close()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -395,9 +431,28 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := chi.URLParam(r, "id")
-	_, err := h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE id = ? AND user_id = ?", sessionID, authUser.ID)
+
+	// The id may reference either a web session or a native device credential.
+	// Both deletes are scoped to the authenticated user, so only that user's own
+	// rows can ever be revoked; exactly one table (if any) will match.
+	res, err := h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE id = ? AND user_id = ?", sessionID, authUser.ID)
 	if err != nil {
 		http.Error(w, `{"error":"failed to revoke session"}`, http.StatusInternalServerError)
+		return
+	}
+	affected, _ := res.RowsAffected()
+
+	if affected == 0 {
+		dRes, dErr := h.DB.SQL.ExecContext(r.Context(), "DELETE FROM device_credentials WHERE id = ? AND user_id = ?", sessionID, authUser.ID)
+		if dErr != nil {
+			http.Error(w, `{"error":"failed to revoke session"}`, http.StatusInternalServerError)
+			return
+		}
+		affected, _ = dRes.RowsAffected()
+	}
+
+	if affected == 0 {
+		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
 		return
 	}
 

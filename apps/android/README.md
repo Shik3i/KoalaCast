@@ -101,8 +101,9 @@ Self-hosters run their own server. The app must let the user choose the server:
 | POST | `/auth/device/login` | – (rate-limited) | **Native login → returns revocable `device_token`.** |
 | POST | `/auth/register`, `/auth/login`, `/auth/recovery/verify` | – | Account lifecycle. |
 | GET | `/auth/me` | Bearer | Current user. |
-| POST | `/auth/logout` | Bearer | Revoke current device session. |
-| GET/DELETE | `/auth/sessions`, `/auth/sessions/{id}` | Bearer | List / revoke device sessions. |
+| POST | `/auth/logout` | Bearer | Revokes the calling device's own token (native) / clears the web session. |
+| GET | `/auth/sessions` | Bearer | Lists web sessions **and** device credentials; each item has a `kind` (`"session"` \| `"device"`) and `is_current`. |
+| DELETE | `/auth/sessions/{id}` | Bearer | Revokes either a web session or a device token by id (user-scoped). |
 | GET | `/sync` | Bearer | **Pull** changes (subscriptions, queue, favorites, progress). |
 | POST | `/sync` | Bearer | **Push** local changes. |
 | POST | `/sync/merge` | Bearer | Merge local (pre-account) data on first sign-in. |
@@ -114,7 +115,10 @@ Self-hosters run their own server. The app must let the user choose the server:
 2. Server returns a `device_token` (row in `device_credentials`, revocable, expiring).
 3. Send `Authorization: Bearer <device_token>` on all authed calls (OkHttp interceptor).
 4. Store token in **EncryptedSharedPreferences / DataStore + Keystore**.
-5. Surface active device sessions in Settings (list/revoke) via `/auth/sessions`.
+5. Surface active sessions in Settings via `GET /auth/sessions` (filter/label by `kind`);
+   revoke any with `DELETE /auth/sessions/{id}`; sign out with `POST /auth/logout` (revokes
+   this device's token server-side). Device tokens currently expire after 90 days — no refresh
+   endpoint yet, so plan for a re-login prompt on expiry.
 6. On 401 → clear token, drop to local-only mode, prompt re-auth (never lose local data).
 
 ### 2.4 Sync semantics
