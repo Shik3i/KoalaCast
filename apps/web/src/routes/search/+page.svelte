@@ -40,7 +40,30 @@
 		executeSearch(searchQuery);
 	}
 
-	async function handleAddPodcast(pod: any) {
+	async function openPodcastShow(pod: any) {
+		const feedUrl = pod.feed_url || pod.feedUrl;
+		if (feedUrl) {
+			try {
+				const res = await fetch('/api/v1/podcasts/feed', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ feed_url: feedUrl })
+				});
+				if (res.ok) {
+					const data = await res.json();
+					if (data.id) {
+						window.location.href = `/podcast/${data.id}`;
+						return;
+					}
+				}
+			} catch (_) {}
+		}
+
+		window.location.href = `/podcast/${pod.id}?feed_url=${encodeURIComponent(feedUrl || '')}`;
+	}
+
+	async function handleAddPodcast(e: Event, pod: any) {
+		e.stopPropagation();
 		try {
 			let feedUrl = pod.feed_url || pod.feedUrl;
 			let podId = pod.id;
@@ -97,6 +120,7 @@
 
 			subscribedIds = [...subscribedIds, data.id];
 			rssUrlInput = '';
+			window.location.href = `/podcast/${data.id}`;
 		} catch (err) {
 			errorMessage = 'Failed to fetch RSS feed.';
 		} finally {
@@ -107,7 +131,7 @@
 
 <div class="search-experience">
 	<div class="header-row">
-		<h2>Search & Add Podcasts</h2>
+		<h2>Search & Discover Podcasts</h2>
 	</div>
 
 	<div class="search-grid-top">
@@ -160,7 +184,7 @@
 
 		<div class="results-grid">
 			{#each searchResults as pod}
-				<div class="result-card">
+				<div class="result-card" onclick={() => openPodcastShow(pod)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openPodcastShow(pod)}>
 					<img src={pod.artwork_url || pod.artworkUrl600 || '/favicon.png'} alt={pod.title || pod.trackName} class="artwork" />
 					<div class="info">
 						<h4>{pod.title || pod.trackName}</h4>
@@ -169,7 +193,7 @@
 						<button
 							class="btn-sub"
 							class:subscribed={subscribedIds.includes(pod.id)}
-							onclick={() => handleAddPodcast(pod)}
+							onclick={(e) => handleAddPodcast(e, pod)}
 						>
 							{#if subscribedIds.includes(pod.id)}
 								<i class="ph ph-check" aria-hidden="true"></i> Subscribed
@@ -273,6 +297,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+		cursor: pointer;
+		transition: transform 0.2s ease, border-color 0.2s ease;
+	}
+
+	.result-card:hover {
+		transform: translateY(-4px);
+		border-color: var(--accent-green);
 	}
 
 	.artwork {

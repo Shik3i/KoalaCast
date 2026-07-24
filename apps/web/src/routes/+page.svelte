@@ -49,7 +49,30 @@
 		})
 	);
 
-	async function handleSubscribe(pod: PodcastItem) {
+	async function openPodcastShow(pod: PodcastItem) {
+		if (pod.feed_url) {
+			// Resolve or add feed via API first
+			try {
+				const res = await fetch('/api/v1/podcasts/feed', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ feed_url: pod.feed_url })
+				});
+				if (res.ok) {
+					const data = await res.json();
+					if (data.id) {
+						window.location.href = `/podcast/${data.id}`;
+						return;
+					}
+				}
+			} catch (_) {}
+		}
+
+		window.location.href = `/podcast/${pod.id}?feed_url=${encodeURIComponent(pod.feed_url || '')}`;
+	}
+
+	async function handleSubscribe(e: Event, pod: PodcastItem) {
+		e.stopPropagation();
 		isSubmitting = true;
 		try {
 			let targetFeedUrl = pod.feed_url;
@@ -83,18 +106,18 @@
 </script>
 
 <div class="discover-experience">
-	<!-- Hero Header with Live Search -->
+	<!-- Clean Hero Header -->
 	<section class="hero-section">
 		<div class="hero-content">
-			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> 2026 Next-Gen Podcatcher</span>
-			<h1>Discover Millions of Podcasts</h1>
-			<p class="subtitle">Stream top shows directly from publishers. Zero ads, zero tracking, instant playback.</p>
+			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> 🌿 Open Source Podcatcher</span>
+			<h1>Discover & Listen to Podcasts</h1>
+			<p class="subtitle">Stream shows directly from creators. Simple, calm, privacy-first audio playback.</p>
 
 			<div class="search-bar-hero">
 				<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
 				<input
 					type="text"
-					placeholder="Search millions of podcasts by title, author, or topic..."
+					placeholder="Search podcasts by title, author, or topic..."
 					bind:value={searchQuery}
 				/>
 				{#if searchQuery}
@@ -106,7 +129,7 @@
 		</div>
 	</section>
 
-	<!-- Category Pills Navigation -->
+	<!-- Category Pills -->
 	<div class="category-bar">
 		{#each categories as cat}
 			<button
@@ -122,39 +145,30 @@
 	<!-- Top Charts Grid -->
 	<section class="catalog-section">
 		<div class="section-title-row">
-			<h2>{selectedCategory === 'All' ? 'Top Trending Podcasts' : `${selectedCategory} Shows`}</h2>
+			<h2>{selectedCategory === 'All' ? 'Top Trending Shows' : `${selectedCategory} Shows`}</h2>
 			<span class="count-badge">{filteredPodcasts.length} Shows</span>
 		</div>
 
 		{#if isLoading}
 			<div class="loading-state">
 				<div class="spinner"></div>
-				<p>Fetching live top charts...</p>
+				<p>Fetching podcasts...</p>
 			</div>
 		{:else if filteredPodcasts.length === 0}
 			<div class="empty-state">
 				<i class="ph ph-headphones-slash" aria-hidden="true"></i>
-				<p>No podcasts found matching "{searchQuery}". Try searching another topic!</p>
+				<p>No podcasts found matching "{searchQuery}". Try another search term!</p>
 			</div>
 		{:else}
 			<div class="podcast-grid">
 				{#each filteredPodcasts as pod}
-					<div class="podcast-card">
+					<div class="podcast-card" onclick={() => openPodcastShow(pod)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openPodcastShow(pod)}>
 						<div class="cover-wrapper">
 							<img src={pod.artwork_url || '/favicon.png'} alt={pod.title} class="cover-art" loading="lazy" />
 							<div class="cover-overlay">
-								<button
-									class="btn-sub-overlay"
-									class:subscribed={subscribedIds.includes(pod.id)}
-									onclick={() => handleSubscribe(pod)}
-									disabled={isSubmitting || subscribedIds.includes(pod.id)}
-								>
-									{#if subscribedIds.includes(pod.id)}
-										<i class="ph ph-check-circle" aria-hidden="true"></i> Subscribed
-									{:else}
-										<i class="ph ph-plus-circle" aria-hidden="true"></i> Subscribe
-									{/if}
-								</button>
+								<span class="btn-play-overlay">
+									<i class="ph ph-play-fill" aria-hidden="true"></i> View Episodes
+								</span>
 							</div>
 							{#if pod.category}
 								<span class="cat-tag">{pod.category}</span>
@@ -163,6 +177,21 @@
 						<div class="card-details">
 							<h3 title={pod.title}>{pod.title}</h3>
 							<span class="author-name">{pod.author}</span>
+
+							<div class="card-actions">
+								<button
+									class="btn-sub-card"
+									class:subscribed={subscribedIds.includes(pod.id)}
+									onclick={(e) => handleSubscribe(e, pod)}
+									disabled={isSubmitting || subscribedIds.includes(pod.id)}
+								>
+									{#if subscribedIds.includes(pod.id)}
+										<i class="ph ph-check" aria-hidden="true"></i> Subscribed
+									{:else}
+										<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
+									{/if}
+								</button>
+							</div>
 						</div>
 					</div>
 				{/each}
@@ -327,12 +356,14 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+		cursor: pointer;
 		transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
 	}
 
 	.podcast-card:hover {
 		transform: translateY(-4px);
 		box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+		border-color: var(--accent-green);
 	}
 
 	.cover-wrapper {
@@ -357,7 +388,7 @@
 	.cover-overlay {
 		position: absolute;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
+		background: rgba(0, 0, 0, 0.55);
 		backdrop-filter: blur(4px);
 		display: flex;
 		align-items: center;
@@ -370,10 +401,9 @@
 		opacity: 1;
 	}
 
-	.btn-sub-overlay {
+	.btn-play-overlay {
 		background: var(--accent-green);
 		color: white;
-		border: none;
 		padding: 0.6rem 1.2rem;
 		border-radius: 20px;
 		font-weight: 700;
@@ -381,11 +411,6 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-	}
-
-	.btn-sub-overlay.subscribed {
-		background: rgba(255, 255, 255, 0.9);
-		color: #192a23;
 	}
 
 	.cat-tag {
@@ -405,7 +430,8 @@
 		padding: 1rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
+		gap: 0.4rem;
+		flex: 1;
 	}
 
 	.card-details h3 {
@@ -423,6 +449,38 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.card-actions {
+		margin-top: auto;
+		padding-top: 0.5rem;
+	}
+
+	.btn-sub-card {
+		width: 100%;
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.45rem;
+		border-radius: 6px;
+		font-weight: 700;
+		font-size: 0.8rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+	}
+
+	.btn-sub-card:hover {
+		background: var(--accent-green);
+		color: white;
+		border-color: var(--accent-green);
+	}
+
+	.btn-sub-card.subscribed {
+		background: var(--accent-green);
+		color: white;
+		border-color: var(--accent-green);
 	}
 
 	.loading-state, .empty-state {
