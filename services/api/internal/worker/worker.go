@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -291,6 +292,12 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 			SELECT id FROM episodes WHERE podcast_id = ? AND stable_identity_key = ?
 		`, podcastID, ep.StableKey).Scan(&existingID)
 
+		transcriptsJSON := ""
+		if len(ep.Transcripts) > 0 {
+			if b, mErr := json.Marshal(ep.Transcripts); mErr == nil {
+				transcriptsJSON = string(b)
+			}
+		}
 		if err == sql.ErrNoRows {
 			episodeID := uuid.New().String()
 			_, err = tx.ExecContext(ctx, `
@@ -298,12 +305,12 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 					id, podcast_id, stable_identity_key, guid, fallback_hash, title, description,
 					content_encoded, pub_date, has_pub_date, duration_ms, enclosure_url,
 					enclosure_type, enclosure_length, artwork_url, episode_number, season_number,
-					episode_type, explicit, link, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					episode_type, explicit, link, transcripts, created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, episodeID, podcastID, ep.StableKey, ep.GUID, ep.FallbackHash, ep.Title, ep.Description,
 				ep.ContentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
 				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber,
-				ep.EpisodeType, explicitInt, ep.Link, nowMs)
+				ep.EpisodeType, explicitInt, ep.Link, transcriptsJSON, nowMs)
 			if err != nil {
 				return fmt.Errorf("failed to insert episode: %w", err)
 			}
@@ -318,10 +325,11 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 					enclosure_type = ?,
 					enclosure_length = ?,
 					artwork_url = ?,
-					link = ?
+					link = ?,
+					transcripts = ?
 				WHERE id = ?
 			`, ep.Title, ep.Description, ep.ContentEncoded, ep.DurationMS, ep.EnclosureURL,
-				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.Link, existingID)
+				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.Link, transcriptsJSON, existingID)
 			if err != nil {
 				return fmt.Errorf("failed to update episode: %w", err)
 			}

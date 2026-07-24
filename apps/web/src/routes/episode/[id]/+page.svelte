@@ -13,6 +13,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { dominantColor } from '$lib/color';
+	import { slide } from 'svelte/transition';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -118,6 +119,67 @@
 		return `${m}m`;
 	}
 
+	let showTranscript = $state(false);
+	let transcriptLoading = $state(false);
+	let transcriptError = $state('');
+	let transcriptHtml = $state(''); // sanitized, for html-type transcripts
+	let transcriptText = $state(''); // plain text, for vtt/srt/json/plain
+	let transcriptLoaded = $state(false);
+
+	async function toggleTranscript() {
+		showTranscript = !showTranscript;
+		if (!showTranscript || transcriptLoaded || !episode) return;
+		transcriptLoading = true;
+		transcriptError = '';
+		try {
+			const res = await fetch(`/api/v1/episodes/${episode.id}/transcript?i=0`);
+			if (!res.ok) {
+				transcriptError = 'Transcript could not be loaded.';
+				return;
+			}
+			const data = await res.json();
+			const type = (data.type || '').toLowerCase();
+			const content: string = data.content || '';
+			if (type.includes('html')) {
+				transcriptHtml = sanitizeHTML(content);
+			} else if (type.includes('json')) {
+				transcriptText = jsonTranscriptToText(content);
+			} else if (type.includes('vtt') || type.includes('srt') || type.includes('subrip')) {
+				transcriptText = cueTranscriptToText(content);
+			} else {
+				transcriptText = content;
+			}
+			transcriptLoaded = true;
+		} catch (_) {
+			transcriptError = 'Transcript could not be loaded.';
+		} finally {
+			transcriptLoading = false;
+		}
+	}
+
+	// Strip WEBVTT/SRT cue numbers + timestamp lines down to readable text.
+	function cueTranscriptToText(raw: string): string {
+		const lines = raw.split(/\r?\n/);
+		const out: string[] = [];
+		for (const line of lines) {
+			const l = line.trim();
+			if (!l || l === 'WEBVTT' || /^\d+$/.test(l) || l.includes('-->')) continue;
+			out.push(l.replace(/<[^>]*>/g, '')); // drop inline VTT tags
+		}
+		return out.join('\n');
+	}
+
+	// Podcasting 2.0 JSON transcript → concatenated segment bodies.
+	function jsonTranscriptToText(raw: string): string {
+		try {
+			const j = JSON.parse(raw);
+			if (Array.isArray(j?.segments)) {
+				return j.segments.map((s: any) => s.body ?? '').join(' ').replace(/\s+/g, ' ').trim();
+			}
+		} catch (_) {}
+		return raw;
+	}
+
 	function sanitizeHTML(html: string) {
 		// Feed show-notes are attacker-controlled (anyone can add an arbitrary feed),
 		// so they must go through a real allowlist sanitizer before {@html}. DOMPurify
@@ -167,9 +229,29 @@
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? 'Favorited' : 'Favorite'}
 					</button>
+					{#if episode.transcripts && episode.transcripts.length > 0}
+						<button class="btn-secondary" class:active={showTranscript} onclick={toggleTranscript} aria-expanded={showTranscript}>
+							<i class="ph ph-article" aria-hidden="true"></i> Transcript
+						</button>
+					{/if}
 				</div>
 			</div>
 		</div>
+
+		{#if showTranscript}
+			<section class="transcript-card" transition:slide={{ duration: 220 }}>
+				<h3><i class="ph ph-article" aria-hidden="true"></i> Transcript</h3>
+				{#if transcriptLoading}
+					<p class="transcript-status">Loading transcript…</p>
+				{:else if transcriptError}
+					<p class="transcript-status">{transcriptError}</p>
+				{:else if transcriptHtml}
+					<div class="html-content transcript-body">{@html transcriptHtml}</div>
+				{:else}
+					<div class="transcript-body transcript-text">{transcriptText}</div>
+				{/if}
+			</section>
+		{/if}
 
 		<section class="description-card">
 			<h3>Show Notes & Description</h3>
@@ -307,12 +389,25 @@
 	.btn-fav.active { border-color: #e5484d; color: #e5484d; background: color-mix(in srgb, #e5484d 12%, var(--bg-surface)); }
 	.btn-fav.active :global(.ph-fill) { transform: scale(1.1); }
 
-	.description-card {
+	.description-card,
+	.transcript-card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg, 18px);
 		padding: 2rem;
 	}
+	.transcript-card h3 { display: flex; align-items: center; gap: 0.5rem; }
+	.transcript-card h3 :global(.ph) { color: var(--show-accent, var(--accent-green)); }
+	.transcript-status { color: var(--text-muted); margin-top: 1rem; }
+	.transcript-body {
+		margin-top: 1rem;
+		max-height: 60vh;
+		overflow-y: auto;
+		line-height: 1.7;
+		color: var(--text-secondary);
+	}
+	.transcript-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+	.btn-secondary.active { border-color: var(--show-accent, var(--accent-green)); color: var(--show-accent, var(--accent-green)); }
 
 	.description-card h3 {
 		font-size: 1.25rem;

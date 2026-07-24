@@ -71,6 +71,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.Get("/podcasts/{id}", podcastHandler.GetPodcast)
 		r.Get("/podcasts/{id}/episodes", podcastHandler.GetEpisodes)
 		r.Get("/episodes/{id}", podcastHandler.GetEpisode)
+		r.Get("/episodes/{id}/transcript", podcastHandler.GetEpisodeTranscript)
 
 		// AddFeed triggers an unauthenticated server-side fetch + DB writes, so it
 		// is throttled per client IP to bound outbound-fetch and DB-growth abuse.

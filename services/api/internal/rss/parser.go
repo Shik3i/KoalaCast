@@ -96,11 +96,11 @@ type rssItem struct {
 	} `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
 	PodcastChapters struct {
 		URL string `xml:"url,attr"`
-	} `xml:"https://podcastindex.org/podcast1.0 chapters"`
+	} `xml:"https://podcastindex.org/namespace/1.0 chapters"`
 	PodcastTranscripts []struct {
 		URL  string `xml:"url,attr"`
 		Type string `xml:"type,attr"`
-	} `xml:"https://podcastindex.org/podcast1.0 transcript"`
+	} `xml:"https://podcastindex.org/namespace/1.0 transcript"`
 }
 
 type rssGUID struct {

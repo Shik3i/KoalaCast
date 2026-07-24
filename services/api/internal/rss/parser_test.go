@@ -190,7 +190,7 @@ func TestParseDurationToMS(t *testing.T) {
 
 func TestParseFeedXML_MultipleTranscriptsAndContentEncoded(t *testing.T) {
 	xmlData := `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:podcast="https://podcastindex.org/podcast1.0">
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:podcast="https://podcastindex.org/namespace/1.0">
   <channel>
     <title>Transcripts Feed</title>
     <item>

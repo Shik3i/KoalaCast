@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -63,8 +64,15 @@ type EpisodeResponse struct {
 	EpisodeNumber   int    `json:"episode_number"`
 	SeasonNumber    int    `json:"season_number"`
 	EpisodeType     string `json:"episode_type"`
-	Explicit        bool   `json:"explicit"`
-	Link            string `json:"link"`
+	Explicit        bool             `json:"explicit"`
+	Link            string           `json:"link"`
+	Transcripts     []transcriptItem `json:"transcripts"`
+}
+
+// transcriptItem is a publisher-provided transcript reference (Podcasting 2.0).
+type transcriptItem struct {
+	URL  string `json:"url"`
+	Type string `json:"type"`
 }
 
 // searchResultDTO is the normalized shape the web client consumes, so both
@@ -365,17 +373,23 @@ func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (str
 		}
 
 		epID := uuid.New().String()
+		transcriptsJSON := ""
+		if len(ep.Transcripts) > 0 {
+			if b, mErr := json.Marshal(ep.Transcripts); mErr == nil {
+				transcriptsJSON = string(b)
+			}
+		}
 		_, err = tx.ExecContext(ctx, `
 			INSERT OR IGNORE INTO episodes (
 				id, podcast_id, stable_identity_key, guid, fallback_hash, title, description,
 				content_encoded, pub_date, has_pub_date, duration_ms, enclosure_url,
 				enclosure_type, enclosure_length, artwork_url, episode_number, season_number,
-				episode_type, explicit, link, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				episode_type, explicit, link, transcripts, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, epID, podcastID, ep.StableKey, ep.GUID, ep.FallbackHash, ep.Title, ep.Description,
 			ep.ContentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
 			ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber,
-			ep.EpisodeType, epExplicit, ep.Link, nowMs)
+			ep.EpisodeType, epExplicit, ep.Link, transcriptsJSON, nowMs)
 		if err != nil {
 			// Ignore individual episode duplicate collisions
 			continue
@@ -516,18 +530,19 @@ func (h *PodcastHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 
 	var ep EpisodeResponse
 	var hasPubDateInt, explicitInt int
+	var transcriptsJSON sql.NullString
 
 	err := h.DB.SQL.QueryRowContext(r.Context(), `
 		SELECT id, podcast_id, guid, title, description, content_encoded, pub_date,
 		       has_pub_date, duration_ms, enclosure_url, enclosure_type, enclosure_length,
-		       artwork_url, episode_number, season_number, episode_type, explicit, link
+		       artwork_url, episode_number, season_number, episode_type, explicit, link, transcripts
 		FROM episodes
 		WHERE id = ?
 	`, episodeID).Scan(
 		&ep.ID, &ep.PodcastID, &ep.GUID, &ep.Title, &ep.Description, &ep.ContentEncoded,
 		&ep.PubDate, &hasPubDateInt, &ep.DurationMS, &ep.EnclosureURL, &ep.EnclosureType,
 		&ep.EnclosureLength, &ep.ArtworkURL, &ep.EpisodeNumber, &ep.SeasonNumber,
-		&ep.EpisodeType, &explicitInt, &ep.Link,
+		&ep.EpisodeType, &explicitInt, &ep.Link, &transcriptsJSON,
 	)
 
 	if err == sql.ErrNoRows {
@@ -540,8 +555,76 @@ func (h *PodcastHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 
 	ep.HasPubDate = (hasPubDateInt == 1)
 	ep.Explicit = (explicitInt == 1)
+	ep.Transcripts = []transcriptItem{}
+	if transcriptsJSON.Valid && transcriptsJSON.String != "" {
+		_ = json.Unmarshal([]byte(transcriptsJSON.String), &ep.Transcripts)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(ep)
+}
+
+// GetEpisodeTranscript fetches a publisher-provided transcript on demand and
+// returns its raw text. It only ever fetches a URL already stored for that
+// episode (never arbitrary user input), goes through the SSRF-safe HTTP client,
+// and caps the response size — so it stays light and can't be abused as a proxy.
+func (h *PodcastHandler) GetEpisodeTranscript(w http.ResponseWriter, r *http.Request) {
+	episodeID := chi.URLParam(r, "id")
+	idx := 0
+	if n, e := strconv.Atoi(r.URL.Query().Get("i")); e == nil && n >= 0 {
+		idx = n
+	}
+
+	var transcriptsJSON sql.NullString
+	err := h.DB.SQL.QueryRowContext(r.Context(), "SELECT transcripts FROM episodes WHERE id = ?", episodeID).Scan(&transcriptsJSON)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"episode not found"}`, http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	var items []transcriptItem
+	if transcriptsJSON.Valid && transcriptsJSON.String != "" {
+		_ = json.Unmarshal([]byte(transcriptsJSON.String), &items)
+	}
+	if idx >= len(items) {
+		http.Error(w, `{"error":"transcript not available"}`, http.StatusNotFound)
+		return
+	}
+
+	target := items[idx].URL
+	if err := rss.ValidateURL(target); err != nil {
+		http.Error(w, `{"error":"invalid transcript url"}`, http.StatusBadRequest)
+		return
+	}
+
+	client := rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second})
+	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
+	req.Header.Set("User-Agent", "KoalaCast/1.0 (+https://github.com/Shik3i/KoalaCast)")
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch transcript"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, `{"error":"transcript source returned an error"}`, http.StatusBadGateway)
+		return
+	}
+
+	body, err := io.ReadAll(rss.LimitResponseBody(resp.Body, h.MaxResponseB))
+	if err != nil {
+		http.Error(w, `{"error":"failed to read transcript"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"type":    items[idx].Type,
+		"content": string(body),
+	})
 }
