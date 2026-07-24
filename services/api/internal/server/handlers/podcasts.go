@@ -522,6 +522,10 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 			episodes = append(episodes, ep)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, `{"error":"error scanning episodes"}`, http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

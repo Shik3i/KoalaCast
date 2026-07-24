@@ -99,6 +99,9 @@ export function getLocalDB(): Promise<IDBPDatabase> {
 					db.createObjectStore('settings', { keyPath: 'key' });
 				}
 			}
+		}).catch((err) => {
+			dbPromise = null;
+			throw err;
 		});
 	}
 	return dbPromise;
