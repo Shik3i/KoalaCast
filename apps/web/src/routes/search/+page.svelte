@@ -9,12 +9,22 @@
 	let errorMessage = $state('');
 	let searchResults = $state<any[]>([]);
 	let subscribedIds = $state<string[]>([]);
+	let searchTimeout: any = null;
 
 	onMount(async () => {
 		const subs = await getLocalSubscriptions();
 		subscribedIds = subs.map((s) => s.podcast_id);
-		// Pre-populate with default search if empty
 		executeSearch('technology');
+	});
+
+	$effect(() => {
+		const q = searchQuery;
+		if (searchTimeout) clearTimeout(searchTimeout);
+		if (q.trim().length > 1) {
+			searchTimeout = setTimeout(() => {
+				executeSearch(q);
+			}, 300);
+		}
 	});
 
 	async function executeSearch(query: string) {
@@ -135,13 +145,13 @@
 	</div>
 
 	<div class="search-grid-top">
-		<!-- Search Form -->
+		<!-- Live Search Form -->
 		<form onsubmit={handleSearchSubmit} class="search-box-card">
 			<h3>Search Millions of Shows</h3>
 			<div class="input-row">
 				<input
 					type="text"
-					placeholder="Search by keyword, title, or host..."
+					placeholder="Type to search (live debounced)..."
 					bind:value={searchQuery}
 					required
 				/>
@@ -176,7 +186,7 @@
 	<section class="results-section">
 		<h3>
 			{#if isSearching}
-				Searching podcast catalog...
+				Searching live catalog...
 			{:else}
 				Results ({searchResults.length})
 			{/if}

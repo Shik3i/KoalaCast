@@ -70,6 +70,9 @@
 	function setSpeed(speed: number) {
 		playbackSpeed = speed;
 		if (audioEl) audioEl.playbackRate = speed;
+		try {
+			localStorage.setItem('koalacast_playback_speed', speed.toString());
+		} catch (_) {}
 	}
 
 	function setSleepTimer(minutes: number | null) {
@@ -130,6 +133,14 @@
 	}
 
 	onMount(() => {
+		try {
+			const saved = localStorage.getItem('koalacast_playback_speed');
+			if (saved) {
+				const spd = parseFloat(saved);
+				if (spd > 0 && spd <= 3) setSpeed(spd);
+			}
+		} catch (_) {}
+
 		autoSaveTimer = setInterval(() => {
 			if (isPlaying) saveProgress('PROGRESS_TICK');
 		}, 30000);
@@ -203,6 +214,13 @@
 				<span class="track-title">{track.title}</span>
 				<span class="podcast-title">{track.podcast_title}</span>
 			</div>
+			{#if isPlaying}
+				<div class="eq-bars" aria-label="Audio playing">
+					<span class="bar bar1"></span>
+					<span class="bar bar2"></span>
+					<span class="bar bar3"></span>
+				</div>
+			{/if}
 		</button>
 
 		<div class="controls">
@@ -399,6 +417,30 @@
 		padding: 0.2rem 0.4rem;
 		border-radius: 4px;
 		font-family: monospace;
+	}
+
+	.eq-bars {
+		display: flex;
+		align-items: flex-end;
+		gap: 3px;
+		height: 18px;
+		margin-left: 0.75rem;
+	}
+
+	.bar {
+		width: 3px;
+		background: var(--accent-green);
+		border-radius: 2px;
+		animation: eq-bounce 0.8s ease-in-out infinite alternate;
+	}
+
+	.bar1 { height: 60%; animation-delay: 0.1s; }
+	.bar2 { height: 100%; animation-delay: 0.3s; }
+	.bar3 { height: 40%; animation-delay: 0.2s; }
+
+	@keyframes eq-bounce {
+		0% { height: 20%; }
+		100% { height: 100%; }
 	}
 
 	.btn-close {
