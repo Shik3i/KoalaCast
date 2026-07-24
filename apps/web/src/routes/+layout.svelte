@@ -17,6 +17,7 @@
 	let { children } = $props();
 
 	const links = [
+		{ href: '/inbox', icon: 'ph-tray', label: 'New' },
 		{ href: '/library', icon: 'ph-books', label: 'Library' },
 		{ href: '/search', icon: 'ph-magnifying-glass', label: 'Search' },
 		{ href: '/settings', icon: 'ph-gear', label: 'Settings' }

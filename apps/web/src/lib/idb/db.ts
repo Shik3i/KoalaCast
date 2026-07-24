@@ -1,11 +1,17 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
+export type InboxMode = 'all' | 'latest';
+
 export interface LocalSubscription {
 	podcast_id: string;
 	feed_url: string;
 	title: string;
 	artwork_url: string;
 	added_at: number;
+	// Controls how this show appears in the New/Inbox feed: 'all' lists every
+	// recent episode, 'latest' only the single newest one (ideal for hourly news
+	// shows that would otherwise flood the feed). Defaults to 'all' when unset.
+	inbox_mode?: InboxMode;
 }
 
 export interface LocalPlaybackState {
@@ -92,6 +98,19 @@ export async function removeLocalSubscription(podcast_id: string): Promise<void>
 	await db.delete('subscriptions', podcast_id);
 }
 
+// Update a single subscription's inbox mode (read-modify-write; no-op if the
+// subscription no longer exists).
+export async function setSubscriptionInboxMode(
+	podcast_id: string,
+	mode: InboxMode
+): Promise<void> {
+	const db = await getLocalDB();
+	const sub = (await db.get('subscriptions', podcast_id)) as LocalSubscription | undefined;
+	if (!sub) return;
+	sub.inbox_mode = mode;
+	await db.put('subscriptions', sub);
+}
+
 // Playback States
 export async function getLocalPlaybackState(episode_id: string): Promise<LocalPlaybackState | undefined> {
 	const db = await getLocalDB();
@@ -101,6 +120,13 @@ export async function getLocalPlaybackState(episode_id: string): Promise<LocalPl
 export async function saveLocalPlaybackState(state: LocalPlaybackState): Promise<void> {
 	const db = await getLocalDB();
 	await db.put('playback_states', state);
+}
+
+// Set of episode ids the user has completed — used to filter the Inbox to unplayed.
+export async function getCompletedEpisodeIds(): Promise<Set<string>> {
+	const db = await getLocalDB();
+	const all: LocalPlaybackState[] = await db.getAll('playback_states');
+	return new Set(all.filter((s) => s.completed).map((s) => s.episode_id));
 }
 
 // Recently played, still-in-progress episodes for the "Continue Listening" shelf.
