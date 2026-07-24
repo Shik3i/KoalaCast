@@ -14,6 +14,7 @@
 	let isAddingRss = $state(false);
 	let errorMessage = $state('');
 	let searchResults = $state<any[]>([]);
+	let provider = $state<string>('');
 	let subscribedIds = $state<string[]>([]);
 	let subscribedFeeds = $state<string[]>([]);
 	let searchTimeout: any = null;
@@ -51,6 +52,7 @@
 			if (data.results) {
 				searchResults = data.results;
 			}
+			if (data.provider) provider = data.provider;
 		} catch (err) {
 			errorMessage = 'Failed to execute search query.';
 		} finally {
@@ -210,13 +212,24 @@
 
 	<!-- Results Grid -->
 	<section class="results-section">
-		<h3>
-			{#if isSearching}
-				Searching live catalog...
-			{:else}
-				Results ({searchResults.length})
+		<div class="results-head">
+			<h3>
+				{#if isSearching}
+					Searching live catalog...
+				{:else}
+					Results ({searchResults.length})
+				{/if}
+			</h3>
+			{#if provider && searchResults.length > 0}
+				<span class="provider-credit">
+					{#if provider === 'podcastindex'}
+						Powered by <a href="https://podcastindex.org" target="_blank" rel="noopener noreferrer">Podcast Index</a>
+					{:else}
+						Results via Apple Podcasts
+					{/if}
+				</span>
 			{/if}
-		</h3>
+		</div>
 
 		<div class="results-grid">
 			{#if isSearching && searchResults.length === 0}
@@ -401,11 +414,29 @@
 	.skeleton-result:hover { transform: none; border-color: var(--border-subtle); }
 	.sk-art { width: 100%; aspect-ratio: 1; }
 
+	.results-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-bottom: 1.25rem;
+	}
 	.results-section h3 {
 		font-size: 1.4rem;
-		margin-bottom: 1.25rem;
 		font-weight: 700;
 	}
+	.provider-credit {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+	.provider-credit a {
+		color: var(--text-secondary);
+		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.provider-credit a:hover { color: var(--accent-green); }
 
 	.results-grid {
 		display: grid;

@@ -67,6 +67,18 @@ type EpisodeResponse struct {
 	Link            string `json:"link"`
 }
 
+// searchResultDTO is the normalized shape the web client consumes, so both
+// search backends (Podcast Index and the iTunes fallback) look identical to the
+// frontend (which keys off feed_url / artwork_url).
+type searchResultDTO struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Author      string `json:"author"`
+	FeedURL     string `json:"feed_url"`
+	ArtworkURL  string `json:"artwork_url"`
+	Description string `json:"description"`
+}
+
 func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
@@ -76,9 +88,30 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	var results interface{}
 	var err error
+	provider := "itunes"
 
 	if h.PodcastIndex.IsConfigured() {
-		results, err = h.PodcastIndex.Search(q)
+		provider = "podcastindex"
+		var piResults []podcastindex.SearchResult
+		piResults, err = h.PodcastIndex.Search(q)
+		if err == nil {
+			normalized := make([]searchResultDTO, 0, len(piResults))
+			for _, p := range piResults {
+				feedURL := p.URL
+				if feedURL == "" {
+					feedURL = p.OriginalURL
+				}
+				normalized = append(normalized, searchResultDTO{
+					ID:          strconv.FormatInt(p.ID, 10),
+					Title:       p.Title,
+					Author:      p.Author,
+					FeedURL:     feedURL,
+					ArtworkURL:  p.Artwork,
+					Description: p.Description,
+				})
+			}
+			results = normalized
+		}
 	} else {
 		// iTunes Search API fallback (access to millions of podcasts with HD artwork)
 		if h.ITunes == nil {
@@ -98,6 +131,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"search_available": true,
+		"provider":         provider,
 		"results":          results,
 	})
 }
