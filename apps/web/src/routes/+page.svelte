@@ -23,6 +23,8 @@
 		description?: string;
 	}
 
+	const PAGE_SIZE = 60;
+
 	let discoverPodcasts = $state<PodcastItem[]>([]);
 	let subscribedIds = $state<string[]>([]);
 	let subscribedFeeds = $state<string[]>([]);
@@ -30,9 +32,56 @@
 	let selectedCategory = $state<string>('All');
 	let searchQuery = $state<string>('');
 	let isLoading = $state(true);
+	let isLoadingMore = $state(false);
 	let isSubmitting = $state(false);
+	let limit = $state(PAGE_SIZE);
+	let reachedEnd = $state(false);
 
 	const categories = ['All', 'Technology', 'News', 'Business', 'Science', 'Comedy', 'Society'];
+
+	// Discover now pulls a genre-specific top chart from the server (per selected
+	// category) instead of client-filtering one flat overall chart — so each
+	// category returns a full list. iTunes charts have no offset, so "load more"
+	// simply requests a larger limit and replaces the list.
+	async function loadDiscover() {
+		const params = new URLSearchParams({ limit: String(limit) });
+		if (selectedCategory !== 'All') params.set('category', selectedCategory);
+		try {
+			const res = await fetch(`/api/v1/podcasts/discover?${params}`);
+			const data = await res.json();
+			const results: PodcastItem[] = data.results ?? [];
+			if (results.length > 0) {
+				discoverPodcasts = results;
+				reachedEnd = results.length < limit;
+			} else if (selectedCategory === 'All' && limit === PAGE_SIZE) {
+				discoverPodcasts = FEATURED_PODCASTS;
+				reachedEnd = true;
+			} else {
+				discoverPodcasts = [];
+				reachedEnd = true;
+			}
+		} catch (err) {
+			if (selectedCategory === 'All' && limit === PAGE_SIZE) discoverPodcasts = FEATURED_PODCASTS;
+			reachedEnd = true;
+		}
+	}
+
+	function selectCategory(cat: string) {
+		if (cat === selectedCategory) return;
+		selectedCategory = cat;
+		limit = PAGE_SIZE;
+		reachedEnd = false;
+		isLoading = true;
+		loadDiscover().finally(() => (isLoading = false));
+	}
+
+	async function loadMore() {
+		if (isLoadingMore || reachedEnd) return;
+		isLoadingMore = true;
+		limit += PAGE_SIZE;
+		await loadDiscover();
+		isLoadingMore = false;
+	}
 
 	// A card counts as subscribed if either its resolved id or its (stable) feed URL
 	// matches a stored subscription. The feed URL is the reliable key: the id shown
@@ -49,26 +98,19 @@
 		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);
 		continueItems = await getRecentPlaybackStates(8);
 
-		try {
-			const res = await fetch('/api/v1/podcasts/discover');
-			const data = await res.json();
-			if (data.results && data.results.length > 0) {
-				discoverPodcasts = data.results;
-			} else {
-				discoverPodcasts = FEATURED_PODCASTS;
-			}
-		} catch (err) {
-			discoverPodcasts = FEATURED_PODCASTS;
-		} finally {
-			isLoading = false;
-		}
+		await loadDiscover();
+		isLoading = false;
 	});
 
+	// Category is now resolved server-side; the hero search box stays a quick
+	// client-side text filter over the currently loaded chart.
 	let filteredPodcasts = $derived(
 		discoverPodcasts.filter((pod) => {
-			const matchesCat = selectedCategory === 'All' || (pod.category && pod.category.toLowerCase().includes(selectedCategory.toLowerCase()));
-			const matchesQuery = !searchQuery.trim() || pod.title.toLowerCase().includes(searchQuery.toLowerCase()) || pod.author.toLowerCase().includes(searchQuery.toLowerCase());
-			return matchesCat && matchesQuery;
+			return (
+				!searchQuery.trim() ||
+				pod.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				pod.author.toLowerCase().includes(searchQuery.toLowerCase())
+			);
 		})
 	);
 
@@ -208,7 +250,7 @@
 			<button
 				class="cat-pill"
 				class:active={selectedCategory === cat}
-				onclick={() => (selectedCategory = cat)}
+				onclick={() => selectCategory(cat)}
 			>
 				{cat}
 			</button>
@@ -284,6 +326,18 @@
 					</article>
 				{/each}
 			</div>
+
+			{#if !reachedEnd && !searchQuery.trim()}
+				<div class="load-more-row">
+					<button class="btn-load-more" onclick={loadMore} disabled={isLoadingMore}>
+						{#if isLoadingMore}
+							<span class="spinner-sm"></span> Loading…
+						{:else}
+							<i class="ph ph-arrow-down" aria-hidden="true"></i> Load more
+						{/if}
+					</button>
+				</div>
+			{/if}
 		{/if}
 	</section>
 </div>
@@ -629,6 +683,40 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
+	}
+
+	.load-more-row {
+		display: flex;
+		justify-content: center;
+		margin-top: 2rem;
+	}
+	.btn-load-more {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: var(--bg-surface);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.7rem 1.6rem;
+		border-radius: 999px;
+		font-weight: 700;
+		font-size: 0.9rem;
+		transition: border-color 0.2s ease, transform 0.2s ease;
+	}
+	.btn-load-more:hover:not(:disabled) {
+		border-color: var(--accent-green);
+		transform: translateY(-2px);
+	}
+	.spinner-sm {
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--border-subtle);
+		border-top-color: var(--accent-green);
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+	}
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	/* Continue Listening rail */

@@ -107,10 +107,20 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		h.ITunes = itunes.NewITunesClient()
 	}
 
-	topPodcasts, err := h.ITunes.FetchTopPodcasts(60)
+	// Optional query params let the client pull a genre-specific chart (so the
+	// category chips return full lists), a regional storefront, and more results.
+	category := r.URL.Query().Get("category")
+	region := r.URL.Query().Get("region")
+	limit := 60
+	if l, convErr := strconv.Atoi(r.URL.Query().Get("limit")); convErr == nil && l > 0 {
+		limit = l
+	}
+	genreID := itunes.GenreIDForCategory(category)
+
+	topPodcasts, err := h.ITunes.FetchTopChart(region, genreID, limit)
 	if err != nil || len(topPodcasts) == 0 {
 		var dbPods []PodcastResponse
-		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT 60")
+		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT ?", limit)
 		if errDB == nil {
 			defer rows.Close()
 			for rows.Next() {

@@ -5,10 +5,44 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 )
+
+// Apple podcast genre IDs for the categories the web client exposes. Used to
+// request genre-specific top charts so Discover isn't limited to the single
+// overall chart (which skews to a handful of genres).
+var genreIDs = map[string]int{
+	"technology": 1318,
+	"news":       1489,
+	"business":   1321,
+	"science":    1533,
+	"comedy":     1303,
+	"society":    1324,
+}
+
+// GenreIDForCategory maps a UI category label to an Apple podcast genre id.
+// Unknown labels and "all" return 0, meaning the overall (un-scoped) chart.
+func GenreIDForCategory(category string) int {
+	return genreIDs[strings.ToLower(strings.TrimSpace(category))]
+}
+
+// sanitizeRegion guards the region path segment (it is interpolated into the
+// iTunes URL): only a two-letter alpha storefront code is allowed, else "us".
+func sanitizeRegion(region string) string {
+	region = strings.ToLower(strings.TrimSpace(region))
+	if len(region) != 2 {
+		return "us"
+	}
+	for _, r := range region {
+		if r < 'a' || r > 'z' {
+			return "us"
+		}
+	}
+	return region
+}
 
 type ITunesClient struct {
 	httpClient *http.Client
@@ -30,12 +64,25 @@ func NewITunesClient() *ITunesClient {
 	}
 }
 
-// FetchTopPodcasts returns the current top trending podcasts from iTunes Top Charts
+// FetchTopPodcasts returns the current overall top trending podcasts (US chart).
+// Kept for backward compatibility; delegates to FetchTopChart.
 func (c *ITunesClient) FetchTopPodcasts(limit int) ([]PodcastResult, error) {
-	if limit <= 0 || limit > 100 {
+	return c.FetchTopChart("us", 0, limit)
+}
+
+// FetchTopChart returns the iTunes top-podcasts chart for a storefront region,
+// optionally scoped to a genre id (0 = overall). limit is clamped to iTunes'
+// supported 1..200.
+func (c *ITunesClient) FetchTopChart(region string, genreID, limit int) ([]PodcastResult, error) {
+	if limit <= 0 || limit > 200 {
 		limit = 60
 	}
-	reqURL := fmt.Sprintf("https://itunes.apple.com/us/rss/toppodcasts/limit=%d/json", limit)
+	region = sanitizeRegion(region)
+	genreSegment := ""
+	if genreID > 0 {
+		genreSegment = fmt.Sprintf("/genre=%d", genreID)
+	}
+	reqURL := fmt.Sprintf("https://itunes.apple.com/%s/rss/toppodcasts/limit=%d%s/json", region, limit, genreSegment)
 
 	resp, err := c.httpClient.Get(reqURL)
 	if err != nil {
