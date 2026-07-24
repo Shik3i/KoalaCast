@@ -11,6 +11,7 @@
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
 	import { dominantColor } from '$lib/color';
 
 	let episodeId = $state('');
@@ -146,7 +147,7 @@
 				{/if}
 				<div class="badges">
 					<span class="badge">
-						{episode.pub_date ? new Date(episode.pub_date * 1000).toLocaleDateString() : 'No Date'}
+						{episode.pub_date ? prefs.formatDate(episode.pub_date) : 'No date'}
 					</span>
 					<span class="badge">{formatDuration(episode.duration_ms)}</span>
 					{#if episode.explicit}

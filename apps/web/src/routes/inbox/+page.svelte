@@ -10,6 +10,7 @@
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
 	import { reveal } from '$lib/actions/reveal';
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
@@ -149,13 +150,6 @@
 		});
 	}
 
-	function formatDate(sec?: number) {
-		if (!sec) return '';
-		return new Date(sec * 1000).toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric'
-		});
-	}
 	function formatDuration(ms?: number) {
 		if (!ms) return '';
 		const total = Math.floor(ms / 1000);
@@ -178,7 +172,7 @@
 					<span>Unplayed only</span>
 				</label>
 				<button class="btn-ghost" class:active={showSettings} onclick={() => (showSettings = !showSettings)}>
-					<i class="ph ph-sliders-horizontal" aria-hidden="true"></i> Per-show
+					<i class="ph ph-sliders-horizontal" aria-hidden="true"></i> Show settings
 				</button>
 			</div>
 		{/if}
@@ -243,7 +237,7 @@
 						<a class="ep-title" href={`/episode/${ep.id}`}>{ep.title}</a>
 						<span class="ep-meta">
 							<span class="ep-show">{ep.podcast_title}</span>
-							<span class="dot">•</span>{formatDate(ep.pub_date)}
+							<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}
 							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
 							{#if completed.has(ep.id)}<span class="played-tag">Played</span>{/if}
 						</span>

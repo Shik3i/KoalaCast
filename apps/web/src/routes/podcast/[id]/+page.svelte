@@ -9,6 +9,7 @@
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
 	import { dominantColor } from '$lib/color';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide } from 'svelte/transition';
@@ -327,7 +328,7 @@
 										<h4><a href={`/episode/${ep.id}`}>{ep.title}</a></h4>
 										<p class="ep-desc">{ep.description ? ep.description.replace(/<[^>]*>?/gm, '').slice(0, 160) + '...' : ''}</p>
 										<span class="ep-meta">
-											{ep.pub_date ? new Date(ep.pub_date * 1000).toLocaleDateString() : 'No Date'}
+											{ep.pub_date ? prefs.formatDate(ep.pub_date) : 'No date'}
 											{#if ep.duration_ms}
 												• {formatDuration(ep.duration_ms)}
 											{/if}

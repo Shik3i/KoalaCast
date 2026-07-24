@@ -3,6 +3,7 @@
 	import { clearAllLocalData } from '$lib/idb/db';
 	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');
@@ -183,6 +184,16 @@
 				onclick={() => handleThemeChange('light')}
 			>
 				<i class="ph ph-sun" aria-hidden="true"></i> Light
+			</button>
+		</div>
+
+		<p class="subtitle" style="margin-top: 1rem;">Episode dates</p>
+		<div class="theme-selector">
+			<button class="theme-btn" class:active={prefs.dateFormat === 'absolute'} onclick={() => prefs.setDateFormat('absolute')}>
+				<i class="ph ph-calendar-blank" aria-hidden="true"></i> Absolute date
+			</button>
+			<button class="theme-btn" class:active={prefs.dateFormat === 'relative'} onclick={() => prefs.setDateFormat('relative')}>
+				<i class="ph ph-clock-countdown" aria-hidden="true"></i> Relative (x days ago)
 			</button>
 		</div>
 	</section>
