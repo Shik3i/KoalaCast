@@ -23,6 +23,25 @@
 	let playedIds = $state<Set<string>>(new Set());
 	let collapsedTiers = $state<Set<string>>(new Set());
 	let openMenuId = $state<string | null>(null);
+	let searchQuery = $state('');
+	let filterUnplayedOnly = $state(false);
+
+	const filteredEpisodes = $derived.by(() => {
+		let list = episodes;
+		if (filterUnplayedOnly) {
+			list = list.filter((ep) => !playedIds.has(ep.id));
+		}
+		const q = searchQuery.trim().toLowerCase();
+		if (q) {
+			list = list.filter(
+				(ep) =>
+					(ep.title && ep.title.toLowerCase().includes(q)) ||
+					(ep.description && ep.description.toLowerCase().includes(q)) ||
+					(ep.episode_number && String(ep.episode_number).includes(q))
+			);
+		}
+		return list;
+	});
 
 	const DAY = 86400;
 	// Recency tiers, newest first. Anything older than a year collapses by default.
@@ -37,7 +56,7 @@
 	const groupedEpisodes = $derived.by(() => {
 		const nowSec = Date.now() / 1000;
 		const buckets: Record<string, any[]> = { week: [], month: [], year: [], older: [], undated: [] };
-		for (const ep of episodes) {
+		for (const ep of filteredEpisodes) {
 			if (!ep.pub_date) {
 				buckets.undated.push(ep);
 				continue;
@@ -297,7 +316,7 @@
 		<!-- Episode List, grouped by recency -->
 		<section class="episodes-section">
 			<div class="episodes-head">
-				<h3>Episodes ({episodes.length})</h3>
+				<h3>Episodes ({filteredEpisodes.length}{#if filteredEpisodes.length !== episodes.length} of {episodes.length}{/if})</h3>
 				{#if episodes.length > 0}
 					<div class="ep-head-actions">
 						<span class="unplayed-pill">{unplayedCount} unplayed</span>
@@ -313,6 +332,43 @@
 					</div>
 				{/if}
 			</div>
+
+			{#if episodes.length > 0}
+				<div class="episodes-filter-bar">
+					<div class="ep-search-input">
+						<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+						<input
+							type="text"
+							placeholder="Search episodes in this show…"
+							bind:value={searchQuery}
+							aria-label="Filter episodes by title or description"
+						/>
+						{#if searchQuery}
+							<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label="Clear search">
+								<i class="ph ph-x" aria-hidden="true"></i>
+							</button>
+						{/if}
+					</div>
+					<button
+						class="filter-pill"
+						class:active={filterUnplayedOnly}
+						onclick={() => (filterUnplayedOnly = !filterUnplayedOnly)}
+					>
+						<i class="ph {filterUnplayedOnly ? 'ph-check-circle-fill' : 'ph-circle'}" aria-hidden="true"></i>
+						Unplayed ({unplayedCount})
+					</button>
+				</div>
+			{/if}
+
+			{#if filteredEpisodes.length === 0 && episodes.length > 0}
+				<div class="no-episodes-found">
+					<i class="ph ph-magnifying-glass lead-icon" aria-hidden="true"></i>
+					<p>No episodes match your search or filter.</p>
+					<button class="btn-reset-filter" onclick={() => { searchQuery = ''; filterUnplayedOnly = false; }}>
+						Clear search filter
+					</button>
+				</div>
+			{/if}
 
 			{#if openMenuId}
 				<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label="Close menu" tabindex="-1"></button>
@@ -794,4 +850,92 @@
 		align-items: center;
 		gap: 1rem;
 	}
+
+	/* In-Page Episode Search & Filter Bar */
+	.episodes-filter-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1.25rem;
+		flex-wrap: wrap;
+	}
+	.ep-search-input {
+		flex: 1;
+		min-width: 220px;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		padding: 0.4rem 0.8rem;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	}
+	.ep-search-input:focus-within {
+		border-color: var(--show-accent, var(--accent-green));
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--show-accent, var(--accent-green)) 20%, transparent);
+	}
+	.ep-search-input input {
+		flex: 1;
+		border: none;
+		background: none;
+		outline: none;
+		color: var(--text-primary);
+		font-size: 0.9rem;
+	}
+	.ep-search-input .clear-btn {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 1rem;
+		display: grid;
+		place-items: center;
+		padding: 0.2rem;
+		border-radius: 50%;
+	}
+	.ep-search-input .clear-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+	.filter-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.45rem 0.85rem;
+		border-radius: 999px;
+		border: 1px solid var(--border-subtle);
+		background: var(--bg-surface);
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		font-weight: 600;
+		transition: all 0.2s ease;
+	}
+	.filter-pill:hover { border-color: var(--show-accent, var(--accent-green)); color: var(--text-primary); }
+	.filter-pill.active {
+		background: var(--show-accent-soft, color-mix(in srgb, var(--accent-green) 18%, transparent));
+		border-color: var(--show-accent, var(--accent-green));
+		color: var(--show-accent, var(--accent-green));
+	}
+
+	.no-episodes-found {
+		padding: 3rem 1.5rem;
+		text-align: center;
+		background: var(--bg-surface);
+		border: 1px dashed var(--border-subtle);
+		border-radius: 12px;
+		margin: 1rem 0 2rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+	}
+	.no-episodes-found .lead-icon { font-size: 2.2rem; color: var(--text-muted); }
+	.btn-reset-filter {
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		color: var(--text-primary);
+		padding: 0.45rem 1rem;
+		border-radius: 8px;
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+	.btn-reset-filter:hover { border-color: var(--show-accent, var(--accent-green)); color: var(--show-accent, var(--accent-green)); }
 </style>

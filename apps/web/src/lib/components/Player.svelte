@@ -10,6 +10,7 @@
 	import { player } from '$lib/stores/player.svelte';
 	import { dominantColor } from '$lib/color';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { slide } from 'svelte/transition';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
@@ -36,6 +37,58 @@
 	let transcriptCues = $state<any[]>([]);
 	let loadingChapters = $state(false);
 	let loadingTranscript = $state(false);
+	let showChaptersDrawer = $state(false);
+
+	let lastFetchedTrack = '';
+	$effect(() => {
+		const t = track;
+		if (!t) {
+			chapters = [];
+			return;
+		}
+		if (t.episode_id === lastFetchedTrack) return;
+		lastFetchedTrack = t.episode_id;
+
+		fetch(`/api/v1/episodes/${t.episode_id}`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((epData) => {
+				if (epData && epData.chapters_url) {
+					fetchChapters(epData.chapters_url);
+				} else {
+					chapters = [];
+				}
+			})
+			.catch(() => (chapters = []));
+	});
+
+	async function fetchChapters(url: string) {
+		loadingChapters = true;
+		try {
+			const res = await fetch(`/api/v1/proxy/chapters?url=${encodeURIComponent(url)}`);
+			if (res.ok) {
+				const data = await res.json();
+				chapters = data.chapters || [];
+			} else {
+				chapters = [];
+			}
+		} catch (_) {
+			chapters = [];
+		} finally {
+			loadingChapters = false;
+		}
+	}
+
+	const activeChapterIndex = $derived.by(() => {
+		if (!chapters || chapters.length === 0) return -1;
+		const curSec = currentTimeMs / 1000;
+		for (let i = chapters.length - 1; i >= 0; i--) {
+			const startTime = typeof chapters[i].startTime === 'number' ? chapters[i].startTime : chapters[i].start;
+			if (curSec >= startTime) {
+				return i;
+			}
+		}
+		return -1;
+	});
 
 	function toggleVolumeBoost() {
 		volumeBoost = !volumeBoost;
@@ -530,6 +583,11 @@
 							<button onclick={() => setSpeed(spd)} class:active={playbackSpeed === spd}>{spd}x</button>
 						{/each}
 					</div>
+					{#if chapters.length > 0}
+						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label="Toggle Chapters">
+							<i class="ph ph-list-numbers" aria-hidden="true"></i> Chapters ({chapters.length})
+						</button>
+					{/if}
 					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label="Sleep timer">
 						<option value="">💤 Sleep off</option>
 						<option value="episode">End of episode</option>
@@ -539,6 +597,34 @@
 						<option value="60">60 min</option>
 					</select>
 				</div>
+
+				{#if showChaptersDrawer && chapters.length > 0}
+					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
+						<div class="drawer-header">
+							<h4><i class="ph ph-list-numbers" aria-hidden="true"></i> Episode Chapters ({chapters.length})</h4>
+							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label="Close chapters">
+								<i class="ph ph-x" aria-hidden="true"></i>
+							</button>
+						</div>
+						<div class="chapters-list">
+							{#each chapters as ch, i}
+								{@const startSec = typeof ch.startTime === 'number' ? ch.startTime : ch.start}
+								{@const isActive = activeChapterIndex === i}
+								<button
+									class="chapter-row"
+									class:active={isActive}
+									onclick={() => seekTo(startSec * 1000)}
+								>
+									<span class="ch-time">{formatTime(startSec * 1000)}</span>
+									<span class="ch-title">{ch.title}</span>
+									{#if isActive}
+										<span class="ch-playing-badge"><i class="ph-fill ph-play" aria-hidden="true"></i> Playing</span>
+									{/if}
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 
 				{#if player.upNext}
 					<button class="np-upnext" onclick={() => player.upNext && player.playFromQueue(player.upNext)}>
@@ -1135,6 +1221,106 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	/* Chapters Drawer in Full-Screen Player */
+	.np-chapters-drawer {
+		width: min(90vw, 420px);
+		max-height: 280px;
+		background: color-mix(in srgb, var(--player-bg, #000) 80%, rgba(20, 20, 20, 0.95));
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		border: 1px solid color-mix(in srgb, var(--player-text) 18%, transparent);
+		border-radius: 16px;
+		padding: 0.85rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+		overflow: hidden;
+	}
+	.drawer-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-bottom: 0.4rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--player-text) 12%, transparent);
+	}
+	.drawer-header h4 {
+		font-size: 0.92rem;
+		font-weight: 700;
+		color: var(--player-text);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.close-drawer {
+		background: none;
+		border: none;
+		color: color-mix(in srgb, var(--player-text) 70%, transparent);
+		font-size: 1.1rem;
+		display: grid;
+		place-items: center;
+		padding: 0.2rem;
+		border-radius: 50%;
+	}
+	.close-drawer:hover { color: var(--player-text); background: color-mix(in srgb, var(--player-text) 12%, transparent); }
+
+	.chapters-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		overflow-y: auto;
+		max-height: 210px;
+		padding-right: 0.3rem;
+	}
+	.chapter-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		background: color-mix(in srgb, var(--player-text) 5%, transparent);
+		border: 1px solid transparent;
+		padding: 0.55rem 0.75rem;
+		border-radius: 10px;
+		text-align: left;
+		color: var(--player-text);
+		transition: background 0.15s ease, border-color 0.15s ease;
+		cursor: pointer;
+	}
+	.chapter-row:hover {
+		background: color-mix(in srgb, var(--player-text) 12%, transparent);
+		border-color: color-mix(in srgb, var(--player-text) 20%, transparent);
+	}
+	.chapter-row.active {
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 25%, transparent);
+		border-color: var(--show-accent, var(--accent-green));
+	}
+	.ch-time {
+		font-size: 0.78rem;
+		font-weight: 700;
+		font-family: var(--font-mono, monospace);
+		color: color-mix(in srgb, var(--player-text) 75%, transparent);
+		flex-shrink: 0;
+	}
+	.ch-title {
+		flex: 1;
+		font-size: 0.88rem;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.ch-playing-badge {
+		font-size: 0.72rem;
+		font-weight: 800;
+		color: var(--show-accent, var(--accent-green));
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 20%, transparent);
+		padding: 0.15rem 0.45rem;
+		border-radius: 999px;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
 	}
 
 	@keyframes np-in {
