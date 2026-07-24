@@ -46,7 +46,7 @@
 <div class="app-container">
 	<header class="navbar">
 		<a class="brand" href="/" aria-label="KoalaCast home">
-			<span class="logo-icon" aria-hidden="true">🌿</span>
+			<img class="logo-icon" src="/icon-192.png" alt="" width="40" height="40" aria-hidden="true" />
 			<span class="brand-title">KoalaCast</span>
 		</a>
 		<nav class="nav-links">
@@ -127,8 +127,11 @@
 	}
 
 	.logo-icon {
-		font-size: 1.6rem;
-		display: inline-block;
+		width: 2.5rem;
+		height: 2.5rem;
+		object-fit: contain;
+		display: block;
+		border-radius: 0.65rem;
 		transition: transform 0.3s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
 	}
 

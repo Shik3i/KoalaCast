@@ -2,7 +2,7 @@
 	<div class="footer-container">
 		<div class="footer-brand">
 			<div class="brand">
-				<span class="logo-icon">🌿</span>
+				<img class="logo-icon" src="/icon-192.png" alt="" width="36" height="36" aria-hidden="true" />
 				<span class="brand-title">KoalaCast</span>
 			</div>
 			<p class="tagline">Next-generation, privacy-first podcast player with cross-device sync.</p>
@@ -77,7 +77,9 @@
 	}
 
 	.logo-icon {
-		font-size: 1.5rem;
+		width: 2.25rem;
+		height: 2.25rem;
+		object-fit: contain;
 	}
 
 	.tagline {
