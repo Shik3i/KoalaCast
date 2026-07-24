@@ -7,9 +7,12 @@
 		getLocalQueue,
 		removeFromLocalQueue,
 		clearLocalQueue,
+		getLocalFavorites,
+		removeLocalFavorite,
 		type LocalSubscription,
 		type LocalPlaybackState,
-		type LocalQueueItem
+		type LocalQueueItem,
+		type LocalFavorite
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -19,13 +22,36 @@
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
 	let queue = $state<LocalQueueItem[]>([]);
+	let favorites = $state<LocalFavorite[]>([]);
 	let activeTab = $state<'subscriptions' | 'episodes' | 'queue' | 'favorites'>('subscriptions');
 
 	onMount(async () => {
 		subscriptions = await getLocalSubscriptions();
 		recentEpisodes = await getRecentPlaybackStates(30);
 		queue = await getLocalQueue();
+		favorites = await getLocalFavorites();
 	});
+
+	function playFavorite(fav: LocalFavorite) {
+		if (!fav.enclosure_url) {
+			goto(`/episode/${fav.episode_id}`);
+			return;
+		}
+		player.play({
+			episode_id: fav.episode_id,
+			podcast_id: fav.podcast_id || '',
+			title: fav.title || 'Episode',
+			podcast_title: fav.podcast_title || '',
+			artwork_url: fav.artwork_url || '',
+			enclosure_url: fav.enclosure_url,
+			duration_ms: fav.duration_ms || 0
+		});
+	}
+
+	async function unfavorite(episode_id: string) {
+		await removeLocalFavorite(episode_id);
+		favorites = favorites.filter((f) => f.episode_id !== episode_id);
+	}
 
 	function playQueueItem(item: LocalQueueItem) {
 		player.play({
@@ -95,7 +121,7 @@
 			<i class="ph ph-list-plus" aria-hidden="true"></i> Queue <span class="count">{queue.length}</span>
 		</button>
 		<button role="tab" aria-selected={activeTab === 'favorites'} class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')}>
-			<i class="ph ph-heart" aria-hidden="true"></i> Favorites
+			<i class="ph ph-heart" aria-hidden="true"></i> Favorites <span class="count">{favorites.length}</span>
 		</button>
 	</div>
 
@@ -178,9 +204,31 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="empty-state">
-			<p>Favorites are coming soon.</p>
-		</div>
+		{#if favorites.length === 0}
+			<div class="empty-state">
+				<i class="ph ph-heart" aria-hidden="true"></i>
+				<p>No favorites yet. Tap the heart on any episode to save it here.</p>
+				<a href="/search" class="btn">Discover Podcasts</a>
+			</div>
+		{:else}
+			<div class="episode-list">
+				{#each favorites as fav (fav.episode_id)}
+					<div class="ep-row">
+						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label="Play episode">
+							<img src={fav.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
+						</button>
+						<div class="ep-body">
+							<a class="ep-title" href={`/episode/${fav.episode_id}`}>{fav.title || 'Episode'}</a>
+							<span class="ep-sub">{fav.podcast_title || ''}</span>
+						</div>
+						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label="Remove from favorites">
+							<i class="ph-fill ph-heart" aria-hidden="true"></i>
+						</button>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -406,6 +454,8 @@
 		font-size: 1.1rem;
 	}
 	.ep-remove:hover { background: var(--bg-elevated); color: var(--color-danger); }
+	.fav-heart { color: #e5484d; }
+	.fav-heart:hover { background: color-mix(in srgb, #e5484d 14%, transparent); color: #e5484d; }
 
 	@media (max-width: 640px) {
 		.ep-pct { display: none; }

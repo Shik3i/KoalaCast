@@ -45,6 +45,13 @@ export interface LocalQueueItem {
 export interface LocalFavorite {
 	episode_id: string;
 	added_at: number;
+	// Denormalized so the Favorites list renders and plays without a refetch.
+	podcast_id?: string;
+	title?: string;
+	podcast_title?: string;
+	artwork_url?: string;
+	enclosure_url?: string;
+	duration_ms?: number;
 }
 
 const DB_NAME = 'koalacast_local_db';
@@ -160,6 +167,34 @@ export async function removeFromLocalQueue(id: string): Promise<void> {
 export async function clearLocalQueue(): Promise<void> {
 	const db = await getLocalDB();
 	await db.clear('queue');
+}
+
+// Favorites
+export async function getLocalFavorites(): Promise<LocalFavorite[]> {
+	const db = await getLocalDB();
+	const items: LocalFavorite[] = await db.getAll('favorites');
+	return items.sort((a, b) => b.added_at - a.added_at);
+}
+
+export async function getFavoriteEpisodeIds(): Promise<Set<string>> {
+	const db = await getLocalDB();
+	const items: LocalFavorite[] = await db.getAll('favorites');
+	return new Set(items.map((f) => f.episode_id));
+}
+
+export async function isLocalFavorite(episode_id: string): Promise<boolean> {
+	const db = await getLocalDB();
+	return !!(await db.get('favorites', episode_id));
+}
+
+export async function addLocalFavorite(fav: LocalFavorite): Promise<void> {
+	const db = await getLocalDB();
+	await db.put('favorites', { ...fav, added_at: fav.added_at || Date.now() });
+}
+
+export async function removeLocalFavorite(episode_id: string): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('favorites', episode_id);
 }
 
 // Clear all local browser data

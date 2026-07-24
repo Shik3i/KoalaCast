@@ -2,7 +2,15 @@
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import DOMPurify from 'dompurify';
-	import { getLocalPlaybackState, saveLocalPlaybackState, type LocalQueueItem, addToLocalQueue } from '$lib/idb/db';
+	import {
+		getLocalPlaybackState,
+		saveLocalPlaybackState,
+		type LocalQueueItem,
+		addToLocalQueue,
+		isLocalFavorite,
+		addLocalFavorite,
+		removeLocalFavorite
+	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { dominantColor } from '$lib/color';
@@ -43,10 +51,33 @@
 
 			const state = await getLocalPlaybackState(id);
 			if (state) playbackState = state;
+			isFavorite = await isLocalFavorite(id);
 		} catch (err) {
 			console.error('Failed to load episode details', err);
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	async function toggleFavorite() {
+		if (!episode) return;
+		if (isFavorite) {
+			await removeLocalFavorite(episode.id);
+			isFavorite = false;
+			toast.success('Removed from favorites.');
+		} else {
+			await addLocalFavorite({
+				episode_id: episode.id,
+				added_at: Date.now(),
+				podcast_id: episode.podcast_id,
+				title: episode.title,
+				podcast_title: podcast?.title || '',
+				artwork_url: episode.artwork_url || podcast?.artwork_url || '',
+				enclosure_url: episode.enclosure_url,
+				duration_ms: episode.duration_ms
+			});
+			isFavorite = true;
+			toast.success('Added to favorites.');
 		}
 	}
 
@@ -135,6 +166,10 @@
 					</button>
 					<button class="btn-secondary" onclick={handleAddToQueue}>
 						<i class="ph ph-plus" aria-hidden="true"></i> Add to Queue
+					</button>
+					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
+						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
+						{isFavorite ? 'Favorited' : 'Favorite'}
 					</button>
 				</div>
 			</div>
@@ -257,6 +292,24 @@
 		gap: 0.5rem;
 	}
 	.btn-secondary:hover { border-color: var(--accent-green); color: var(--accent-green); transform: translateY(-2px); }
+
+	.btn-fav {
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		padding: 0.7rem 1.3rem;
+		border-radius: 12px;
+		font-weight: 600;
+		font-size: 0.95rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		transition: all 0.2s ease;
+	}
+	.btn-fav :global(.ph), .btn-fav :global(.ph-fill) { font-size: 1.15rem; transition: transform 0.2s var(--ease-spring, ease); }
+	.btn-fav:hover { border-color: #e5484d; color: #e5484d; transform: translateY(-2px); }
+	.btn-fav.active { border-color: #e5484d; color: #e5484d; background: color-mix(in srgb, #e5484d 12%, var(--bg-surface)); }
+	.btn-fav.active :global(.ph-fill) { transform: scale(1.1); }
 
 	.description-card {
 		background: var(--bg-surface);

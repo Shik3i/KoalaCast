@@ -1,8 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { saveLocalPlaybackState, getLocalPlaybackState } from '../idb/db';
+	import {
+		saveLocalPlaybackState,
+		getLocalPlaybackState,
+		isLocalFavorite,
+		addLocalFavorite,
+		removeLocalFavorite
+	} from '../idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { dominantColor } from '$lib/color';
+	import { toast } from '$lib/stores/toast.svelte';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
@@ -14,6 +21,7 @@
 	let loadError = $state(false);
 	let expanded = $state(false);
 	let showAccent = $state<string | null>(null);
+	let isFav = $state(false);
 	let lastToken = 0;
 
 	let autoSaveTimer: any = null;
@@ -171,6 +179,38 @@
 	$effect(() => {
 		if (!track) expanded = false;
 	});
+
+	// Track favorite state of the current episode.
+	let lastFavEp = '';
+	$effect(() => {
+		const ep = track?.episode_id ?? '';
+		if (ep === lastFavEp) return;
+		lastFavEp = ep;
+		isFav = false;
+		if (ep) isLocalFavorite(ep).then((v) => (track?.episode_id === ep ? (isFav = v) : null));
+	});
+
+	async function toggleFavorite() {
+		if (!track) return;
+		if (isFav) {
+			await removeLocalFavorite(track.episode_id);
+			isFav = false;
+			toast.success('Removed from favorites.');
+		} else {
+			await addLocalFavorite({
+				episode_id: track.episode_id,
+				added_at: Date.now(),
+				podcast_id: track.podcast_id,
+				title: track.title,
+				podcast_title: track.podcast_title,
+				artwork_url: track.artwork_url,
+				enclosure_url: track.enclosure_url,
+				duration_ms: track.duration_ms
+			});
+			isFav = true;
+			toast.success('Added to favorites.');
+		}
+	}
 
 	const accentVars = $derived(
 		showAccent
@@ -399,6 +439,9 @@
 				</div>
 
 				<div class="np-extras">
+					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}>
+						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
+					</button>
 					<div class="speed-selector">
 						{#each speeds as spd}
 							<button onclick={() => setSpeed(spd)} class:active={playbackSpeed === spd}>{spd}x</button>
@@ -882,6 +925,22 @@
 	.np-play:hover { filter: brightness(1.08); transform: scale(1.05); }
 
 	.np-extras { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; }
+	.np-fav {
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		border: 1px solid color-mix(in srgb, var(--player-text) 16%, transparent);
+		background: color-mix(in srgb, var(--player-text) 8%, transparent);
+		color: var(--player-text);
+		display: grid;
+		place-items: center;
+		font-size: 1.25rem;
+		transition: transform 0.2s var(--ease-spring, ease), color 0.2s ease;
+	}
+	.np-fav:hover { color: #ff8b8b; transform: scale(1.08); }
+	.np-fav.active { color: #ff6b6b; border-color: color-mix(in srgb, #ff6b6b 45%, transparent); }
+	.np-fav.active :global(.ph-fill) { animation: fav-pop 0.3s var(--ease-spring, ease); }
+	@keyframes fav-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 	.np-extras select {
 		background: color-mix(in srgb, var(--player-text) 10%, transparent);
 		color: var(--player-text);
