@@ -1,9 +1,7 @@
 <script lang="ts">
 	// Self-hosted fonts + icons (no render-blocking third-party requests).
 	import '@fontsource/outfit/400.css';
-	import '@fontsource/outfit/500.css';
 	import '@fontsource/outfit/600.css';
-	import '@fontsource/outfit/700.css';
 	import '@fontsource/outfit/800.css';
 	import '@phosphor-icons/web/regular';
 	import '@phosphor-icons/web/fill';

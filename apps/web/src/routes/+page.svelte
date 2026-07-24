@@ -374,7 +374,9 @@
 						<img
 							src={featured.artwork_url || '/placeholder.svg'}
 							alt={featured.title}
-							loading="lazy"
+							loading="eager"
+							fetchpriority="high"
+							decoding="async"
 							onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
 						/>
 					</div>

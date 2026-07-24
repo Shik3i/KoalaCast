@@ -273,6 +273,9 @@
 				src={podcast.artwork_url || '/placeholder.svg'}
 				alt={podcast.title}
 				class="artwork"
+				loading="eager"
+				fetchpriority="high"
+				decoding="async"
 				onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
 			/>
 			<div class="meta">

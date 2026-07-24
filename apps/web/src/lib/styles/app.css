@@ -1,5 +1,15 @@
 /* KoalaCast Forest Green Design System */
 
+@font-face {
+	font-family: 'Phosphor';
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'Phosphor-Fill';
+	font-display: swap;
+}
+
 :root {
 	--font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	
