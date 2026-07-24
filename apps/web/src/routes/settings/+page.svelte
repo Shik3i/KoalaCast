@@ -199,7 +199,7 @@
 	</section>
 
 	<section class="card">
-		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> Privacy &amp; Mode Explanation</h3>
+		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> Privacy</h3>
 		<div class="privacy-box">
 			<h4>Local Browser Mode</h4>
 			<p>Your subscriptions, queue, and listening history stay in this browser. KoalaCast contacts the server to search podcasts and retrieve RSS metadata, but anonymous listening activity is not stored on the server.</p>

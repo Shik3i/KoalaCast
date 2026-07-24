@@ -257,7 +257,7 @@
 				onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
 			/>
 			<div class="meta">
-				<span class="badge">Podcast Show</span>
+				<span class="badge">{episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}</span>
 				<h2>{podcast.title}</h2>
 				<span class="author">By {podcast.author}</span>
 				<p class="desc">{podcast.description}</p>

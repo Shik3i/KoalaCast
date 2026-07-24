@@ -462,9 +462,9 @@
 	.ep-show { font-weight: 600; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }
 	.dot { opacity: 0.5; }
 	.played-tag {
-		background: var(--bg-elevated);
-		color: var(--text-secondary);
-		padding: 0.05rem 0.4rem;
+		background: color-mix(in srgb, var(--accent-green) 16%, transparent);
+		color: var(--accent-green);
+		padding: 0.05rem 0.45rem;
 		border-radius: 999px;
 		font-size: 0.7rem;
 		font-weight: 700;

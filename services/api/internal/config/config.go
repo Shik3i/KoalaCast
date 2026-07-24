@@ -23,6 +23,8 @@ type Config struct {
 	SecureCookies          bool
 	PodcastIndexKey        string
 	PodcastIndexSecret     string
+	AdminUsername          string
+	AdminPassword          string
 	FeedWorkerConcurrency  int
 	FeedRequestTimeoutMS   int
 	FeedMaxResponseBytes   int64
@@ -49,6 +51,8 @@ func LoadConfig() (*Config, error) {
 		SessionSecret:         os.Getenv("SESSION_SECRET"),
 		PodcastIndexKey:       os.Getenv("PODCAST_INDEX_KEY"),
 		PodcastIndexSecret:    os.Getenv("PODCAST_INDEX_SECRET"),
+		AdminUsername:         os.Getenv("ADMIN_USERNAME"),
+		AdminPassword:         os.Getenv("ADMIN_PASSWORD"),
 		FeedWorkerConcurrency: getEnvInt("FEED_WORKER_CONCURRENCY", 5),
 		FeedRequestTimeoutMS:  getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
 		FeedMaxResponseBytes:  int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),

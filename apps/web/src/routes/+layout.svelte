@@ -13,15 +13,32 @@
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { player } from '$lib/stores/player.svelte';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
 
-	const links = [
+	let isAdmin = $state(false);
+
+	const baseLinks = [
 		{ href: '/inbox', icon: 'ph-tray', label: 'New' },
 		{ href: '/library', icon: 'ph-books', label: 'Library' },
 		{ href: '/search', icon: 'ph-magnifying-glass', label: 'Search' },
 		{ href: '/settings', icon: 'ph-gear', label: 'Settings' }
 	];
+	const links = $derived(
+		isAdmin ? [...baseLinks, { href: '/admin', icon: 'ph-shield-star', label: 'Admin' }] : baseLinks
+	);
+
+	onMount(async () => {
+		// Reveal the Admin entry only for signed-in admins.
+		try {
+			const res = await fetch('/api/v1/auth/me');
+			if (res.ok) {
+				const me = await res.json();
+				isAdmin = me?.role === 'admin';
+			}
+		} catch (_) {}
+	});
 
 	const path = $derived($page.url.pathname);
 	function isActive(href: string) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { toast } from '$lib/stores/toast.svelte';
 
 	let systemStatus = $state<any>(null);
 	let users = $state<any[]>([]);
@@ -54,7 +55,7 @@
 		try {
 			const res = await fetch(`/api/v1/admin/podcasts/${podcastId}/refresh`, { method: 'POST' });
 			if (res.ok) {
-				alert('Feed refresh requested successfully.');
+				toast.success('Feed refresh requested.');
 				loadAdminData();
 			}
 		} catch (_) {}
@@ -62,7 +63,10 @@
 </script>
 
 <div class="admin-page">
-	<h2>Administration Interface</h2>
+	<div class="admin-head">
+		<h2><i class="ph-fill ph-shield-star" aria-hidden="true"></i> Admin</h2>
+		<p class="admin-sub">System metrics, user moderation and feed health.</p>
+	</div>
 
 	{#if isLoading}
 		<div class="loading">Loading admin dashboard...</div>
@@ -168,13 +172,24 @@
 	.admin-page {
 		display: flex;
 		flex-direction: column;
-		gap: 2rem;
+		gap: 1.5rem;
 	}
+
+	.admin-head h2 {
+		font-size: clamp(1.6rem, 3vw, 2.1rem);
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+	}
+	.admin-head h2 :global(.ph-fill) { color: var(--accent-green); }
+	.admin-sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
 
 	.card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: 14px;
 		padding: 1.5rem;
 	}
 

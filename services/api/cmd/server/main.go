@@ -34,6 +34,7 @@ func main() {
 	defer database.Close()
 
 	database.SeedDefaultPodcasts(context.Background(), logger)
+	database.SeedAdmin(context.Background(), cfg.AdminUsername, cfg.AdminPassword, logger)
 
 	// Initialize background feed worker pool
 	feedWorker := worker.NewFeedWorker(database, cfg, logger)

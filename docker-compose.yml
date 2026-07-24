@@ -38,6 +38,10 @@ services:
       - KC_REGISTRATION_ENABLED=${KC_REGISTRATION_ENABLED:-}
       - PODCAST_INDEX_KEY=${PODCAST_INDEX_KEY:-}
       - PODCAST_INDEX_SECRET=${PODCAST_INDEX_SECRET:-}
+      # Seed / promote an admin account on startup (idempotent; password never
+      # overwritten once set). Leave empty to disable seeding.
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       - koala_data:/app/data
 
