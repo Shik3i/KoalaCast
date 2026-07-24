@@ -76,7 +76,8 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
 		return
 	}
-	req.Header.Set("User-Agent", "KoalaCast/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
 
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
