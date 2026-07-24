@@ -1,22 +1,11 @@
-version: '3.8'
-
 services:
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./infrastructure/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-    depends_on:
-      - api
-      - web
-
   api:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.api
     restart: unless-stopped
+    ports:
+      - "8080:8080"
     environment:
       - PORT=8080
       - LOG_LEVEL=info
@@ -33,9 +22,12 @@ services:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.web
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
+      - ORIGIN=http://localhost:3000
 
 volumes:
   koala_data:
