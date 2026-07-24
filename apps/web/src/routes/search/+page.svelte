@@ -77,6 +77,8 @@
 		}
 	});
 
+	let spotifyExclusives = $state<any[]>([]);
+
 	async function executeSearch(query: string) {
 		if (!query.trim()) return;
 		isSearching = true;
@@ -88,6 +90,7 @@
 			if (data.results) {
 				searchResults = data.results;
 			}
+			spotifyExclusives = data.spotify_exclusives || [];
 			if (data.provider) provider = data.provider;
 		} catch (err) {
 			errorMessage = 'Failed to execute search query.';
@@ -258,6 +261,30 @@
 
 	{#if errorMessage}
 		<div class="alert error" transition:slide={{ duration: 200 }}>{errorMessage}</div>
+	{/if}
+
+	{#if spotifyExclusives.length > 0}
+		<section class="spotify-card-section" transition:slide={{ duration: 220 }}>
+			<div class="spotify-header">
+				<span class="spotify-badge"><i class="ph-fill ph-lock-key" aria-hidden="true"></i> Spotify Exklusiv</span>
+				<p class="spotify-note">Exklusive Podcasts verfassen keinen freien RSS-Feed und sind nur direkt bei Spotify verfügbar.</p>
+			</div>
+			<div class="spotify-grid">
+				{#each spotifyExclusives as item}
+					<div class="spotify-card">
+						<img src={item.artwork_url || '/placeholder.svg'} alt={item.title} class="sp-art" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<div class="sp-details">
+							<h4>{item.title}</h4>
+							<span class="sp-author">{item.author}</span>
+							{#if item.description}<p class="sp-desc">{item.description}</p>{/if}
+							<a href={item.spotify_url} target="_blank" rel="noopener noreferrer" class="btn-spotify">
+								Auf Spotify öffnen <i class="ph ph-arrow-square-out" aria-hidden="true"></i>
+							</a>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</section>
 	{/if}
 
 	<!-- Results Grid -->
@@ -608,4 +635,68 @@
 		color: var(--text-primary);
 		border: 1px solid var(--border-subtle);
 	}
+
+	/* Spotify Exclusives Section */
+	.spotify-card-section {
+		background: linear-gradient(135deg, color-mix(in srgb, #1db954 12%, var(--bg-surface)), var(--bg-surface));
+		border: 1px solid color-mix(in srgb, #1db954 35%, transparent);
+		border-radius: 16px;
+		padding: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+	}
+	.spotify-header { display: flex; flex-direction: column; gap: 0.3rem; }
+	.spotify-badge {
+		background: #1db954;
+		color: #000;
+		padding: 0.25rem 0.65rem;
+		border-radius: 999px;
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		width: fit-content;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.spotify-note { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.2rem; }
+
+	.spotify-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: 1.25rem;
+	}
+	.spotify-card {
+		display: flex;
+		gap: 1rem;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		padding: 1rem;
+		align-items: center;
+	}
+	.sp-art { width: 84px; height: 84px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+	.sp-details { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; flex: 1; }
+	.sp-details h4 { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); line-height: 1.25; }
+	.sp-author { font-size: 0.82rem; color: #1db954; font-weight: 700; }
+	.sp-desc { font-size: 0.8rem; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+	.btn-spotify {
+		margin-top: 0.4rem;
+		background: #1db954;
+		color: #000;
+		border-radius: 999px;
+		padding: 0.4rem 0.85rem;
+		font-size: 0.8rem;
+		font-weight: 800;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		width: fit-content;
+		text-decoration: none;
+		transition: transform 0.15s ease, filter 0.2s ease;
+	}
+	.btn-spotify:hover { filter: brightness(1.1); transform: translateY(-1px); text-decoration: none; }
 </style>

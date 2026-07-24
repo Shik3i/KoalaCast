@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
+	"github.com/Shik3i/KoalaCast/services/api/internal/spotify"
 	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -137,12 +139,15 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	spotifyExclusives := spotify.SearchExclusives(q)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"search_available": true,
-		"provider":         provider,
-		"results":          results,
+		"search_available":   true,
+		"provider":           provider,
+		"results":            results,
+		"spotify_exclusives": spotifyExclusives,
 	})
 }
 
@@ -259,6 +264,15 @@ func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 	var req AddFeedRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FeedURL == "" {
 		http.Error(w, `{"error":"valid 'feed_url' is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if strings.Contains(strings.ToLower(req.FeedURL), "spotify.com") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "This podcast is exclusive to Spotify and does not offer an open RSS feed.",
+		})
 		return
 	}
 
