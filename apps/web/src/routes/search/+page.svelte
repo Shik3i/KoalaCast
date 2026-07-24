@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
+	import { toast } from '$lib/stores/toast.svelte';
+	import { reveal } from '$lib/actions/reveal';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 
 	let searchQuery = $state('');
 	let rssUrlInput = $state('');
@@ -9,11 +13,18 @@
 	let errorMessage = $state('');
 	let searchResults = $state<any[]>([]);
 	let subscribedIds = $state<string[]>([]);
+	let subscribedFeeds = $state<string[]>([]);
 	let searchTimeout: any = null;
+
+	function isSubscribed(pod: any) {
+		const feed = pod.feed_url || pod.feedUrl;
+		return subscribedIds.includes(pod.id) || (!!feed && subscribedFeeds.includes(feed));
+	}
 
 	onMount(async () => {
 		const subs = await getLocalSubscriptions();
 		subscribedIds = subs.map((s) => s.podcast_id);
+		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);
 		executeSearch('technology');
 	});
 
@@ -62,14 +73,14 @@
 				if (res.ok) {
 					const data = await res.json();
 					if (data.id) {
-						window.location.href = `/podcast/${data.id}`;
+						goto(`/podcast/${data.id}`);
 						return;
 					}
 				}
 			} catch (_) {}
 		}
 
-		window.location.href = `/podcast/${pod.id}?feed_url=${encodeURIComponent(feedUrl || '')}`;
+		goto(`/podcast/${pod.id}?feed_url=${encodeURIComponent(feedUrl || '')}`);
 	}
 
 	async function handleAddPodcast(e: Event, pod: any) {
@@ -97,8 +108,11 @@
 			});
 
 			subscribedIds = [...subscribedIds, podId];
+			if (feedUrl) subscribedFeeds = [...subscribedFeeds, feedUrl];
+			toast.success(`Subscribed to ${pod.title || pod.trackName}`);
 		} catch (err) {
 			console.error(err);
+			toast.error('Could not subscribe. Please try again.');
 		}
 	}
 
@@ -129,8 +143,10 @@
 			});
 
 			subscribedIds = [...subscribedIds, data.id];
+			if (data.feed_url) subscribedFeeds = [...subscribedFeeds, data.feed_url];
 			rssUrlInput = '';
-			window.location.href = `/podcast/${data.id}`;
+			toast.success('Feed added.');
+			goto(`/podcast/${data.id}`);
 		} catch (err) {
 			errorMessage = 'Failed to fetch RSS feed.';
 		} finally {
@@ -193,27 +209,39 @@
 		</h3>
 
 		<div class="results-grid">
-			{#each searchResults as pod}
-				<div class="result-card" onclick={() => openPodcastShow(pod)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openPodcastShow(pod)}>
-					<img src={pod.artwork_url || pod.artworkUrl600 || '/placeholder.svg'} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
-					<div class="info">
-						<h4>{pod.title || pod.trackName}</h4>
-						<p class="author">{pod.author || pod.artistName}</p>
-
-						<button
-							class="btn-sub"
-							class:subscribed={subscribedIds.includes(pod.id)}
-							onclick={(e) => handleAddPodcast(e, pod)}
-						>
-							{#if subscribedIds.includes(pod.id)}
-								<i class="ph ph-check" aria-hidden="true"></i> Subscribed
-							{:else}
-								<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
-							{/if}
-						</button>
+			{#if isSearching && searchResults.length === 0}
+				{#each Array(8) as _}
+					<div class="result-card skeleton-result">
+						<div class="sk-art"><Skeleton width="100%" height="100%" radius="8px" /></div>
+						<Skeleton width="80%" height="1rem" />
+						<Skeleton width="50%" height="0.8rem" />
+						<Skeleton width="100%" height="2.1rem" radius="6px" />
 					</div>
-				</div>
-			{/each}
+				{/each}
+			{:else}
+				{#each searchResults as pod, i (pod.id ?? i)}
+					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
+						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title || pod.trackName}`}></button>
+						<img src={pod.artwork_url || pod.artworkUrl600 || '/placeholder.svg'} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<div class="info">
+							<h4>{pod.title || pod.trackName}</h4>
+							<p class="author">{pod.author || pod.artistName}</p>
+
+							<button
+								class="btn-sub"
+								class:subscribed={isSubscribed(pod)}
+								onclick={(e) => handleAddPodcast(e, pod)}
+							>
+								{#if isSubscribed(pod)}
+									<i class="ph ph-check" aria-hidden="true"></i> Subscribed
+								{:else}
+									<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
+								{/if}
+							</button>
+						</div>
+					</article>
+				{/each}
+			{/if}
 		</div>
 	</section>
 </div>
@@ -282,10 +310,15 @@
 
 	.alert.error {
 		padding: 1rem;
-		background: #ffdddd;
-		color: #900;
+		background: var(--color-danger-bg);
+		color: var(--text-primary);
+		border: 1px solid var(--color-danger-border);
 		border-radius: 8px;
 	}
+
+	.skeleton-result { cursor: default; }
+	.skeleton-result:hover { transform: none; border-color: var(--border-subtle); }
+	.sk-art { width: 100%; aspect-ratio: 1; }
 
 	.results-section h3 {
 		font-size: 1.4rem;
@@ -300,6 +333,7 @@
 	}
 
 	.result-card {
+		position: relative;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: 12px;
@@ -315,6 +349,22 @@
 		transform: translateY(-4px);
 		border-color: var(--accent-green);
 	}
+
+	.card-hit {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+	.card-hit:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -2px;
+		border-radius: 12px;
+	}
+	.result-card .btn-sub { position: relative; z-index: 2; }
 
 	.artwork {
 		width: 100%;

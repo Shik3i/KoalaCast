@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { saveLocalPlaybackState, getLocalPlaybackState } from '../idb/db';
 	import { player } from '$lib/stores/player.svelte';
+	import { dominantColor } from '$lib/color';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
@@ -11,6 +12,8 @@
 	let showShortcutsModal = $state(false);
 	let sleepTimerEndsAt = $state<number | null>(null);
 	let loadError = $state(false);
+	let expanded = $state(false);
+	let showAccent = $state<string | null>(null);
 	let lastToken = 0;
 
 	let autoSaveTimer: any = null;
@@ -120,7 +123,14 @@
 			position_ms: currentTimeMs,
 			completed: isCompleted,
 			progress_percent: pct,
-			last_played_at: Date.now()
+			last_played_at: Date.now(),
+			// Denormalized so the "Continue Listening" shelf can render + resume
+			// without another fetch.
+			title: track.title,
+			podcast_title: track.podcast_title,
+			artwork_url: track.artwork_url,
+			enclosure_url: track.enclosure_url,
+			duration_ms: durationMs || track.duration_ms
 		});
 	}
 
@@ -143,6 +153,31 @@
 		if (track) updateMediaSession();
 	});
 
+	// Pull a vivid accent out of the current cover art so the player + now-playing
+	// view theme themselves around the show. Null → keep the default brand green.
+	let lastArt = '';
+	$effect(() => {
+		const art = track?.artwork_url ?? '';
+		if (art === lastArt) return;
+		lastArt = art;
+		showAccent = null;
+		if (!art) return;
+		dominantColor(art).then((c) => {
+			if (track?.artwork_url === art) showAccent = c;
+		});
+	});
+
+	// Never leave the full-screen view open once playback is closed.
+	$effect(() => {
+		if (!track) expanded = false;
+	});
+
+	const accentVars = $derived(
+		showAccent
+			? `--show-accent:${showAccent};--show-accent-soft:color-mix(in srgb, ${showAccent} 22%, transparent);`
+			: '--show-accent:var(--accent-green);--show-accent-soft:color-mix(in srgb, var(--accent-green) 22%, transparent);'
+	);
+
 	onMount(() => {
 		try {
 			const saved = localStorage.getItem('koalacast_playback_speed');
@@ -157,6 +192,11 @@
 		}, 30000);
 
 		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				if (showShortcutsModal) showShortcutsModal = false;
+				else if (expanded) expanded = false;
+				return;
+			}
 			if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
 			if (!player.current) return;
 			if (e.code === 'Space') {
@@ -211,8 +251,8 @@
 ></audio>
 
 {#if showShortcutsModal}
-	<div class="modal-overlay" onclick={() => (showShortcutsModal = false)} role="presentation">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+	<div class="modal-overlay" onclick={() => (showShortcutsModal = false)} onkeydown={(e) => e.key === 'Escape' && (showShortcutsModal = false)} role="presentation">
+		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabindex="-1">
 			<h3>Keyboard Shortcuts</h3>
 			<ul>
 				<li><kbd>Space</kbd> Play / Pause</li>
@@ -226,18 +266,21 @@
 {/if}
 
 {#if track}
-	<div class="player-shell">
+	<div class="player-shell" style={accentVars}>
 		<div class="player-bar">
 			<!-- Seek progress line spanning the top of the bar -->
 			<div class="progress-track" style="--progress: {progressPercent}%"></div>
 
 			<div class="track-info">
-				<img
-					src={track.artwork_url || '/placeholder.svg'}
-					alt={track.title}
-					class="artwork"
-					onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
-				/>
+				<button class="art-btn" onclick={() => (expanded = true)} aria-label="Open full-screen player">
+					<img
+						src={track.artwork_url || '/placeholder.svg'}
+						alt={track.title}
+						class="artwork"
+						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+					/>
+					<span class="art-expand"><i class="ph ph-arrows-out-simple" aria-hidden="true"></i></span>
+				</button>
 				<div class="meta">
 					<a class="track-title" href={`/episode/${track.episode_id}`}>{track.title}</a>
 					<a class="podcast-title" href={`/podcast/${track.podcast_id}`}>{track.podcast_title}</a>
@@ -247,6 +290,7 @@
 						<span class="bar bar1"></span>
 						<span class="bar bar2"></span>
 						<span class="bar bar3"></span>
+						<span class="bar bar4"></span>
 					</div>
 				{/if}
 			</div>
@@ -304,6 +348,73 @@
 			</div>
 		</div>
 	</div>
+
+	<!-- Full-screen Now Playing -->
+	{#if expanded}
+		<div class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label="Now playing">
+			<div class="np-bg" style="background-image: url({track.artwork_url || '/placeholder.svg'})"></div>
+			<button class="np-close" onclick={() => (expanded = false)} aria-label="Close full-screen player">
+				<i class="ph ph-caret-down" aria-hidden="true"></i>
+			</button>
+
+			<div class="np-content">
+				<div class="np-art-wrap" class:playing={isPlaying}>
+					<img
+						src={track.artwork_url || '/placeholder.svg'}
+						alt={track.title}
+						class="np-art"
+						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+					/>
+				</div>
+
+				<div class="np-meta">
+					<a class="np-title" href={`/episode/${track.episode_id}`} onclick={() => (expanded = false)}>{track.title}</a>
+					<a class="np-podcast" href={`/podcast/${track.podcast_id}`} onclick={() => (expanded = false)}>{track.podcast_title}</a>
+				</div>
+
+				<div class="np-timeline">
+					<span class="time">{formatTime(currentTimeMs)}</span>
+					<input
+						type="range"
+						min="0"
+						max={durationMs || track.duration_ms || 100}
+						value={currentTimeMs}
+						style="--progress: {progressPercent}%"
+						onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
+						aria-label="Playback timeline"
+					/>
+					<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
+				</div>
+
+				<div class="np-controls">
+					<button class="np-ctrl" onclick={() => skip(-10)} aria-label="Skip backward 10 seconds">
+						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>10</small>
+					</button>
+					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
+					</button>
+					<button class="np-ctrl" onclick={() => skip(30)} aria-label="Skip forward 30 seconds">
+						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
+					</button>
+				</div>
+
+				<div class="np-extras">
+					<div class="speed-selector">
+						{#each speeds as spd}
+							<button onclick={() => setSpeed(spd)} class:active={playbackSpeed === spd}>{spd}x</button>
+						{/each}
+					</div>
+					<select onchange={(e) => setSleepTimer(e.currentTarget.value ? Number(e.currentTarget.value) : null)} aria-label="Sleep timer">
+						<option value="">💤 Sleep off</option>
+						<option value="15">15 min</option>
+						<option value="30">30 min</option>
+						<option value="45">45 min</option>
+						<option value="60">60 min</option>
+					</select>
+				</div>
+			</div>
+		</div>
+	{/if}
 {/if}
 
 <style>
@@ -344,9 +455,32 @@
 		left: 0;
 		height: 3px;
 		width: var(--progress, 0%);
-		background: linear-gradient(90deg, var(--accent-green), var(--accent-green-hover));
-		transition: width 0.25s linear;
+		background: linear-gradient(90deg, var(--show-accent, var(--accent-green)), color-mix(in srgb, var(--show-accent, var(--accent-green)) 60%, #fff));
+		transition: width 0.25s linear, background 0.4s ease;
 	}
+
+	.art-btn {
+		position: relative;
+		padding: 0;
+		border: none;
+		background: none;
+		flex-shrink: 0;
+		border-radius: 10px;
+		line-height: 0;
+	}
+	.art-expand {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background: rgba(0, 0, 0, 0.45);
+		color: #fff;
+		border-radius: 10px;
+		font-size: 1.2rem;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+	}
+	.art-btn:hover .art-expand { opacity: 1; }
 
 	.track-info {
 		display: flex;
@@ -433,15 +567,16 @@
 		width: 46px;
 		height: 46px;
 		border-radius: 50%;
-		background: var(--accent-green);
+		background: var(--show-accent, var(--accent-green));
 		color: #fff;
 		border: none;
 		display: grid;
 		place-items: center;
 		font-size: 1.3rem;
-		box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-green) 55%, transparent);
+		box-shadow: 0 6px 18px var(--show-accent-soft, color-mix(in srgb, var(--accent-green) 55%, transparent));
+		transition: transform 0.15s ease, background 0.4s ease, box-shadow 0.4s ease;
 	}
-	.play-btn:hover { background: var(--accent-green-hover); transform: scale(1.06); }
+	.play-btn:hover { filter: brightness(1.08); transform: scale(1.06); }
 
 	.timeline {
 		display: flex;
@@ -458,8 +593,8 @@
 		border-radius: 999px;
 		background: linear-gradient(
 			90deg,
-			var(--accent-green) 0%,
-			var(--accent-green) var(--progress, 0%),
+			var(--show-accent, var(--accent-green)) 0%,
+			var(--show-accent, var(--accent-green)) var(--progress, 0%),
 			color-mix(in srgb, var(--player-text) 22%, transparent) var(--progress, 0%)
 		);
 		cursor: pointer;
@@ -526,7 +661,7 @@
 		opacity: 0.7;
 	}
 	.speed-selector button.active {
-		background: var(--accent-green);
+		background: var(--show-accent, var(--accent-green));
 		color: #fff;
 		opacity: 1;
 	}
@@ -583,13 +718,14 @@
 	}
 	.bar {
 		width: 3px;
-		background: var(--accent-green);
+		background: var(--show-accent, var(--accent-green));
 		border-radius: 2px;
 		animation: eq-bounce 0.8s ease-in-out infinite alternate;
 	}
 	.bar1 { height: 60%; animation-delay: 0.1s; }
 	.bar2 { height: 100%; animation-delay: 0.3s; }
 	.bar3 { height: 40%; animation-delay: 0.2s; }
+	.bar4 { height: 80%; animation-delay: 0.45s; }
 
 	.btn-close {
 		background: var(--accent-green);
@@ -599,6 +735,171 @@
 		border-radius: 8px;
 		font-weight: 600;
 		width: 100%;
+	}
+
+	/* ---------- Full-screen Now Playing ---------- */
+	.np-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 300;
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		background: var(--player-bg);
+		color: var(--player-text);
+		animation: np-in 0.35s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+	}
+	/* Blurred cover art bleeding a show-tinted ambient wash behind the content. */
+	.np-bg {
+		position: absolute;
+		inset: -12%;
+		background-size: cover;
+		background-position: center;
+		filter: blur(60px) saturate(150%) brightness(0.55);
+		transform: scale(1.2);
+		opacity: 0.85;
+	}
+	.np-overlay::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(120% 90% at 50% 0%, var(--show-accent-soft, transparent), transparent 60%),
+			linear-gradient(to bottom, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.72));
+	}
+
+	.np-close {
+		position: absolute;
+		top: 1.1rem;
+		left: 1.1rem;
+		z-index: 2;
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		border: none;
+		background: color-mix(in srgb, var(--player-text) 12%, transparent);
+		color: var(--player-text);
+		display: grid;
+		place-items: center;
+		font-size: 1.4rem;
+		backdrop-filter: blur(8px);
+	}
+	.np-close:hover { background: color-mix(in srgb, var(--player-text) 22%, transparent); }
+
+	.np-content {
+		position: relative;
+		z-index: 1;
+		width: min(92vw, 440px);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1.5rem;
+		padding: 2rem 1rem;
+	}
+
+	.np-art-wrap {
+		width: min(72vw, 340px);
+		aspect-ratio: 1;
+		border-radius: 22px;
+		overflow: hidden;
+		box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px color-mix(in srgb, var(--player-text) 10%, transparent);
+		transition: transform 0.5s var(--ease-spring, ease);
+	}
+	.np-art-wrap.playing { animation: np-breathe 5s ease-in-out infinite; }
+	.np-art { width: 100%; height: 100%; object-fit: cover; }
+
+	.np-meta { text-align: center; display: flex; flex-direction: column; gap: 0.35rem; max-width: 100%; }
+	.np-title {
+		font-size: 1.4rem;
+		font-weight: 800;
+		line-height: 1.25;
+		color: var(--player-text);
+		letter-spacing: -0.01em;
+	}
+	.np-title:hover { text-decoration: underline; }
+	.np-podcast { font-size: 0.95rem; color: color-mix(in srgb, var(--player-text) 72%, transparent); }
+
+	.np-timeline { display: flex; align-items: center; gap: 0.75rem; width: 100%; }
+	.np-timeline input[type='range'] {
+		flex: 1;
+		-webkit-appearance: none;
+		appearance: none;
+		height: 6px;
+		border-radius: 999px;
+		background: linear-gradient(
+			90deg,
+			var(--show-accent, var(--accent-green)) 0%,
+			var(--show-accent, var(--accent-green)) var(--progress, 0%),
+			color-mix(in srgb, var(--player-text) 24%, transparent) var(--progress, 0%)
+		);
+		cursor: pointer;
+	}
+	.np-timeline input[type='range']::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: #fff;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+	}
+	.np-timeline input[type='range']::-moz-range-thumb {
+		width: 16px; height: 16px; border: none; border-radius: 50%; background: #fff;
+	}
+
+	.np-controls { display: flex; align-items: center; gap: 1.75rem; }
+	.np-ctrl {
+		position: relative;
+		width: 54px;
+		height: 54px;
+		border-radius: 50%;
+		border: none;
+		background: transparent;
+		color: var(--player-text);
+		display: grid;
+		place-items: center;
+		font-size: 1.7rem;
+		opacity: 0.9;
+	}
+	.np-ctrl small {
+		position: absolute;
+		font-size: 0.55rem;
+		font-weight: 700;
+		bottom: 12px;
+	}
+	.np-ctrl:hover { background: color-mix(in srgb, var(--player-text) 12%, transparent); opacity: 1; }
+	.np-play {
+		width: 76px;
+		height: 76px;
+		border-radius: 50%;
+		border: none;
+		background: var(--show-accent, var(--accent-green));
+		color: #fff;
+		display: grid;
+		place-items: center;
+		font-size: 2rem;
+		box-shadow: 0 12px 34px var(--show-accent-soft, rgba(0,0,0,0.4));
+		transition: transform 0.15s ease, filter 0.2s ease;
+	}
+	.np-play:hover { filter: brightness(1.08); transform: scale(1.05); }
+
+	.np-extras { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; }
+	.np-extras select {
+		background: color-mix(in srgb, var(--player-text) 10%, transparent);
+		color: var(--player-text);
+		border: 1px solid color-mix(in srgb, var(--player-text) 16%, transparent);
+		padding: 0.4rem 0.6rem;
+		border-radius: 9px;
+		font-size: 0.82rem;
+		font-family: inherit;
+	}
+	.np-extras select option { color: #111; }
+
+	@keyframes np-in {
+		from { opacity: 0; transform: translateY(3%); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+	@keyframes np-breathe {
+		0%, 100% { transform: scale(1); }
+		50% { transform: scale(1.02); }
 	}
 
 	@keyframes eq-bounce {
@@ -630,5 +931,7 @@
 		.player-shell { animation: none; }
 		.bar { animation: none; height: 60% !important; }
 		.play-btn:hover { transform: none; }
+		.np-overlay { animation: none; }
+		.np-art-wrap.playing { animation: none; }
 	}
 </style>

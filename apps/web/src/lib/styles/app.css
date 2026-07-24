@@ -11,16 +11,30 @@
 	
 	--text-primary: #192a23;
 	--text-secondary: #4a6358;
-	--text-muted: #728c81;
-	
+	--text-muted: #587266;
+
 	--accent-green: #2d6a4f;
 	--accent-green-hover: #1b4332;
 	--accent-light: #d8f3dc;
-	
+
 	--player-bg: #1e3a2b;
 	--player-text: #f8f9fa;
-	
+
 	--focus-ring: #52b788;
+
+	/* Semantic status surfaces. Defined once — they reference --bg-surface, which
+	   is redefined per theme, and CSS resolves custom properties lazily, so these
+	   automatically adapt to light/dark without being duplicated. */
+	--color-danger: #e5484d;
+	--color-danger-bg: color-mix(in srgb, #e5484d 13%, var(--bg-surface));
+	--color-danger-border: color-mix(in srgb, #e5484d 30%, transparent);
+	--color-warning-bg: color-mix(in srgb, #f5a623 16%, var(--bg-surface));
+	--color-warning-border: color-mix(in srgb, #f5a623 34%, transparent);
+
+	/* Per-show dynamic accent extracted from cover art (JS overrides at runtime);
+	   falls back to the brand green per theme. */
+	--show-accent: var(--accent-green);
+	--show-accent-contrast: #ffffff;
 
 	/* Motion */
 	--ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
@@ -90,10 +104,10 @@
 	--bg-surface: #ffffff;
 	--bg-elevated: #edf2f0;
 	--border-subtle: #d6e2dd;
-	
+
 	--text-primary: #192a23;
 	--text-secondary: #4a6358;
-	--text-muted: #728c81;
+	--text-muted: #587266;
 	
 	--accent-green: #2d6a4f;
 	--accent-green-hover: #1b4332;

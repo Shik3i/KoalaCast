@@ -15,6 +15,13 @@ export interface LocalPlaybackState {
 	completed: boolean;
 	progress_percent: number;
 	last_played_at: number;
+	// Optional denormalized track metadata so a "continue listening" shelf can
+	// render and resume playback without an extra network round-trip.
+	title?: string;
+	podcast_title?: string;
+	artwork_url?: string;
+	enclosure_url?: string;
+	duration_ms?: number;
 }
 
 export interface LocalQueueItem {
@@ -94,6 +101,17 @@ export async function getLocalPlaybackState(episode_id: string): Promise<LocalPl
 export async function saveLocalPlaybackState(state: LocalPlaybackState): Promise<void> {
 	const db = await getLocalDB();
 	await db.put('playback_states', state);
+}
+
+// Recently played, still-in-progress episodes for the "Continue Listening" shelf.
+// Most-recent first; completed episodes and untouched (0%) ones are filtered out.
+export async function getRecentPlaybackStates(limit = 12): Promise<LocalPlaybackState[]> {
+	const db = await getLocalDB();
+	const all: LocalPlaybackState[] = await db.getAll('playback_states');
+	return all
+		.filter((s) => !s.completed && s.position_ms > 5000 && s.progress_percent < 98)
+		.sort((a, b) => b.last_played_at - a.last_played_at)
+		.slice(0, limit);
 }
 
 // Queue

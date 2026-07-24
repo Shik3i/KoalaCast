@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { clearAllLocalData } from '$lib/idb/db';
 	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
+	import { toast } from '$lib/stores/toast.svelte';
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');
@@ -48,7 +49,7 @@
 			}
 
 			recoveryCodeDisplay = data.recovery_code;
-			alert('Account created! Please save your recovery code carefully.');
+			toast.success('Account created — save your recovery code below.');
 		} catch (err: any) {
 			authError = 'Network error during registration.';
 		} finally {
@@ -75,12 +76,26 @@
 			}
 
 			authUser = data;
+			toast.success(`Welcome back, ${data.username}`);
 			loadActiveSessions();
 		} catch (err: any) {
 			authError = 'Network error during login.';
 		} finally {
 			isLoggingIn = false;
 		}
+	}
+
+	async function handleLogout() {
+		try {
+			await fetch('/api/v1/auth/logout', { method: 'POST' });
+		} catch (_) {
+			// Even if the network call fails, drop the client-side session view.
+		}
+		authUser = null;
+		sessions = [];
+		usernameInput = '';
+		passwordInput = '';
+		toast.success('Signed out.');
 	}
 
 	async function loadActiveSessions() {
@@ -96,7 +111,7 @@
 	async function handleResetLocalData() {
 		if (confirm('Clear all local browser subscriptions and listening history? This action cannot be undone.')) {
 			await clearAllLocalData();
-			alert('Local data reset successfully.');
+			toast.success('Local data reset.');
 		}
 	}
 
@@ -124,7 +139,7 @@
 			}
 
 			opmlReport = report;
-			alert(`OPML Import Complete! Found ${report.total_found} podcasts. ${report.imported} imported, ${report.skipped} skipped.`);
+			toast.success(`OPML imported — ${report.imported} added, ${report.skipped} skipped.`);
 		} catch (err: any) {
 			opmlError = 'Error reading or processing OPML XML file.';
 		} finally {
@@ -247,7 +262,7 @@
 		<section class="card">
 			<h3>Active Account</h3>
 			<p>Logged in as <strong>{authUser.username}</strong> ({authUser.role})</p>
-			<button onclick={() => location.reload()}>Sign Out</button>
+			<button onclick={handleLogout}>Sign Out</button>
 		</section>
 	{/if}
 
@@ -365,15 +380,16 @@
 	}
 
 	.btn-danger {
-		background: #d90429;
+		background: var(--color-danger);
 		width: fit-content;
 	}
 
 	.error-banner {
 		padding: 0.75rem 1rem;
-		background: #f8d7da;
-		color: #721c24;
-		border-radius: 6px;
+		background: var(--color-danger-bg);
+		color: var(--text-primary);
+		border: 1px solid var(--color-danger-border);
+		border-radius: 8px;
 	}
 
 	.report-box {
@@ -392,10 +408,10 @@
 	}
 
 	.recovery-box {
-		background: #fff3cd;
-		color: #856404;
-		border: 1px solid #ffeeba;
-		border-radius: 6px;
+		background: var(--color-warning-bg);
+		color: var(--text-primary);
+		border: 1px solid var(--color-warning-border);
+		border-radius: 8px;
 		padding: 1rem;
 	}
 
@@ -405,8 +421,10 @@
 		font-weight: 700;
 		letter-spacing: 0.1em;
 		margin-top: 0.5rem;
-		background: white;
+		color: var(--text-primary);
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
 		padding: 0.5rem;
-		border-radius: 4px;
+		border-radius: 6px;
 	}
 </style>

@@ -38,11 +38,18 @@
 
 <style>
 	.app-footer {
-		background-color: rgba(19, 34, 28, 0.8);
+		background: color-mix(in srgb, var(--bg-surface) 75%, var(--bg-primary));
 		border-top: 1px solid var(--border-subtle);
 		padding: 3rem 2rem 2rem;
 		margin-top: 5rem;
 		backdrop-filter: blur(12px);
+	}
+
+	.brand-title {
+		background: linear-gradient(120deg, var(--text-primary), var(--accent-green));
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
 	}
 
 	.footer-container {

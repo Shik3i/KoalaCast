@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { FEATURED_PODCASTS } from '$lib/data/featured';
-	import { saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
+	import {
+		saveLocalSubscription,
+		getLocalSubscriptions,
+		getRecentPlaybackStates,
+		type LocalPlaybackState
+	} from '$lib/idb/db';
+	import { player } from '$lib/stores/player.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
+	import { reveal } from '$lib/actions/reveal';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 
 	interface PodcastItem {
 		id: string;
@@ -15,6 +25,8 @@
 
 	let discoverPodcasts = $state<PodcastItem[]>([]);
 	let subscribedIds = $state<string[]>([]);
+	let subscribedFeeds = $state<string[]>([]);
+	let continueItems = $state<LocalPlaybackState[]>([]);
 	let selectedCategory = $state<string>('All');
 	let searchQuery = $state<string>('');
 	let isLoading = $state(true);
@@ -22,9 +34,20 @@
 
 	const categories = ['All', 'Technology', 'News', 'Business', 'Science', 'Comedy', 'Society'];
 
+	// A card counts as subscribed if either its resolved id or its (stable) feed URL
+	// matches a stored subscription. The feed URL is the reliable key: the id shown
+	// on a discover card (iTunes id/slug) differs from the UUID saved after resolving.
+	function isSubscribed(pod: PodcastItem) {
+		return (
+			subscribedIds.includes(pod.id) || (!!pod.feed_url && subscribedFeeds.includes(pod.feed_url))
+		);
+	}
+
 	onMount(async () => {
 		const subs = await getLocalSubscriptions();
 		subscribedIds = subs.map((s) => s.podcast_id);
+		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);
+		continueItems = await getRecentPlaybackStates(8);
 
 		try {
 			const res = await fetch('/api/v1/podcasts/discover');
@@ -61,14 +84,30 @@
 				if (res.ok) {
 					const data = await res.json();
 					if (data.id) {
-						window.location.href = `/podcast/${data.id}`;
+						goto(`/podcast/${data.id}`);
 						return;
 					}
 				}
 			} catch (_) {}
 		}
 
-		window.location.href = `/podcast/${pod.id}?feed_url=${encodeURIComponent(pod.feed_url || '')}`;
+		goto(`/podcast/${pod.id}?feed_url=${encodeURIComponent(pod.feed_url || '')}`);
+	}
+
+	function resumePlay(item: LocalPlaybackState) {
+		if (!item.enclosure_url) {
+			goto(`/episode/${item.episode_id}`);
+			return;
+		}
+		player.play({
+			episode_id: item.episode_id,
+			podcast_id: item.podcast_id,
+			title: item.title || 'Episode',
+			podcast_title: item.podcast_title || '',
+			artwork_url: item.artwork_url || '',
+			enclosure_url: item.enclosure_url,
+			duration_ms: item.duration_ms || 0
+		});
 	}
 
 	async function handleSubscribe(e: Event, pod: PodcastItem) {
@@ -97,8 +136,11 @@
 			});
 
 			subscribedIds = [...subscribedIds, targetId];
+			if (targetFeedUrl) subscribedFeeds = [...subscribedFeeds, targetFeedUrl];
+			toast.success(`Subscribed to ${pod.title}`);
 		} catch (err) {
 			console.error('Failed to subscribe:', err);
+			toast.error('Could not subscribe. Please try again.');
 		} finally {
 			isSubmitting = false;
 		}
@@ -129,6 +171,37 @@
 		</div>
 	</section>
 
+	<!-- Continue Listening -->
+	{#if continueItems.length > 0}
+		<section class="continue-section" use:reveal>
+			<div class="section-title-row">
+				<h2><i class="ph-fill ph-play-circle" aria-hidden="true"></i> Continue Listening</h2>
+			</div>
+			<div class="continue-rail">
+				{#each continueItems as item (item.episode_id)}
+					<button class="continue-card" onclick={() => resumePlay(item)}>
+						<div class="cc-art">
+							<img
+								src={item.artwork_url || '/placeholder.svg'}
+								alt=""
+								loading="lazy"
+								onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+							/>
+							<span class="cc-play"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
+						</div>
+						<div class="cc-meta">
+							<span class="cc-title" title={item.title}>{item.title || 'Episode'}</span>
+							<span class="cc-podcast">{item.podcast_title || ''}</span>
+							<span class="cc-progress" aria-hidden="true">
+								<span class="cc-progress-fill" style="width:{Math.round(item.progress_percent)}%"></span>
+							</span>
+						</div>
+					</button>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
 	<!-- Category Pills -->
 	<div class="category-bar">
 		{#each categories as cat}
@@ -150,9 +223,17 @@
 		</div>
 
 		{#if isLoading}
-			<div class="loading-state">
-				<div class="spinner"></div>
-				<p>Fetching podcasts...</p>
+			<div class="podcast-grid">
+				{#each Array(8) as _}
+					<div class="skeleton-card">
+						<div class="cover-wrapper"><Skeleton width="100%" height="100%" radius="0" /></div>
+						<div class="card-details">
+							<Skeleton width="85%" height="1rem" />
+							<Skeleton width="55%" height="0.8rem" />
+							<Skeleton width="100%" height="2rem" radius="6px" />
+						</div>
+					</div>
+				{/each}
 			</div>
 		{:else if filteredPodcasts.length === 0}
 			<div class="empty-state">
@@ -161,8 +242,9 @@
 			</div>
 		{:else}
 			<div class="podcast-grid">
-				{#each filteredPodcasts as pod}
-					<div class="podcast-card" onclick={() => openPodcastShow(pod)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && openPodcastShow(pod)}>
+				{#each filteredPodcasts as pod, i (pod.id)}
+					<article class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
+						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title}`}></button>
 						<div class="cover-wrapper">
 							<img
 								src={pod.artwork_url || '/placeholder.svg'}
@@ -187,11 +269,11 @@
 							<div class="card-actions">
 								<button
 									class="btn-sub-card"
-									class:subscribed={subscribedIds.includes(pod.id)}
+									class:subscribed={isSubscribed(pod)}
 									onclick={(e) => handleSubscribe(e, pod)}
-									disabled={isSubmitting || subscribedIds.includes(pod.id)}
+									disabled={isSubmitting || isSubscribed(pod)}
 								>
-									{#if subscribedIds.includes(pod.id)}
+									{#if isSubscribed(pod)}
 										<i class="ph ph-check" aria-hidden="true"></i> Subscribed
 									{:else}
 										<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
@@ -199,7 +281,7 @@
 								</button>
 							</div>
 						</div>
-					</div>
+					</article>
 				{/each}
 			</div>
 		{/if}
@@ -213,21 +295,48 @@
 		gap: 2.5rem;
 	}
 
+	/* Intentionally a dark "showcase" panel in both themes — text is light, so the
+	   gradient must be self-sufficiently dark (no bg-surface bleed) for contrast. */
 	.hero-section {
-		background: linear-gradient(135deg, rgba(64, 145, 108, 0.25) 0%, rgba(19, 34, 28, 0.85) 100%), var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 16px;
+		position: relative;
+		overflow: hidden;
+		background:
+			radial-gradient(90% 130% at 8% 0%, rgba(82, 183, 136, 0.45), transparent 55%),
+			linear-gradient(135deg, #1c3a2b 0%, #0e1b15 100%);
+		border: 1px solid color-mix(in srgb, #52b788 22%, transparent);
+		border-radius: 20px;
 		padding: 3.5rem 2.5rem;
-		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
-		backdrop-filter: blur(16px);
+		box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+	}
+	/* Soft animated aurora blob for a bit of life behind the hero copy. */
+	.hero-section::after {
+		content: '';
+		position: absolute;
+		top: -40%;
+		right: -10%;
+		width: 45%;
+		height: 160%;
+		background: radial-gradient(circle, rgba(116, 198, 157, 0.35), transparent 65%);
+		filter: blur(20px);
+		animation: hero-float 9s var(--ease-out, ease-in-out) infinite alternate;
+		pointer-events: none;
+	}
+	@keyframes hero-float {
+		from { transform: translate(0, 0) scale(1); }
+		to { transform: translate(-24px, 20px) scale(1.15); }
 	}
 
 	.hero-content {
+		position: relative;
+		z-index: 1;
 		max-width: 680px;
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
 	}
+
+	.hero-content h1 { color: #f4fbf7; }
+	.hero-content .subtitle { color: rgba(232, 245, 240, 0.82); }
 
 	.pill-badge {
 		display: inline-flex;
@@ -274,18 +383,21 @@
 	.search-bar-hero input {
 		width: 100%;
 		padding: 1rem 1rem 1rem 3.25rem;
-		background: rgba(11, 20, 17, 0.7);
-		border: 1px solid var(--border-subtle);
+		background: rgba(9, 16, 13, 0.55);
+		border: 1px solid rgba(232, 245, 240, 0.18);
 		border-radius: 12px;
-		color: var(--text-primary);
+		color: #f4fbf7;
 		font-size: 1rem;
 		outline: none;
 		transition: all 0.2s ease;
 	}
+	.search-bar-hero input::placeholder { color: rgba(232, 245, 240, 0.55); }
+	.search-bar-hero .search-icon { color: rgba(232, 245, 240, 0.6); }
 
 	.search-bar-hero input:focus {
 		border-color: var(--focus-ring);
-		box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.2);
+		box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.28);
+		background: rgba(9, 16, 13, 0.72);
 	}
 
 	.clear-btn {
@@ -356,6 +468,7 @@
 	}
 
 	.podcast-card {
+		position: relative;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: 12px;
@@ -365,6 +478,25 @@
 		cursor: pointer;
 		transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
 	}
+
+	/* Full-card click target — a real button (keyboard-accessible) that sits
+	   beneath the interactive subscribe control, so the two never nest. */
+	.card-hit {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+	.card-hit:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -2px;
+		border-radius: 12px;
+	}
+	.card-details { position: relative; }
+	.card-actions { position: relative; z-index: 2; }
 
 	.podcast-card:hover {
 		transform: translateY(-4px);
@@ -489,7 +621,7 @@
 		border-color: var(--accent-green);
 	}
 
-	.loading-state, .empty-state {
+	.empty-state {
 		padding: 4rem 2rem;
 		text-align: center;
 		color: var(--text-muted);
@@ -499,16 +631,111 @@
 		gap: 1rem;
 	}
 
-	.spinner {
-		width: 32px;
-		height: 32px;
-		border: 3px solid var(--border-subtle);
-		border-top-color: var(--accent-green);
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
+	/* Continue Listening rail */
+	.continue-section {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.continue-section h2 {
+		font-size: 1.35rem;
+		font-weight: 800;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.continue-section h2 :global(.ph-fill) { color: var(--accent-green); }
+
+	.continue-rail {
+		display: flex;
+		gap: 1rem;
+		overflow-x: auto;
+		padding-bottom: 0.5rem;
+		scroll-snap-type: x mandatory;
+		scrollbar-width: none;
+	}
+	.continue-rail::-webkit-scrollbar { display: none; }
+
+	.continue-card {
+		scroll-snap-align: start;
+		flex: 0 0 auto;
+		width: 240px;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.6rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 14px;
+		text-align: left;
+		transition: transform 0.25s var(--ease-spring), border-color 0.2s ease, box-shadow 0.25s ease;
+	}
+	.continue-card:hover {
+		transform: translateY(-3px);
+		border-color: var(--accent-green);
+		box-shadow: var(--shadow-md);
 	}
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
+	.cc-art {
+		position: relative;
+		width: 58px;
+		height: 58px;
+		flex-shrink: 0;
+		border-radius: 10px;
+		overflow: hidden;
 	}
+	.cc-art img { width: 100%; height: 100%; object-fit: cover; }
+	.cc-play {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		background: rgba(0, 0, 0, 0.4);
+		color: #fff;
+		font-size: 1.3rem;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+	}
+	.continue-card:hover .cc-play { opacity: 1; }
+
+	.cc-meta { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; }
+	.cc-title {
+		font-weight: 700;
+		font-size: 0.88rem;
+		color: var(--text-primary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.cc-podcast {
+		font-size: 0.76rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.cc-progress {
+		margin-top: 0.15rem;
+		height: 4px;
+		border-radius: 999px;
+		background: var(--bg-elevated);
+		overflow: hidden;
+	}
+	.cc-progress-fill {
+		display: block;
+		height: 100%;
+		border-radius: 999px;
+		background: linear-gradient(90deg, var(--accent-green), var(--accent-green-hover));
+	}
+
+	/* Skeleton card mirrors the real podcast card layout */
+	.skeleton-card {
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+	.skeleton-card .card-details { gap: 0.6rem; }
 </style>

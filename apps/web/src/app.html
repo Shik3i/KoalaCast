@@ -5,8 +5,12 @@
 		<link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="KoalaCast - Free, open-source, privacy-first podcast player with cross-device sync." />
+		<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#13221c" media="(prefers-color-scheme: dark)" />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<link rel="apple-touch-icon" href="/icon.svg" />
 		<title>KoalaCast</title>
-		
+
 		<script>
 			(function() {
 				try {
@@ -18,11 +22,6 @@
 			})();
 		</script>
 
-		<link rel="preconnect" href="https://fonts.googleapis.com">
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-		<script src="https://unpkg.com/@phosphor-icons/web"></script>
-		
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

@@ -4,6 +4,8 @@
 	import DOMPurify from 'dompurify';
 	import { getLocalPlaybackState, saveLocalPlaybackState, type LocalQueueItem, addToLocalQueue } from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
+	import { dominantColor } from '$lib/color';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -11,6 +13,13 @@
 	let playbackState = $state<any>(null);
 	let isLoading = $state(true);
 	let isFavorite = $state(false);
+	let showAccent = $state<string | null>(null);
+
+	const accentVars = $derived(
+		showAccent
+			? `--show-accent:${showAccent};--show-accent-soft:color-mix(in srgb, ${showAccent} 18%, transparent);`
+			: '--show-accent:var(--accent-green);--show-accent-soft:color-mix(in srgb, var(--accent-green) 14%, transparent);'
+	);
 
 	$effect(() => {
 		episodeId = $page.params.id || '';
@@ -28,6 +37,9 @@
 					if (podRes.ok) podcast = await podRes.json();
 				}
 			}
+
+			const art = episode?.artwork_url || podcast?.artwork_url;
+			if (art) dominantColor(art).then((c) => (showAccent = c));
 
 			const state = await getLocalPlaybackState(id);
 			if (state) playbackState = state;
@@ -67,7 +79,7 @@
 			added_at: Date.now()
 		};
 		await addToLocalQueue(queueItem);
-		alert('Added episode to queue!');
+		toast.success('Added to queue.');
 	}
 
 	function formatDuration(ms: number) {
@@ -97,7 +109,7 @@
 {#if isLoading}
 	<div class="loading">Loading episode...</div>
 {:else if episode}
-	<div class="episode-page">
+	<div class="episode-page" style={accentVars}>
 		<div class="episode-header">
 			<img src={episode.artwork_url || podcast?.artwork_url || '/placeholder.svg'} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 
@@ -151,11 +163,12 @@
 		display: flex;
 		gap: 2rem;
 		background:
-			radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-green) 14%, transparent), transparent 60%),
+			radial-gradient(120% 140% at 0% 0%, var(--show-accent-soft, color-mix(in srgb, var(--accent-green) 14%, transparent)), transparent 60%),
 			var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg, 18px);
 		padding: 2rem;
+		transition: background 0.5s ease;
 	}
 
 	.artwork {
@@ -215,7 +228,7 @@
 	}
 
 	.btn-play {
-		background: var(--accent-green);
+		background: var(--show-accent, var(--accent-green));
 		color: #fff;
 		border: none;
 		padding: 0.7rem 1.5rem;
@@ -225,9 +238,10 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-green) 40%, transparent);
+		box-shadow: 0 8px 20px var(--show-accent-soft, color-mix(in srgb, var(--accent-green) 40%, transparent));
+		transition: transform 0.15s ease, filter 0.2s ease;
 	}
-	.btn-play:hover { background: var(--accent-green-hover); transform: translateY(-2px); }
+	.btn-play:hover { filter: brightness(1.08); transform: translateY(-2px); }
 	.btn-play :global(.ph) { font-size: 1.15rem; }
 
 	.btn-secondary {

@@ -1,8 +1,17 @@
 <script lang="ts">
+	// Self-hosted fonts + icons (no render-blocking third-party requests).
+	import '@fontsource/outfit/400.css';
+	import '@fontsource/outfit/500.css';
+	import '@fontsource/outfit/600.css';
+	import '@fontsource/outfit/700.css';
+	import '@fontsource/outfit/800.css';
+	import '@phosphor-icons/web/regular';
+	import '@phosphor-icons/web/fill';
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';
 	import Footer from '$lib/components/Footer.svelte';
 	import Player from '$lib/components/Player.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import { player } from '$lib/stores/player.svelte';
 
 	let { children } = $props();
@@ -41,6 +50,7 @@
 
 	<Footer />
 	<Player />
+	<Toast />
 </div>
 
 <style>

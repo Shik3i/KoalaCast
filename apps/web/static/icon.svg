@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="KoalaCast">
+  <rect width="512" height="512" fill="#2d6a4f"/>
+  <g transform="translate(256 268) scale(4.2) translate(-32 -32)">
+    <circle cx="32" cy="34" r="15" fill="#d8f3dc"/>
+    <circle cx="16" cy="20" r="8" fill="#d8f3dc"/>
+    <circle cx="48" cy="20" r="8" fill="#d8f3dc"/>
+    <circle cx="16" cy="20" r="4" fill="#40916c"/>
+    <circle cx="48" cy="20" r="4" fill="#40916c"/>
+    <circle cx="26" cy="33" r="2.6" fill="#1b4332"/>
+    <circle cx="38" cy="33" r="2.6" fill="#1b4332"/>
+    <ellipse cx="32" cy="40" rx="4.5" ry="3.2" fill="#1b4332"/>
+  </g>
+</svg>
