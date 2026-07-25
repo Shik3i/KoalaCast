@@ -206,12 +206,18 @@ func (c *ITunesClient) LookupFeedURL(id string) (string, error) {
 	return "", fmt.Errorf("no feed URL found for iTunes ID %s", id)
 }
 
-// SearchPodcasts queries iTunes Search API for podcasts matching query term
+// SearchPodcasts queries iTunes Search API for podcasts matching query term using default "us" country storefront
 func (c *ITunesClient) SearchPodcasts(query string, limit int) ([]PodcastResult, error) {
+	return c.SearchPodcastsWithCountry(query, "us", limit)
+}
+
+// SearchPodcastsWithCountry queries iTunes Search API for podcasts matching query term in a specific country storefront
+func (c *ITunesClient) SearchPodcastsWithCountry(query, country string, limit int) ([]PodcastResult, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
-	reqURL := fmt.Sprintf("https://itunes.apple.com/search?media=podcast&entity=podcast&term=%s&limit=%d", url.QueryEscape(query), limit)
+	country = sanitizeRegion(country)
+	reqURL := fmt.Sprintf("https://itunes.apple.com/search?media=podcast&entity=podcast&term=%s&country=%s&limit=%d", url.QueryEscape(query), country, limit)
 
 	resp, err := c.httpClient.Get(reqURL)
 	if err != nil {

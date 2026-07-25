@@ -8,8 +8,10 @@
 	import { optimizeArtwork } from '$lib/artwork';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide, fade } from 'svelte/transition';
+	import { SUPPORTED_REGIONS, DEFAULT_REGION } from '$lib/data/regions';
 
 	let searchQuery = $state('');
+	let selectedRegion = $state<string>(DEFAULT_REGION);
 	let rssUrlInput = $state('');
 	let showRss = $state(false);
 	let isSearching = $state(false);
@@ -22,6 +24,11 @@
 	let searchTimeout: any = null;
 	// Monotonic id so a slow earlier query can't overwrite the results of a newer one.
 	let searchReqId = 0;
+
+	function selectRegion(code: string) {
+		selectedRegion = code;
+		executeSearch(searchQuery || 'podcast');
+	}
 
 	function isSubscribed(pod: any) {
 		const feed = pod.feed_url || pod.feedUrl;
@@ -87,7 +94,7 @@
 		errorMessage = '';
 
 		try {
-			const res = await fetch(`/api/v1/podcasts/search?q=${encodeURIComponent(query)}`);
+			const res = await fetch(`/api/v1/podcasts/search?q=${encodeURIComponent(query)}&region=${selectedRegion}`);
 			const data = await res.json();
 			if (reqId !== searchReqId) return; // superseded by a newer query
 			searchResults = data.results ?? [];
@@ -258,6 +265,24 @@
 				</button>
 			</form>
 		{/if}
+	</div>
+
+	<!-- Region / Country Selector -->
+	<div class="region-bar">
+		<span class="region-label"><i class="ph ph-globe-hemisphere-west" aria-hidden="true"></i> Region:</span>
+		<div class="region-pills">
+			{#each SUPPORTED_REGIONS as reg}
+				<button
+					type="button"
+					class="region-pill"
+					class:active={selectedRegion === reg.code}
+					onclick={() => selectRegion(reg.code)}
+				>
+					<span class="flag-emoji">{reg.flag}</span>
+					<span>{reg.name}</span>
+				</button>
+			{/each}
+		</div>
 	</div>
 
 	{#if errorMessage}
@@ -637,5 +662,63 @@
 		background: var(--bg-elevated);
 		color: var(--text-primary);
 		border: 1px solid var(--border-subtle);
+	}
+
+	/* Region / Country selector bar */
+	.region-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+		flex-wrap: wrap;
+		margin: 0.5rem 0 1rem;
+	}
+
+	.region-label {
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.region-pills {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.region-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		padding: 0.4rem 0.85rem;
+		border-radius: 20px;
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: var(--transition-smooth);
+	}
+
+	.region-pill:hover {
+		border-color: var(--accent-green);
+		color: var(--text-primary);
+		background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface));
+	}
+
+	.region-pill.active {
+		background: var(--accent-green);
+		color: #ffffff;
+		border-color: var(--accent-green);
+	}
+
+	.flag-emoji {
+		font-family: 'Twemoji Country Flags', var(--font-sans);
+		font-size: 1.1rem;
+		line-height: 1;
 	}
 </style>

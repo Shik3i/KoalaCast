@@ -16,6 +16,7 @@
 	import Onboarding from '$lib/components/Onboarding.svelte';
 	import { GENRES } from '$lib/genres';
 	import { optimizeArtwork } from '$lib/artwork';
+	import { SUPPORTED_REGIONS, DEFAULT_REGION } from '$lib/data/regions';
 
 	interface PodcastItem {
 		id: string;
@@ -38,6 +39,7 @@
 	let subscribedFeeds = $state<string[]>([]);
 	let continueItems = $state<LocalPlaybackState[]>([]);
 	let selectedCategory = $state<string>('All');
+	let selectedRegion = $state<string>(DEFAULT_REGION);
 	let searchQuery = $state<string>('');
 	let isLoading = $state(true);
 	let isLoadingMore = $state(false);
@@ -50,13 +52,20 @@
 
 	const categories = ['All', ...GENRES.map((g) => g.name)];
 
+	function selectRegion(code: string) {
+		selectedRegion = code;
+		limit = PAGE_SIZE;
+		reachedEnd = false;
+		loadDiscover();
+	}
+
 	// Discover now pulls a genre-specific top chart from the server (per selected
 	// category) instead of client-filtering one flat overall chart — so each
 	// category returns a full list. iTunes charts have no offset, so "load more"
 	// simply requests a larger limit and replaces the list.
 	async function loadDiscover() {
 		const reqId = ++discoverReqId;
-		const params = new URLSearchParams({ limit: String(limit) });
+		const params = new URLSearchParams({ limit: String(limit), region: selectedRegion });
 		if (selectedCategory !== 'All') params.set('category', selectedCategory);
 		try {
 			const res = await fetch(`/api/v1/podcasts/discover?${params}`);
@@ -334,6 +343,24 @@
 			</div>
 		</section>
 	{/if}
+
+	<!-- Region / Country Selector -->
+	<div class="region-bar">
+		<span class="region-label"><i class="ph ph-globe-hemisphere-west" aria-hidden="true"></i> Region:</span>
+		<div class="region-pills">
+			{#each SUPPORTED_REGIONS as reg}
+				<button
+					type="button"
+					class="region-pill"
+					class:active={selectedRegion === reg.code}
+					onclick={() => selectRegion(reg.code)}
+				>
+					<span class="flag-emoji">{reg.flag}</span>
+					<span>{reg.name}</span>
+				</button>
+			{/each}
+		</div>
+	</div>
 
 	<!-- Category Pills -->
 	<div class="category-bar">
@@ -1078,4 +1105,62 @@
 		flex-direction: column;
 	}
 	.skeleton-card .card-details { gap: 0.6rem; }
+
+	/* Region / Country selector bar */
+	.region-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+		flex-wrap: wrap;
+		margin-bottom: 0.25rem;
+	}
+
+	.region-label {
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.region-pills {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.region-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		padding: 0.4rem 0.85rem;
+		border-radius: 20px;
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: var(--transition-smooth);
+	}
+
+	.region-pill:hover {
+		border-color: var(--accent-green);
+		color: var(--text-primary);
+		background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface));
+	}
+
+	.region-pill.active {
+		background: var(--accent-green);
+		color: #ffffff;
+		border-color: var(--accent-green);
+	}
+
+	.flag-emoji {
+		font-family: 'Twemoji Country Flags', var(--font-sans);
+		font-size: 1.1rem;
+		line-height: 1;
+	}
 </style>

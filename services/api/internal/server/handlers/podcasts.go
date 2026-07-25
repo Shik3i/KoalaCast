@@ -95,6 +95,11 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	region := r.URL.Query().Get("region")
+	if region == "" {
+		region = r.URL.Query().Get("country")
+	}
+
 	var results interface{}
 	var err error
 	provider := "itunes"
@@ -127,7 +132,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		if h.ITunes == nil {
 			h.ITunes = itunes.NewITunesClient()
 		}
-		results, err = h.ITunes.SearchPodcasts(q, 50)
+		results, err = h.ITunes.SearchPodcastsWithCountry(q, region, 50)
 	}
 
 	if err != nil {
