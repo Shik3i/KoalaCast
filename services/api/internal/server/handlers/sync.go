@@ -301,18 +301,8 @@ func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID stri
 }
 
 func (h *SyncHandler) MergeLocalData(w http.ResponseWriter, r *http.Request) {
-	authUser := customMiddleware.GetAuthUser(r.Context())
-	if authUser == nil {
-		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-
-	var req SyncPushRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid merge payload"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Execute Push logic for all local mode data
+	// Merging local-mode data uses identical apply/dedupe semantics as a normal
+	// push. Delegate directly to Push — do NOT pre-decode r.Body here, or Push
+	// would receive an already-drained body and fail with an empty-payload error.
 	h.Push(w, r)
 }

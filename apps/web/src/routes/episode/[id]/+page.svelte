@@ -35,28 +35,52 @@
 		if (episodeId) loadEpisodeDetails(episodeId);
 	});
 
+	// Monotonic id so a slow load for a previous episode can't overwrite the one the
+	// user navigated to (this $effect re-runs on every route param change).
+	let loadReqId = 0;
+
 	async function loadEpisodeDetails(id: string) {
+		const reqId = ++loadReqId;
 		isLoading = true;
+		// Reset per-episode expandable state so the previous episode's chapters or
+		// transcript never bleed into the newly opened one.
+		showChapters = false;
+		showTranscript = false;
+		chaptersLoaded = false;
+		transcriptLoaded = false;
+		chaptersList = [];
+		transcriptCues = [];
+		transcriptHtml = '';
+		transcriptText = '';
+		chaptersError = '';
+		transcriptError = '';
 		try {
 			const res = await fetch(`/api/v1/episodes/${id}`);
 			if (res.ok) {
-				episode = await res.json();
+				const epData = await res.json();
+				if (reqId !== loadReqId) return; // superseded by a newer navigation
+				episode = epData;
 				if (episode.podcast_id) {
 					const podRes = await fetch(`/api/v1/podcasts/${episode.podcast_id}`);
-					if (podRes.ok) podcast = await podRes.json();
+					if (podRes.ok) {
+						const podData = await podRes.json();
+						if (reqId !== loadReqId) return;
+						podcast = podData;
+					}
 				}
 			}
 
 			const art = episode?.artwork_url || podcast?.artwork_url;
-			if (art) dominantColor(art).then((c) => (showAccent = c));
+			if (art) dominantColor(art).then((c) => (reqId === loadReqId ? (showAccent = c) : null));
 
 			const state = await getLocalPlaybackState(id);
+			if (reqId !== loadReqId) return;
 			if (state) playbackState = state;
 			isFavorite = await isLocalFavorite(id);
 		} catch (err) {
 			console.error('Failed to load episode details', err);
 		} finally {
-			isLoading = false;
+			if (reqId === loadReqId) isLoading = false;
 		}
 	}
 
@@ -199,11 +223,19 @@
 	}
 
 	function seekToCue(seconds: number) {
-		handlePlay();
-		setTimeout(() => {
-			const audio = document.querySelector('audio');
-			if (audio) audio.currentTime = seconds;
-		}, 100);
+		// Start (or keep) this episode playing, then seek once the media is ready.
+		// Waiting on loadedmetadata is reliable; the old fixed 100ms timeout dropped
+		// the seek whenever the audio hadn't parsed its header yet.
+		if (!isCurrent) handlePlay();
+		const audio = document.querySelector('audio') as HTMLAudioElement | null;
+		if (!audio) return;
+		const doSeek = () => {
+			try {
+				audio.currentTime = seconds;
+			} catch (_) {}
+		};
+		if (audio.readyState >= 1 /* HAVE_METADATA */) doSeek();
+		else audio.addEventListener('loadedmetadata', doSeek, { once: true });
 	}
 
 	// Strip WEBVTT/SRT cue numbers + timestamp lines down to readable text.
@@ -229,12 +261,28 @@
 		return raw;
 	}
 
+	let sanitizeHookRegistered = false;
+
 	function sanitizeHTML(html: string) {
 		// Feed show-notes are attacker-controlled (anyone can add an arbitrary feed),
 		// so they must go through a real allowlist sanitizer before {@html}. DOMPurify
 		// needs a DOM, and this block only ever renders in the browser (episode is
 		// populated client-side), so we no-op during SSR.
 		if (!html || !browser) return '';
+		// Any link opened in a new tab must carry rel="noopener noreferrer" so the
+		// destination can't reach back through window.opener (reverse tabnabbing).
+		if (!sanitizeHookRegistered) {
+			DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+				if (
+					node instanceof HTMLElement &&
+					node.tagName === 'A' &&
+					node.getAttribute('target') === '_blank'
+				) {
+					node.setAttribute('rel', 'noopener noreferrer');
+				}
+			});
+			sanitizeHookRegistered = true;
+		}
 		return DOMPurify.sanitize(html, {
 			USE_PROFILES: { html: true },
 			ADD_ATTR: ['target'],

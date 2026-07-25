@@ -13,6 +13,27 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		// Defense-in-depth CSP. The episode view renders publisher-supplied HTML
+		// (DOMPurify-sanitized) via {@html}, so lock down the dangerous sinks:
+		// no plugins/objects, no framing, no <base> hijack, forms only to self,
+		// and scripts/XHR restricted to same-origin. 'unsafe-inline' is required
+		// for scripts because SvelteKit inlines its hydration bootstrap and the
+		// app.html theme snippet, and for styles because the CSS is inlined; images
+		// and audio must allow remote http(s) hosts since artwork/enclosures live on
+		// third-party podcast CDNs.
+		h.Set("Content-Security-Policy", strings.Join([]string{
+			"default-src 'self'",
+			"base-uri 'self'",
+			"object-src 'none'",
+			"frame-ancestors 'none'",
+			"form-action 'self'",
+			"script-src 'self' 'unsafe-inline'",
+			"style-src 'self' 'unsafe-inline'",
+			"img-src 'self' data: https: http:",
+			"media-src 'self' https: http:",
+			"font-src 'self'",
+			"connect-src 'self'",
+		}, "; "))
 		next.ServeHTTP(w, r)
 	})
 }

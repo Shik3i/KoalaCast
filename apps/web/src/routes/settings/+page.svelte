@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { clearAllLocalData } from '$lib/idb/db';
+	import { clearAllLocalData, saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
 	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
@@ -40,9 +40,30 @@
 	let opmlReport = $state<any>(null);
 	let opmlError = $state('');
 
-	onMount(() => {
+	onMount(async () => {
 		currentTheme = getStoredTheme();
+		// Restore an existing signed-in session after a reload: the HttpOnly session
+		// cookie persists, but this component's auth state does not, so without this
+		// a logged-in user always saw the sign-in form again.
+		try {
+			const res = await fetch('/api/v1/auth/me');
+			if (res.ok) {
+				const me = await res.json();
+				authUser = { username: me.username, role: me.role };
+				loadActiveSessions();
+			}
+		} catch (_) {}
 	});
+
+	async function revokeSession(id: string) {
+		try {
+			const res = await fetch(`/api/v1/auth/sessions/${id}`, { method: 'DELETE' });
+			if (res.ok) {
+				sessions = sessions.filter((s) => s.id !== id);
+				toast.success('Session revoked.');
+			}
+		} catch (_) {}
+	}
 
 	function handleThemeChange(mode: ThemeMode) {
 		currentTheme = mode;
@@ -158,6 +179,25 @@
 			}
 
 			opmlReport = report;
+
+			// Local-first: the server ingested the feeds and returned the resolved
+			// podcasts; persist them as on-device subscriptions so they appear in the
+			// (account-less) Library.
+			if (Array.isArray(report.podcasts)) {
+				for (const p of report.podcasts) {
+					if (!p?.id) continue;
+					try {
+						await saveLocalSubscription({
+							podcast_id: p.id,
+							feed_url: p.feed_url || '',
+							title: p.title || 'Podcast',
+							artwork_url: p.artwork_url || '',
+							added_at: Date.now()
+						});
+					} catch (_) {}
+				}
+			}
+
 			toast.success(`OPML imported — ${report.imported} added, ${report.skipped} skipped.`);
 		} catch (err: any) {
 			opmlError = 'Error reading or processing OPML XML file.';
@@ -165,6 +205,41 @@
 			isImportingOpml = false;
 			target.value = '';
 		}
+	}
+
+	// Export is generated on-device from local subscriptions so it works without an
+	// account (the server export endpoint only sees account-synced subscriptions).
+	function escapeXml(s: string): string {
+		return (s || '').replace(
+			/[<>&"']/g,
+			(c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string
+		);
+	}
+
+	async function handleExportOpml() {
+		const subs = (await getLocalSubscriptions()).filter((s) => s.feed_url);
+		if (subs.length === 0) {
+			toast.error('No subscriptions with a feed URL to export yet.');
+			return;
+		}
+		const outlines = subs
+			.map(
+				(s) =>
+					`    <outline type="rss" text="${escapeXml(s.title)}" title="${escapeXml(s.title)}" xmlUrl="${escapeXml(s.feed_url)}" />`
+			)
+			.join('\n');
+		const xml =
+			`<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n  <head>\n    <title>KoalaCast Subscriptions</title>\n  </head>\n  <body>\n${outlines}\n  </body>\n</opml>\n`;
+		const blob = new Blob([xml], { type: 'application/xml' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = 'koalacast_subscriptions.opml';
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		URL.revokeObjectURL(url);
+		toast.success(`Exported ${subs.length} subscription${subs.length === 1 ? '' : 's'}.`);
 	}
 </script>
 
@@ -235,7 +310,7 @@
 		</div>
 	</section>
 
-	<section class="card">
+	<section class="card" id="privacy">
 		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> Privacy</h3>
 		<div class="privacy-box">
 			<h4>Local Browser Mode</h4>
@@ -270,9 +345,9 @@
 				<input type="file" accept=".opml,.xml" onchange={handleOpmlFileUpload} disabled={isImportingOpml} hidden />
 			</label>
 
-			<a href="/api/v1/opml/export" class="btn btn-secondary" target="_blank">
+			<button type="button" class="btn btn-secondary" onclick={handleExportOpml}>
 				<i class="ph ph-download-simple" aria-hidden="true"></i> Export OPML
-			</a>
+			</button>
 		</div>
 	</section>
 
@@ -313,6 +388,31 @@
 		<section class="card">
 			<h3><i class="ph ph-user-circle-check" aria-hidden="true"></i> Active Account</h3>
 			<p>Logged in as <strong>{authUser.username}</strong> ({authUser.role})</p>
+
+			{#if sessions.length > 0}
+				<div class="sessions-list">
+					<h4>Active sessions & devices</h4>
+					{#each sessions as s (s.id)}
+						<div class="session-row">
+							<div class="s-info">
+								<span class="s-name">
+									{s.device_name || (s.kind === 'device' ? 'Device' : 'Web session')}
+									{#if s.is_current}<span class="s-current">This device</span>{/if}
+								</span>
+								<span class="s-meta">
+									{s.kind === 'device' ? 'App' : 'Browser'}{s.sanitized_user_agent
+										? ` · ${s.sanitized_user_agent}`
+										: ''}
+								</span>
+							</div>
+							{#if !s.is_current}
+								<button class="s-revoke" onclick={() => revokeSession(s.id)}>Revoke</button>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+
 			<button onclick={handleLogout}>Sign Out</button>
 		</section>
 	{/if}
@@ -531,6 +631,54 @@
 		border-radius: 8px;
 		padding: 1rem;
 	}
+
+	.sessions-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin: 0.25rem 0 0.5rem;
+	}
+	.sessions-list h4 { font-size: 0.9rem; font-weight: 700; color: var(--text-secondary); }
+	.session-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		padding: 0.6rem 0.85rem;
+	}
+	.s-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+	.s-name { font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.s-current {
+		font-size: 0.68rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--accent-green);
+		background: color-mix(in srgb, var(--accent-green) 16%, transparent);
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+	}
+	.s-meta {
+		font-size: 0.78rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.s-revoke {
+		background: var(--bg-surface);
+		color: var(--color-danger);
+		border: 1px solid var(--color-danger-border);
+		padding: 0.35rem 0.8rem;
+		border-radius: 8px;
+		font-size: 0.82rem;
+		font-weight: 600;
+		flex-shrink: 0;
+	}
+	.s-revoke:hover { background: var(--color-danger-bg); }
 
 	.code {
 		font-family: monospace;

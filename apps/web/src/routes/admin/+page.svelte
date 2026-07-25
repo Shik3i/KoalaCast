@@ -105,6 +105,10 @@
 		<!-- Users Table -->
 		<section class="card">
 			<h3>Registered Users ({users.length})</h3>
+			{#if users.length === 0}
+				<p class="empty-note">No registered users yet.</p>
+			{:else}
+			<div class="table-scroll">
 			<table class="admin-table">
 				<thead>
 					<tr>
@@ -135,11 +139,17 @@
 					{/each}
 				</tbody>
 			</table>
+			</div>
+			{/if}
 		</section>
 
 		<!-- Feed Health Table -->
 		<section class="card">
 			<h3>Feed Health & Error Status</h3>
+			{#if feedHealth.length === 0}
+				<p class="empty-note">No feeds are being tracked yet.</p>
+			{:else}
+			<div class="table-scroll">
 			<table class="admin-table">
 				<thead>
 					<tr>
@@ -164,6 +174,8 @@
 					{/each}
 				</tbody>
 			</table>
+			</div>
+			{/if}
 		</section>
 	{/if}
 </div>
@@ -220,10 +232,24 @@
 		color: var(--text-secondary);
 	}
 
+	/* Let wide tables scroll on their own instead of blowing out the mobile layout. */
+	.table-scroll {
+		width: 100%;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.empty-note {
+		color: var(--text-muted);
+		font-size: 0.9rem;
+		margin-top: 0.75rem;
+	}
+
 	.admin-table {
 		width: 100%;
 		border-collapse: collapse;
 		margin-top: 1rem;
+		min-width: 480px;
 	}
 
 	.admin-table th, .admin-table td {

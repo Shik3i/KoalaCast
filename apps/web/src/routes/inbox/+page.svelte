@@ -240,7 +240,7 @@
 						<a class="ep-title" href={`/episode/${ep.id}`}>{ep.title}</a>
 						<span class="ep-meta">
 							<span class="ep-show">{ep.podcast_title}</span>
-							<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}
+							{#if ep.pub_date}<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}{/if}
 							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
 							{#if completed.has(ep.id)}<span class="played-tag">Played</span>{/if}
 						</span>

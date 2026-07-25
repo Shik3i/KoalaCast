@@ -28,8 +28,15 @@
 		subscriptions = await getLocalSubscriptions();
 		recentEpisodes = await getRecentPlaybackStates(30);
 		await player.loadQueue();
-		queue = [...player.queue];
 		favorites = await getLocalFavorites();
+	});
+
+	// Mirror the store's queue into the local list so the tab stays correct when the
+	// queue changes elsewhere (e.g. autoplay advancing to the next episode) — except
+	// mid-drag, where the local list is the source of truth until it's persisted.
+	$effect(() => {
+		const storeQueue = player.queue;
+		if (dragIndex === null) queue = [...storeQueue];
 	});
 
 	function playFavorite(fav: LocalFavorite) {
@@ -86,7 +93,22 @@
 		dragIndex = i;
 	}
 	async function onDrop() {
+		if (dragIndex === null) return; // dragend + drop both fire; run once
+		// Capture the dragged order before clearing dragIndex (which re-enables the
+		// store→local sync effect), so the persisted order is the intended one.
+		const orderedIds = queue.map((q) => q.episode_id);
 		dragIndex = null;
+		await reorderLocalQueue(orderedIds);
+		await player.loadQueue();
+	}
+
+	// Touch/keyboard-friendly reordering (HTML5 drag-and-drop doesn't work on touch).
+	async function moveItem(i: number, dir: -1 | 1) {
+		const j = i + dir;
+		if (j < 0 || j >= queue.length) return;
+		const next = [...queue];
+		[next[i], next[j]] = [next[j], next[i]];
+		queue = next;
 		await reorderLocalQueue(queue.map((q) => q.episode_id));
 		await player.loadQueue();
 	}
@@ -210,7 +232,15 @@
 						ondragend={onDrop}
 						ondrop={onDrop}
 					>
-						<span class="drag-handle" aria-hidden="true"><i class="ph ph-dots-six-vertical"></i></span>
+						<div class="reorder-btns">
+							<button class="reorder-btn" onclick={() => moveItem(i, -1)} disabled={i === 0} aria-label="Move up in queue">
+								<i class="ph ph-caret-up" aria-hidden="true"></i>
+							</button>
+							<button class="reorder-btn" onclick={() => moveItem(i, 1)} disabled={i === queue.length - 1} aria-label="Move down in queue">
+								<i class="ph ph-caret-down" aria-hidden="true"></i>
+							</button>
+						</div>
+						<span class="drag-handle" aria-hidden="true" title="Drag to reorder"><i class="ph ph-dots-six-vertical"></i></span>
 						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label="Play episode">
 							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
@@ -453,6 +483,27 @@
 	.queue-hint { font-size: 0.8rem; color: var(--text-muted); }
 	.drag-handle { color: var(--text-muted); font-size: 1.3rem; cursor: grab; flex-shrink: 0; display: grid; place-items: center; }
 	.drag-handle:active { cursor: grabbing; }
+
+	.reorder-btns { display: flex; flex-direction: column; flex-shrink: 0; }
+	.reorder-btn {
+		width: 28px;
+		height: 22px;
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		display: grid;
+		place-items: center;
+		font-size: 1rem;
+		border-radius: 6px;
+		padding: 0;
+	}
+	.reorder-btn:hover:not(:disabled) { color: var(--accent-green); background: var(--bg-elevated); }
+	.reorder-btn:disabled { opacity: 0.3; cursor: default; }
+
+	/* The drag handle is a desktop nicety; on touch the up/down buttons do the work. */
+	@media (hover: none) {
+		.drag-handle { display: none; }
+	}
 	.ep-row[draggable='true'] { cursor: default; }
 	.ep-row.dragging { opacity: 0.5; border-color: var(--accent-green); }
 	.btn-clear {

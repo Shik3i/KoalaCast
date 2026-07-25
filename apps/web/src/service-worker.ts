@@ -15,7 +15,20 @@ const PRECACHE = [...build, ...files];
 
 sw.addEventListener('install', (event) => {
 	event.waitUntil(
-		caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => sw.skipWaiting())
+		caches
+			.open(CACHE)
+			.then(async (cache) => {
+				await cache.addAll(PRECACHE);
+				// Cache the SPA shell under '/' so an offline navigation to a route we
+				// haven't visited yet can still fall back to it. Best-effort: never fail
+				// the install if the root can't be fetched at this moment.
+				try {
+					await cache.add('/');
+				} catch (_) {
+					/* ignore */
+				}
+			})
+			.then(() => sw.skipWaiting())
 	);
 });
 

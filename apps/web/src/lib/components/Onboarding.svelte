@@ -1,11 +1,19 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { GENRES } from '$lib/genres';
 	import { fade, scale } from 'svelte/transition';
+
+	let cardEl: HTMLElement | null = $state(null);
+	// Move focus into the dialog so keyboard users land inside it, and Escape can
+	// dismiss (treated as "skip for now").
+	onMount(() => cardEl?.focus());
 </script>
 
+<svelte:window onkeydown={(e) => e.key === 'Escape' && prefs.completeOnboarding()} />
+
 <div class="ob-overlay" transition:fade={{ duration: 180 }} role="dialog" aria-modal="true" aria-label="Choose your interests">
-	<div class="ob-card" transition:scale={{ duration: 240, start: 0.96 }}>
+	<div class="ob-card" bind:this={cardEl} tabindex="-1" transition:scale={{ duration: 240, start: 0.96 }}>
 		<span class="ob-badge"><i class="ph-fill ph-sparkle" aria-hidden="true"></i> Personalize</span>
 		<h2>What are you into?</h2>
 		<p>Pick a few genres and we'll tailor Discover to you. You can change these anytime in Settings — and it all stays on your device.</p>
@@ -50,6 +58,7 @@
 		box-shadow: var(--shadow-xl);
 		padding: 2rem;
 	}
+	.ob-card:focus { outline: none; }
 	.ob-badge {
 		display: inline-flex;
 		align-items: center;

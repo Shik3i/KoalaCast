@@ -45,11 +45,22 @@ type OPMLImportReport struct {
 	Imported   int               `json:"imported"`
 	Skipped    int               `json:"skipped"`
 	Failures   []OPMLImportError `json:"failures"`
+	// Podcasts carries the resolved records for every successfully imported feed so
+	// a local-first (anonymous) client can add them to its on-device subscription
+	// store — the server only persists subscriptions for signed-in accounts.
+	Podcasts []OPMLImportedPodcast `json:"podcasts"`
 }
 
 type OPMLImportError struct {
 	URL    string `json:"url"`
 	Reason string `json:"reason"`
+}
+
+type OPMLImportedPodcast struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	FeedURL    string `json:"feed_url"`
+	ArtworkURL string `json:"artwork_url"`
 }
 
 func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +83,7 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 	report := OPMLImportReport{
 		TotalFound: len(feedURLs),
 		Failures:   make([]OPMLImportError, 0),
+		Podcasts:   make([]OPMLImportedPodcast, 0),
 	}
 
 	// Bound the fan-out: each URL triggers a server-side fetch (up to
@@ -163,8 +175,18 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 			`, authUser.ID, podcastID, nowMs, nowMs)
 		}
 
-		_ = tx.Commit()
+		if err := tx.Commit(); err != nil {
+			report.Failures = append(report.Failures, OPMLImportError{URL: feedURL, Reason: "failed to persist feed"})
+			report.Skipped++
+			continue
+		}
 		report.Imported++
+		report.Podcasts = append(report.Podcasts, OPMLImportedPodcast{
+			ID:         podcastID,
+			Title:      parsedFeed.Title,
+			FeedURL:    feedURL,
+			ArtworkURL: parsedFeed.ArtworkURL,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")

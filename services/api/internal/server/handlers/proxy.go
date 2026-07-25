@@ -100,14 +100,22 @@ type ProxyHandler struct {
 
 func NewProxyHandler() *ProxyHandler {
 	return &ProxyHandler{
+		// SSRF-safe client: never allow loopback/private/link-local targets. These
+		// endpoints fetch fully attacker-controlled URLs, so AllowLoopback MUST stay
+		// false (it exists only for unit tests targeting httptest.NewServer).
 		httpClient: rss.NewSafeHTTPClient(rss.SafeTransportConfig{
 			ConnectTimeout: 10 * time.Second,
-			AllowLoopback:  true,
 		}),
 		// Bounded 100 MB In-Memory RAM LRU cache
 		memCache: NewMemoryLRUCache(100 * 1024 * 1024),
 	}
 }
+
+// maxDecodedPixels caps the pixel count of a source image before it is decoded
+// into an uncompressed bitmap. Without this a tiny, highly compressed file (a
+// "decompression bomb") could decode to gigabytes of RGBA and OOM the process.
+// 40 MP comfortably covers legitimate podcast artwork (typically <=3000x3000).
+const maxDecodedPixels = 40 * 1000 * 1000
 
 // GetImageProxy fetches an external image, resizes it, converts/compresses it to optimized JPEG,
 // and caches it entirely in RAM (In-Memory) to guarantee zero disk I/O, privacy, and maximum performance.
@@ -164,8 +172,22 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("remote image non-200")
 		}
 
-		limitReader := io.LimitReader(resp.Body, 15*1024*1024)
-		img, _, err := image.Decode(limitReader)
+		// Read the (byte-bounded) body into memory once so the image header can
+		// be inspected before committing to a full decode.
+		rawBytes, err := io.ReadAll(io.LimitReader(resp.Body, 15*1024*1024))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read remote image")
+		}
+
+		// Reject decompression bombs: check declared dimensions (header-only,
+		// cheap) before decoding the full bitmap into RAM.
+		if cfg, _, cfgErr := image.DecodeConfig(bytes.NewReader(rawBytes)); cfgErr == nil {
+			if int64(cfg.Width)*int64(cfg.Height) > maxDecodedPixels {
+				return nil, fmt.Errorf("image dimensions too large")
+			}
+		}
+
+		img, _, err := image.Decode(bytes.NewReader(rawBytes))
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode image")
 		}

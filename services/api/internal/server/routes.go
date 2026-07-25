@@ -72,13 +72,21 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.Get("/healthz", healthHandler.Healthz)
 		r.Get("/readyz", healthHandler.Readyz)
 
-		// Proxy endpoints for CORS-safe Chapters, Transcripts, and Privacy-Safe Cached Images
-		r.Get("/proxy/chapters", proxyHandler.GetChapters)
-		r.Head("/proxy/chapters", proxyHandler.GetChapters)
-		r.Get("/proxy/transcript", proxyHandler.GetTranscript)
-		r.Head("/proxy/transcript", proxyHandler.GetTranscript)
-		r.Get("/proxy/image", proxyHandler.GetImageProxy)
-		r.Head("/proxy/image", proxyHandler.GetImageProxy)
+		// Proxy endpoints for CORS-safe Chapters, Transcripts, and Privacy-Safe Cached
+		// Images. Each fetches an arbitrary client-supplied URL server-side, so the
+		// group is throttled per client IP to bound outbound-fetch, open-relay and
+		// image-decode CPU/RAM abuse. The cap is generous (a discover page loads many
+		// artworks) but still bounds a hostile client.
+		proxyLimiter := customMiddleware.NewRateLimiter(600, 1*time.Minute)
+		r.Group(func(r chi.Router) {
+			r.Use(proxyLimiter.Limit)
+			r.Get("/proxy/chapters", proxyHandler.GetChapters)
+			r.Head("/proxy/chapters", proxyHandler.GetChapters)
+			r.Get("/proxy/transcript", proxyHandler.GetTranscript)
+			r.Head("/proxy/transcript", proxyHandler.GetTranscript)
+			r.Get("/proxy/image", proxyHandler.GetImageProxy)
+			r.Head("/proxy/image", proxyHandler.GetImageProxy)
+		})
 
 		// Podcasts & Discovery
 		r.Get("/podcasts/discover", podcastHandler.Discover)
@@ -106,6 +114,18 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Post("/auth/recovery/verify", authHandler.VerifyRecoveryCode)
 		})
 
+		// OPML import works for anonymous local-first users too: it ingests the feeds
+		// server-side and returns the resolved podcasts so the client can store the
+		// subscriptions on-device. Signed-in accounts additionally get server-side
+		// subscriptions. Each request can fan out to many outbound fetches, so it is
+		// tightly throttled per client IP.
+		opmlLimiter := customMiddleware.NewRateLimiter(5, 1*time.Minute)
+		r.Group(func(r chi.Router) {
+			r.Use(customMiddleware.OptionalAuth(database))
+			r.Use(opmlLimiter.Limit)
+			r.Post("/opml/import", opmlHandler.Import)
+		})
+
 		// Authenticated Routes
 		r.Group(func(r chi.Router) {
 			r.Use(customMiddleware.AuthRequired(database))
@@ -120,8 +140,8 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Post("/sync", syncHandler.Push)
 			r.Post("/sync/merge", syncHandler.MergeLocalData)
 
-			// OPML Import / Export
-			r.Post("/opml/import", opmlHandler.Import)
+			// OPML export reads the account's server-side subscriptions (local-first
+			// clients generate their OPML on-device instead).
 			r.Get("/opml/export", opmlHandler.Export)
 		})
 

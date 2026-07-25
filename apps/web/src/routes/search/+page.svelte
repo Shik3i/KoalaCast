@@ -20,6 +20,8 @@
 	let subscribedIds = $state<string[]>([]);
 	let subscribedFeeds = $state<string[]>([]);
 	let searchTimeout: any = null;
+	// Monotonic id so a slow earlier query can't overwrite the results of a newer one.
+	let searchReqId = 0;
 
 	function isSubscribed(pod: any) {
 		const feed = pod.feed_url || pod.feedUrl;
@@ -80,20 +82,21 @@
 
 	async function executeSearch(query: string) {
 		if (!query.trim()) return;
+		const reqId = ++searchReqId;
 		isSearching = true;
 		errorMessage = '';
 
 		try {
 			const res = await fetch(`/api/v1/podcasts/search?q=${encodeURIComponent(query)}`);
 			const data = await res.json();
-			if (data.results) {
-				searchResults = data.results;
-			}
+			if (reqId !== searchReqId) return; // superseded by a newer query
+			searchResults = data.results ?? [];
 			if (data.provider) provider = data.provider;
 		} catch (err) {
+			if (reqId !== searchReqId) return;
 			errorMessage = 'Failed to execute search query.';
 		} finally {
-			isSearching = false;
+			if (reqId === searchReqId) isSearching = false;
 		}
 	}
 
@@ -282,8 +285,8 @@
 			{/if}
 		</div>
 
-		<div class="results-grid">
-			{#if isSearching && searchResults.length === 0}
+		{#if isSearching && searchResults.length === 0}
+			<div class="results-grid">
 				{#each Array(8) as _}
 					<div class="result-card skeleton-result">
 						<div class="sk-art"><Skeleton width="100%" height="100%" radius="8px" /></div>
@@ -292,7 +295,17 @@
 						<Skeleton width="100%" height="2.1rem" radius="6px" />
 					</div>
 				{/each}
-			{:else}
+			</div>
+		{:else if visibleResults.length === 0}
+			<div class="empty-state">
+				<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+				<p>
+					No podcasts found{searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''}. Try a
+					different term, or add a show directly by its RSS URL above.
+				</p>
+			</div>
+		{:else}
+			<div class="results-grid">
 				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
 						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title || pod.trackName}`}></button>
@@ -315,8 +328,8 @@
 						</div>
 					</article>
 				{/each}
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</section>
 </div>
 
@@ -528,6 +541,22 @@
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 		gap: 1.5rem;
 	}
+
+	.empty-state {
+		text-align: center;
+		padding: 3.5rem 2rem;
+		background: var(--bg-surface);
+		border: 1px dashed var(--border-subtle);
+		border-radius: 14px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		color: var(--text-muted);
+		max-width: 520px;
+		margin: 0 auto;
+	}
+	.empty-state :global(.ph) { font-size: 2.2rem; }
 
 	.result-card {
 		position: relative;

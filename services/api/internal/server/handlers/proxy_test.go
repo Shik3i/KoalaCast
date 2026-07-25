@@ -100,6 +100,30 @@ Enjoy your podcast experience.
 	}
 }
 
+// TestProxyHandler_BlocksLoopbackByDefault verifies the production handler (whose
+// client is built by NewProxyHandler, i.e. AllowLoopback=false) refuses to fetch a
+// loopback/private target — the SSRF guard that must not regress.
+func TestProxyHandler_BlocksLoopbackByDefault(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"chapters":[{"startTime":0,"title":"secret"}]}`))
+	}))
+	defer ts.Close()
+
+	// Note: no override of proxy.httpClient — exercise the real production client.
+	proxy := NewProxyHandler()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/chapters?url="+ts.URL, nil)
+	rec := httptest.NewRecorder()
+	proxy.GetChapters(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected loopback fetch to be blocked, but got 200 with body %q", rec.Body.String())
+	}
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("expected 502 Bad Gateway for blocked target, got %d", rec.Code)
+	}
+}
+
 func TestProxyHandler_GetImageProxy(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
 	for y := 0; y < 100; y++ {

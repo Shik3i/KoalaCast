@@ -135,10 +135,20 @@
 
 	async function loadSavedPosition(epId: string) {
 		const state = await getLocalPlaybackState(epId);
-		if (state && state.position_ms > 0 && !state.completed && audioEl) {
-			audioEl.currentTime = state.position_ms / 1000;
+		if (!state || state.position_ms <= 0 || state.completed || !audioEl) return;
+		const el = audioEl;
+		const seconds = state.position_ms / 1000;
+		const apply = () => {
+			// A different track may have loaded while we awaited IndexedDB; only seek
+			// if this episode is still the active one.
+			if (!track || track.episode_id !== epId) return;
+			el.currentTime = seconds;
 			currentTimeMs = state.position_ms;
-		}
+		};
+		// Seeking before metadata is ready is silently dropped by the browser, so
+		// wait for loadedmetadata when the element hasn't parsed the header yet.
+		if (el.readyState >= 1 /* HAVE_METADATA */) apply();
+		else el.addEventListener('loadedmetadata', apply, { once: true });
 	}
 
 	function togglePlay() {
@@ -230,10 +240,15 @@
 
 	async function saveProgress(eventType = 'PROGRESS_TICK', forceCompleted = false) {
 		if (!track) return;
-		const dur = durationMs || track.duration_ms || 1;
-		const remMs = Math.max(0, dur - currentTimeMs);
-		const pct = Math.min(100, (currentTimeMs / dur) * 100);
-		const isCompleted = forceCompleted || remMs < 120000 || pct > 95;
+		// Only derive completion from a *known* duration. Before metadata loads (and
+		// for feeds with no declared duration) the fallback used to be 1ms, which made
+		// any position read as 100% complete and wrongly evicted the episode from
+		// "Continue Listening". With no real duration, never auto-complete.
+		const dur = durationMs || track.duration_ms || 0;
+		const hasDuration = dur > 1000;
+		const remMs = hasDuration ? Math.max(0, dur - currentTimeMs) : Infinity;
+		const pct = hasDuration ? Math.min(100, (currentTimeMs / dur) * 100) : 0;
+		const isCompleted = forceCompleted || (hasDuration && (remMs < 120000 || pct > 95));
 
 		await saveLocalPlaybackState({
 			episode_id: track.episode_id,
@@ -260,10 +275,17 @@
 				artist: track.podcast_title,
 				artwork: track.artwork_url ? [{ src: track.artwork_url, sizes: '512x512' }] : []
 			});
-			navigator.mediaSession.setActionHandler('play', () => togglePlay());
-			navigator.mediaSession.setActionHandler('pause', () => togglePlay());
-			navigator.mediaSession.setActionHandler('seekbackward', () => skip(-10));
-			navigator.mediaSession.setActionHandler('seekforward', () => skip(30));
+			navigator.mediaSession.setActionHandler('play', () => audioEl?.play().catch(() => {}));
+			navigator.mediaSession.setActionHandler('pause', () => audioEl?.pause());
+			navigator.mediaSession.setActionHandler('seekbackward', (d) => skip(-(d.seekOffset || 10)));
+			navigator.mediaSession.setActionHandler('seekforward', (d) => skip(d.seekOffset || 30));
+			navigator.mediaSession.setActionHandler('seekto', (d) => {
+				if (audioEl && typeof d.seekTime === 'number') seekTo(d.seekTime * 1000);
+			});
+			navigator.mediaSession.setActionHandler('nexttrack', () => {
+				player.playNext();
+			});
+			navigator.mediaSession.setActionHandler('previoustrack', () => skip(-15));
 		} catch (_) {}
 	}
 
@@ -458,7 +480,7 @@
 				{#if loadError}
 					<div class="load-error" role="alert">
 						<i class="ph ph-warning-circle" aria-hidden="true"></i>
-						Audio konnte nicht geladen werden — evtl. blockiert ein Tracking-/Werbeblocker die Datei.
+						Audio couldn't be loaded — a tracking/ad blocker may be blocking the file.
 					</div>
 				{/if}
 				<div class="controls">

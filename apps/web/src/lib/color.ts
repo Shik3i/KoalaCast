@@ -1,7 +1,13 @@
 // Extracts a representative accent color from podcast/episode artwork so the UI
 // can theme itself around the current show (à la Spotify/Apple). Falls back to
-// null when the image can't be sampled (CORS-tainted canvas, decode error) — the
-// caller then keeps the default forest-green accent.
+// null when the image can't be sampled (decode error) — the caller then keeps the
+// default forest-green accent.
+//
+// The image is loaded through the same-origin privacy proxy (optimizeArtwork), so
+// sampling neither leaks the user's IP to third-party CDNs nor taints the canvas
+// (remote CDNs rarely send CORS headers, which used to make this silently fail).
+
+import { optimizeArtwork } from '$lib/artwork';
 
 const cache = new Map<string, string | null>();
 
@@ -54,7 +60,8 @@ export async function dominantColor(url: string | undefined | null): Promise<str
 			}
 		};
 		img.onerror = () => resolve(null);
-		img.src = url;
+		// Sample a small proxied copy — enough for an average color, cheap to decode.
+		img.src = optimizeArtwork(url, 96);
 	});
 
 	cache.set(url, result);

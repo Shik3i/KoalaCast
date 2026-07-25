@@ -48,22 +48,22 @@ type PodcastResponse struct {
 }
 
 type EpisodeResponse struct {
-	ID              string `json:"id"`
-	PodcastID       string `json:"podcast_id"`
-	GUID            string `json:"guid"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	ContentEncoded  string `json:"content_encoded"`
-	PubDate         int64  `json:"pub_date"`
-	HasPubDate      bool   `json:"has_pub_date"`
-	DurationMS      int64  `json:"duration_ms"`
-	EnclosureURL    string `json:"enclosure_url"`
-	EnclosureType   string `json:"enclosure_type"`
-	EnclosureLength int64  `json:"enclosure_length"`
-	ArtworkURL      string `json:"artwork_url"`
-	EpisodeNumber   int    `json:"episode_number"`
-	SeasonNumber    int    `json:"season_number"`
-	EpisodeType     string `json:"episode_type"`
+	ID              string           `json:"id"`
+	PodcastID       string           `json:"podcast_id"`
+	GUID            string           `json:"guid"`
+	Title           string           `json:"title"`
+	Description     string           `json:"description"`
+	ContentEncoded  string           `json:"content_encoded"`
+	PubDate         int64            `json:"pub_date"`
+	HasPubDate      bool             `json:"has_pub_date"`
+	DurationMS      int64            `json:"duration_ms"`
+	EnclosureURL    string           `json:"enclosure_url"`
+	EnclosureType   string           `json:"enclosure_type"`
+	EnclosureLength int64            `json:"enclosure_length"`
+	ArtworkURL      string           `json:"artwork_url"`
+	EpisodeNumber   int              `json:"episode_number"`
+	SeasonNumber    int              `json:"season_number"`
+	EpisodeType     string           `json:"episode_type"`
 	Explicit        bool             `json:"explicit"`
 	Link            string           `json:"link"`
 	Transcripts     []transcriptItem `json:"transcripts"`
@@ -157,6 +157,11 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	region := r.URL.Query().Get("region")
 	limit := 60
 	if l, convErr := strconv.Atoi(r.URL.Query().Get("limit")); convErr == nil && l > 0 {
+		// Cap the upper bound so a client can't request an unbounded chart size
+		// (which fans out to the upstream chart APIs and a large DB scan).
+		if l > 100 {
+			l = 100
+		}
 		limit = l
 	}
 	var topPodcasts []itunes.PodcastResult

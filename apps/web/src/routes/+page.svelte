@@ -14,7 +14,6 @@
 	import { reveal } from '$lib/actions/reveal';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Onboarding from '$lib/components/Onboarding.svelte';
-	import PodcastCard from '$lib/components/PodcastCard.svelte';
 	import { GENRES } from '$lib/genres';
 	import { optimizeArtwork } from '$lib/artwork';
 
@@ -45,6 +44,9 @@
 	let isSubmitting = $state(false);
 	let limit = $state(PAGE_SIZE);
 	let reachedEnd = $state(false);
+	// Monotonic id so a slow earlier discover response can't overwrite a newer one
+	// (e.g. quick category switches or a load-more landing after a category change).
+	let discoverReqId = 0;
 
 	const categories = ['All', ...GENRES.map((g) => g.name)];
 
@@ -53,11 +55,13 @@
 	// category returns a full list. iTunes charts have no offset, so "load more"
 	// simply requests a larger limit and replaces the list.
 	async function loadDiscover() {
+		const reqId = ++discoverReqId;
 		const params = new URLSearchParams({ limit: String(limit) });
 		if (selectedCategory !== 'All') params.set('category', selectedCategory);
 		try {
 			const res = await fetch(`/api/v1/podcasts/discover?${params}`);
 			const data = await res.json();
+			if (reqId !== discoverReqId) return; // a newer request superseded this one
 			const results: PodcastItem[] = data.results ?? [];
 			if (results.length > 0) {
 				discoverPodcasts = results;
@@ -70,6 +74,7 @@
 				reachedEnd = true;
 			}
 		} catch (err) {
+			if (reqId !== discoverReqId) return;
 			if (selectedCategory === 'All' && limit === PAGE_SIZE) discoverPodcasts = FEATURED_PODCASTS;
 			reachedEnd = true;
 		}

@@ -88,7 +88,12 @@
 		if (podcastId) loadPodcastData(podcastId);
 	});
 
+	// Monotonic id so a slow load for a previous podcast can't overwrite the one the
+	// user navigated to (this $effect re-runs on every route param change).
+	let loadReqId = 0;
+
 	async function loadPodcastData(id: string) {
+		const reqId = ++loadReqId;
 		isLoading = true;
 		try {
 			// Check if id is an iTunes ID or feed URL passed via query param
@@ -115,19 +120,23 @@
 			// original numeric id, which would return zero rows.
 			const podRes = await fetch(`/api/v1/podcasts/${targetId}`);
 			if (podRes.ok) {
-				podcast = await podRes.json();
+				const podData = await podRes.json();
+				if (reqId !== loadReqId) return; // superseded by a newer navigation
+				podcast = podData;
 				showAccent = null;
 				if (podcast.artwork_url) {
 					dominantColor(podcast.artwork_url).then((c) => {
-						if (podcast?.artwork_url) showAccent = c;
+						if (reqId === loadReqId && podcast?.artwork_url) showAccent = c;
 					});
 				}
 				const epRes = await fetch(`/api/v1/podcasts/${podcast.id}/episodes`);
 				if (epRes.ok) {
 					const epData = await epRes.json();
+					if (reqId !== loadReqId) return;
 					episodes = epData.episodes || [];
 				}
 				const subs = await getLocalSubscriptions();
+				if (reqId !== loadReqId) return;
 				isSubscribed = subs.some((s) => s.podcast_id === podcast.id);
 				playedIds = await getCompletedEpisodeIds();
 				// Collapse the "older than a year" tier by default.
@@ -136,7 +145,7 @@
 		} catch (err) {
 			console.error(err);
 		} finally {
-			isLoading = false;
+			if (reqId === loadReqId) isLoading = false;
 		}
 	}
 
@@ -170,6 +179,13 @@
 		const m = Math.floor((totalSec % 3600) / 60);
 		if (h > 0) return `${h}h ${m}m`;
 		return `${m}m`;
+	}
+
+	// Plain-text episode blurb; only ellipsize when actually truncated.
+	function epDescription(ep: any): string {
+		if (!ep.description) return '';
+		const text = ep.description.replace(/<[^>]*>?/gm, '').trim();
+		return text.length > 160 ? text.slice(0, 160).trimEnd() + '…' : text;
 	}
 
 	function playEpisode(ep: any) {
@@ -403,7 +419,7 @@
 
 									<div class="ep-info">
 										<h4><a href={`/episode/${ep.id}`}>{ep.title}</a></h4>
-										<p class="ep-desc">{ep.description ? ep.description.replace(/<[^>]*>?/gm, '').slice(0, 160) + '...' : ''}</p>
+										<p class="ep-desc">{epDescription(ep)}</p>
 										<span class="ep-meta">
 											{ep.pub_date ? prefs.formatDate(ep.pub_date) : 'No date'}
 											{#if ep.duration_ms}

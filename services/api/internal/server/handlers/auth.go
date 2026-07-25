@@ -117,11 +117,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	userID := uuid.New().String()
 	nowMs := time.Now().UnixMilli()
 
-	// Check if this is the first user -> Seed as Admin
+	// First-run bootstrap: the very first registrant becomes admin so a fresh
+	// self-hosted instance has an operator. Suppressed when the deployment seeds an
+	// admin out-of-band via ADMIN_USERNAME/ADMIN_PASSWORD, so an env-provisioned
+	// server never silently hands admin to whoever registers first.
 	var userCount int
 	_ = h.DB.SQL.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM users").Scan(&userCount)
 	role := "user"
-	if userCount == 0 {
+	if userCount == 0 && strings.TrimSpace(h.Config.AdminUsername) == "" {
 		role = "admin"
 	}
 
@@ -197,7 +200,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	nowMs := time.Now().UnixMilli()
 	expiresAtMs := nowMs + (30 * 86400 * 1000) // 30 days
 
-	truncatedIP := customMiddleware.TruncateIP(r.RemoteAddr)
+	// r.RemoteAddr is "host:port"; TruncateIP needs the bare host or it parses to
+	// nothing and stores an empty IP. (RealIP already strips the port when the
+	// request arrives via a trusted proxy, but a direct connection still has one.)
+	truncatedIP := customMiddleware.TruncateIP(customMiddleware.ClientHostIP(r.RemoteAddr))
 	sanitizedUA := customMiddleware.SanitizeUserAgent(r.UserAgent())
 
 	_, err = h.DB.SQL.ExecContext(r.Context(), `
