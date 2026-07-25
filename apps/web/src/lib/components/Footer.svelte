@@ -9,7 +9,7 @@
 				</picture>
 				<span class="brand-title">KoalaCast</span>
 			</div>
-			<p class="tagline">Next-generation, privacy-first podcast player with cross-device sync.</p>
+			<p class="tagline">Privacy-first podcast player with cross-device sync.</p>
 			<p class="copyright">© 2026 KoalaStuff</p>
 		</div>
 
