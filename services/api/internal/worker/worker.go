@@ -92,8 +92,14 @@ func (w *FeedWorker) runLoop(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
+	// Periodically compact the sync mutation log so it can't grow unbounded from
+	// high-frequency playback progress updates.
+	compactTicker := time.NewTicker(30 * time.Minute)
+	defer compactTicker.Stop()
+
 	// Run initial refresh check
 	w.RefreshScheduledFeeds(ctx)
+	w.compactSyncLog(ctx)
 
 	for {
 		select {
@@ -103,7 +109,17 @@ func (w *FeedWorker) runLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			w.RefreshScheduledFeeds(ctx)
+		case <-compactTicker.C:
+			w.compactSyncLog(ctx)
 		}
+	}
+}
+
+func (w *FeedWorker) compactSyncLog(ctx context.Context) {
+	if n, err := w.db.CompactSyncLog(ctx); err != nil {
+		w.logger.Warn("sync_log compaction failed", "error", err)
+	} else if n > 0 {
+		w.logger.Info("compacted sync_log", "rows_deleted", n)
 	}
 }
 
