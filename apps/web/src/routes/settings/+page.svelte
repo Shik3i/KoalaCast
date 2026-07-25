@@ -6,7 +6,7 @@
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
 	import { GENRES } from '$lib/genres';
-	import { SUPPORTED_REGIONS } from '$lib/data/regions';
+	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
 	function cycleGenre(name: string) {
@@ -297,19 +297,19 @@
 		</div>
 	<!-- Spoken Languages Card -->
 	<section class="card" id="languages">
-		<h3><i class="ph ph-translate" aria-hidden="true"></i> Spoken Languages &amp; Regions</h3>
+		<h3><i class="ph ph-translate" aria-hidden="true"></i> Spoken Languages</h3>
 		<p class="subtitle">Select the languages you speak. Discover and Search will mix trending shows from your active languages.</p>
 		<div class="language-grid">
-			{#each SUPPORTED_REGIONS as reg}
+			{#each SUPPORTED_LANGUAGES as lang}
 				<button
 					type="button"
 					class="lang-chip"
-					class:active={prefs.languages.includes(reg.code)}
-					onclick={() => prefs.toggleLanguage(reg.code)}
+					class:active={prefs.languages.includes(lang.code)}
+					onclick={() => prefs.toggleLanguage(lang.code)}
 				>
-					<span class="flag-emoji">{reg.flag}</span>
-					<span class="lang-name">{reg.name}</span>
-					{#if prefs.languages.includes(reg.code)}
+					<span class="flag-emoji">{lang.flag}</span>
+					<span class="lang-name">{lang.name}</span>
+					{#if prefs.languages.includes(lang.code)}
 						<i class="ph-fill ph-check-circle state-ic" aria-hidden="true"></i>
 					{/if}
 				</button>

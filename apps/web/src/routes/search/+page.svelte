@@ -8,10 +8,8 @@
 	import { optimizeArtwork } from '$lib/artwork';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide, fade } from 'svelte/transition';
-	import { SUPPORTED_REGIONS, DEFAULT_REGION } from '$lib/data/regions';
 
 	let searchQuery = $state('');
-	let selectedRegion = $state<string>(DEFAULT_REGION);
 	let rssUrlInput = $state('');
 	let showRss = $state(false);
 	let isSearching = $state(false);
@@ -24,11 +22,6 @@
 	let searchTimeout: any = null;
 	// Monotonic id so a slow earlier query can't overwrite the results of a newer one.
 	let searchReqId = 0;
-
-	function selectRegion(code: string) {
-		selectedRegion = code;
-		executeSearch(searchQuery || 'podcast');
-	}
 
 	function isSubscribed(pod: any) {
 		const feed = pod.feed_url || pod.feedUrl;
@@ -93,8 +86,9 @@
 		isSearching = true;
 		errorMessage = '';
 
+		const primaryLang = prefs.languages[0] || 'us';
 		try {
-			const res = await fetch(`/api/v1/podcasts/search?q=${encodeURIComponent(query)}&region=${selectedRegion}`);
+			const res = await fetch(`/api/v1/podcasts/search?q=${encodeURIComponent(query)}&region=${primaryLang}`);
 			const data = await res.json();
 			if (reqId !== searchReqId) return; // superseded by a newer query
 			searchResults = data.results ?? [];
@@ -265,24 +259,6 @@
 				</button>
 			</form>
 		{/if}
-	</div>
-
-	<!-- Region / Country Selector -->
-	<div class="region-bar">
-		<span class="region-label"><i class="ph ph-globe-hemisphere-west" aria-hidden="true"></i> Region:</span>
-		<div class="region-pills">
-			{#each SUPPORTED_REGIONS as reg}
-				<button
-					type="button"
-					class="region-pill"
-					class:active={selectedRegion === reg.code}
-					onclick={() => selectRegion(reg.code)}
-				>
-					<span class="flag-emoji">{reg.flag}</span>
-					<span>{reg.name}</span>
-				</button>
-			{/each}
-		</div>
 	</div>
 
 	{#if errorMessage}

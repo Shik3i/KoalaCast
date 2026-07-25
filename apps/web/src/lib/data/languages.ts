@@ -1,14 +1,14 @@
-export interface RegionConfig {
+export interface LanguageConfig {
 	code: string;
 	name: string;
 	flag: string;
 }
 
-export const SUPPORTED_REGIONS: RegionConfig[] = [
-	{ code: 'us', name: 'Global / English', flag: '🇺🇸' },
+export const SUPPORTED_LANGUAGES: LanguageConfig[] = [
+	{ code: 'us', name: 'English', flag: '🇬🇧' },
 	{ code: 'de', name: 'Deutsch', flag: '🇩🇪' },
 	{ code: 'fr', name: 'Français', flag: '🇫🇷' },
 	{ code: 'es', name: 'Español', flag: '🇪🇸' }
 ];
 
-export const DEFAULT_REGION = 'us';
+export const DEFAULT_LANGUAGES = ['us', 'de'];

@@ -16,7 +16,6 @@
 	import Onboarding from '$lib/components/Onboarding.svelte';
 	import { GENRES } from '$lib/genres';
 	import { optimizeArtwork } from '$lib/artwork';
-	import { SUPPORTED_REGIONS, DEFAULT_REGION } from '$lib/data/regions';
 
 	interface PodcastItem {
 		id: string;
@@ -39,7 +38,6 @@
 	let subscribedFeeds = $state<string[]>([]);
 	let continueItems = $state<LocalPlaybackState[]>([]);
 	let selectedCategory = $state<string>('All');
-	let selectedRegion = $state<string>(DEFAULT_REGION);
 	let searchQuery = $state<string>('');
 	let isLoading = $state(true);
 	let isLoadingMore = $state(false);
@@ -52,22 +50,15 @@
 
 	const categories = ['All', ...GENRES.map((g) => g.name)];
 
-	function selectRegion(code: string) {
-		selectedRegion = code;
-		limit = PAGE_SIZE;
-		reachedEnd = false;
-		loadDiscover();
-	}
-
 	// Discover pulls top charts from the server for all active spoken languages,
 	// interleaving results so multi-language preferences are served seamlessly.
 	async function loadDiscover() {
 		const reqId = ++discoverReqId;
-		const activeRegions = Array.from(new Set([selectedRegion, ...prefs.languages]));
+		const activeLanguages = prefs.languages.length > 0 ? prefs.languages : ['us', 'de'];
 
 		try {
-			const fetchPromises = activeRegions.map((reg) => {
-				const params = new URLSearchParams({ limit: String(limit), region: reg });
+			const fetchPromises = activeLanguages.map((lang) => {
+				const params = new URLSearchParams({ limit: String(limit), region: lang });
 				if (selectedCategory !== 'All') params.set('category', selectedCategory);
 				return fetch(`/api/v1/podcasts/discover?${params}`).then((r) => (r.ok ? r.json() : { results: [] }));
 			});
@@ -373,24 +364,6 @@
 			</div>
 		</section>
 	{/if}
-
-	<!-- Region / Country Selector -->
-	<div class="region-bar">
-		<span class="region-label"><i class="ph ph-globe-hemisphere-west" aria-hidden="true"></i> Region:</span>
-		<div class="region-pills">
-			{#each SUPPORTED_REGIONS as reg}
-				<button
-					type="button"
-					class="region-pill"
-					class:active={selectedRegion === reg.code}
-					onclick={() => selectRegion(reg.code)}
-				>
-					<span class="flag-emoji">{reg.flag}</span>
-					<span>{reg.name}</span>
-				</button>
-			{/each}
-		</div>
-	</div>
 
 	<!-- Category Pills -->
 	<div class="category-bar">
