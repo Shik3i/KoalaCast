@@ -95,6 +95,11 @@ export function getLocalDB(): Promise<IDBPDatabase> {
 				if (!db.objectStoreNames.contains('settings')) {
 					db.createObjectStore('settings', { keyPath: 'key' });
 				}
+				// Deletion tombstones so unsubscribe/unfavorite can propagate through
+				// cross-device sync (an "upsert-only" sync would resurrect removed items).
+				if (!db.objectStoreNames.contains('tombstones')) {
+					db.createObjectStore('tombstones', { keyPath: 'id' });
+				}
 				// v1 created a 'history' store that was never read or written; drop it
 				// when upgrading an existing database.
 				if (db.objectStoreNames.contains('history')) {
@@ -118,11 +123,14 @@ export async function getLocalSubscriptions(): Promise<LocalSubscription[]> {
 export async function saveLocalSubscription(sub: LocalSubscription): Promise<void> {
 	const db = await getLocalDB();
 	await db.put('subscriptions', sub);
+	// Re-subscribing clears any prior deletion tombstone.
+	await db.delete('tombstones', tombstoneId('subscription', sub.podcast_id));
 }
 
 export async function removeLocalSubscription(podcast_id: string): Promise<void> {
 	const db = await getLocalDB();
 	await db.delete('subscriptions', podcast_id);
+	await recordTombstone(db, 'subscription', podcast_id);
 }
 
 // Update a single subscription's inbox mode (read-modify-write; no-op if the
@@ -190,6 +198,12 @@ export async function setEpisodePlayed(
 	});
 }
 
+// All playback states (used by the sync engine to push local progress).
+export async function getAllLocalPlaybackStates(): Promise<LocalPlaybackState[]> {
+	const db = await getLocalDB();
+	return db.getAll('playback_states');
+}
+
 // Recently played, still-in-progress episodes for the "Continue Listening" shelf.
 // Most-recent first; completed episodes and untouched (0%) ones are filtered out.
 export async function getRecentPlaybackStates(limit = 12): Promise<LocalPlaybackState[]> {
@@ -244,9 +258,53 @@ export async function isLocalFavorite(episode_id: string): Promise<boolean> {
 export async function addLocalFavorite(fav: LocalFavorite): Promise<void> {
 	const db = await getLocalDB();
 	await db.put('favorites', { ...fav, added_at: fav.added_at || Date.now() });
+	await db.delete('tombstones', tombstoneId('favorite', fav.episode_id));
 }
 
 export async function removeLocalFavorite(episode_id: string): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('favorites', episode_id);
+	await recordTombstone(db, 'favorite', episode_id);
+}
+
+// ---- Deletion tombstones (for cross-device sync) ----
+export type TombstoneEntity = 'subscription' | 'favorite';
+export interface LocalTombstone {
+	id: string; // `${entity_type}:${entity_id}`
+	entity_type: TombstoneEntity;
+	entity_id: string;
+	deleted_at: number;
+}
+
+function tombstoneId(entity_type: TombstoneEntity, entity_id: string): string {
+	return `${entity_type}:${entity_id}`;
+}
+
+async function recordTombstone(
+	db: IDBPDatabase,
+	entity_type: TombstoneEntity,
+	entity_id: string
+): Promise<void> {
+	await db.put('tombstones', {
+		id: tombstoneId(entity_type, entity_id),
+		entity_type,
+		entity_id,
+		deleted_at: Date.now()
+	} satisfies LocalTombstone);
+}
+
+export async function getTombstones(): Promise<LocalTombstone[]> {
+	const db = await getLocalDB();
+	return db.getAll('tombstones');
+}
+
+// Removers used by the sync applier when a delete arrives from another device:
+// they must NOT create a new tombstone (that would echo the delete back out).
+export async function removeLocalSubscriptionSilent(podcast_id: string): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('subscriptions', podcast_id);
+}
+export async function removeLocalFavoriteSilent(episode_id: string): Promise<void> {
 	const db = await getLocalDB();
 	await db.delete('favorites', episode_id);
 }
@@ -259,4 +317,5 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('queue');
 	await db.clear('favorites');
 	await db.clear('settings');
+	await db.clear('tombstones');
 }

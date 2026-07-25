@@ -154,6 +154,15 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// Ensure the cursor row exists before reading it. Without this a push that
+	// happens before the user's first pull would read/update a non-existent row,
+	// leaving user_sync_cursors.current_cursor at 0 while sync_log advances — which
+	// then makes a later push reuse cursor values and drop changesets from pulls.
+	_, _ = tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO user_sync_cursors (user_id, current_cursor, min_retained_cursor, protocol_version, client_schema_version)
+		VALUES (?, 0, 0, 1, 1)
+	`, authUser.ID)
+
 	// Get current user sync cursor
 	var currentCursor int64
 	_ = tx.QueryRowContext(ctx, "SELECT current_cursor FROM user_sync_cursors WHERE user_id = ?", authUser.ID).Scan(&currentCursor)

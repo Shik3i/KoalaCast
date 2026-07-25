@@ -4,6 +4,7 @@
 	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
+	import { sync } from '$lib/stores/sync.svelte';
 	import { GENRES } from '$lib/genres';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
@@ -51,6 +52,7 @@
 				const me = await res.json();
 				authUser = { username: me.username, role: me.role };
 				loadActiveSessions();
+				if (me.user_id) sync.enable(me.user_id);
 			}
 		} catch (_) {}
 	});
@@ -118,6 +120,8 @@
 			authUser = data;
 			toast.success(`Welcome back, ${data.username}`);
 			loadActiveSessions();
+			// Kick off cross-device sync now that we're authenticated.
+			if (data.user_id) sync.enable(data.user_id);
 		} catch (err: any) {
 			authError = 'Network error during login.';
 		} finally {
@@ -131,6 +135,7 @@
 		} catch (_) {
 			// Even if the network call fails, drop the client-side session view.
 		}
+		sync.disable();
 		authUser = null;
 		sessions = [];
 		usernameInput = '';
@@ -389,6 +394,27 @@
 			<h3><i class="ph ph-user-circle-check" aria-hidden="true"></i> Active Account</h3>
 			<p>Logged in as <strong>{authUser.username}</strong> ({authUser.role})</p>
 
+			<div class="sync-row">
+				<div class="sync-info">
+					<span class="sync-state">
+						<span class="sync-dot {sync.status}"></span>
+						{#if sync.status === 'syncing'}
+							Syncing…
+						{:else if sync.status === 'error'}
+							Sync error — will retry automatically
+						{:else if sync.lastSyncedAt}
+							Synced · last {new Date(sync.lastSyncedAt).toLocaleTimeString()}
+						{:else}
+							Sync ready
+						{/if}
+					</span>
+					<span class="sync-hint">Subscriptions, favorites and progress sync across your devices.</span>
+				</div>
+				<button class="btn-secondary" onclick={() => sync.syncNow()} disabled={sync.status === 'syncing'}>
+					<i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Sync now
+				</button>
+			</div>
+
 			{#if sessions.length > 0}
 				<div class="sessions-list">
 					<h4>Active sessions & devices</h4>
@@ -631,6 +657,27 @@
 		border-radius: 8px;
 		padding: 1rem;
 	}
+
+	.sync-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		padding: 0.75rem 1rem;
+		margin: 0.25rem 0 0.5rem;
+	}
+	.sync-info { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+	.sync-state { font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.sync-hint { font-size: 0.8rem; color: var(--text-muted); }
+	.sync-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+	.sync-dot.idle { background: var(--accent-green); }
+	.sync-dot.syncing { background: var(--focus-ring); animation: sync-pulse 1s ease-in-out infinite; }
+	.sync-dot.error { background: var(--color-danger); }
+	@keyframes sync-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 	.sessions-list {
 		display: flex;

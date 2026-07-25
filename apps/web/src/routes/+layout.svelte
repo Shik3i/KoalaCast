@@ -11,6 +11,7 @@
 	import Player from '$lib/components/Player.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { player } from '$lib/stores/player.svelte';
+	import { sync } from '$lib/stores/sync.svelte';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -33,6 +34,8 @@
 			.then((res) => (res.ok ? res.json() : null))
 			.then((me) => {
 				if (me?.role === 'admin') isAdmin = true;
+				// Start cross-device sync for a signed-in account.
+				if (me?.user_id) sync.enable(me.user_id);
 			})
 			.catch(() => {});
 	});
