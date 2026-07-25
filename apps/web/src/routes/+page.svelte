@@ -69,23 +69,27 @@
 			const fetchPromises = activeRegions.map((reg) => {
 				const params = new URLSearchParams({ limit: String(limit), region: reg });
 				if (selectedCategory !== 'All') params.set('category', selectedCategory);
-				return fetch(`/api/v1/podcasts/discover?${params}`).then((r) => r.json());
+				return fetch(`/api/v1/podcasts/discover?${params}`).then((r) => (r.ok ? r.json() : { results: [] }));
 			});
 
-			const responses = await Promise.all(fetchPromises);
+			const resultsList = await Promise.allSettled(fetchPromises);
 			if (reqId !== discoverReqId) return;
+
+			const responses = resultsList
+				.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
+				.map((res) => res.value);
 
 			// Interleave results from selected regions
 			const combined: PodcastItem[] = [];
 			const seen = new Set<string>();
-			const maxLen = Math.max(0, ...responses.map((d) => (Array.isArray(d.results) ? d.results.length : 0)));
+			const maxLen = Math.max(0, ...responses.map((d) => (Array.isArray(d?.results) ? d.results.length : 0)));
 
 			for (let i = 0; i < maxLen; i++) {
 				for (const data of responses) {
-					const item = data.results?.[i];
+					const item = data?.results?.[i];
 					if (item) {
-						const key = item.feed_url || item.id || item.title;
-						if (!seen.has(key)) {
+						const key = (item.feed_url || item.id || item.title || '').trim();
+						if (key && !seen.has(key)) {
 							seen.add(key);
 							combined.push(item);
 						}
