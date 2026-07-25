@@ -7,7 +7,18 @@ export type DateFormat = 'absolute' | 'relative';
 const KEY = 'koalacast_date_format';
 const INTERESTS_KEY = 'koalacast_interests';
 const HIDDEN_KEY = 'koalacast_hidden_genres';
+const LANGUAGES_KEY = 'koalacast_preferred_languages';
 const ONBOARDED_KEY = 'koalacast_onboarded';
+
+function initialLanguages(): string[] {
+	if (typeof localStorage === 'undefined') return ['us', 'de'];
+	try {
+		const v = JSON.parse(localStorage.getItem(LANGUAGES_KEY) || '[]');
+		return Array.isArray(v) && v.length > 0 ? v : ['us', 'de'];
+	} catch (_) {
+		return ['us', 'de'];
+	}
+}
 
 function initialFormat(): DateFormat {
 	if (typeof localStorage === 'undefined') return 'absolute';
@@ -46,7 +57,25 @@ class Prefs {
 	interests = $state<string[]>(initialInterests());
 	// Vetoed genres — podcasts in these are hidden from discover and search.
 	hiddenGenres = $state<string[]>(initialHidden());
+	// Preferred content languages/regions for trends and discovery.
+	languages = $state<string[]>(initialLanguages());
 	onboarded = $state<boolean>(initialOnboarded());
+
+	#persistLanguages() {
+		try {
+			localStorage.setItem(LANGUAGES_KEY, JSON.stringify(this.languages));
+		} catch (_) {}
+	}
+
+	toggleLanguage(langCode: string) {
+		const has = this.languages.includes(langCode);
+		if (has && this.languages.length === 1) {
+			// At least one language must remain active
+			return;
+		}
+		this.languages = has ? this.languages.filter((l) => l !== langCode) : [...this.languages, langCode];
+		this.#persistLanguages();
+	}
 
 	setDateFormat(mode: DateFormat) {
 		this.dateFormat = mode;

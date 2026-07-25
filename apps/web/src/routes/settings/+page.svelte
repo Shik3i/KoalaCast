@@ -6,6 +6,7 @@
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
 	import { GENRES } from '$lib/genres';
+	import { SUPPORTED_REGIONS } from '$lib/data/regions';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
 	function cycleGenre(name: string) {
@@ -294,6 +295,26 @@
 				<i class="ph ph-clock-countdown" aria-hidden="true"></i> Relative (x days ago)
 			</button>
 		</div>
+	<!-- Spoken Languages Card -->
+	<section class="card" id="languages">
+		<h3><i class="ph ph-translate" aria-hidden="true"></i> Spoken Languages &amp; Regions</h3>
+		<p class="subtitle">Select the languages you speak. Discover and Search will mix trending shows from your active languages.</p>
+		<div class="language-grid">
+			{#each SUPPORTED_REGIONS as reg}
+				<button
+					type="button"
+					class="lang-chip"
+					class:active={prefs.languages.includes(reg.code)}
+					onclick={() => prefs.toggleLanguage(reg.code)}
+				>
+					<span class="flag-emoji">{reg.flag}</span>
+					<span class="lang-name">{reg.name}</span>
+					{#if prefs.languages.includes(reg.code)}
+						<i class="ph-fill ph-check-circle state-ic" aria-hidden="true"></i>
+					{/if}
+				</button>
+			{/each}
+		</div>
 	</section>
 
 	<section class="card" id="interests">
@@ -523,6 +544,50 @@
 	.genre-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
 	.genre-legend .dot.like { background: var(--accent-green); }
 	.genre-legend .dot.hide { background: var(--color-danger); }
+
+	.language-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: 0.75rem;
+		margin-top: 0.25rem;
+	}
+
+	.lang-chip {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.7rem 1rem;
+		border-radius: 12px;
+		border: 1.5px solid var(--border-subtle);
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font-weight: 600;
+		font-size: 0.92rem;
+		cursor: pointer;
+		transition: all 0.2s var(--ease-spring);
+	}
+
+	.lang-chip:hover {
+		border-color: var(--text-muted);
+		color: var(--text-primary);
+	}
+
+	.lang-chip.active {
+		background: color-mix(in srgb, var(--accent-green) 15%, var(--bg-surface));
+		border-color: var(--accent-green);
+		color: var(--accent-green);
+	}
+
+	.lang-chip .lang-name {
+		flex: 1;
+		text-align: left;
+	}
+
+	.lang-chip .flag-emoji {
+		font-family: 'Twemoji Country Flags', var(--font-sans);
+		font-size: 1.25rem;
+		line-height: 1;
+	}
 
 	.privacy-box {
 		background: var(--bg-elevated);

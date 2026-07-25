@@ -59,22 +59,43 @@
 		loadDiscover();
 	}
 
-	// Discover now pulls a genre-specific top chart from the server (per selected
-	// category) instead of client-filtering one flat overall chart — so each
-	// category returns a full list. iTunes charts have no offset, so "load more"
-	// simply requests a larger limit and replaces the list.
+	// Discover pulls top charts from the server for all active spoken languages,
+	// interleaving results so multi-language preferences are served seamlessly.
 	async function loadDiscover() {
 		const reqId = ++discoverReqId;
-		const params = new URLSearchParams({ limit: String(limit), region: selectedRegion });
-		if (selectedCategory !== 'All') params.set('category', selectedCategory);
+		const activeRegions = Array.from(new Set([selectedRegion, ...prefs.languages]));
+
 		try {
-			const res = await fetch(`/api/v1/podcasts/discover?${params}`);
-			const data = await res.json();
-			if (reqId !== discoverReqId) return; // a newer request superseded this one
-			const results: PodcastItem[] = data.results ?? [];
-			if (results.length > 0) {
-				discoverPodcasts = results;
-				reachedEnd = results.length < limit;
+			const fetchPromises = activeRegions.map((reg) => {
+				const params = new URLSearchParams({ limit: String(limit), region: reg });
+				if (selectedCategory !== 'All') params.set('category', selectedCategory);
+				return fetch(`/api/v1/podcasts/discover?${params}`).then((r) => r.json());
+			});
+
+			const responses = await Promise.all(fetchPromises);
+			if (reqId !== discoverReqId) return;
+
+			// Interleave results from selected regions
+			const combined: PodcastItem[] = [];
+			const seen = new Set<string>();
+			const maxLen = Math.max(0, ...responses.map((d) => (Array.isArray(d.results) ? d.results.length : 0)));
+
+			for (let i = 0; i < maxLen; i++) {
+				for (const data of responses) {
+					const item = data.results?.[i];
+					if (item) {
+						const key = item.feed_url || item.id || item.title;
+						if (!seen.has(key)) {
+							seen.add(key);
+							combined.push(item);
+						}
+					}
+				}
+			}
+
+			if (combined.length > 0) {
+				discoverPodcasts = combined;
+				reachedEnd = combined.length < limit;
 			} else if (selectedCategory === 'All' && limit === PAGE_SIZE) {
 				discoverPodcasts = FEATURED_PODCASTS;
 				reachedEnd = true;
@@ -84,8 +105,13 @@
 			}
 		} catch (err) {
 			if (reqId !== discoverReqId) return;
-			if (selectedCategory === 'All' && limit === PAGE_SIZE) discoverPodcasts = FEATURED_PODCASTS;
+			discoverPodcasts = FEATURED_PODCASTS;
 			reachedEnd = true;
+		} finally {
+			if (reqId === discoverReqId) {
+				isLoading = false;
+				isLoadingMore = false;
+			}
 		}
 	}
 
