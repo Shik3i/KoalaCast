@@ -85,7 +85,7 @@ func TestSearchResult_CategoryList(t *testing.T) {
 				"102": "Technology",
 				"105": "Science",
 			},
-			want: []string{"Technology", "Science"},
+			want: []string{"Technology", "Science"}, // ordered by category id: 102, 105
 		},
 		{
 			name: "ignore empty values",
@@ -110,5 +110,32 @@ func TestSearchResult_CategoryList(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// CategoryList must be deterministic. Go randomizes map iteration, so the
+// original positional assertions above passed or failed by luck depending on
+// the run — this pins the contract by checking many iterations agree.
+func TestSearchResult_CategoryList_IsDeterministic(t *testing.T) {
+	res := SearchResult{Categories: map[string]string{
+		"102": "Technology",
+		"9":   "Business",
+		"105": "Science",
+		"55":  "News",
+	}}
+
+	// Ordered by numeric category id, not by map iteration order.
+	want := []string{"Business", "News", "Technology", "Science"}
+
+	for i := 0; i < 100; i++ {
+		got := res.CategoryList()
+		if len(got) != len(want) {
+			t.Fatalf("iteration %d: got %d items, want %d", i, len(got), len(want))
+		}
+		for j := range want {
+			if got[j] != want[j] {
+				t.Fatalf("iteration %d: CategoryList()[%d] = %q, want %q", i, j, got[j], want[j])
+			}
+		}
 	}
 }

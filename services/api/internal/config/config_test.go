@@ -54,8 +54,12 @@ func TestConfig_SessionSecretValidation(t *testing.T) {
 }
 
 func TestConfig_RegistrationEnabledOverride(t *testing.T) {
-	os.Setenv("SESSION_SECRET", "a-very-secure-production-secret-with-at-least-32-characters")
-	os.Setenv("APP_ENV", "production")
+	// t.Setenv restores the previous value when the test ends. Plain os.Setenv
+	// leaked KC_REGISTRATION_ENABLED="invalid-bool" out of case 4, which made
+	// TestConfig_SessionSecretValidation fail on any repeated run (go test -count>1).
+	t.Setenv("SESSION_SECRET", "a-very-secure-production-secret-with-at-least-32-characters")
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("KC_REGISTRATION_ENABLED", "")
 
 	// Case 1: Environment Unset -> RegistrationEnabledEnv must be nil
 	os.Unsetenv("KC_REGISTRATION_ENABLED")

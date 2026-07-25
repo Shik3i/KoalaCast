@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -37,16 +38,36 @@ type SearchResult struct {
 	Language string `json:"language"`
 }
 
-// CategoryList returns the podcast's category names as a slice.
+// CategoryList returns the podcast's category names as a slice, ordered by
+// Podcast Index's category id.
+//
+// The order matters: Go randomizes map iteration, so without sorting the same
+// feed yields a different category order on every request — which surfaces as
+// an unstable `categories` array in the API response, a jumping category label
+// in the UI, and a test that passes or fails by luck.
 func (r SearchResult) CategoryList() []string {
 	if len(r.Categories) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(r.Categories))
-	for _, v := range r.Categories {
-		if v != "" {
-			out = append(out, v)
+	ids := make([]string, 0, len(r.Categories))
+	for id, name := range r.Categories {
+		if name != "" {
+			ids = append(ids, id)
 		}
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		// Ids are numeric strings; compare numerically so "9" sorts before "102".
+		a, errA := strconv.Atoi(ids[i])
+		b, errB := strconv.Atoi(ids[j])
+		if errA == nil && errB == nil {
+			return a < b
+		}
+		return ids[i] < ids[j]
+	})
+
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, r.Categories[id])
 	}
 	return out
 }
