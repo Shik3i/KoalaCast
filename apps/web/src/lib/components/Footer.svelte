@@ -18,7 +18,7 @@
 				<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">
 					<i class="ph ph-scales" aria-hidden="true"></i> Legal Notice
 				</a>
-				<a href="/settings#privacy">
+				<a href="/privacy">
 					<i class="ph ph-shield-check" aria-hidden="true"></i> Privacy Policy
 				</a>
 			</div>
