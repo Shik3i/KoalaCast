@@ -1,24 +1,47 @@
 # syntax=docker/dockerfile:1
 
+# Multi-arch note: every stage below builds on the *native* runner architecture
+# and cross-compiles, rather than running under QEMU emulation. Emulation cost
+# roughly 6x — the arm64 Go build alone took 12m55s against 2m05s native, and
+# the arm64 web build 4m15s against 43s — which was the entire release time.
+
+# Cross-compilation helpers (sets CC/GOARCH/sysroot per target platform).
+# Pinned by digest: this image runs during the build, so it is part of the
+# supply chain and must not float.
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.6.1@sha256:923441d7c25f1e2eb5789f82d987693c47b8ed987c4ab3b075d6ed2b5d6779a3 AS xx
+
 # Stage 1: Build the SvelteKit web app (static SPA)
-FROM node:20-alpine AS builder-web
+#
+# Pinned to BUILDPLATFORM and built exactly once: the output is a bundle of
+# static files with no architecture-specific content, so building it per target
+# platform was pure waste.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder-web
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json* ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/web/ ./
 RUN npm run build
 
 # Stage 2: Build the single Go application binary
-FROM golang:1.25-alpine AS builder-api
-RUN apk add --no-cache gcc musl-dev
+#
+# Runs on the native architecture and cross-compiles to the target. CGO is
+# required for the SQLite driver, so a target-matched C toolchain is installed
+# via xx rather than emulating the whole build.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder-api
+COPY --from=xx / /
+RUN apk add --no-cache clang lld
+ARG TARGETPLATFORM
+RUN xx-apk add --no-cache gcc musl-dev
+
 WORKDIR /app
 COPY services/api/go.mod services/api/go.sum* ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY services/api/ ./
-# CGO is required for the SQLite driver. Trim the binary; the build-cache mount
-# keeps incremental CI builds fast.
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-w -s" -o koalacast ./cmd/server
+# Build cache is keyed per target arch so amd64 and arm64 don't evict each other.
+RUN --mount=type=cache,target=/root/.cache/go-build,id=go-build-$TARGETPLATFORM \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=1 xx-go build -trimpath -ldflags="-w -s" -o koalacast ./cmd/server && \
+    xx-verify koalacast
 
 # Stage 3: Minimal runtime image
 FROM alpine:3.21 AS runner
