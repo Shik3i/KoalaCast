@@ -9,6 +9,8 @@
 	} from '../idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { dominantColor } from '$lib/color';
+	import Toast from './Toast.svelte';
+	import ShortcutsModal from './ShortcutsModal.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
@@ -431,20 +433,7 @@
 	onended={handleEnded}
 ></audio>
 
-{#if showShortcutsModal}
-	<div class="modal-overlay" onclick={() => (showShortcutsModal = false)} onkeydown={(e) => e.key === 'Escape' && (showShortcutsModal = false)} role="presentation">
-		<div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabindex="-1">
-			<h3>Keyboard Shortcuts</h3>
-			<ul>
-				<li><kbd>Space</kbd> Play / Pause</li>
-				<li><kbd>←</kbd> Skip 10 seconds back</li>
-				<li><kbd>→</kbd> Skip 30 seconds forward</li>
-				<li><kbd>?</kbd> Toggle this help</li>
-			</ul>
-			<button class="btn-close" onclick={() => (showShortcutsModal = false)}>Close</button>
-		</div>
-	</div>
-{/if}
+<ShortcutsModal bind:show={showShortcutsModal} />
 
 {#if track}
 	<div class="player-shell" style={accentVars}>
