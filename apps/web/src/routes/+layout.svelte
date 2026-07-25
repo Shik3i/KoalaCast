@@ -16,7 +16,7 @@
 
 	let { children } = $props();
 
-	let isAdmin = $state(false);
+	let currentUser = $state<{ user_id: string; username: string; role: string } | null>(null);
 	let scrollY = $state(0);
 	const isScrolled = $derived(scrollY > 20);
 
@@ -26,18 +26,22 @@
 		{ href: '/search', icon: 'ph-magnifying-glass', label: 'Search' },
 		{ href: '/settings', icon: 'ph-gear', label: 'Settings' }
 	];
-	const links = $derived(
-		isAdmin ? [...baseLinks, { href: '/admin', icon: 'ph-shield-star', label: 'Admin' }] : baseLinks
-	);
+	const links = $derived([
+		...baseLinks,
+		currentUser
+			? { href: '/account', icon: 'ph-user-circle', label: 'Account' }
+			: { href: '/login', icon: 'ph-sign-in', label: 'Sign In' },
+		...(currentUser?.role === 'admin' ? [{ href: '/admin', icon: 'ph-shield-star', label: 'Admin' }] : [])
+	]);
 
 	onMount(() => {
-		// Reveal the Admin entry only for signed-in admins.
 		fetch('/api/v1/auth/me')
 			.then((res) => (res.ok ? res.json() : null))
 			.then((me) => {
-				if (me?.role === 'admin') isAdmin = true;
-				// Start cross-device sync for a signed-in account.
-				if (me?.user_id) sync.enable(me.user_id);
+				if (me?.user_id) {
+					currentUser = me;
+					sync.enable(me.user_id);
+				}
 			})
 			.catch(() => {});
 	});

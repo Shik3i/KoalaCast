@@ -356,44 +356,11 @@
 		</div>
 	</section>
 
-	{#if !authUser}
-		<section class="card">
-			<h3><i class="ph ph-user-circle" aria-hidden="true"></i> Account Sign In / Registration</h3>
-			<p class="subtitle">Accounts allow you to synchronize subscriptions and progress across devices without email or tracking.</p>
-
-			{#if authError}
-				<div class="error-banner">{authError}</div>
-			{/if}
-
-			{#if recoveryCodeDisplay}
-				<div class="recovery-box">
-					<h4>⚠️ Save Your Recovery Code</h4>
-					<p>Loss of both password and recovery code makes account recovery impossible.</p>
-
-					<div class="code">{recoveryCodeDisplay}</div>
-				</div>
-			{/if}
-
-			<form class="auth-form">
-				<div class="form-group">
-					<label for="username">Username</label>
-					<input id="username" type="text" bind:value={usernameInput} placeholder="Username" required />
-				</div>
-				<div class="form-group">
-					<label for="password">Password</label>
-					<input id="password" type="password" bind:value={passwordInput} placeholder="Password" required />
-				</div>
-				<div class="btn-group">
-					<button type="button" onclick={handleLogin} disabled={isLoggingIn}>Sign In</button>
-					<button type="button" class="btn-secondary" onclick={handleRegister} disabled={isRegistering}>Create Account</button>
-				</div>
-			</form>
-		</section>
-	{:else}
-		<section class="card">
-			<h3><i class="ph ph-user-circle-check" aria-hidden="true"></i> Active Account</h3>
-			<p>Logged in as <strong>{authUser.username}</strong> ({authUser.role})</p>
-
+	<section class="card">
+		<h3><i class="ph ph-user-circle" aria-hidden="true"></i> Account & Cloud Sync</h3>
+		{#if authUser}
+			<p class="subtitle">Logged in as <strong>{authUser.username}</strong> ({authUser.role}). Subscriptions and progress sync automatically across your devices.</p>
+			
 			<div class="sync-row">
 				<div class="sync-info">
 					<span class="sync-state">
@@ -408,40 +375,29 @@
 							Sync ready
 						{/if}
 					</span>
-					<span class="sync-hint">Subscriptions, favorites and progress sync across your devices.</span>
 				</div>
-				<button class="btn-secondary" onclick={() => sync.syncNow()} disabled={sync.status === 'syncing'}>
+				<button type="button" class="btn-secondary" onclick={() => sync.syncNow()} disabled={sync.status === 'syncing'}>
 					<i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Sync now
 				</button>
 			</div>
 
-			{#if sessions.length > 0}
-				<div class="sessions-list">
-					<h4>Active sessions & devices</h4>
-					{#each sessions as s (s.id)}
-						<div class="session-row">
-							<div class="s-info">
-								<span class="s-name">
-									{s.device_name || (s.kind === 'device' ? 'Device' : 'Web session')}
-									{#if s.is_current}<span class="s-current">This device</span>{/if}
-								</span>
-								<span class="s-meta">
-									{s.kind === 'device' ? 'App' : 'Browser'}{s.sanitized_user_agent
-										? ` · ${s.sanitized_user_agent}`
-										: ''}
-								</span>
-							</div>
-							{#if !s.is_current}
-								<button class="s-revoke" onclick={() => revokeSession(s.id)}>Revoke</button>
-							{/if}
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			<button onclick={handleLogout}>Sign Out</button>
-		</section>
-	{/if}
+			<div class="account-actions">
+				<a href="/account" class="btn btn-primary">
+					<i class="ph ph-user-gear" aria-hidden="true"></i> Manage Account & Devices
+				</a>
+			</div>
+		{:else}
+			<p class="subtitle">Sign in or register an account to sync your subscriptions, favorite episodes, and playback history across all your devices.</p>
+			<div class="account-actions">
+				<a href="/login" class="btn btn-primary">
+					<i class="ph ph-sign-in" aria-hidden="true"></i> Sign In
+				</a>
+				<a href="/register" class="btn btn-secondary">
+					<i class="ph ph-user-plus" aria-hidden="true"></i> Create Account
+				</a>
+			</div>
+		{/if}
+	</section>
 
 	<section class="card">
 		<h3><i class="ph ph-database" aria-hidden="true"></i> Data Management</h3>
@@ -595,7 +551,7 @@
 		color: var(--text-primary);
 	}
 
-	.opml-actions, .btn-group {
+	.opml-actions, .btn-group, .account-actions {
 		display: flex;
 		gap: 1rem;
 		flex-wrap: wrap;
