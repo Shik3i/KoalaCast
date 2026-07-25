@@ -184,5 +184,3 @@ func TestPodcastHandler_Discover_WithPodcastIndexCategories(t *testing.T) {
 		t.Errorf("expected category Science in discover result, got %v", resp.Results[0].Categories)
 	}
 }
-
-

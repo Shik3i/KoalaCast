@@ -40,9 +40,9 @@ services/api/cmd/server/server
 *.db
 *.db-wal
 *.db-shm
-data/
-services/api/data/
 /data/
+services/api/data/
+!apps/web/src/lib/data/
 
 # IDE & Editor Configuration
 .vscode/*

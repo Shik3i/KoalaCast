@@ -112,4 +112,3 @@ func TestSearchResult_CategoryList(t *testing.T) {
 		})
 	}
 }
-

@@ -22,11 +22,11 @@ type Client struct {
 }
 
 type SearchResult struct {
-	ID          int64  `json:"id"`
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	OriginalURL string `json:"originalUrl"`
-	Description string `json:"description"`
+	ID          int64             `json:"id"`
+	Title       string            `json:"title"`
+	URL         string            `json:"url"`
+	OriginalURL string            `json:"originalUrl"`
+	Description string            `json:"description"`
 	Author      string            `json:"author"`
 	Artwork     string            `json:"artwork"`
 	Image       string            `json:"image"`
