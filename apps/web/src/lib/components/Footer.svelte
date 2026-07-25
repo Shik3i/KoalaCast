@@ -10,11 +10,12 @@
 				<span class="brand-title">KoalaCast</span>
 			</div>
 			<p class="tagline">Next-generation, privacy-first podcast player with cross-device sync.</p>
+			<p class="copyright">© 2026 KoalaStuff</p>
 		</div>
 
 		<div class="footer-links">
 			<div class="link-column">
-				<h4>Legal & Privacy</h4>
+				<h4>Legal &amp; Privacy</h4>
 				<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">
 					<i class="ph ph-scales" aria-hidden="true"></i> Legal Notice
 				</a>
@@ -34,18 +35,14 @@
 			</div>
 		</div>
 	</div>
-
-	<div class="footer-bottom">
-		<p>© 2026 KoalaCast • Timo Schmidt (Shik3i)</p>
-	</div>
 </footer>
 
 <style>
 	.app-footer {
 		background: color-mix(in srgb, var(--bg-surface) 75%, var(--bg-primary));
 		border-top: 1px solid var(--border-subtle);
-		padding: 3rem 2rem 2rem;
-		margin-top: 5rem;
+		padding: 1.75rem 2rem 1.5rem;
+		margin-top: 2.5rem;
 		backdrop-filter: blur(12px);
 	}
 
@@ -61,7 +58,8 @@
 		margin: 0 auto;
 		display: flex;
 		justify-content: space-between;
-		gap: 3rem;
+		align-items: flex-start;
+		gap: 2rem;
 		flex-wrap: wrap;
 	}
 
@@ -69,7 +67,7 @@
 		max-width: 380px;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.4rem;
 	}
 
 	.brand {
@@ -77,34 +75,41 @@
 		align-items: center;
 		gap: 0.5rem;
 		font-weight: 700;
-		font-size: 1.25rem;
+		font-size: 1.15rem;
 	}
 
 	.logo-icon {
-		width: 2.25rem;
-		height: 2.25rem;
+		width: 1.85rem;
+		height: 1.85rem;
 		object-fit: contain;
 	}
 
 	.tagline {
 		color: var(--text-secondary);
-		font-size: 0.9rem;
-		line-height: 1.6;
+		font-size: 0.85rem;
+		line-height: 1.5;
+	}
+
+	.copyright {
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		font-weight: 500;
+		margin-top: 0.25rem;
 	}
 
 	.footer-links {
 		display: flex;
-		gap: 4rem;
+		gap: 3.5rem;
 	}
 
 	.link-column {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.55rem;
 	}
 
 	.link-column h4 {
-		font-size: 0.85rem;
+		font-size: 0.8rem;
 		font-weight: 700;
 		color: var(--text-muted);
 		text-transform: uppercase;
@@ -113,25 +118,15 @@
 
 	.link-column a {
 		color: var(--text-secondary);
-		font-size: 0.9rem;
+		font-size: 0.88rem;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.45rem;
 		transition: color 0.2s ease;
 	}
 
 	.link-column a:hover {
 		color: var(--accent-green);
 		text-decoration: none;
-	}
-
-	.footer-bottom {
-		max-width: 1200px;
-		margin: 2.5rem auto 0;
-		padding-top: 1.5rem;
-		border-top: 1px solid var(--border-subtle);
-		text-align: center;
-		font-size: 0.85rem;
-		color: var(--text-muted);
 	}
 </style>
