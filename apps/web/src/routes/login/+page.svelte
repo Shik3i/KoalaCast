@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
@@ -31,7 +32,7 @@
 				return;
 			}
 
-			toast.success(`Welcome back, ${data.username}!`);
+			toast.success(t('toast.welcomeBack', { username: data.username }));
 			if (data.user_id) sync.enable(data.user_id);
 			goto('/account');
 		} catch (err) {
@@ -43,8 +44,8 @@
 </script>
 
 <svelte:head>
-	<title>Sign In — KoalaCast</title>
-	<meta name="description" content="Sign in to your KoalaCast account to synchronize your podcast subscriptions and listening progress across devices." />
+	<title>{t('login.pageTitle')}</title>
+	<meta name="description" content={t('login.metaDescription')} />
 </svelte:head>
 
 <div class="auth-container">
@@ -53,8 +54,8 @@
 			<div class="auth-icon">
 				<i class="ph ph-user-circle" aria-hidden="true"></i>
 			</div>
-			<h1>Sign In</h1>
-			<p class="subtitle">Access your account to sync subscriptions and queue across all your devices.</p>
+			<h1>{t('login.title')}</h1>
+			<p class="subtitle">{t('login.subtitle')}</p>
 		</header>
 
 		{#if authError}
@@ -66,24 +67,24 @@
 
 		<form onsubmit={handleLogin} class="auth-form">
 			<div class="form-group">
-				<label for="username">Username</label>
+				<label for="username">{t('login.username')}</label>
 				<input
 					id="username"
 					type="text"
 					bind:value={usernameInput}
-					placeholder="Enter your username"
+					placeholder={t('login.usernamePlaceholder')}
 					required
 					autocomplete="username"
 				/>
 			</div>
 
 			<div class="form-group">
-				<label for="password">Password</label>
+				<label for="password">{t('login.password')}</label>
 				<input
 					id="password"
 					type="password"
 					bind:value={passwordInput}
-					placeholder="Enter your password"
+					placeholder={t('login.passwordPlaceholder')}
 					required
 					autocomplete="current-password"
 				/>
@@ -91,17 +92,17 @@
 
 			<button type="submit" class="btn btn-primary" disabled={isLoggingIn}>
 				{#if isLoggingIn}
-					<i class="ph ph-spinner spinner" aria-hidden="true"></i> Signing in...
+					<i class="ph ph-spinner spinner" aria-hidden="true"></i> {t('login.signingIn')}
 				{:else}
-					<i class="ph ph-sign-in" aria-hidden="true"></i> Sign In
+					<i class="ph ph-sign-in" aria-hidden="true"></i> {t('login.title')}
 				{/if}
 			</button>
 		</form>
 
 		<footer class="auth-footer">
-			<p>Don't have an account yet?</p>
+			<p>{t('login.noAccount')}</p>
 			<a href="/register" class="link-register">
-				Create a new account <i class="ph ph-arrow-right" aria-hidden="true"></i>
+				{t('login.createAccount')} <i class="ph ph-arrow-right" aria-hidden="true"></i>
 			</a>
 		</footer>
 	</div>

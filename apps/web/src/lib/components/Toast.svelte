@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
@@ -11,16 +12,16 @@
 </script>
 
 <div class="toast-stack" role="status" aria-live="polite">
-	{#each toast.items as t (t.id)}
+	{#each toast.items as item (item.id)}
 		<div
-			class="toast {t.type}"
+			class="toast {item.type}"
 			animate:flip={{ duration: 260 }}
 			in:fly={{ y: 16, duration: 260 }}
 			out:fly={{ y: 10, duration: 200 }}
 		>
-			<i class="ph-fill {icons[t.type]}" aria-hidden="true"></i>
-			<span>{t.message}</span>
-			<button onclick={() => toast.dismiss(t.id)} aria-label="Dismiss notification">
+			<i class="ph-fill {icons[item.type]}" aria-hidden="true"></i>
+			<span>{item.message}</span>
+			<button onclick={() => toast.dismiss(item.id)} aria-label={t('common.dismissNotification')}>
 				<i class="ph ph-x" aria-hidden="true"></i>
 			</button>
 		</div>

@@ -32,6 +32,9 @@ type SearchResult struct {
 	Image       string            `json:"image"`
 	Categories  map[string]string `json:"categories"`
 	Explicit    bool              `json:"explicit"`
+	// Language as reported by Podcast Index (an RSS <language> tag such as
+	// "en", "de-DE"). Authoritative — unlike iTunes, no guessing required.
+	Language string `json:"language"`
 }
 
 // CategoryList returns the podcast's category names as a slice.

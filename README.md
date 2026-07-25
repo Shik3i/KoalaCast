@@ -55,6 +55,7 @@ Calm, distraction-free listening — with optional, end-to-end cross-device sync
 | Area | Highlights |
 | :--- | :--- |
 | **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, add any feed by direct RSS URL |
+| **Languages** | Spoken-language filtering (not just storefront region) for Discover and Search, language + genre search filters, fully translated English/German interface (add a language with one JSON file) |
 | **Playback** | Web Audio player, Media Session API, playback-speed control, ms-accurate position tracking, keyboard shortcuts |
 | **Library** | Subscriptions, queue, favorites, OPML import/export |
 | **Accounts (optional)** | Argon2id hashing, Base32 recovery codes, HttpOnly session cookies, Bearer device tokens |
@@ -118,6 +119,8 @@ Deep dives live in [docs/](docs/):
 - [Sync engine protocol](docs/sync-protocol/specification.md)
 - [Feed compatibility & parsing](docs/feed-compatibility/rss-spec.md)
 - [Privacy policy & data retention](docs/privacy/privacy-policy.md)
+- [Internationalization & language filtering](docs/i18n.md)
+- [Roadmap](docs/roadmap.md)
 - [Future Android architecture](docs/android-architecture.md)
 
 ---
@@ -201,8 +204,8 @@ Full precedence rules: [docs/architecture/overview.md](docs/architecture/overvie
 # Backend — unit + integration with the race detector
 cd services/api && go test -race ./...
 
-# Frontend — type checking
-cd apps/web && npm run check
+# Frontend — unit tests, type checking, translation integrity
+cd apps/web && npm test && npm run check && npm run check:i18n
 ```
 
 CI runs the same checks plus `go vet`, `gofmt`, OpenAPI linting, and Docker builds on every push and PR — see [.github/workflows/ci.yml](.github/workflows/ci.yml).

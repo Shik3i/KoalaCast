@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import {
 		saveLocalPlaybackState,
@@ -329,7 +330,7 @@
 		if (isFav) {
 			await removeLocalFavorite(track.episode_id);
 			isFav = false;
-			toast.success('Removed from favorites.');
+			toast.success(t('toast.removedFromFavorites'));
 		} else {
 			await addLocalFavorite({
 				episode_id: track.episode_id,
@@ -342,7 +343,7 @@
 				duration_ms: track.duration_ms
 			});
 			isFav = true;
-			toast.success('Added to favorites.');
+			toast.success(t('toast.addedToFavorites'));
 		}
 	}
 
@@ -442,7 +443,7 @@
 			<div class="progress-track" style="--progress: {progressPercent}%"></div>
 
 			<div class="track-info">
-				<button class="art-btn" onclick={() => (expanded = true)} aria-label="Open full-screen player">
+				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')}>
 					<img
 						src={optimizeArtwork(track.artwork_url, 120)}
 						alt={track.title}
@@ -456,7 +457,7 @@
 					<a class="podcast-title" href={`/podcast/${track.podcast_id}`}>{track.podcast_title}</a>
 				</div>
 				{#if isPlaying}
-					<div class="eq-bars" aria-label="Audio playing">
+					<div class="eq-bars" aria-label={t('player.audioPlaying')}>
 						<span class="bar bar1"></span>
 						<span class="bar bar2"></span>
 						<span class="bar bar3"></span>
@@ -469,17 +470,17 @@
 				{#if loadError}
 					<div class="load-error" role="alert">
 						<i class="ph ph-warning-circle" aria-hidden="true"></i>
-						Audio couldn't be loaded — a tracking/ad blocker may be blocking the file.
+						{t('player.loadError')}
 					</div>
 				{/if}
 				<div class="controls">
-					<button class="ctrl" onclick={() => skip(-10)} aria-label="Skip backward 10 seconds">
+					<button class="ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')}>
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
 					</button>
 					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
-					<button class="ctrl" onclick={() => skip(30)} aria-label="Skip forward 30 seconds">
+					<button class="ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
 					</button>
 				</div>
@@ -493,33 +494,33 @@
 						value={currentTimeMs}
 						style="--progress: {progressPercent}%"
 						onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
-						aria-label="Playback timeline"
+						aria-label={t('player.timeline')}
 					/>
 					<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
 				</div>
 			</div>
 
 			<div class="extras">
-				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label="Playback speed">{playbackSpeed}×</button>
+				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label={t('player.speed')}>{playbackSpeed}×</button>
 				<div class="vol-wrap">
-					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label="Volume">
+					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label={t('player.volume')}>
 						<i class="ph {volIcon}" aria-hidden="true"></i>
 					</button>
 					{#if showVolume}
 						<div class="vol-pop">
-							<input type="range" min="0" max="1" step="0.05" value={player.volume} oninput={(e) => player.setVolume(Number((e.target as HTMLInputElement).value))} aria-label="Volume level" />
+							<input type="range" min="0" max="1" step="0.05" value={player.volume} oninput={(e) => player.setVolume(Number((e.target as HTMLInputElement).value))} aria-label={t('player.volumeLevel')} />
 						</div>
 					{/if}
 				</div>
-				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label="Sleep timer">
-					<option value="">💤 Off</option>
-					<option value="episode">End of episode</option>
+				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
+					<option value="">💤 {t('player.sleepOff')}</option>
+					<option value="episode">{t('player.endOfEpisode')}</option>
 					<option value="15">15 min</option>
 					<option value="30">30 min</option>
 					<option value="45">45 min</option>
 					<option value="60">60 min</option>
 				</select>
-				<button class="ctrl close-track" onclick={() => player.stop()} aria-label="Close player">
+				<button class="ctrl close-track" onclick={() => player.stop()} aria-label={t('player.closePlayer')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			</div>
@@ -528,9 +529,9 @@
 
 	<!-- Full-screen Now Playing -->
 	{#if expanded}
-		<div class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label="Now playing">
+		<div class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label={t('player.nowPlaying')}>
 			<div class="np-bg" style="background-image: url({optimizeArtwork(track.artwork_url, 400)})"></div>
-			<button class="np-close" onclick={() => (expanded = false)} aria-label="Close full-screen player">
+			<button class="np-close" onclick={() => (expanded = false)} aria-label={t('player.closeFullscreen')}>
 				<i class="ph ph-caret-down" aria-hidden="true"></i>
 			</button>
 
@@ -558,37 +559,37 @@
 						value={currentTimeMs}
 						style="--progress: {progressPercent}%"
 						onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
-						aria-label="Playback timeline"
+						aria-label={t('player.timeline')}
 					/>
 					<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
 				</div>
 
 				<div class="np-controls">
-					<button class="np-ctrl" onclick={() => skip(-10)} aria-label="Skip backward 10 seconds">
+					<button class="np-ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')}>
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>10</small>
 					</button>
 					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-ctrl" onclick={() => skip(30)} aria-label="Skip forward 30 seconds">
+					<button class="np-ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
 					</button>
 				</div>
 
 				<div class="np-volume">
 					<i class="ph {volIcon}" aria-hidden="true"></i>
-					<input type="range" min="0" max="1" step="0.05" value={player.volume} oninput={(e) => player.setVolume(Number((e.target as HTMLInputElement).value))} aria-label="Volume level" />
+					<input type="range" min="0" max="1" step="0.05" value={player.volume} oninput={(e) => player.setVolume(Number((e.target as HTMLInputElement).value))} aria-label={t('player.volumeLevel')} />
 				</div>
 
 				<div class="np-extras">
 					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label="Toggle Volume Boost">
-						<i class="ph ph-speaker-high" aria-hidden="true"></i> Boost
+					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')}>
+						<i class="ph ph-speaker-high" aria-hidden="true"></i> {t('player.boost')}
 					</button>
-					<button class="np-pill-btn" class:active={skipSilence} onclick={toggleSkipSilence} aria-label="Toggle Skip Silence">
-						<i class="ph ph-waveform" aria-hidden="true"></i> Trim Silence
+					<button class="np-pill-btn" class:active={skipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')}>
+						<i class="ph ph-waveform" aria-hidden="true"></i> {t('player.trimSilence')}
 					</button>
 					<div class="speed-selector">
 						{#each speeds as spd}
@@ -596,13 +597,13 @@
 						{/each}
 					</div>
 					{#if chapters.length > 0}
-						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label="Toggle Chapters">
+						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')}>
 							<i class="ph ph-list-numbers" aria-hidden="true"></i> Chapters ({chapters.length})
 						</button>
 					{/if}
-					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label="Sleep timer">
-						<option value="">💤 Sleep off</option>
-						<option value="episode">End of episode</option>
+					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
+						<option value="">💤 {t('player.sleepTimerOff')}</option>
+						<option value="episode">{t('player.endOfEpisode')}</option>
 						<option value="15">15 min</option>
 						<option value="30">30 min</option>
 						<option value="45">45 min</option>
@@ -614,7 +615,7 @@
 					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
 						<div class="drawer-header">
 							<h4><i class="ph ph-list-numbers" aria-hidden="true"></i> Episode Chapters ({chapters.length})</h4>
-							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label="Close chapters">
+							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label={t('player.closeChapters')}>
 								<i class="ph ph-x" aria-hidden="true"></i>
 							</button>
 						</div>
@@ -630,7 +631,7 @@
 									<span class="ch-time">{formatTime(startSec * 1000)}</span>
 									<span class="ch-title">{ch.title}</span>
 									{#if isActive}
-										<span class="ch-playing-badge"><i class="ph-fill ph-play" aria-hidden="true"></i> Playing</span>
+										<span class="ch-playing-badge"><i class="ph-fill ph-play" aria-hidden="true"></i> {t('player.playing')}</span>
 									{/if}
 								</button>
 							{/each}
@@ -640,7 +641,7 @@
 
 				{#if player.upNext}
 					<button class="np-upnext" onclick={() => player.upNext && player.playFromQueue(player.upNext)}>
-						<span class="upnext-label"><i class="ph ph-queue" aria-hidden="true"></i> Up next</span>
+						<span class="upnext-label"><i class="ph ph-queue" aria-hidden="true"></i> {t('player.upNext')}</span>
 						<span class="upnext-title">{player.upNext.title}</span>
 						<i class="ph ph-play" aria-hidden="true"></i>
 					</button>

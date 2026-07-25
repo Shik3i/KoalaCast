@@ -11,6 +11,9 @@ By participating, you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
 - **Report bugs** — open an issue with reproduction steps, expected vs. actual behavior, and environment details.
 - **Suggest features** — open an issue describing the problem you're solving (not just the solution).
 - **Improve docs** — typo fixes to whole guides are all welcome.
+- **Translate the app** — add or improve a language. It is one JSON file and one
+  line of registration, no build tooling required — see [docs/i18n.md](docs/i18n.md).
+  Partial translations are welcome; untranslated strings fall back to English.
 - **Submit code** — bug fixes and features via pull request (see below).
 
 ---
@@ -59,11 +62,33 @@ go test -race ./...
 
 # Frontend
 cd apps/web
+npm test              # unit tests (i18n catalogues & runtime)
 npm run check         # svelte-check type verification
+npm run check:i18n    # translation catalogues must be structurally valid
 npm run build         # production build must succeed
 ```
 
 Shortcut: `make test` runs Go race tests + `svelte-check` from the repo root.
+
+---
+
+## Translations
+
+Add a language by copying `apps/web/src/lib/i18n/messages/en.json`, translating
+the values, and registering it in `apps/web/src/lib/i18n/registry.ts`. Full
+walkthrough: [docs/i18n.md](docs/i18n.md).
+
+Two rules worth knowing before you start:
+
+- **Keep every `{placeholder}` exactly as it appears.** `npm test` and
+  `npm run check:i18n` fail the build if one is missing, misspelled, or invented.
+- **Every key must be present and non-empty.** The test suite runs over every
+  registered language and rejects blanks, `TODO` markers, stray whitespace,
+  unknown keys, and plural forms your language never uses — so a new language is
+  held to the same standard automatically.
+- **Legal text is English-only.** The privacy policy and links naming legal
+  documents are deliberately not translated — a mistranslated clause is a legal
+  problem, not a cosmetic one.
 
 ---
 

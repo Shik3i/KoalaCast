@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -182,17 +183,17 @@
 <div class="inbox-page">
 	<div class="head">
 		<div>
-			<h2><i class="ph-fill ph-tray" aria-hidden="true"></i> New</h2>
-			<p class="sub">Latest episodes from the shows you follow.</p>
+			<h2><i class="ph-fill ph-tray" aria-hidden="true"></i> {t('inbox.title')}</h2>
+			<p class="sub">{t('inbox.subtitle')}</p>
 		</div>
 		{#if subscriptions.length > 0}
 			<div class="head-actions">
 				<label class="switch">
 					<input type="checkbox" bind:checked={unplayedOnly} />
-					<span>Unplayed only</span>
+					<span>{t('inbox.unplayedOnly')}</span>
 				</label>
 				<button class="btn-ghost" class:active={showSettings} onclick={() => (showSettings = !showSettings)}>
-					<i class="ph ph-sliders-horizontal" aria-hidden="true"></i> Show settings
+					<i class="ph ph-sliders-horizontal" aria-hidden="true"></i> {t('inbox.showSettings')}
 				</button>
 			</div>
 		{/if}
@@ -201,8 +202,7 @@
 	{#if showSettings}
 		<section class="settings-panel">
 			<p class="panel-hint">
-				Choose how much each show contributes. Pick <strong>Only newest</strong> for hourly
-				news shows so they don't flood your feed.
+				{@html t('inbox.panelHint')}
 			</p>
 			<div class="settings-list">
 				{#each subscriptions as sub (sub.podcast_id)}
@@ -210,8 +210,8 @@
 						<img src={optimizeArtwork(sub.artwork_url, 80)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="s-title">{sub.title}</span>
 						<div class="seg">
-							<button class:active={(modes[sub.podcast_id] ?? 'all') === 'all'} onclick={() => setMode(sub.podcast_id, 'all')}>All</button>
-							<button class:active={modes[sub.podcast_id] === 'latest'} onclick={() => setMode(sub.podcast_id, 'latest')}>Only newest</button>
+							<button class:active={(modes[sub.podcast_id] ?? 'all') === 'all'} onclick={() => setMode(sub.podcast_id, 'all')}>{t('inbox.modeAll')}</button>
+							<button class:active={modes[sub.podcast_id] === 'latest'} onclick={() => setMode(sub.podcast_id, 'latest')}>{t('inbox.modeLatest')}</button>
 						</div>
 					</div>
 				{/each}
@@ -234,22 +234,22 @@
 	{:else if subscriptions.length === 0}
 		<div class="empty-state">
 			<i class="ph ph-tray" aria-hidden="true"></i>
-			<p>Subscribe to some shows and their newest episodes land here.</p>
-			<a href="/search" class="btn">Discover Podcasts</a>
+			<p>{t('inbox.emptyNoSubscriptions')}</p>
+			<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 		</div>
 	{:else if feed.length === 0}
 		<div class="empty-state">
 			<i class="ph ph-check-circle" aria-hidden="true"></i>
-			<p>{unplayedOnly ? "You're all caught up — nothing unplayed." : 'No recent episodes found.'}</p>
+			<p>{unplayedOnly ? t('inbox.emptyCaughtUp') : t('inbox.emptyNoRecent')}</p>
 		</div>
 	{:else}
 		{#if openMenuId}
-			<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label="Close menu" tabindex="-1"></button>
+			<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label={t('common.closeMenu')} tabindex="-1"></button>
 		{/if}
 		<div class="episode-list">
 			{#each feed as ep, i (ep.id)}
 				<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
-					<button class="ep-play" onclick={() => play(ep)} aria-label="Play episode">
+					<button class="ep-play" onclick={() => play(ep)} aria-label={t('inbox.playEpisode')}>
 						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 					</button>
@@ -259,7 +259,7 @@
 							<span class="ep-show">{ep.podcast_title}</span>
 							{#if ep.pub_date}<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}{/if}
 							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
-							{#if completed.has(ep.id)}<span class="played-tag">Played</span>{/if}
+							{#if completed.has(ep.id)}<span class="played-tag">{t('common.played')}</span>{/if}
 						</span>
 					</div>
 
@@ -268,16 +268,16 @@
 					</button>
 
 					<div class="row-menu">
-						<button class="ep-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label="More actions">
+						<button class="ep-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('common.moreActions')}>
 							<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
 						</button>
 						{#if openMenuId === ep.id}
 							<div class="menu" role="menu">
 								<button role="menuitem" onclick={() => markThisAndOlder(ep, true)}>
-									<i class="ph ph-arrow-line-down" aria-hidden="true"></i> Mark this &amp; older as played
+									<i class="ph ph-arrow-line-down" aria-hidden="true"></i> {t('common.markOlderPlayed')}
 								</button>
 								<button role="menuitem" onclick={() => markThisAndOlder(ep, false)}>
-									<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Mark this &amp; older as unplayed
+									<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> {t('common.markOlderUnplayed')}
 								</button>
 							</div>
 						{/if}

@@ -5,8 +5,9 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
-	import { GENRES } from '$lib/genres';
+	import { GENRES, genreLabel } from '$lib/genres';
 	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
+	import { LOCALES, t } from '$lib/i18n';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
 	function cycleGenre(name: string) {
@@ -63,7 +64,7 @@
 			const res = await fetch(`/api/v1/auth/sessions/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				sessions = sessions.filter((s) => s.id !== id);
-				toast.success('Session revoked.');
+				toast.success(t('toast.sessionRevoked'));
 			}
 		} catch (_) {}
 	}
@@ -87,14 +88,14 @@
 
 			const data = await res.json();
 			if (!res.ok) {
-				authError = data.error || 'Registration failed.';
+				authError = data.error || t('settings.registrationFailed');
 				return;
 			}
 
 			recoveryCodeDisplay = data.recovery_code;
-			toast.success('Account created — save your recovery code below.');
+			toast.success(t('toast.accountCreatedSaveCode'));
 		} catch (err: any) {
-			authError = 'Network error during registration.';
+			authError = t('settings.registrationNetworkError');
 		} finally {
 			isRegistering = false;
 		}
@@ -114,17 +115,17 @@
 
 			const data = await res.json();
 			if (!res.ok) {
-				authError = data.error || 'Login failed.';
+				authError = data.error || t('settings.loginFailed');
 				return;
 			}
 
 			authUser = data;
-			toast.success(`Welcome back, ${data.username}`);
+			toast.success(t('toast.welcomeBack', { username: data.username }));
 			loadActiveSessions();
 			// Kick off cross-device sync now that we're authenticated.
 			if (data.user_id) sync.enable(data.user_id);
 		} catch (err: any) {
-			authError = 'Network error during login.';
+			authError = t('settings.loginNetworkError');
 		} finally {
 			isLoggingIn = false;
 		}
@@ -141,7 +142,7 @@
 		sessions = [];
 		usernameInput = '';
 		passwordInput = '';
-		toast.success('Signed out.');
+		toast.success(t('settings.signedOut'));
 	}
 
 	async function loadActiveSessions() {
@@ -155,9 +156,9 @@
 	}
 
 	async function handleResetLocalData() {
-		if (confirm('Clear all local browser subscriptions and listening history? This action cannot be undone.')) {
+		if (confirm(t('settings.confirmReset'))) {
 			await clearAllLocalData();
-			toast.success('Local data reset.');
+			toast.success(t('settings.localDataReset'));
 		}
 	}
 
@@ -180,7 +181,7 @@
 
 			const report = await res.json();
 			if (!res.ok) {
-				opmlError = report.error || 'Failed to import OPML file.';
+				opmlError = report.error || t('settings.opmlImportFailed');
 				return;
 			}
 
@@ -204,9 +205,9 @@
 				}
 			}
 
-			toast.success(`OPML imported — ${report.imported} added, ${report.skipped} skipped.`);
+			toast.success(t('settings.opmlImported', { imported: report.imported, skipped: report.skipped }));
 		} catch (err: any) {
-			opmlError = 'Error reading or processing OPML XML file.';
+			opmlError = t('settings.opmlReadError');
 		} finally {
 			isImportingOpml = false;
 			target.value = '';
@@ -225,7 +226,7 @@
 	async function handleExportOpml() {
 		const subs = (await getLocalSubscriptions()).filter((s) => s.feed_url);
 		if (subs.length === 0) {
-			toast.error('No subscriptions with a feed URL to export yet.');
+			toast.error(t('settings.opmlNothingToExport'));
 			return;
 		}
 		const outlines = subs
@@ -251,14 +252,14 @@
 
 <div class="settings-page">
 	<div class="settings-head">
-		<h2><i class="ph-fill ph-gear-six" aria-hidden="true"></i> Settings</h2>
-		<p class="page-sub">Appearance, privacy, import/export and your optional sync account.</p>
+		<h2><i class="ph-fill ph-gear-six" aria-hidden="true"></i> {t('settings.title')}</h2>
+		<p class="page-sub">{t('settings.subtitle')}</p>
 	</div>
 
 	<!-- Theme Selection Card -->
 	<section class="card">
-		<h3><i class="ph ph-palette" aria-hidden="true"></i> Appearance &amp; Theme</h3>
-		<p class="subtitle">Select your preferred color theme or automatically follow your operating system settings.</p>
+		<h3><i class="ph ph-palette" aria-hidden="true"></i> {t('settings.appearance')}</h3>
+		<p class="subtitle">{t('settings.appearanceHint')}</p>
 
 		<div class="theme-selector">
 			<button
@@ -266,7 +267,7 @@
 				class:active={currentTheme === 'system'}
 				onclick={() => handleThemeChange('system')}
 			>
-				<i class="ph ph-desktop" aria-hidden="true"></i> System (Auto)
+				<i class="ph ph-desktop" aria-hidden="true"></i> {t('settings.themeSystem')}
 			</button>
 
 			<button
@@ -274,7 +275,7 @@
 				class:active={currentTheme === 'dark'}
 				onclick={() => handleThemeChange('dark')}
 			>
-				<i class="ph ph-moon" aria-hidden="true"></i> Dark
+				<i class="ph ph-moon" aria-hidden="true"></i> {t('settings.themeDark')}
 			</button>
 
 			<button
@@ -282,29 +283,64 @@
 				class:active={currentTheme === 'light'}
 				onclick={() => handleThemeChange('light')}
 			>
-				<i class="ph ph-sun" aria-hidden="true"></i> Light
+				<i class="ph ph-sun" aria-hidden="true"></i> {t('settings.themeLight')}
 			</button>
 		</div>
 
-		<p class="subtitle" style="margin-top: 1rem;">Episode dates</p>
+		<p class="subtitle" style="margin-top: 1rem;">{t('settings.episodeDates')}</p>
 		<div class="theme-selector">
 			<button class="theme-btn" class:active={prefs.dateFormat === 'absolute'} onclick={() => prefs.setDateFormat('absolute')}>
-				<i class="ph ph-calendar-blank" aria-hidden="true"></i> Absolute date
+				<i class="ph ph-calendar-blank" aria-hidden="true"></i> {t('settings.dateAbsolute')}
 			</button>
 			<button class="theme-btn" class:active={prefs.dateFormat === 'relative'} onclick={() => prefs.setDateFormat('relative')}>
-				<i class="ph ph-clock-countdown" aria-hidden="true"></i> Relative (x days ago)
+				<i class="ph ph-clock-countdown" aria-hidden="true"></i> {t('settings.dateRelative')}
 			</button>
 		</div>
-	<!-- Spoken Languages Card -->
-	<section class="card" id="languages">
-		<h3><i class="ph ph-translate" aria-hidden="true"></i> Spoken Languages</h3>
-		<p class="subtitle">Select the languages you speak. Discover and Search will mix trending shows from your active languages.</p>
+	</section>
+
+	<!-- Interface Language Card — what KoalaCast itself is displayed in. Kept
+	     separate from content languages: wanting a German UI and wanting only
+	     German podcasts are two different preferences. -->
+	<section class="card" id="interface-language">
+		<h3><i class="ph ph-globe" aria-hidden="true"></i> {t('settings.interfaceLanguage')}</h3>
+		<p class="subtitle">{t('settings.interfaceLanguageHint')}</p>
 		<div class="language-grid">
-			{#each SUPPORTED_LANGUAGES as lang}
+			{#each LOCALES as locale (locale.code)}
+				<button
+					type="button"
+					class="lang-chip"
+					class:active={prefs.uiLanguage === locale.code}
+					aria-pressed={prefs.uiLanguage === locale.code}
+					onclick={() => prefs.setUILanguage(locale.code)}
+				>
+					<span class="flag-emoji">{locale.flag}</span>
+					<span class="lang-name">{locale.name}</span>
+					{#if prefs.uiLanguage === locale.code}
+						<i class="ph-fill ph-check-circle state-ic" aria-hidden="true"></i>
+					{/if}
+				</button>
+			{/each}
+		</div>
+		<p class="subtitle translate-cta">
+			{t('settings.helpTranslate')}
+			<a href="https://github.com/Shik3i/KoalaCast/blob/main/docs/i18n.md" target="_blank" rel="noopener noreferrer">
+				{t('settings.helpTranslateLink')}
+				<i class="ph ph-arrow-square-out" aria-hidden="true"></i>
+			</a>
+		</p>
+	</section>
+
+	<!-- Content Languages Card -->
+	<section class="card" id="languages">
+		<h3><i class="ph ph-translate" aria-hidden="true"></i> {t('settings.contentLanguages')}</h3>
+		<p class="subtitle">{t('settings.contentLanguagesHint')}</p>
+		<div class="language-grid">
+			{#each SUPPORTED_LANGUAGES as lang (lang.code)}
 				<button
 					type="button"
 					class="lang-chip"
 					class:active={prefs.languages.includes(lang.code)}
+					aria-pressed={prefs.languages.includes(lang.code)}
 					onclick={() => prefs.toggleLanguage(lang.code)}
 				>
 					<span class="flag-emoji">{lang.flag}</span>
@@ -318,36 +354,36 @@
 	</section>
 
 	<section class="card" id="interests">
-		<h3><i class="ph ph-sparkle" aria-hidden="true"></i> Your interests</h3>
-		<p class="subtitle">Tap once to prefer a genre (shown in “For You”), tap again to hide it everywhere, tap a third time to reset. Stays on your device.</p>
+		<h3><i class="ph ph-sparkle" aria-hidden="true"></i> {t('settings.interests')}</h3>
+		<p class="subtitle">{t('settings.interestsHint')}</p>
 		<div class="genre-grid">
 			{#each GENRES as g (g.name)}
 				<button class="genre-chip {genreState(g.name)}" onclick={() => cycleGenre(g.name)}>
 					<i class="ph {g.icon}" aria-hidden="true"></i>
-					<span>{g.name}</span>
+					<span>{genreLabel(g.name)}</span>
 					{#if genreState(g.name) === 'like'}<i class="ph-fill ph-heart state-ic" aria-hidden="true"></i>
 					{:else if genreState(g.name) === 'hide'}<i class="ph-fill ph-eye-slash state-ic" aria-hidden="true"></i>{/if}
 				</button>
 			{/each}
 		</div>
 		<div class="genre-legend">
-			<span><span class="dot like"></span> Preferred</span>
-			<span><span class="dot hide"></span> Hidden</span>
+			<span><span class="dot like"></span> {t('settings.preferred')}</span>
+			<span><span class="dot hide"></span> {t('settings.hidden')}</span>
 		</div>
 	</section>
 
 	<section class="card" id="privacy">
-		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> Privacy</h3>
+		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> {t('settings.privacy')}</h3>
 		<div class="privacy-box">
-			<h4>Local Browser Mode</h4>
-			<p>Your subscriptions, queue, and listening history stay in this browser. KoalaCast contacts the server to search podcasts and retrieve RSS metadata, but anonymous listening activity is not stored on the server.</p>
+			<h4>{t('settings.localBrowserMode')}</h4>
+			<p>{t('settings.privacyBody')}</p>
 		</div>
 	</section>
 
 	<!-- OPML Import / Export Card -->
 	<section class="card">
-		<h3><i class="ph ph-arrows-down-up" aria-hidden="true"></i> OPML Import &amp; Export</h3>
-		<p class="subtitle">Import subscriptions from Pocket Casts, Apple Podcasts, AntennaPod, or Overcast XML files.</p>
+		<h3><i class="ph ph-arrows-down-up" aria-hidden="true"></i> {t('settings.opmlTitle')}</h3>
+		<p class="subtitle">{t('settings.opmlHint')}</p>
 
 		{#if opmlError}
 			<div class="error-banner">{opmlError}</div>
@@ -355,11 +391,11 @@
 
 		{#if opmlReport}
 			<div class="report-box">
-				<h4>Import Summary</h4>
+				<h4>{t('settings.importSummary')}</h4>
 				<ul>
-					<li><strong>Total Found:</strong> {opmlReport.total_found}</li>
-					<li><strong>Successfully Imported:</strong> {opmlReport.imported}</li>
-					<li><strong>Skipped / Duplicates:</strong> {opmlReport.skipped}</li>
+					<li><strong>{t('settings.totalFound')}</strong> {opmlReport.total_found}</li>
+					<li><strong>{t('settings.successfullyImported')}</strong> {opmlReport.imported}</li>
+					<li><strong>{t('settings.skippedDuplicates')}</strong> {opmlReport.skipped}</li>
 				</ul>
 			</div>
 		{/if}
@@ -367,20 +403,20 @@
 		<div class="opml-actions">
 			<label class="btn btn-import">
 				<i class="ph ph-upload-simple" aria-hidden="true"></i>
-				{isImportingOpml ? 'Importing OPML...' : 'Upload & Import OPML File'}
+				{isImportingOpml ? t('settings.importingOpml') : t('settings.uploadOpml')}
 				<input type="file" accept=".opml,.xml" onchange={handleOpmlFileUpload} disabled={isImportingOpml} hidden />
 			</label>
 
 			<button type="button" class="btn btn-secondary" onclick={handleExportOpml}>
-				<i class="ph ph-download-simple" aria-hidden="true"></i> Export OPML
+				<i class="ph ph-download-simple" aria-hidden="true"></i> {t('settings.exportOpml')}
 			</button>
 		</div>
 	</section>
 
 	<section class="card">
-		<h3><i class="ph ph-user-circle" aria-hidden="true"></i> Account & Cloud Sync</h3>
+		<h3><i class="ph ph-user-circle" aria-hidden="true"></i> {t('settings.accountSync')}</h3>
 		{#if authUser}
-			<p class="subtitle">Logged in as <strong>{authUser.username}</strong> ({authUser.role}). Subscriptions and progress sync automatically across your devices.</p>
+			<p class="subtitle">{t('settings.loggedInAs')} <strong>{authUser.username}</strong> ({authUser.role}). Subscriptions and progress sync automatically across your devices.</p>
 			
 			<div class="sync-row">
 				<div class="sync-info">
@@ -398,31 +434,31 @@
 					</span>
 				</div>
 				<button type="button" class="btn-secondary" onclick={() => sync.syncNow()} disabled={sync.status === 'syncing'}>
-					<i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Sync now
+					<i class="ph ph-arrows-clockwise" aria-hidden="true"></i> {t('settings.syncNow')}
 				</button>
 			</div>
 
 			<div class="account-actions">
 				<a href="/account" class="btn btn-primary">
-					<i class="ph ph-user-gear" aria-hidden="true"></i> Manage Account & Devices
+					<i class="ph ph-user-gear" aria-hidden="true"></i> {t('settings.manageAccount')}
 				</a>
 			</div>
 		{:else}
-			<p class="subtitle">Sign in or register an account to sync your subscriptions, favorite episodes, and playback history across all your devices.</p>
+			<p class="subtitle">{t('settings.signInPrompt')}</p>
 			<div class="account-actions">
 				<a href="/login" class="btn btn-primary">
-					<i class="ph ph-sign-in" aria-hidden="true"></i> Sign In
+					<i class="ph ph-sign-in" aria-hidden="true"></i> {t('common.signIn')}
 				</a>
 				<a href="/register" class="btn btn-secondary">
-					<i class="ph ph-user-plus" aria-hidden="true"></i> Create Account
+					<i class="ph ph-user-plus" aria-hidden="true"></i> {t('common.createAccount')}
 				</a>
 			</div>
 		{/if}
 	</section>
 
 	<section class="card">
-		<h3><i class="ph ph-database" aria-hidden="true"></i> Data Management</h3>
-		<button class="btn-danger" onclick={handleResetLocalData}>Reset Local Browser Data</button>
+		<h3><i class="ph ph-database" aria-hidden="true"></i> {t('settings.dataManagement')}</h3>
+		<button class="btn-danger" onclick={handleResetLocalData}>{t('settings.resetLocalData')}</button>
 	</section>
 </div>
 
@@ -466,6 +502,22 @@
 		color: var(--text-secondary);
 		font-size: 0.95rem;
 		margin-top: -0.4rem;
+	}
+
+	.translate-cta {
+		margin-top: 0.9rem;
+		font-size: 0.85rem;
+	}
+
+	.translate-cta a {
+		color: var(--accent-green);
+		font-weight: 600;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.translate-cta a:hover {
+		text-decoration: underline;
 	}
 
 	/* Segmented control */

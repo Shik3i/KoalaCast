@@ -12,6 +12,8 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import { player } from '$lib/stores/player.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
+	import { prefs } from '$lib/stores/prefs.svelte';
+	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -20,18 +22,19 @@
 	let scrollY = $state(0);
 	const isScrolled = $derived(scrollY > 20);
 
-	const baseLinks = [
-		{ href: '/inbox', icon: 'ph-tray', label: 'New' },
-		{ href: '/library', icon: 'ph-books', label: 'Library' },
-		{ href: '/search', icon: 'ph-magnifying-glass', label: 'Search' },
-		{ href: '/settings', icon: 'ph-gear', label: 'Settings' }
-	];
+	// Derived (not a module constant) so the labels re-render when the interface
+	// language changes without a reload.
 	const links = $derived([
-		...baseLinks,
+		{ href: '/inbox', icon: 'ph-tray', label: t('nav.new') },
+		{ href: '/library', icon: 'ph-books', label: t('nav.library') },
+		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },
+		{ href: '/settings', icon: 'ph-gear', label: t('nav.settings') },
 		currentUser
-			? { href: '/account', icon: 'ph-user-circle', label: 'Account' }
-			: { href: '/login', icon: 'ph-sign-in', label: 'Sign In' },
-		...(currentUser?.role === 'admin' ? [{ href: '/admin', icon: 'ph-shield-star', label: 'Admin' }] : [])
+			? { href: '/account', icon: 'ph-user-circle', label: t('nav.account') }
+			: { href: '/login', icon: 'ph-sign-in', label: t('nav.signIn') },
+		...(currentUser?.role === 'admin'
+			? [{ href: '/admin', icon: 'ph-shield-star', label: t('nav.admin') }]
+			: [])
 	]);
 
 	onMount(() => {
@@ -46,6 +49,16 @@
 			.catch(() => {});
 	});
 
+	// Activate the catalogue whenever the preference changes (the initial one is
+	// already loaded by +layout.ts). Also keeps the document language and
+	// direction in sync, so screen readers and RTL scripts behave correctly.
+	$effect(() => {
+		const locale = prefs.uiLanguage;
+		loadLocale(locale);
+		document.documentElement.lang = locale;
+		document.documentElement.dir = getLocaleConfig(locale)?.rtl ? 'rtl' : 'ltr';
+	});
+
 	const path = $derived($page.url.pathname);
 	function isActive(href: string) {
 		return path === href || path.startsWith(href + '/');
@@ -56,7 +69,7 @@
 
 <div class="app-container">
 	<header class="navbar" class:scrolled={isScrolled}>
-		<a class="brand" href="/" aria-label="KoalaCast home">
+		<a class="brand" href="/" aria-label={t('nav.brandHome')}>
 			<picture>
 				<source type="image/avif" srcset="/icon-40.avif 1x, /icon-80.avif 2x" />
 				<source type="image/webp" srcset="/icon-40.webp 1x, /icon-80.webp 2x" />
@@ -81,7 +94,7 @@
 	<Footer />
 
 	<!-- Mobile bottom tab bar (thumb-reachable); hidden on larger screens. -->
-	<nav class="bottom-nav" class:has-player={player.isActive} aria-label="Primary">
+	<nav class="bottom-nav" class:has-player={player.isActive} aria-label={t('nav.primary')}>
 		{#each links as link}
 			<a href={link.href} class:active={isActive(link.href)} aria-current={isActive(link.href) ? 'page' : undefined}>
 				<i class="ph {link.icon}" aria-hidden="true"></i>

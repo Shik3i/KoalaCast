@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { page } from '$app/stores';
 	import {
 		saveLocalSubscription,
@@ -154,7 +155,7 @@
 		if (isSubscribed) {
 			await removeLocalSubscription(podcast.id);
 			isSubscribed = false;
-			toast.success(`Unsubscribed from ${podcast.title}`);
+			toast.success(t('toast.unsubscribedFrom', { title: podcast.title }));
 		} else {
 			await saveLocalSubscription({
 				podcast_id: podcast.id,
@@ -164,7 +165,7 @@
 				added_at: Date.now()
 			});
 			isSubscribed = true;
-			toast.success(`Subscribed to ${podcast.title}`);
+			toast.success(t('toast.subscribed', { title: podcast.title }));
 		}
 	}
 
@@ -304,7 +305,7 @@
 				<div class="actions">
 					{#if episodes.length > 0}
 						<button class="btn-play-latest" onclick={playLatest}>
-							<i class="ph-fill ph-play" aria-hidden="true"></i> Play latest
+							<i class="ph-fill ph-play" aria-hidden="true"></i> {t('podcast.playLatest')}
 						</button>
 					{/if}
 					<button class="btn-subscribe" class:subscribed={isSubscribed} onclick={handleSubscribe}>
@@ -326,7 +327,7 @@
 					{/if}
 					{#if podcast.is_live}
 						<a class="live-badge" href={podcast.live_url || '#'} target="_blank" rel="noopener noreferrer">
-							<i class="ph-fill ph-broadcast" aria-hidden="true"></i> LIVE NOW
+							<i class="ph-fill ph-broadcast" aria-hidden="true"></i> {t('podcast.liveNow')}
 						</a>
 					{/if}
 				</div>
@@ -342,11 +343,11 @@
 						<span class="unplayed-pill">{unplayedCount} unplayed</span>
 						{#if unplayedCount > 0}
 							<button class="mark-all-btn" onclick={() => markManyPlayed(episodes, true)}>
-								<i class="ph ph-checks" aria-hidden="true"></i> Mark all played
+								<i class="ph ph-checks" aria-hidden="true"></i> {t('podcast.markAllPlayed')}
 							</button>
 						{:else}
 							<button class="mark-all-btn" onclick={() => markManyPlayed(episodes, false)}>
-								<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Mark all unplayed
+								<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> {t('podcast.markAllUnplayed')}
 							</button>
 						{/if}
 					</div>
@@ -359,12 +360,12 @@
 						<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 						<input
 							type="text"
-							placeholder="Search episodes in this show…"
+							placeholder={t('podcast.searchEpisodes')}
 							bind:value={searchQuery}
-							aria-label="Filter episodes by title or description"
+							aria-label={t('podcast.filterEpisodes')}
 						/>
 						{#if searchQuery}
-							<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label="Clear search">
+							<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')}>
 								<i class="ph ph-x" aria-hidden="true"></i>
 							</button>
 						{/if}
@@ -383,15 +384,15 @@
 			{#if filteredEpisodes.length === 0 && episodes.length > 0}
 				<div class="no-episodes-found">
 					<i class="ph ph-magnifying-glass lead-icon" aria-hidden="true"></i>
-					<p>No episodes match your search or filter.</p>
+					<p>{t('podcast.noEpisodesMatch')}</p>
 					<button class="btn-reset-filter" onclick={() => { searchQuery = ''; filterUnplayedOnly = false; }}>
-						Clear search filter
+						{t('podcast.clearSearchFilter')}
 					</button>
 				</div>
 			{/if}
 
 			{#if openMenuId}
-				<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label="Close menu" tabindex="-1"></button>
+				<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label={t('common.closeMenu')} tabindex="-1"></button>
 			{/if}
 
 			{#each groupedEpisodes as group (group.key)}
@@ -413,7 +414,7 @@
 						<div class="episode-list" transition:slide={{ duration: 240 }}>
 							{#each group.episodes as ep (ep.id)}
 								<div class="episode-row" class:current={player.current?.episode_id === ep.id} class:played={playedIds.has(ep.id)}>
-									<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label="Play episode">
+									<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label={t('podcast.playEpisode')}>
 										<i class="ph-fill {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
 									</button>
 
@@ -425,7 +426,7 @@
 											{#if ep.duration_ms}
 												• {formatDuration(ep.duration_ms)}
 											{/if}
-											{#if playedIds.has(ep.id)}<span class="played-tag">Played</span>{/if}
+											{#if playedIds.has(ep.id)}<span class="played-tag">{t('podcast.played')}</span>{/if}
 										</span>
 									</div>
 
@@ -433,16 +434,16 @@
 										<i class="{playedIds.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
 									</button>
 								<div class="row-menu">
-									<button class="btn-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label="More actions">
+									<button class="btn-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('podcast.moreActions')}>
 										<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
 									</button>
 									{#if openMenuId === ep.id}
 										<div class="menu" role="menu">
 											<button role="menuitem" onclick={() => markThisAndOlder(ep, true)}>
-												<i class="ph ph-arrow-line-down" aria-hidden="true"></i> Mark this &amp; older as played
+												<i class="ph ph-arrow-line-down" aria-hidden="true"></i> {t('common.markOlderPlayed')}
 											</button>
 											<button role="menuitem" onclick={() => markThisAndOlder(ep, false)}>
-												<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Mark this &amp; older as unplayed
+												<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> {t('common.markOlderUnplayed')}
 											</button>
 										</div>
 									{/if}
@@ -458,7 +459,7 @@
 {:else}
 	<div class="error-state">
 		<i class="ph ph-warning-circle" aria-hidden="true"></i>
-		<p>Podcast details not found.</p>
+		<p>{t('podcast.notFound')}</p>
 	</div>
 {/if}
 

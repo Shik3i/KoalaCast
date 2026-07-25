@@ -59,6 +59,17 @@ jobs:
         working-directory: apps/web
         run: npm run check
 
+      - name: Unit tests
+        working-directory: apps/web
+        run: npm test
+
+      # Fails on structural translation problems (unknown keys, broken
+      # placeholders, missing plural forms). Untranslated keys are reported as
+      # warnings so a partial new language can still land.
+      - name: Translation check
+        working-directory: apps/web
+        run: npm run check:i18n
+
       - name: Production build
         working-directory: apps/web
         run: npm run build

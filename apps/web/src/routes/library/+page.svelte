@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -72,10 +73,10 @@
 
 	async function emptyQueue() {
 		if (!queue.length) return;
-		if (confirm('Clear the entire queue?')) {
+		if (confirm(t('library.confirmClearQueue'))) {
 			await player.clearQueue();
 			queue = [];
-			toast.success('Queue cleared.');
+			toast.success(t('toast.queueCleared'));
 		}
 	}
 
@@ -114,10 +115,10 @@
 	}
 
 	async function handleUnsubscribe(id: string) {
-		if (confirm('Unsubscribe from this podcast?')) {
+		if (confirm(t('library.confirmUnsubscribe'))) {
 			await removeLocalSubscription(id);
 			subscriptions = subscriptions.filter((s) => s.podcast_id !== id);
-			toast.success('Unsubscribed.');
+			toast.success(t('toast.unsubscribed'));
 		}
 	}
 
@@ -140,30 +141,30 @@
 
 <div class="library-page">
 	<div class="lib-head">
-		<h2><i class="ph-fill ph-books" aria-hidden="true"></i> Library</h2>
-		<p class="sub">Your shows, in-progress episodes and queue — all on this device.</p>
+		<h2><i class="ph-fill ph-books" aria-hidden="true"></i> {t('library.title')}</h2>
+		<p class="sub">{t('library.subtitle')}</p>
 	</div>
 
 	<div class="tabs" role="tablist">
 		<button role="tab" aria-selected={activeTab === 'subscriptions'} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
-			<i class="ph ph-books" aria-hidden="true"></i> Subscriptions <span class="count">{subscriptions.length}</span>
+			<i class="ph ph-books" aria-hidden="true"></i> {t('library.subscriptions')} <span class="count">{subscriptions.length}</span>
 		</button>
 		<button role="tab" aria-selected={activeTab === 'episodes'} class:active={activeTab === 'episodes'} onclick={() => (activeTab = 'episodes')}>
-			<i class="ph ph-hourglass-medium" aria-hidden="true"></i> In Progress <span class="count">{recentEpisodes.length}</span>
+			<i class="ph ph-hourglass-medium" aria-hidden="true"></i> {t('library.inProgress')} <span class="count">{recentEpisodes.length}</span>
 		</button>
 		<button role="tab" aria-selected={activeTab === 'queue'} class:active={activeTab === 'queue'} onclick={() => (activeTab = 'queue')}>
-			<i class="ph ph-list-plus" aria-hidden="true"></i> Queue <span class="count">{queue.length}</span>
+			<i class="ph ph-list-plus" aria-hidden="true"></i> {t('library.queue')} <span class="count">{queue.length}</span>
 		</button>
 		<button role="tab" aria-selected={activeTab === 'favorites'} class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')}>
-			<i class="ph ph-heart" aria-hidden="true"></i> Favorites <span class="count">{favorites.length}</span>
+			<i class="ph ph-heart" aria-hidden="true"></i> {t('library.favorites')} <span class="count">{favorites.length}</span>
 		</button>
 	</div>
 
 	{#if activeTab === 'subscriptions'}
 		{#if subscriptions.length === 0}
 			<div class="empty-state">
-				<p>You haven't subscribed to any podcasts yet.</p>
-				<a href="/search" class="btn">Discover Podcasts</a>
+				<p>{t('library.emptySubscriptions')}</p>
+				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
 		{:else}
 			<div class="podcast-grid">
@@ -173,8 +174,8 @@
 						<div class="details">
 							<h3>{sub.title}</h3>
 							<div class="actions">
-								<a href={`/podcast/${sub.podcast_id}`} class="btn-sm">View Episodes</a>
-								<button class="btn-sm text-danger" onclick={() => handleUnsubscribe(sub.podcast_id)}>Unsubscribe</button>
+								<a href={`/podcast/${sub.podcast_id}`} class="btn-sm">{t('common.viewEpisodes')}</a>
+								<button class="btn-sm text-danger" onclick={() => handleUnsubscribe(sub.podcast_id)}>{t('common.unsubscribe')}</button>
 							</div>
 						</div>
 					</div>
@@ -184,19 +185,19 @@
 	{:else if activeTab === 'episodes'}
 		{#if recentEpisodes.length === 0}
 			<div class="empty-state">
-				<p>Nothing in progress yet. Start an episode and it'll show up here.</p>
-				<a href="/search" class="btn">Discover Podcasts</a>
+				<p>{t('library.emptyInProgress')}</p>
+				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
 		{:else}
 			<div class="episode-list">
 				{#each recentEpisodes as ep (ep.episode_id)}
 					<div class="ep-row">
-						<button class="ep-play" onclick={() => resume(ep)} aria-label="Resume episode">
+						<button class="ep-play" onclick={() => resume(ep)} aria-label={t('library.resumeEpisode')}>
 							<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
-							<a class="ep-title" href={`/episode/${ep.episode_id}`}>{ep.title || 'Episode'}</a>
+							<a class="ep-title" href={`/episode/${ep.episode_id}`}>{ep.title || t('common.episode')}</a>
 							<span class="ep-sub">{ep.podcast_title || ''}</span>
 							<span class="ep-bar" aria-hidden="true">
 								<span class="ep-bar-fill" style="width:{Math.round(ep.progress_percent)}%"></span>
@@ -210,14 +211,14 @@
 	{:else if activeTab === 'queue'}
 		{#if queue.length === 0}
 			<div class="empty-state">
-				<p>Your queue is empty. Add episodes from any show to line them up.</p>
-				<a href="/search" class="btn">Discover Podcasts</a>
+				<p>{t('library.emptyQueue')}</p>
+				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
 		{:else}
 			<div class="queue-head">
-				<span class="queue-hint">Drag to reorder</span>
+				<span class="queue-hint">{t('library.dragToReorder')}</span>
 				<button class="btn-clear" onclick={emptyQueue}>
-					<i class="ph ph-trash" aria-hidden="true"></i> Clear queue
+					<i class="ph ph-trash" aria-hidden="true"></i> {t('library.clearQueue')}
 				</button>
 			</div>
 			<div class="episode-list">
@@ -233,15 +234,15 @@
 						ondrop={onDrop}
 					>
 						<div class="reorder-btns">
-							<button class="reorder-btn" onclick={() => moveItem(i, -1)} disabled={i === 0} aria-label="Move up in queue">
+							<button class="reorder-btn" onclick={() => moveItem(i, -1)} disabled={i === 0} aria-label={t('library.moveUp')}>
 								<i class="ph ph-caret-up" aria-hidden="true"></i>
 							</button>
-							<button class="reorder-btn" onclick={() => moveItem(i, 1)} disabled={i === queue.length - 1} aria-label="Move down in queue">
+							<button class="reorder-btn" onclick={() => moveItem(i, 1)} disabled={i === queue.length - 1} aria-label={t('library.moveDown')}>
 								<i class="ph ph-caret-down" aria-hidden="true"></i>
 							</button>
 						</div>
-						<span class="drag-handle" aria-hidden="true" title="Drag to reorder"><i class="ph ph-dots-six-vertical"></i></span>
-						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label="Play episode">
+						<span class="drag-handle" aria-hidden="true" title={t('library.dragToReorder')}><i class="ph ph-dots-six-vertical"></i></span>
+						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label={t('library.playEpisode')}>
 							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
@@ -249,7 +250,7 @@
 							<a class="ep-title" href={`/episode/${item.episode_id}`}>{item.title || 'Episode'}</a>
 							<span class="ep-sub">{item.podcast_title || 'Queued'}</span>
 						</div>
-						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label="Remove from queue">
+						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label={t('library.removeFromQueue')}>
 							<i class="ph ph-x" aria-hidden="true"></i>
 						</button>
 					</div>
@@ -260,14 +261,14 @@
 		{#if favorites.length === 0}
 			<div class="empty-state">
 				<i class="ph ph-heart" aria-hidden="true"></i>
-				<p>No favorites yet. Tap the heart on any episode to save it here.</p>
-				<a href="/search" class="btn">Discover Podcasts</a>
+				<p>{t('library.emptyFavorites')}</p>
+				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
 		{:else}
 			<div class="episode-list">
 				{#each favorites as fav (fav.episode_id)}
 					<div class="ep-row">
-						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label="Play episode">
+						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label={t('library.playEpisode')}>
 							<img src={optimizeArtwork(fav.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
@@ -275,7 +276,7 @@
 							<a class="ep-title" href={`/episode/${fav.episode_id}`}>{fav.title || 'Episode'}</a>
 							<span class="ep-sub">{fav.podcast_title || ''}</span>
 						</div>
-						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label="Remove from favorites">
+						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label={t('library.removeFromFavorites')}>
 							<i class="ph-fill ph-heart" aria-hidden="true"></i>
 						</button>
 					</div>

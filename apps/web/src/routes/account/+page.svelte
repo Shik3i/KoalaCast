@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -55,10 +56,10 @@
 			const res = await fetch(`/api/v1/auth/sessions/${id}`, { method: 'DELETE' });
 			if (res.ok) {
 				sessions = sessions.filter((s) => s.id !== id);
-				toast.success('Session revoked.');
+				toast.success(t('toast.sessionRevoked'));
 			}
 		} catch (_) {
-			toast.error('Failed to revoke session.');
+			toast.error(t('toast.sessionRevokeError'));
 		}
 	}
 
@@ -67,7 +68,7 @@
 			await fetch('/api/v1/auth/logout', { method: 'POST' });
 		} catch (_) {}
 		sync.disable();
-		toast.success('Signed out successfully.');
+		toast.success(t('toast.signedOut'));
 		goto('/login');
 	}
 
@@ -81,19 +82,19 @@
 </script>
 
 <svelte:head>
-	<title>Account Management — KoalaCast</title>
+	<title>{t('account.title')} — KoalaCast</title>
 	<meta name="description" content="Manage your KoalaCast user account, active device sessions, and cloud synchronization settings." />
 </svelte:head>
 
 <div class="account-page">
 	<header class="page-header">
-		<h1><i class="ph ph-user-gear" aria-hidden="true"></i> Account Overview</h1>
-		<p class="subtitle">Manage your account profile, device sessions, and cloud synchronization.</p>
+		<h1><i class="ph ph-user-gear" aria-hidden="true"></i> {t('account.title')}</h1>
+		<p class="subtitle">{t('account.subtitle')}</p>
 	</header>
 
 	{#if isLoading}
 		<div class="loading-state">
-			<i class="ph ph-spinner spinner" aria-hidden="true"></i> Loading account profile...
+			<i class="ph ph-spinner spinner" aria-hidden="true"></i> {t('account.loadingProfile')}
 		</div>
 	{:else if user}
 		<div class="account-grid">
@@ -113,11 +114,11 @@
 
 				<div class="profile-details">
 					<div class="detail-item">
-						<span class="detail-label"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i> Cloud Sync</span>
-						<span class="detail-value active"><i class="ph ph-check-circle" aria-hidden="true"></i> Active</span>
+						<span class="detail-label"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i> {t('account.cloudSync')}</span>
+						<span class="detail-value active"><i class="ph ph-check-circle" aria-hidden="true"></i> {t('account.active')}</span>
 					</div>
 					<div class="detail-item">
-						<span class="detail-label"><i class="ph ph-fingerprint" aria-hidden="true"></i> Account ID</span>
+						<span class="detail-label"><i class="ph ph-fingerprint" aria-hidden="true"></i> {t('account.accountId')}</span>
 						<span class="detail-value mono">{user.user_id}</span>
 					</div>
 				</div>
@@ -125,11 +126,11 @@
 				<div class="card-actions">
 					{#if user.role === 'admin'}
 						<a href="/admin" class="btn btn-secondary">
-							<i class="ph ph-shield" aria-hidden="true"></i> Admin Dashboard
+							<i class="ph ph-shield" aria-hidden="true"></i> {t('account.adminDashboard')}
 						</a>
 					{/if}
 					<button type="button" class="btn btn-danger" onclick={handleLogout}>
-						<i class="ph ph-sign-out" aria-hidden="true"></i> Sign Out
+						<i class="ph ph-sign-out" aria-hidden="true"></i> {t('account.signOut')}
 					</button>
 				</div>
 			</section>
@@ -137,12 +138,12 @@
 			<!-- Active Sessions Card -->
 			<section class="card sessions-card">
 				<header class="section-header">
-					<h3><i class="ph ph-devices" aria-hidden="true"></i> Active Device Sessions</h3>
-					<span class="session-count">{sessions.length} {sessions.length === 1 ? 'device' : 'devices'}</span>
+					<h3><i class="ph ph-devices" aria-hidden="true"></i> {t('account.activeSessions')}</h3>
+					<span class="session-count">{t('account.deviceCount', { count: sessions.length })}</span>
 				</header>
 
 				{#if sessions.length === 0}
-					<p class="empty-text">No other active sessions detected.</p>
+					<p class="empty-text">{t('account.noSessions')}</p>
 				{:else}
 					<div class="sessions-list">
 						{#each sessions as session (session.id)}
@@ -152,13 +153,13 @@
 								</div>
 								<div class="session-info">
 									<div class="session-title">
-										<span class="client-type">{session.client_type || 'Browser'}</span>
+										<span class="client-type">{session.client_type || t('account.browser')}</span>
 										{#if session.is_current}
-											<span class="current-badge">Current Device</span>
+											<span class="current-badge">{t('account.currentDevice')}</span>
 										{/if}
 									</div>
 									<div class="session-meta">
-										<span>IP Subnet: {session.ip_network || 'Direct'}</span>
+										<span>{t('account.ipSubnet')}: {session.ip_network || t('account.direct')}</span>
 										<span>•</span>
 										<span>Last active: {formatDate(session.last_active_at)}</span>
 									</div>
@@ -168,9 +169,9 @@
 										type="button"
 										class="btn-revoke"
 										onclick={() => revokeSession(session.id)}
-										title="Revoke session"
+										title={t('settings.revokeSession')}
 									>
-										Revoke
+										{t('common.revoke')}
 									</button>
 								{/if}
 							</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import DOMPurify from 'dompurify';
@@ -89,7 +90,7 @@
 		if (isFavorite) {
 			await removeLocalFavorite(episode.id);
 			isFavorite = false;
-			toast.success('Removed from favorites.');
+			toast.success(t('toast.removedFromFavorites'));
 		} else {
 			await addLocalFavorite({
 				episode_id: episode.id,
@@ -102,7 +103,7 @@
 				duration_ms: episode.duration_ms
 			});
 			isFavorite = true;
-			toast.success('Added to favorites.');
+			toast.success(t('toast.addedToFavorites'));
 		}
 	}
 
@@ -132,7 +133,7 @@
 			enclosure_url: episode.enclosure_url,
 			duration_ms: episode.duration_ms
 		});
-		toast.success('Added to queue.');
+		toast.success(t('toast.addedToQueue'));
 	}
 
 	function formatDuration(ms: number) {
@@ -293,7 +294,7 @@
 </script>
 
 {#if isLoading}
-	<div class="loading">Loading episode...</div>
+	<div class="loading">{t('episode.loading')}</div>
 {:else if episode}
 	<div class="episode-page" style={accentVars}>
 		<div class="episode-header">
@@ -310,7 +311,7 @@
 					</span>
 					<span class="badge">{formatDuration(episode.duration_ms)}</span>
 					{#if episode.explicit}
-						<span class="badge explicit">Explicit</span>
+						<span class="badge explicit">{t('episode.explicit')}</span>
 					{/if}
 				</div>
 
@@ -320,7 +321,7 @@
 						{isCurrent ? 'Now Playing' : 'Play Episode'}
 					</button>
 					<button class="btn-secondary" onclick={handleAddToQueue}>
-						<i class="ph ph-plus" aria-hidden="true"></i> Add to Queue
+						<i class="ph ph-plus" aria-hidden="true"></i> {t('episode.addToQueue')}
 					</button>
 					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
@@ -328,12 +329,12 @@
 					</button>
 					{#if episode.chapters_url}
 						<button class="btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
-							<i class="ph ph-list-numbers" aria-hidden="true"></i> Chapters
+							<i class="ph ph-list-numbers" aria-hidden="true"></i> {t('episode.chapters')}
 						</button>
 					{/if}
 					{#if episode.transcripts && episode.transcripts.length > 0}
 						<button class="btn-secondary" class:active={showTranscript} onclick={toggleTranscript} aria-expanded={showTranscript}>
-							<i class="ph ph-article" aria-hidden="true"></i> Transcript
+							<i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}
 						</button>
 					{/if}
 				</div>
@@ -342,9 +343,9 @@
 
 		{#if showChapters}
 			<section class="chapters-card" transition:slide={{ duration: 220 }}>
-				<h3><i class="ph ph-list-numbers" aria-hidden="true"></i> Episode Chapters</h3>
+				<h3><i class="ph ph-list-numbers" aria-hidden="true"></i> {t('episode.episodeChapters')}</h3>
 				{#if chaptersLoading}
-					<p class="transcript-status">Loading chapters…</p>
+					<p class="transcript-status">{t('episode.loadingChapters')}</p>
 				{:else if chaptersError}
 					<p class="transcript-status">{chaptersError}</p>
 				{:else if chaptersList.length > 0}
@@ -359,16 +360,16 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="transcript-status">No chapter markers found.</p>
+					<p class="transcript-status">{t('episode.noChapters')}</p>
 				{/if}
 			</section>
 		{/if}
 
 		{#if showTranscript}
 			<section class="transcript-card" transition:slide={{ duration: 220 }}>
-				<h3><i class="ph ph-article" aria-hidden="true"></i> Transcript</h3>
+				<h3><i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}</h3>
 				{#if transcriptLoading}
-					<p class="transcript-status">Loading transcript…</p>
+					<p class="transcript-status">{t('episode.loadingTranscript')}</p>
 				{:else if transcriptError}
 					<p class="transcript-status">{transcriptError}</p>
 				{:else if transcriptCues.length > 0}
@@ -389,14 +390,14 @@
 		{/if}
 
 		<section class="description-card">
-			<h3>Show Notes & Description</h3>
+			<h3>{t('episode.showNotes')}</h3>
 			<div class="html-content">
 				{@html sanitizeHTML(episode.content_encoded || episode.description)}
 			</div>
 		</section>
 	</div>
 {:else}
-	<div class="error">Episode not found.</div>
+	<div class="error">{t('episode.notFound')}</div>
 {/if}
 
 <style>

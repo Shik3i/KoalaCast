@@ -28,12 +28,16 @@ dev-api:
 dev-web:
 	@cd apps/web && npm run dev
 
-## test: Run Go tests with race detector & svelte-check
-test: test-api check
+## test: Run Go tests with race detector, web unit tests & svelte-check
+test: test-api test-web check
 
 test-api:
 	@echo "==> Running Go unit & integration tests with race detection..."
 	@cd services/api && go test -race ./...
+
+test-web:
+	@echo "==> Running web unit tests (i18n catalogues & runtime)..."
+	@cd apps/web && npm test
 
 ## check: Run svelte-check type verification
 check:

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
+	"github.com/Shik3i/KoalaCast/services/api/internal/lang"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
@@ -75,19 +76,6 @@ type transcriptItem struct {
 	Type string `json:"type"`
 }
 
-// searchResultDTO is the normalized shape the web client consumes, so both
-// search backends (Podcast Index and the iTunes fallback) look identical to the
-// frontend (which keys off feed_url / artwork_url).
-type searchResultDTO struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Author      string   `json:"author"`
-	FeedURL     string   `json:"feed_url"`
-	ArtworkURL  string   `json:"artwork_url"`
-	Categories  []string `json:"categories,omitempty"`
-	Description string   `json:"description"`
-}
-
 func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
@@ -99,8 +87,12 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if region == "" {
 		region = r.URL.Query().Get("country")
 	}
+	// Both filters are optional and independent: the client pre-selects the
+	// listener's settings languages but can clear them to search everything.
+	languages := lang.ParseList(r.URL.Query().Get("languages"))
+	category := r.URL.Query().Get("category")
 
-	var results interface{}
+	var results []itunes.PodcastResult
 	var err error
 	provider := "itunes"
 
@@ -109,23 +101,33 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		var piResults []podcastindex.SearchResult
 		piResults, err = h.PodcastIndex.Search(q)
 		if err == nil {
-			normalized := make([]searchResultDTO, 0, len(piResults))
+			results = make([]itunes.PodcastResult, 0, len(piResults))
 			for _, p := range piResults {
 				feedURL := p.URL
 				if feedURL == "" {
 					feedURL = p.OriginalURL
 				}
-				normalized = append(normalized, searchResultDTO{
+				language := lang.Normalize(p.Language)
+				if language == "" {
+					language = lang.Detect(p.Title + " " + p.Description)
+				}
+				cats := p.CategoryList()
+				cat := ""
+				if len(cats) > 0 {
+					cat = cats[0]
+				}
+				results = append(results, itunes.PodcastResult{
 					ID:          strconv.FormatInt(p.ID, 10),
 					Title:       p.Title,
 					Author:      p.Author,
 					FeedURL:     feedURL,
 					ArtworkURL:  p.Artwork,
-					Categories:  p.CategoryList(),
+					Category:    cat,
+					Categories:  cats,
 					Description: p.Description,
+					Language:    language,
 				})
 			}
-			results = normalized
 		}
 	} else {
 		// iTunes Search API fallback (access to millions of podcasts with HD artwork)
@@ -140,6 +142,15 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
+	}
+
+	if len(languages) > 0 {
+		h.resolveLanguages(r.Context(), results)
+		results = filterByLanguage(results, languages)
+	}
+	results = filterByCategory(results, category)
+	if results == nil {
+		results = []itunes.PodcastResult{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -160,6 +171,10 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	// category chips return full lists), a regional storefront, and more results.
 	category := r.URL.Query().Get("category")
 	region := r.URL.Query().Get("region")
+	// Spoken-language filter, independent of the storefront region: the German
+	// storefront carries plenty of English shows, so region alone never yields
+	// a German-only chart.
+	languages := lang.ParseList(r.URL.Query().Get("languages"))
 	limit := 60
 	if l, convErr := strconv.Atoi(r.URL.Query().Get("limit")); convErr == nil && l > 0 {
 		// Cap the upper bound so a client can't request an unbounded chart size
@@ -168,6 +183,15 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 			l = 100
 		}
 		limit = l
+	}
+	// Pull extra rows upstream when filtering, so a mixed-language chart still
+	// fills a page after the non-matching entries are dropped.
+	fetchLimit := limit
+	if len(languages) > 0 {
+		fetchLimit = limit * languageFilterOverfetch
+		if fetchLimit > 200 {
+			fetchLimit = 200
+		}
 	}
 	var topPodcasts []itunes.PodcastResult
 
@@ -178,7 +202,13 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		if piCat == "All" {
 			piCat = ""
 		}
-		if piResults, piErr := h.PodcastIndex.Trending(piCat, limit); piErr == nil {
+		// Podcast Index caps a trending request at 100 and silently falls back to
+		// its own default above that, so clamp rather than overshoot.
+		piLimit := fetchLimit
+		if piLimit > 100 {
+			piLimit = 100
+		}
+		if piResults, piErr := h.PodcastIndex.Trending(piCat, piLimit); piErr == nil {
 			for _, p := range piResults {
 				art := p.Artwork
 				if art == "" {
@@ -193,6 +223,12 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 				if len(cats) > 0 {
 					cat = cats[0]
 				}
+				// Podcast Index reports the feed's own <language>; fall back to
+				// detection only when it left the field empty.
+				language := lang.Normalize(p.Language)
+				if language == "" {
+					language = lang.Detect(p.Title + " " + p.Description)
+				}
 				topPodcasts = append(topPodcasts, itunes.PodcastResult{
 					ID:          strconv.FormatInt(p.ID, 10),
 					Title:       p.Title,
@@ -202,6 +238,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 					Category:    cat,
 					Categories:  cats,
 					Description: p.Description,
+					Language:    language,
 				})
 			}
 		}
@@ -209,14 +246,14 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 
 	if len(topPodcasts) == 0 && h.ITunes != nil {
 		genreID := itunes.GenreIDForCategory(category)
-		if tp, err := h.ITunes.FetchTopChart(region, genreID, limit); err == nil {
+		if tp, err := h.ITunes.FetchTopChart(region, genreID, fetchLimit); err == nil {
 			topPodcasts = tp
 		}
 	}
 
 	if len(topPodcasts) == 0 && h.DB != nil {
 		var dbPods []PodcastResponse
-		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT ?", limit)
+		rows, errDB := h.DB.SQL.QueryContext(r.Context(), "SELECT id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, last_successful_fetch_at FROM podcasts LIMIT ?", fetchLimit)
 		if errDB == nil {
 			defer rows.Close()
 			for rows.Next() {
@@ -237,8 +274,19 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 				FeedURL:     p.FeedURL,
 				ArtworkURL:  p.ArtworkURL,
 				Description: p.Description,
+				Language:    lang.Normalize(p.Language),
 			})
 		}
+	}
+
+	// Prefer the stored RSS <language> over a guess wherever the feed is known
+	// locally, then drop everything the listener does not speak.
+	if len(languages) > 0 {
+		h.resolveLanguages(r.Context(), topPodcasts)
+		topPodcasts = filterByLanguage(topPodcasts, languages)
+	}
+	if len(topPodcasts) > limit {
+		topPodcasts = topPodcasts[:limit]
 	}
 
 	if topPodcasts == nil {

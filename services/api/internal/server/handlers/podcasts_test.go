@@ -116,7 +116,7 @@ func TestPodcastHandler_Search_WithPodcastIndexCategories(t *testing.T) {
 	}
 
 	var resp struct {
-		Results []searchResultDTO `json:"results"`
+		Results []itunes.PodcastResult `json:"results"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode search response: %v", err)

@@ -1,3 +1,9 @@
+<script lang="ts">
+	import { t } from '$lib/i18n';
+
+	// Legal link labels are intentionally left in English — see docs/i18n.md.
+</script>
+
 <footer class="app-footer">
 	<div class="footer-container">
 		<div class="footer-brand">
@@ -9,8 +15,8 @@
 				</picture>
 				<span class="brand-title">KoalaCast</span>
 			</div>
-			<p class="tagline">Privacy-first podcast player with cross-device sync.</p>
-			<p class="copyright">© 2026 KoalaStuff</p>
+			<p class="tagline">{t('footer.blurb')}</p>
+			<p class="copyright">{t('footer.copyright')}</p>
 		</div>
 
 		<div class="footer-links">
@@ -25,7 +31,7 @@
 			</div>
 
 			<div class="link-column">
-				<h4>Open Source</h4>
+				<h4>{t('footer.openSource')}</h4>
 				<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer">
 					<i class="ph ph-github-logo" aria-hidden="true"></i> GitHub
 				</a>

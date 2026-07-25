@@ -8,6 +8,9 @@
 	import { optimizeArtwork } from '$lib/artwork';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide, fade } from 'svelte/transition';
+	import { SUPPORTED_LANGUAGES, regionForLanguage } from '$lib/data/languages';
+	import { GENRES, genreLabel } from '$lib/genres';
+	import { t } from '$lib/i18n';
 
 	let searchQuery = $state('');
 	let rssUrlInput = $state('');
@@ -22,6 +25,61 @@
 	let searchTimeout: any = null;
 	// Monotonic id so a slow earlier query can't overwrite the results of a newer one.
 	let searchReqId = 0;
+
+	// Search filters. Languages start pre-selected from the listener's settings —
+	// the same default as Discover — but unlike Discover they can be cleared here,
+	// because search is exactly where someone goes looking for the one show that
+	// falls outside their usual languages.
+	let filterLanguages = $state<string[]>([...prefs.languages]);
+	let filterGenre = $state<string>('');
+	let showFilters = $state(false);
+	// The term the visible results came from, which is not always what is in the
+	// search box (the page seeds itself with a default query on mount).
+	let lastExecutedQuery = $state('');
+
+	const activeFilterCount = $derived(filterLanguages.length + (filterGenre ? 1 : 0));
+	const hasNonDefaultFilters = $derived(
+		activeFilterCount > 0 &&
+			!(filterGenre === '' && sameLanguages(filterLanguages, prefs.languages))
+	);
+
+	function sameLanguages(a: string[], b: string[]): boolean {
+		return a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
+	}
+
+	// Re-runs whatever query the visible results came from. The search box can be
+	// empty while results are on screen (the page seeds itself with a default
+	// query), so changing a filter has to fall back to the last executed term
+	// instead of the box — otherwise the filter appears to do nothing.
+	function rerunSearch() {
+		executeSearch(searchQuery.trim() || lastExecutedQuery);
+	}
+
+	function toggleFilterLanguage(code: string) {
+		filterLanguages = filterLanguages.includes(code)
+			? filterLanguages.filter((l) => l !== code)
+			: [...filterLanguages, code];
+		rerunSearch();
+	}
+
+	function setFilterGenre(genre: string) {
+		filterGenre = filterGenre === genre ? '' : genre;
+		rerunSearch();
+	}
+
+	// "Clear filters" drops every restriction, including the settings-derived
+	// languages, so the next query searches everything.
+	function clearFilters() {
+		filterLanguages = [];
+		filterGenre = '';
+		rerunSearch();
+	}
+
+	function resetFiltersToSettings() {
+		filterLanguages = [...prefs.languages];
+		filterGenre = '';
+		rerunSearch();
+	}
 
 	function isSubscribed(pod: any) {
 		const feed = pod.feed_url || pod.feedUrl;
@@ -83,19 +141,26 @@
 	async function executeSearch(query: string) {
 		if (!query.trim()) return;
 		const reqId = ++searchReqId;
+		lastExecutedQuery = query.trim();
 		isSearching = true;
 		errorMessage = '';
 
-		const primaryLang = prefs.languages[0] || 'us';
+		// The storefront follows the first selected language; the language filter
+		// itself is what actually restricts results (a storefront is a market, not
+		// a language). With no language filter, search the widest storefront.
+		const params = new URLSearchParams({ q: query, region: regionForLanguage(filterLanguages[0] ?? 'en') });
+		if (filterLanguages.length > 0) params.set('languages', filterLanguages.join(','));
+		if (filterGenre) params.set('category', filterGenre);
+
 		try {
-			const res = await fetch(`/api/v1/podcasts/search?q=${encodeURIComponent(query)}&region=${primaryLang}`);
+			const res = await fetch(`/api/v1/podcasts/search?${params}`);
 			const data = await res.json();
 			if (reqId !== searchReqId) return; // superseded by a newer query
 			searchResults = data.results ?? [];
 			if (data.provider) provider = data.provider;
 		} catch (err) {
 			if (reqId !== searchReqId) return;
-			errorMessage = 'Failed to execute search query.';
+			errorMessage = t('search.searchError');
 		} finally {
 			if (reqId === searchReqId) isSearching = false;
 		}
@@ -156,10 +221,10 @@
 
 			subscribedIds = [...subscribedIds, podId];
 			if (feedUrl) subscribedFeeds = [...subscribedFeeds, feedUrl];
-			toast.success(`Subscribed to ${pod.title || pod.trackName}`);
+			toast.success(t('toast.subscribed', { title: pod.title || pod.trackName }));
 		} catch (err) {
 			console.error(err);
-			toast.error('Could not subscribe. Please try again.');
+			toast.error(t('toast.subscribeError'));
 		}
 	}
 
@@ -192,10 +257,10 @@
 			subscribedIds = [...subscribedIds, data.id];
 			if (data.feed_url) subscribedFeeds = [...subscribedFeeds, data.feed_url];
 			rssUrlInput = '';
-			toast.success('Feed added.');
+			toast.success(t('toast.feedAdded'));
 			goto(`/podcast/${data.id}`);
 		} catch (err) {
-			errorMessage = 'Failed to fetch RSS feed.';
+			errorMessage = t('search.rssError');
 		} finally {
 			isAddingRss = false;
 		}
@@ -204,33 +269,113 @@
 
 <div class="search-experience">
 	<div class="search-hero">
-		<h2>Search podcasts</h2>
+		<h2>{t('search.title')}</h2>
 
 		<form onsubmit={handleSearchSubmit} class="search-field" class:searching={isSearching}>
 			<i class="ph ph-magnifying-glass lead" aria-hidden="true"></i>
 			<input
 				type="text"
-				placeholder="Search millions of shows by title, author, or topic…"
+				placeholder={t('search.placeholder')}
 				bind:value={searchQuery}
-				aria-label="Search podcasts"
+				aria-label={t('search.title')}
 			/>
 			{#if searchQuery}
-				<button type="button" class="clear" onclick={() => (searchQuery = '')} aria-label="Clear search" transition:fade={{ duration: 120 }}>
+				<button type="button" class="clear" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')} transition:fade={{ duration: 120 }}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			{/if}
 			<button type="submit" class="go" disabled={isSearching}>
-				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}Search{/if}
+				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}{t('search.submit')}{/if}
 			</button>
 		</form>
 
+		<!-- Filters. Languages are pre-selected from Settings so the default search
+		     matches Discover; "Clear filters" drops them to search everything. -->
+		<div class="filter-row">
+			<button
+				class="filter-toggle"
+				class:open={showFilters}
+				class:has-active={activeFilterCount > 0}
+				onclick={() => (showFilters = !showFilters)}
+				aria-expanded={showFilters}
+			>
+				<i class="ph ph-funnel" aria-hidden="true"></i>
+				{t('search.filters')}
+				{#if activeFilterCount > 0}
+					<span class="filter-count">{activeFilterCount}</span>
+				{/if}
+				<i class="ph ph-caret-down chev" aria-hidden="true"></i>
+			</button>
+
+			{#if activeFilterCount > 0}
+				<button class="filter-clear" onclick={clearFilters}>
+					<i class="ph ph-x" aria-hidden="true"></i>
+					{t('search.clearFilters')}
+				</button>
+			{/if}
+			{#if hasNonDefaultFilters}
+				<button class="filter-reset" onclick={resetFiltersToSettings}>
+					<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
+					{t('search.resetFilters')}
+				</button>
+			{/if}
+		</div>
+
+		{#if showFilters}
+			<div class="filter-panel" transition:slide={{ duration: 220 }}>
+				<div class="filter-group">
+					<span class="filter-label">
+						<i class="ph ph-translate" aria-hidden="true"></i>
+						{t('search.languageFilter')}
+					</span>
+					<div class="filter-pills">
+						{#each SUPPORTED_LANGUAGES as lang (lang.code)}
+							<button
+								class="filter-pill"
+								class:active={filterLanguages.includes(lang.code)}
+								onclick={() => toggleFilterLanguage(lang.code)}
+								aria-pressed={filterLanguages.includes(lang.code)}
+							>
+								<span class="flag-emoji">{lang.flag}</span>
+								{lang.name}
+							</button>
+						{/each}
+					</div>
+					<p class="filter-hint">{t('search.filterHint')}</p>
+				</div>
+
+				<div class="filter-group">
+					<span class="filter-label">
+						<i class="ph ph-squares-four" aria-hidden="true"></i>
+						{t('search.genreFilter')}
+					</span>
+					<div class="filter-pills">
+						<button class="filter-pill" class:active={filterGenre === ''} onclick={() => setFilterGenre('')}>
+							{t('search.allGenres')}
+						</button>
+						{#each GENRES as g (g.name)}
+							<button
+								class="filter-pill"
+								class:active={filterGenre === g.name}
+								onclick={() => setFilterGenre(g.name)}
+								aria-pressed={filterGenre === g.name}
+							>
+								<i class="ph {g.icon}" aria-hidden="true"></i>
+								{genreLabel(g.name)}
+							</button>
+						{/each}
+					</div>
+				</div>
+			</div>
+		{/if}
+
 		{#if !searchQuery.trim() && recentSearches.length > 0}
 			<div class="recent-row" transition:slide={{ duration: 180 }}>
-				<span class="recent-label">Recent</span>
+				<span class="recent-label">{t('search.recent')}</span>
 				{#each recentSearches as q}
 					<button class="recent-chip" onclick={() => runRecent(q)}>{q}</button>
 				{/each}
-				<button class="recent-clear" onclick={clearHistory} aria-label="Clear search history">
+				<button class="recent-clear" onclick={clearHistory} aria-label={t('search.clearHistory')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			</div>
@@ -240,7 +385,7 @@
 		<div class="rss-toggle-row">
 			<button class="rss-toggle" class:open={showRss} onclick={() => (showRss = !showRss)} aria-expanded={showRss}>
 				<i class="ph ph-rss" aria-hidden="true"></i>
-				Add a podcast by RSS URL
+				{t('search.addByRss')}
 				<i class="ph ph-caret-down chev" aria-hidden="true"></i>
 			</button>
 		</div>
@@ -250,12 +395,12 @@
 				<i class="ph ph-link lead" aria-hidden="true"></i>
 				<input
 					type="url"
-					placeholder="https://example.com/feed.xml"
+					placeholder={t('search.rssPlaceholder')}
 					bind:value={rssUrlInput}
 					required
 				/>
 				<button type="submit" class="go" disabled={isAddingRss}>
-					{isAddingRss ? 'Adding…' : 'Add'}
+					{isAddingRss ? t('search.adding') : t('search.add')}
 				</button>
 			</form>
 		{/if}
@@ -270,17 +415,17 @@
 		<div class="results-head">
 			<h3>
 				{#if isSearching}
-					Searching live catalog...
+					{t('search.searchingLive')}
 				{:else}
-					Results ({visibleResults.length})
+					{t('search.results', { count: visibleResults.length })}
 				{/if}
 			</h3>
 			{#if provider && searchResults.length > 0}
 				<span class="provider-credit">
 					{#if provider === 'podcastindex'}
-						Powered by <a href="https://podcastindex.org" target="_blank" rel="noopener noreferrer">Podcast Index</a>
+						{t('search.poweredByIndex')} <a href="https://podcastindex.org" target="_blank" rel="noopener noreferrer">Podcast Index</a>
 					{:else}
-						Results via Apple Podcasts
+						{t('search.resultsViaApple')}
 					{/if}
 				</span>
 			{/if}
@@ -640,32 +785,18 @@
 		border: 1px solid var(--border-subtle);
 	}
 
-	/* Region / Country selector bar */
-	.region-bar {
+	/* Search filters (language + genre) */
+	.filter-row {
 		display: flex;
 		align-items: center;
-		gap: 0.85rem;
+		gap: 0.6rem;
 		flex-wrap: wrap;
-		margin: 0.5rem 0 1rem;
+		margin: 0.75rem 0 0.25rem;
 	}
 
-	.region-label {
-		font-size: 0.88rem;
-		font-weight: 700;
-		color: var(--text-secondary);
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
-	.region-pills {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
-
-	.region-pill {
+	.filter-toggle,
+	.filter-clear,
+	.filter-reset {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.45rem;
@@ -680,16 +811,104 @@
 		transition: var(--transition-smooth);
 	}
 
-	.region-pill:hover {
+	.filter-toggle:hover,
+	.filter-clear:hover,
+	.filter-reset:hover {
 		border-color: var(--accent-green);
 		color: var(--text-primary);
 		background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface));
 	}
 
-	.region-pill.active {
+	.filter-toggle.has-active {
+		border-color: var(--accent-green);
+		color: var(--text-primary);
+	}
+
+	.filter-count {
+		display: inline-grid;
+		place-items: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.35rem;
+		border-radius: 999px;
+		background: var(--accent-green);
+		color: #ffffff;
+		font-size: 0.72rem;
+		font-weight: 700;
+	}
+
+	.filter-toggle .chev {
+		transition: transform 0.2s ease;
+	}
+
+	.filter-toggle.open .chev {
+		transform: rotate(180deg);
+	}
+
+	.filter-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 1.1rem;
+		padding: 1rem 1.15rem;
+		margin-bottom: 0.5rem;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
+		border-radius: 16px;
+	}
+
+	.filter-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+
+	.filter-label {
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.filter-pills {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.filter-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		background: var(--bg-elevated);
+		border: 1px solid var(--border-subtle);
+		padding: 0.4rem 0.85rem;
+		border-radius: 20px;
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: var(--transition-smooth);
+	}
+
+	.filter-pill:hover {
+		border-color: var(--accent-green);
+		color: var(--text-primary);
+		background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface));
+	}
+
+	.filter-pill.active {
 		background: var(--accent-green);
 		color: #ffffff;
 		border-color: var(--accent-green);
+	}
+
+	.filter-hint {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-secondary);
 	}
 
 	.flag-emoji {

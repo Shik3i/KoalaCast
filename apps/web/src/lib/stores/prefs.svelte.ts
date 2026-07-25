@@ -1,6 +1,15 @@
-// Small global preferences store (persisted to localStorage). Currently holds the
-// date display mode so the whole app formats episode dates consistently and can
-// switch between an absolute date and a relative "x days ago" style.
+// Small global preferences store (persisted to localStorage). Holds the date
+// display mode so the whole app formats episode dates consistently, the content
+// languages Discover and Search are filtered to, and the UI language.
+
+import {
+	detectBrowserLanguages,
+	normalizeLanguageList,
+	regionForLanguage
+} from '$lib/data/languages';
+// Only the pure registry is imported here, never the runtime: the runtime reads
+// this store, and importing it back would create a cycle.
+import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
 
 export type DateFormat = 'absolute' | 'relative';
 
@@ -8,16 +17,33 @@ const KEY = 'koalacast_date_format';
 const INTERESTS_KEY = 'koalacast_interests';
 const HIDDEN_KEY = 'koalacast_hidden_genres';
 const LANGUAGES_KEY = 'koalacast_preferred_languages';
+const UI_LANGUAGE_KEY = 'koalacast_ui_language';
 const ONBOARDED_KEY = 'koalacast_onboarded';
 
+// Reads the stored content languages, migrating the legacy storefront codes
+// ("us", "gb") this preference used to hold before languages and regions were
+// separated. An empty or unreadable value falls back to the browser's language.
 function initialLanguages(): string[] {
-	if (typeof localStorage === 'undefined') return ['us', 'de'];
+	if (typeof localStorage === 'undefined') return ['en'];
 	try {
-		const v = JSON.parse(localStorage.getItem(LANGUAGES_KEY) || '[]');
-		return Array.isArray(v) && v.length > 0 ? v : ['us', 'de'];
+		const stored = normalizeLanguageList(JSON.parse(localStorage.getItem(LANGUAGES_KEY) || '[]'));
+		return stored.length > 0 ? stored : detectBrowserLanguages();
 	} catch (_) {
-		return ['us', 'de'];
+		return detectBrowserLanguages();
 	}
+}
+
+// The UI language is independent of the content languages: someone may want a
+// German interface while still listening to English shows. It defaults to the
+// first content language when it is one we have translations for, else to the
+// browser's own language.
+export function initialUILanguage(contentLanguages: string[] = initialLanguages()): string {
+	if (typeof localStorage === 'undefined') return 'en';
+	const stored = localStorage.getItem(UI_LANGUAGE_KEY);
+	if (stored && isSupportedLocale(stored)) return stored;
+	const fromContent = resolveLocale(contentLanguages[0]);
+	if (fromContent !== 'en') return fromContent;
+	return resolveLocale(typeof navigator !== 'undefined' ? navigator.language : undefined);
 }
 
 function initialFormat(): DateFormat {
@@ -57,9 +83,19 @@ class Prefs {
 	interests = $state<string[]>(initialInterests());
 	// Vetoed genres — podcasts in these are hidden from discover and search.
 	hiddenGenres = $state<string[]>(initialHidden());
-	// Preferred content languages/regions for trends and discovery.
+	// Spoken languages Discover and Search are filtered to (ISO 639-1 codes).
 	languages = $state<string[]>(initialLanguages());
+	// Interface language, independent of the content languages above. The active
+	// translation catalogue lives in the i18n runtime; this is the persisted
+	// preference that drives it (see `applyLocale` in +layout.svelte).
+	uiLanguage = $state<string>(initialUILanguage());
 	onboarded = $state<boolean>(initialOnboarded());
+
+	// iTunes storefronts to pull charts from, one per selected language.
+	// Deduplicated because several languages can share a storefront.
+	get regions(): string[] {
+		return [...new Set(this.languages.map(regionForLanguage))];
+	}
 
 	#persistLanguages() {
 		try {
@@ -75,6 +111,13 @@ class Prefs {
 		}
 		this.languages = has ? this.languages.filter((l) => l !== langCode) : [...this.languages, langCode];
 		this.#persistLanguages();
+	}
+
+	setUILanguage(locale: string) {
+		this.uiLanguage = locale;
+		try {
+			localStorage.setItem(UI_LANGUAGE_KEY, locale);
+		} catch (_) {}
 	}
 
 	setDateFormat(mode: DateFormat) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -32,7 +33,7 @@
 			}
 
 			recoveryCodeDisplay = data.recovery_code;
-			toast.success('Account created successfully!');
+			toast.success(t('toast.accountCreated'));
 		} catch (err) {
 			authError = 'Network error during registration.';
 		} finally {
@@ -42,13 +43,13 @@
 
 	function copyRecoveryCode() {
 		navigator.clipboard.writeText(recoveryCodeDisplay);
-		toast.success('Recovery code copied to clipboard!');
+		toast.success(t('toast.recoveryCopied'));
 	}
 </script>
 
 <svelte:head>
-	<title>Register Account — KoalaCast</title>
-	<meta name="description" content="Create a new KoalaCast account to enable seamless cloud synchronization." />
+	<title>{t('register.pageTitle')}</title>
+	<meta name="description" content={t('register.metaDescription')} />
 </svelte:head>
 
 <div class="auth-container">
@@ -58,30 +59,30 @@
 				<div class="auth-icon success">
 					<i class="ph ph-shield-check" aria-hidden="true"></i>
 				</div>
-				<h1>Account Created!</h1>
-				<p class="subtitle">Please save your one-time account recovery code. You will need it if you ever lose your password.</p>
+				<h1>{t('register.created')}</h1>
+				<p class="subtitle">{t('register.createdSubtitle')}</p>
 			</header>
 
 			<div class="recovery-box">
-				<label for="recovery-code-val">Your Account Recovery Code</label>
+				<label for="recovery-code-val">{t('register.recoveryLabel')}</label>
 				<div class="code-row">
 					<code id="recovery-code-val">{recoveryCodeDisplay}</code>
-					<button type="button" class="btn-copy" onclick={copyRecoveryCode} title="Copy code">
-						<i class="ph ph-copy" aria-hidden="true"></i> Copy
+					<button type="button" class="btn-copy" onclick={copyRecoveryCode} title={t('register.copyCode')}>
+						<i class="ph ph-copy" aria-hidden="true"></i> {t('common.copy')}
 					</button>
 				</div>
 			</div>
 
 			<button type="button" class="btn btn-primary" onclick={() => goto('/login')}>
-				Proceed to Sign In <i class="ph ph-arrow-right" aria-hidden="true"></i>
+				{t('register.proceedToSignIn')} <i class="ph ph-arrow-right" aria-hidden="true"></i>
 			</button>
 		{:else}
 			<header class="auth-header">
 				<div class="auth-icon">
 					<i class="ph ph-user-plus" aria-hidden="true"></i>
 				</div>
-				<h1>Create Account</h1>
-				<p class="subtitle">Create a KoalaCast account to sync your subscriptions across devices.</p>
+				<h1>{t('register.title')}</h1>
+				<p class="subtitle">{t('register.subtitle')}</p>
 			</header>
 
 			{#if authError}
@@ -93,24 +94,24 @@
 
 			<form onsubmit={handleRegister} class="auth-form">
 				<div class="form-group">
-					<label for="reg-username">Username</label>
+					<label for="reg-username">{t('register.username')}</label>
 					<input
 						id="reg-username"
 						type="text"
 						bind:value={usernameInput}
-						placeholder="Choose a username"
+						placeholder={t('register.usernamePlaceholder')}
 						required
 						autocomplete="username"
 					/>
 				</div>
 
 				<div class="form-group">
-					<label for="reg-password">Password</label>
+					<label for="reg-password">{t('register.password')}</label>
 					<input
 						id="reg-password"
 						type="password"
 						bind:value={passwordInput}
-						placeholder="Create a strong password"
+						placeholder={t('register.passwordPlaceholder')}
 						required
 						autocomplete="new-password"
 					/>
@@ -118,17 +119,17 @@
 
 				<button type="submit" class="btn btn-primary" disabled={isRegistering}>
 					{#if isRegistering}
-						<i class="ph ph-spinner spinner" aria-hidden="true"></i> Creating account...
+						<i class="ph ph-spinner spinner" aria-hidden="true"></i> {t('register.creating')}
 					{:else}
-						<i class="ph ph-user-plus" aria-hidden="true"></i> Register Account
+						<i class="ph ph-user-plus" aria-hidden="true"></i> {t('register.submit')}
 					{/if}
 				</button>
 			</form>
 
 			<footer class="auth-footer">
-				<p>Already have an account?</p>
+				<p>{t('register.haveAccount')}</p>
 				<a href="/login" class="link-login">
-					Sign in to your account <i class="ph ph-arrow-right" aria-hidden="true"></i>
+					{t('register.signInToAccount')} <i class="ph ph-arrow-right" aria-hidden="true"></i>
 				</a>
 			</footer>
 		{/if}

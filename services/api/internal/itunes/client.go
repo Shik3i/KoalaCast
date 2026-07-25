@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Shik3i/KoalaCast/services/api/internal/lang"
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 )
 
@@ -75,6 +76,11 @@ type PodcastResult struct {
 	Category    string   `json:"category"`
 	Categories  []string `json:"categories,omitempty"`
 	Description string   `json:"description"`
+	// Language is a bare language code ("de", "en") or "" when unknown. iTunes
+	// reports no language on either the chart or the search endpoint, so it is
+	// inferred from the title and description; callers that can resolve an
+	// authoritative language (RSS <language>, Podcast Index) should overwrite it.
+	Language string `json:"language,omitempty"`
 }
 
 func NewITunesClient() *ITunesClient {
@@ -167,6 +173,7 @@ func (c *ITunesClient) FetchTopChart(region string, genreID, limit int) ([]Podca
 			Category:    cat,
 			Categories:  cats,
 			Description: entry.Summary.Label,
+			Language:    lang.Detect(entry.Title.Label + " " + entry.Summary.Label),
 		})
 	}
 
@@ -268,6 +275,7 @@ func (c *ITunesClient) SearchPodcastsWithCountry(query, country string, limit in
 			ArtworkURL: art,
 			Category:   item.PrimaryGenre,
 			Categories: cats,
+			Language:   lang.Detect(item.TrackName + " " + item.ArtistName),
 		})
 	}
 

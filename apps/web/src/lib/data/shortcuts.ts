@@ -1,11 +1,14 @@
+import type { MessageKey } from '$lib/i18n';
+
 export interface KeyboardShortcut {
 	key: string;
-	description: string;
+	/** Translation key — the description is rendered through `t()` at display time. */
+	descriptionKey: MessageKey;
 }
 
 export const KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
-	{ key: 'Space', description: 'Play / Pause' },
-	{ key: '←', description: 'Skip 10 seconds back' },
-	{ key: '→', description: 'Skip 30 seconds forward' },
-	{ key: '?', description: 'Toggle this help' }
+	{ key: 'Space', descriptionKey: 'shortcuts.playPause' },
+	{ key: '←', descriptionKey: 'shortcuts.skipBack' },
+	{ key: '→', descriptionKey: 'shortcuts.skipForward' },
+	{ key: '?', descriptionKey: 'shortcuts.toggleHelp' }
 ];

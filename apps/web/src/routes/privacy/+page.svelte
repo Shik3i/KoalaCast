@@ -1,5 +1,10 @@
 <script lang="ts">
 	import { PRIVACY_SECTIONS } from '$lib/data/privacy';
+
+	// NOTE: This page is intentionally NOT translated. The privacy policy is a
+	// legal document — a mistranslated clause is a legal problem, not a cosmetic
+	// one — so it is maintained in English only and reviewed as English.
+	// See docs/i18n.md ("Legal content is not translated").
 </script>
 
 <svelte:head>

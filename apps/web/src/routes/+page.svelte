@@ -14,8 +14,10 @@
 	import { reveal } from '$lib/actions/reveal';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Onboarding from '$lib/components/Onboarding.svelte';
-	import { GENRES } from '$lib/genres';
+	import { GENRES, genreLabel } from '$lib/genres';
 	import { optimizeArtwork } from '$lib/artwork';
+	import { detectBrowserLanguages, regionForLanguage } from '$lib/data/languages';
+	import { t } from '$lib/i18n';
 
 	interface PodcastItem {
 		id: string;
@@ -50,15 +52,23 @@
 
 	const categories = ['All', ...GENRES.map((g) => g.name)];
 
-	// Discover pulls top charts from the server for all active spoken languages,
-	// interleaving results so multi-language preferences are served seamlessly.
+	// Discover pulls one top chart per spoken language and interleaves them.
+	//
+	// Each request carries both a storefront `region` and a `languages` filter,
+	// because they are not the same thing: the German storefront is full of
+	// English shows, so without the language filter a German-only preference
+	// still returns English podcasts.
 	async function loadDiscover() {
 		const reqId = ++discoverReqId;
-		const activeLanguages = prefs.languages.length > 0 ? prefs.languages : ['us', 'de'];
+		const activeLanguages = prefs.languages.length > 0 ? prefs.languages : detectBrowserLanguages();
 
 		try {
 			const fetchPromises = activeLanguages.map((lang) => {
-				const params = new URLSearchParams({ limit: String(limit), region: lang });
+				const params = new URLSearchParams({
+					limit: String(limit),
+					region: regionForLanguage(lang),
+					languages: lang
+				});
 				if (selectedCategory !== 'All') params.set('category', selectedCategory);
 				return fetch(`/api/v1/podcasts/discover?${params}`).then((r) => (r.ok ? r.json() : { results: [] }));
 			});
@@ -147,6 +157,23 @@
 		isLoading = false;
 	});
 
+	// Re-pull the charts when the content languages change. Onboarding lives on
+	// this page, so a first-run language pick has to refresh Discover without a
+	// navigation. Plain (non-reactive) tracking variable: writing to a $state
+	// this effect also reads would loop.
+	let lastLanguageKey = '';
+	$effect(() => {
+		const key = prefs.languages.join(',');
+		if (!mounted || key === lastLanguageKey) return;
+		const isInitialRun = lastLanguageKey === '';
+		lastLanguageKey = key;
+		if (isInitialRun) return; // onMount already fetched with these languages
+		limit = PAGE_SIZE;
+		reachedEnd = false;
+		isLoading = true;
+		loadDiscover().finally(() => (isLoading = false));
+	});
+
 	// Build a "For You" rail from the user's interest genres (Podcast Index trending
 	// per genre, interleaved + deduped). Re-runs whenever interests change (e.g.
 	// after onboarding). Everything stays on-device; only category trending is fetched.
@@ -155,10 +182,20 @@
 			forYou = [];
 			return;
 		}
+		// Same language contract as Discover — without these params "For You"
+		// silently fell back to the US chart and served English shows to a
+		// German-only listener.
+		const activeLanguages = prefs.languages.length > 0 ? prefs.languages : detectBrowserLanguages();
 		const lists = await Promise.all(
 			picks.slice(0, 4).map(async (g) => {
 				try {
-					const res = await fetch(`/api/v1/podcasts/discover?category=${encodeURIComponent(g)}&limit=10`);
+					const params = new URLSearchParams({
+						category: g,
+						limit: '10',
+						region: regionForLanguage(activeLanguages[0]),
+						languages: activeLanguages.join(',')
+					});
+					const res = await fetch(`/api/v1/podcasts/discover?${params}`);
 					const data = await res.json();
 					return (data.results ?? []) as PodcastItem[];
 				} catch (_) {
@@ -271,10 +308,10 @@
 
 			subscribedIds = [...subscribedIds, targetId];
 			if (targetFeedUrl) subscribedFeeds = [...subscribedFeeds, targetFeedUrl];
-			toast.success(`Subscribed to ${pod.title}`);
+			toast.success(t('discover.subscribeSuccess', { title: pod.title }));
 		} catch (err) {
 			console.error('Failed to subscribe:', err);
-			toast.error('Could not subscribe. Please try again.');
+			toast.error(t('discover.subscribeError'));
 		} finally {
 			isSubmitting = false;
 		}
@@ -289,19 +326,19 @@
 	<!-- Clean Hero Header -->
 	<section class="hero-section">
 		<div class="hero-content">
-			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> Open Source Podcatcher</span>
-			<h1>Discover & Listen to Podcasts</h1>
-			<p class="subtitle">Stream shows directly from creators. Simple, calm, privacy-first audio playback.</p>
+			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> {t('discover.badge')}</span>
+			<h1>{t('discover.title')}</h1>
+			<p class="subtitle">{t('discover.subtitle')}</p>
 
 			<div class="search-bar-hero">
 				<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
 				<input
 					type="text"
-					placeholder="Search podcasts by title, author, or topic..."
+					placeholder={t('discover.searchPlaceholder')}
 					bind:value={searchQuery}
 				/>
 				{#if searchQuery}
-					<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label="Clear search input">
+					<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')}>
 						<i class="ph ph-x" aria-hidden="true"></i>
 					</button>
 				{/if}
@@ -313,7 +350,7 @@
 	{#if continueItems.length > 0}
 		<section class="continue-section" use:reveal>
 			<div class="section-title-row">
-				<h2><i class="ph-fill ph-play-circle" aria-hidden="true"></i> Continue Listening</h2>
+				<h2><i class="ph-fill ph-play-circle" aria-hidden="true"></i> {t('discover.continueListening')}</h2>
 			</div>
 			<div class="continue-rail">
 				{#each continueItems as item (item.episode_id)}
@@ -328,7 +365,7 @@
 							<span class="cc-play"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</div>
 						<div class="cc-meta">
-							<span class="cc-title" title={item.title}>{item.title || 'Episode'}</span>
+							<span class="cc-title" title={item.title}>{item.title || t('common.episode')}</span>
 							<span class="cc-podcast">{item.podcast_title || ''}</span>
 							<span class="cc-progress" aria-hidden="true">
 								<span class="cc-progress-fill" style="width:{Math.round(item.progress_percent)}%"></span>
@@ -344,8 +381,8 @@
 	{#if forYou.length > 0}
 		<section class="foryou-section" use:reveal>
 			<div class="section-title-row">
-				<h2><i class="ph-fill ph-sparkle" aria-hidden="true"></i> For You</h2>
-				<a class="foryou-edit" href="/settings#interests">Edit interests</a>
+				<h2><i class="ph-fill ph-sparkle" aria-hidden="true"></i> {t('discover.forYou')}</h2>
+				<a class="foryou-edit" href="/settings#interests">{t('discover.editInterests')}</a>
 			</div>
 			<div class="foryou-rail">
 				{#each forYou as pod (pod.feed_url || pod.id)}
@@ -373,7 +410,7 @@
 				class:active={selectedCategory === cat}
 				onclick={() => selectCategory(cat)}
 			>
-				{cat}
+				{genreLabel(cat)}
 			</button>
 		{/each}
 	</div>
@@ -381,8 +418,10 @@
 	<!-- Top Charts Grid -->
 	<section class="catalog-section">
 		<div class="section-title-row">
-			<h2>{selectedCategory === 'All' ? 'Top Trending Shows' : `${selectedCategory} Shows`}</h2>
-			<span class="count-badge">{filteredPodcasts.length} Shows</span>
+			<h2>{selectedCategory === 'All'
+					? t('discover.topTrending')
+					: t('discover.categoryShows', { category: genreLabel(selectedCategory) })}</h2>
+			<span class="count-badge">{t('discover.showCount', { count: filteredPodcasts.length })}</span>
 		</div>
 
 		{#if isLoading}
@@ -401,7 +440,9 @@
 		{:else if filteredPodcasts.length === 0}
 			<div class="empty-state">
 				<i class="ph ph-headphones-slash" aria-hidden="true"></i>
-				<p>No podcasts found matching "{searchQuery}". Try another search term!</p>
+				<p>{searchQuery.trim()
+						? t('discover.noResults', { query: searchQuery })
+						: t('discover.noResultsInLanguages')}</p>
 			</div>
 		{:else}
 			{#if featured}
@@ -421,12 +462,12 @@
 					<div class="featured-info">
 						<span class="featured-tag">
 							<i class="ph-fill ph-trend-up" aria-hidden="true"></i>
-							#1 {selectedCategory === 'All' ? 'Trending' : selectedCategory}
+							#1 {selectedCategory === 'All' ? t('discover.trending') : genreLabel(selectedCategory)}
 						</span>
 						<h3>{featured.title}</h3>
 						<span class="featured-author">{featured.author}</span>
 						{#if featured.description}<p class="featured-desc">{featured.description}</p>{/if}
-						<span class="featured-cta"><i class="ph-fill ph-play" aria-hidden="true"></i> View episodes</span>
+						<span class="featured-cta"><i class="ph-fill ph-play" aria-hidden="true"></i> {t('discover.viewEpisodesCta')}</span>
 					</div>
 				</button>
 			{/if}
@@ -434,7 +475,7 @@
 			<div class="podcast-grid">
 				{#each gridPodcasts as pod, i (pod.id)}
 					<article class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
-						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title}`}></button>
+						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title })}></button>
 						<div class="cover-wrapper">
 							<img
 								src={optimizeArtwork(pod.artwork_url, 220)}
@@ -448,11 +489,11 @@
 							/>
 							<div class="cover-overlay">
 								<span class="btn-play-overlay">
-									<i class="ph-fill ph-play" aria-hidden="true"></i> View Episodes
+									<i class="ph-fill ph-play" aria-hidden="true"></i> {t('common.viewEpisodes')}
 								</span>
 							</div>
 							{#if pod.category}
-								<span class="cat-tag">{pod.category}</span>
+								<span class="cat-tag">{genreLabel(pod.category)}</span>
 							{/if}
 						</div>
 						<div class="card-details">
@@ -467,9 +508,9 @@
 									disabled={isSubmitting || isSubscribed(pod)}
 								>
 									{#if isSubscribed(pod)}
-										<i class="ph ph-check" aria-hidden="true"></i> Subscribed
+										<i class="ph ph-check" aria-hidden="true"></i> {t('common.subscribed')}
 									{:else}
-										<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
+										<i class="ph ph-plus" aria-hidden="true"></i> {t('common.subscribe')}
 									{/if}
 								</button>
 							</div>
@@ -482,9 +523,9 @@
 				<div class="load-more-row">
 					<button class="btn-load-more" onclick={loadMore} disabled={isLoadingMore}>
 						{#if isLoadingMore}
-							<span class="spinner-sm"></span> Loading…
+							<span class="spinner-sm"></span> {t('common.loading')}
 						{:else}
-							<i class="ph ph-arrow-down" aria-hidden="true"></i> Load more
+							<i class="ph ph-arrow-down" aria-hidden="true"></i> {t('discover.loadMore')}
 						{/if}
 					</button>
 				</div>
@@ -1109,61 +1150,4 @@
 	}
 	.skeleton-card .card-details { gap: 0.6rem; }
 
-	/* Region / Country selector bar */
-	.region-bar {
-		display: flex;
-		align-items: center;
-		gap: 0.85rem;
-		flex-wrap: wrap;
-		margin-bottom: 0.25rem;
-	}
-
-	.region-label {
-		font-size: 0.88rem;
-		font-weight: 700;
-		color: var(--text-secondary);
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
-	.region-pills {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
-
-	.region-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		padding: 0.4rem 0.85rem;
-		border-radius: 20px;
-		font-size: 0.88rem;
-		font-weight: 600;
-		color: var(--text-secondary);
-		cursor: pointer;
-		transition: var(--transition-smooth);
-	}
-
-	.region-pill:hover {
-		border-color: var(--accent-green);
-		color: var(--text-primary);
-		background: color-mix(in srgb, var(--accent-green) 8%, var(--bg-surface));
-	}
-
-	.region-pill.active {
-		background: var(--accent-green);
-		color: #ffffff;
-		border-color: var(--accent-green);
-	}
-
-	.flag-emoji {
-		font-family: 'Twemoji Country Flags', var(--font-sans);
-		font-size: 1.1rem;
-		line-height: 1;
-	}
 </style>

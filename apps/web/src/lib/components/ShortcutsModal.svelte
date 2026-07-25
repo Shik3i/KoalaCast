@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { KEYBOARD_SHORTCUTS } from '$lib/data/shortcuts';
 
 	let { show = $bindable(false) } = $props();
@@ -24,16 +25,16 @@
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
-			aria-label="Keyboard shortcuts"
+			aria-label={t('shortcuts.title')}
 			tabindex="-1"
 		>
-			<h3>Keyboard Shortcuts</h3>
+			<h3>{t('shortcuts.title')}</h3>
 			<ul>
 				{#each KEYBOARD_SHORTCUTS as shortcut}
-					<li><kbd>{shortcut.key}</kbd> {shortcut.description}</li>
+					<li><kbd>{shortcut.key}</kbd> {t(shortcut.descriptionKey)}</li>
 				{/each}
 			</ul>
-			<button type="button" class="btn-close" onclick={close}>Close</button>
+			<button type="button" class="btn-close" onclick={close}>{t('common.close')}</button>
 		</div>
 	</div>
 {/if}

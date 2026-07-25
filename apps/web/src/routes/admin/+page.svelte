@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -24,7 +25,7 @@
 			]);
 
 			if (!statusRes.ok || !usersRes.ok || !healthRes.ok) {
-				errorMsg = 'Admin access denied or unauthorized.';
+				errorMsg = t('admin.accessDenied');
 				return;
 			}
 
@@ -34,7 +35,7 @@
 			const healthData = await healthRes.json();
 			feedHealth = healthData.feeds || [];
 		} catch (err: any) {
-			errorMsg = 'Network error fetching admin metrics.';
+			errorMsg = t('admin.metricsNetworkError');
 		} finally {
 			isLoading = false;
 		}
@@ -51,25 +52,25 @@
 				loadAdminData();
 			} else {
 				const d = await res.json().catch(() => ({}));
-				toast.error(d.error || 'Could not update user.');
+				toast.error(d.error || t('toast.userUpdateError'));
 			}
 		} catch (_) {
-			toast.error('Network error updating user.');
+			toast.error(t('toast.userUpdateNetworkError'));
 		}
 	}
 
 	async function handleRevokeSessions(userId: string, username: string) {
-		if (!confirm(`Sign out all active sessions for ${username}?`)) return;
+		if (!confirm(t('admin.confirmRevokeAll', { username }))) return;
 		try {
 			const res = await fetch(`/api/v1/admin/users/${userId}/sessions`, { method: 'DELETE' });
 			if (res.ok) {
-				toast.success(`Signed out all sessions for ${username}.`);
+				toast.success(t('toast.sessionsRevokedFor', { username }));
 				loadAdminData();
 			} else {
-				toast.error('Could not revoke sessions.');
+				toast.error(t('toast.sessionsRevokeError'));
 			}
 		} catch (_) {
-			toast.error('Network error revoking sessions.');
+			toast.error(t('toast.sessionsRevokeNetworkError'));
 		}
 	}
 
@@ -83,14 +84,14 @@
 				body: JSON.stringify({ enabled: enable })
 			});
 			if (res.ok) {
-				toast.success(enable ? 'Public registration enabled.' : 'Public registration disabled.');
+				toast.success(enable ? t('toast.registrationEnabled') : t('toast.registrationDisabled'));
 				loadAdminData();
 			} else {
 				const d = await res.json().catch(() => ({}));
-				toast.error(d.error || 'Could not change registration setting.');
+				toast.error(d.error || t('toast.registrationChangeError'));
 			}
 		} catch (_) {
-			toast.error('Network error updating registration.');
+			toast.error(t('toast.registrationNetworkError'));
 		}
 	}
 
@@ -98,7 +99,7 @@
 		try {
 			const res = await fetch(`/api/v1/admin/podcasts/${podcastId}/refresh`, { method: 'POST' });
 			if (res.ok) {
-				toast.success('Feed refresh requested.');
+				toast.success(t('toast.feedRefreshRequested'));
 				loadAdminData();
 			}
 		} catch (_) {}
@@ -107,39 +108,39 @@
 
 <div class="admin-page">
 	<div class="admin-head">
-		<h2><i class="ph-fill ph-shield-star" aria-hidden="true"></i> Admin</h2>
-		<p class="admin-sub">System metrics, user moderation and feed health.</p>
+		<h2><i class="ph-fill ph-shield-star" aria-hidden="true"></i> {t('admin.title')}</h2>
+		<p class="admin-sub">{t('admin.subtitle')}</p>
 	</div>
 
 	{#if isLoading}
-		<div class="loading">Loading admin dashboard...</div>
+		<div class="loading">{t('admin.loading')}</div>
 	{:else if errorMsg}
 		<div class="error-banner">{errorMsg}</div>
 	{:else}
 		<!-- System Metrics -->
 		<section class="card">
-			<h3>System Operational Metrics</h3>
+			<h3>{t('admin.metrics')}</h3>
 			{#if systemStatus}
 				<div class="metrics-grid">
 					<div class="metric-box">
 						<span class="val">{systemStatus.user_count}</span>
-						<span class="lbl">Total Users</span>
+						<span class="lbl">{t('admin.totalUsers')}</span>
 					</div>
 					<div class="metric-box">
 						<span class="val">{systemStatus.podcast_count}</span>
-						<span class="lbl">Podcasts</span>
+						<span class="lbl">{t('admin.podcasts')}</span>
 					</div>
 					<div class="metric-box">
 						<span class="val">{systemStatus.episode_count}</span>
-						<span class="lbl">Episodes</span>
+						<span class="lbl">{t('admin.episodes')}</span>
 					</div>
 					<div class="metric-box">
 						<span class="val">{(systemStatus.database_size_bytes / (1024 * 1024)).toFixed(2)} MB</span>
-						<span class="lbl">DB Size</span>
+						<span class="lbl">{t('admin.dbSize')}</span>
 					</div>
 					<div class="metric-box">
-						<span class="val">{systemStatus.worker_running ? 'Active' : 'Stopped'}</span>
-						<span class="lbl">Worker Status</span>
+						<span class="val">{systemStatus.worker_running ? t('admin.workerActive') : t('admin.workerStopped')}</span>
+						<span class="lbl">{t('admin.workerStatus')}</span>
 					</div>
 				</div>
 			{/if}
@@ -148,18 +149,18 @@
 		<!-- Public Registration Control -->
 		{#if systemStatus}
 			<section class="card">
-				<h3>Public Registration</h3>
+				<h3>{t('admin.publicRegistration')}</h3>
 				<div class="reg-row">
 					<div class="reg-info">
 						<p class="reg-state">
-							New sign-ups are currently
+							{t('admin.signupsAre')}
 							<strong class:on={systemStatus.registration_enabled}>
-								{systemStatus.registration_enabled ? 'enabled' : 'disabled'}
+								{systemStatus.registration_enabled ? t('admin.enabled') : t('admin.disabled')}
 							</strong>.
 						</p>
 						{#if systemStatus.registration_locked}
 							<p class="reg-hint">
-								Locked by the <code>KC_REGISTRATION_ENABLED</code> environment variable — change it there.
+								{@html t('admin.lockedByEnv')}
 							</p>
 						{/if}
 					</div>
@@ -169,7 +170,7 @@
 						disabled={systemStatus.registration_locked}
 						onclick={handleToggleRegistration}
 					>
-						{systemStatus.registration_enabled ? 'Disable registration' : 'Enable registration'}
+						{systemStatus.registration_enabled ? t('admin.disableRegistration') : t('admin.enableRegistration')}
 					</button>
 				</div>
 			</section>
@@ -177,19 +178,19 @@
 
 		<!-- Users Table -->
 		<section class="card">
-			<h3>Registered Users ({users.length})</h3>
+			<h3>{t('admin.registeredUsers', { count: users.length })}</h3>
 			{#if users.length === 0}
-				<p class="empty-note">No registered users yet.</p>
+				<p class="empty-note">{t('admin.noUsers')}</p>
 			{:else}
 			<div class="table-scroll">
 			<table class="admin-table">
 				<thead>
 					<tr>
-						<th>Username</th>
-						<th>Role</th>
-						<th>Active Sessions</th>
-						<th>Status</th>
-						<th>Actions</th>
+						<th>{t('admin.username')}</th>
+						<th>{t('admin.role')}</th>
+						<th>{t('admin.activeSessions')}</th>
+						<th>{t('admin.status')}</th>
+						<th>{t('admin.actions')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -200,17 +201,17 @@
 							<td>{user.active_sessions}</td>
 							<td>
 								<span class="badge" class:suspended={user.is_suspended}>
-									{user.is_suspended ? 'Suspended' : 'Active'}
+									{user.is_suspended ? t('admin.suspended') : t('admin.userActive')}
 								</span>
 							</td>
 							<td>
 								<div class="row-actions">
 									<button class="btn-sm" onclick={() => handleToggleSuspend(user.id, user.is_suspended)}>
-										{user.is_suspended ? 'Restore' : 'Suspend'}
+										{user.is_suspended ? t('admin.restore') : t('admin.suspend')}
 									</button>
 									{#if user.active_sessions > 0}
 										<button class="btn-sm" onclick={() => handleRevokeSessions(user.id, user.username)}>
-											Sign out
+											{t('common.signOut')}
 										</button>
 									{/if}
 								</div>
@@ -225,19 +226,19 @@
 
 		<!-- Feed Health Table -->
 		<section class="card">
-			<h3>Feed Health & Error Status</h3>
+			<h3>{t('admin.feedHealth')}</h3>
 			{#if feedHealth.length === 0}
-				<p class="empty-note">No feeds are being tracked yet.</p>
+				<p class="empty-note">{t('admin.noFeeds')}</p>
 			{:else}
 			<div class="table-scroll">
 			<table class="admin-table">
 				<thead>
 					<tr>
-						<th>Podcast Title</th>
-						<th>Errors</th>
-						<th>Category</th>
-						<th>HTTP Status</th>
-						<th>Actions</th>
+						<th>{t('admin.podcastTitle')}</th>
+						<th>{t('admin.errors')}</th>
+						<th>{t('admin.category')}</th>
+						<th>{t('admin.httpStatus')}</th>
+						<th>{t('admin.actions')}</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -248,7 +249,7 @@
 							<td>{feed.last_error_category || 'OK'}</td>
 							<td>{feed.last_http_status || '-'}</td>
 							<td>
-								<button class="btn-sm" onclick={() => handleRefreshFeed(feed.id)}>Refresh</button>
+								<button class="btn-sm" onclick={() => handleRefreshFeed(feed.id)}>{t('admin.refresh')}</button>
 							</td>
 						</tr>
 					{/each}

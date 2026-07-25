@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
-	import { GENRES } from '$lib/genres';
+	import { GENRES, genreLabel } from '$lib/genres';
 	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
+	import { t } from '$lib/i18n';
 	import { fade, scale } from 'svelte/transition';
 
 	let cardEl: HTMLElement | null = $state(null);
@@ -11,15 +12,15 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && prefs.completeOnboarding()} />
 
-<div class="ob-overlay" transition:fade={{ duration: 180 }} role="dialog" aria-modal="true" aria-label="Personalize your experience">
+<div class="ob-overlay" transition:fade={{ duration: 180 }} role="dialog" aria-modal="true" aria-label={t('onboarding.dialogLabel')}>
 	<div class="ob-card" bind:this={cardEl} tabindex="-1" transition:scale={{ duration: 240, start: 0.96 }}>
-		<span class="ob-badge"><i class="ph-fill ph-sparkle" aria-hidden="true"></i> Personalize</span>
-		<h2>Welcome to KoalaCast</h2>
-		<p>Select the languages you speak and your favorite topics. We'll tailor your Discover feed without tracking you — everything stays on your device.</p>
+		<span class="ob-badge"><i class="ph-fill ph-sparkle" aria-hidden="true"></i> {t('onboarding.badge')}</span>
+		<h2>{t('onboarding.title')}</h2>
+		<p>{t('onboarding.intro')}</p>
 
 		<!-- Spoken Languages Section -->
 		<div class="ob-section">
-			<h3 class="section-title"><i class="ph ph-translate" aria-hidden="true"></i> Spoken Languages</h3>
+			<h3 class="section-title"><i class="ph ph-translate" aria-hidden="true"></i> {t('onboarding.spokenLanguages')}</h3>
 			<div class="ob-lang-grid">
 				{#each SUPPORTED_LANGUAGES as lang}
 					<button
@@ -37,21 +38,23 @@
 
 		<!-- Topic Interests Section -->
 		<div class="ob-section">
-			<h3 class="section-title"><i class="ph ph-sparkle" aria-hidden="true"></i> Topic Interests</h3>
+			<h3 class="section-title"><i class="ph ph-sparkle" aria-hidden="true"></i> {t('onboarding.topicInterests')}</h3>
 			<div class="ob-grid">
 				{#each GENRES as g (g.name)}
 					<button type="button" class="ob-chip" class:on={prefs.interests.includes(g.name)} onclick={() => prefs.toggleInterest(g.name)}>
 						<i class="ph {g.icon}" aria-hidden="true"></i>
-						{g.name}
+						{genreLabel(g.name)}
 					</button>
 				{/each}
 			</div>
 		</div>
 
 		<div class="ob-actions">
-			<button type="button" class="ob-skip" onclick={() => prefs.completeOnboarding()}>Skip for now</button>
+			<button type="button" class="ob-skip" onclick={() => prefs.completeOnboarding()}>{t('onboarding.skip')}</button>
 			<button type="button" class="ob-done" onclick={() => prefs.completeOnboarding()}>
-				{prefs.interests.length > 0 ? `Continue · ${prefs.interests.length} topics` : 'Get Started'}
+				{prefs.interests.length > 0
+					? t('onboarding.continueWithTopics', { count: prefs.interests.length })
+					: t('onboarding.getStarted')}
 			</button>
 		</div>
 	</div>
