@@ -30,6 +30,39 @@ func TestArgon2PasswordHashing(t *testing.T) {
 	}
 }
 
+func TestPepperPasswordHashing(t *testing.T) {
+	// 1. Create a legacy unpeppered hash
+	SetPepper("")
+	legacyPassword := "LegacySecret123!"
+	legacyHash, err := HashPassword(legacyPassword)
+	if err != nil {
+		t.Fatalf("failed to create legacy hash: %v", err)
+	}
+
+	// 2. Enable pepper key
+	pepperSecret := "SuperSecretPepperKey999!"
+	SetPepper(pepperSecret)
+	defer SetPepper("") // cleanup
+
+	// Verify new peppered hash creation & verification
+	pepperedPassword := "PepperedSecret456!"
+	pepperedHash, err := HashPassword(pepperedPassword)
+	if err != nil {
+		t.Fatalf("failed to create peppered hash: %v", err)
+	}
+
+	match, err := VerifyPassword(pepperedPassword, pepperedHash)
+	if err != nil || !match {
+		t.Errorf("expected peppered password to verify against peppered hash")
+	}
+
+	// Verify legacy unpeppered hash still succeeds via fallback
+	legacyMatch, err := VerifyPassword(legacyPassword, legacyHash)
+	if err != nil || !legacyMatch {
+		t.Errorf("expected legacy unpeppered password to verify successfully via fallback")
+	}
+}
+
 func TestRecoveryCodeGeneration(t *testing.T) {
 	code, verifierHash, err := GenerateRecoveryCode()
 	if err != nil {

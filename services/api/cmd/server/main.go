@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Shik3i/KoalaCast/services/api/internal/auth"
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/server"
@@ -20,6 +21,8 @@ func main() {
 		slog.Error("failed to load configuration", "error", err)
 		os.Exit(1)
 	}
+
+	auth.SetPepper(cfg.PepperSecret)
 
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel})
 	logger := slog.New(handler)

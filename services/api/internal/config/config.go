@@ -18,6 +18,7 @@ type Config struct {
 	LogLevel               slog.Level
 	DatabasePath           string
 	SessionSecret          string
+	PepperSecret           string
 	RegistrationEnabledEnv *bool // nil if unset/empty (defer to DB admin setting), non-nil acts as hard override
 	TrustedProxies         []string
 	SecureCookies          bool
@@ -49,6 +50,7 @@ func LoadConfig() (*Config, error) {
 		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:3000/api/v1"),
 		DatabasePath:          getEnv("DATABASE_PATH", "./data/koalacast.db"),
 		SessionSecret:         os.Getenv("SESSION_SECRET"),
+		PepperSecret:          getEnv("PEPPER_SECRET", os.Getenv("KC_PEPPER_SECRET")),
 		PodcastIndexKey:       os.Getenv("PODCAST_INDEX_KEY"),
 		PodcastIndexSecret:    os.Getenv("PODCAST_INDEX_SECRET"),
 		AdminUsername:         os.Getenv("ADMIN_USERNAME"),

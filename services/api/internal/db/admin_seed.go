@@ -28,13 +28,13 @@ func (db *DB) SeedAdmin(ctx context.Context, username, password string, logger *
 	}
 	normalized := strings.ToLower(username)
 
-	var existingID, existingRole string
+	var existingID, existingRole, existingHash string
 	err := db.SQL.QueryRowContext(ctx,
-		"SELECT id, role FROM users WHERE normalized_username = ?", normalized,
-	).Scan(&existingID, &existingRole)
+		"SELECT id, role, password_hash FROM users WHERE normalized_username = ?", normalized,
+	).Scan(&existingID, &existingRole, &existingHash)
 
 	if err == nil {
-		// Account already present — only ever promote, never touch the password.
+		// Account already present — promote to admin if not already admin.
 		if existingRole != "admin" {
 			if _, e := db.SQL.ExecContext(ctx,
 				"UPDATE users SET role = 'admin', updated_at = ? WHERE id = ?",
@@ -44,6 +44,24 @@ func (db *DB) SeedAdmin(ctx context.Context, username, password string, logger *
 				return
 			}
 			logger.Info("admin seed: promoted existing user to admin", "username", username)
+		}
+
+		// Ensure stored password hash matches ADMIN_PASSWORD with active pepper configuration.
+		match, _ := auth.VerifyPassword(password, existingHash)
+		if !match {
+			newHash, e := auth.HashPassword(password)
+			if e != nil {
+				logger.Error("admin seed: failed to hash updated admin password", "error", e)
+				return
+			}
+			if _, e := db.SQL.ExecContext(ctx,
+				"UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+				newHash, time.Now().UnixMilli(), existingID,
+			); e != nil {
+				logger.Error("admin seed: failed to update admin password hash", "error", e)
+				return
+			}
+			logger.Info("admin seed: updated admin password hash to active pepper format", "username", username)
 		}
 		return
 	}
