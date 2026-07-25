@@ -184,6 +184,7 @@ The backend is configured entirely through environment variables. Copy [`.env.ex
 | :--- | :--- | :--- |
 | `PORT` | `3000` | Server listen port |
 | `SESSION_SECRET` | — | **Required.** 32+ byte secret for session signing |
+| `PEPPER_SECRET` | empty | Optional HMAC-SHA256 secret key for Argon2id password hashing |
 | `DATABASE_PATH` | `./data/koalacast.db` | SQLite database file |
 | `KC_REGISTRATION_ENABLED` | unset | Hard override for account registration (else DB-controlled) |
 | `PODCAST_INDEX_KEY` / `_SECRET` | empty | Optional Podcast Index API creds (iTunes used as fallback) |

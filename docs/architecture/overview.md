@@ -29,6 +29,7 @@ KoalaCast enforces strict configuration rules to ensure self-hosters and securit
 | Server Port | `PORT` | No | Server binding port |
 | Public URL | `PUBLIC_BASE_URL` | No | Canonical public origin |
 | Session Secret | `SESSION_SECRET` | No | HMAC key for session token signing |
+| Pepper Secret | `PEPPER_SECRET` | No | HMAC-SHA256 secret key for Argon2id password hashing |
 | Registration Toggle | `KC_REGISTRATION_ENABLED` | Conditional | Hard override if set; DB setting used if unset |
 | Trusted Proxies | `TRUSTED_PROXIES` | No | CIDR list for reverse proxy IP header resolution |
 | Feed Worker Concurrency| `FEED_WORKER_CONCURRENCY` | No | Max parallel RSS feed fetchers |
