@@ -70,7 +70,8 @@ export interface LocalFavorite {
 }
 
 const DB_NAME = 'koalacast_local_db';
-const DB_VERSION = 1;
+// v2 drops the never-used 'history' object store.
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -91,12 +92,13 @@ export function getLocalDB(): Promise<IDBPDatabase> {
 				if (!db.objectStoreNames.contains('favorites')) {
 					db.createObjectStore('favorites', { keyPath: 'episode_id' });
 				}
-				if (!db.objectStoreNames.contains('history')) {
-					const histStore = db.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
-					histStore.createIndex('played_at', 'played_at');
-				}
 				if (!db.objectStoreNames.contains('settings')) {
 					db.createObjectStore('settings', { keyPath: 'key' });
+				}
+				// v1 created a 'history' store that was never read or written; drop it
+				// when upgrading an existing database.
+				if (db.objectStoreNames.contains('history')) {
+					db.deleteObjectStore('history');
 				}
 			}
 		}).catch((err) => {
@@ -256,6 +258,5 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('playback_states');
 	await db.clear('queue');
 	await db.clear('favorites');
-	await db.clear('history');
 	await db.clear('settings');
 }

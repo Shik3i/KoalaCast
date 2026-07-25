@@ -80,6 +80,15 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	feedURLs := extractOutlines(doc.Body.Outlines)
+
+	// Importing fetches each feed server-side and can legitimately take much longer
+	// than the server's default 15s WriteTimeout. Extend the write deadline for this
+	// one response so a multi-feed import isn't cut off mid-flight. Best-effort:
+	// harmless if the platform doesn't support deadline control.
+	if rc := http.NewResponseController(w); rc != nil {
+		_ = rc.SetWriteDeadline(time.Now().Add(4 * time.Minute))
+	}
+
 	report := OPMLImportReport{
 		TotalFound: len(feedURLs),
 		Failures:   make([]OPMLImportError, 0),

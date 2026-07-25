@@ -88,9 +88,16 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Head("/proxy/image", proxyHandler.GetImageProxy)
 		})
 
-		// Podcasts & Discovery
-		r.Get("/podcasts/discover", podcastHandler.Discover)
-		r.Get("/podcasts/search", podcastHandler.Search)
+		// Podcasts & Discovery. Discover and Search proxy out to iTunes / Podcast
+		// Index, so they are throttled per client IP to stop the server being used to
+		// hammer those upstreams. The DB-backed reads below stay unthrottled (the
+		// Inbox legitimately fetches many at once).
+		discoveryLimiter := customMiddleware.NewRateLimiter(60, 1*time.Minute)
+		r.Group(func(r chi.Router) {
+			r.Use(discoveryLimiter.Limit)
+			r.Get("/podcasts/discover", podcastHandler.Discover)
+			r.Get("/podcasts/search", podcastHandler.Search)
+		})
 		r.Get("/podcasts/{id}", podcastHandler.GetPodcast)
 		r.Get("/podcasts/{id}/episodes", podcastHandler.GetEpisodes)
 		r.Get("/episodes/{id}", podcastHandler.GetEpisode)

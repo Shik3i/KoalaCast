@@ -116,11 +116,40 @@ func (h *AdminHandler) ToggleRegistration(w http.ResponseWriter, r *http.Request
 
 func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
 	targetID := chi.URLParam(r, "id")
+	authUser := customMiddleware.GetAuthUser(r.Context())
 
 	var req struct {
 		Suspend bool `json:"suspend"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if req.Suspend {
+		// Guard against an admin locking themselves out, or removing the last admin.
+		if authUser != nil && targetID == authUser.ID {
+			http.Error(w, `{"error":"you cannot suspend your own account"}`, http.StatusBadRequest)
+			return
+		}
+		var targetRole string
+		var targetSuspended int
+		err := h.DB.SQL.QueryRowContext(r.Context(),
+			"SELECT role, is_suspended FROM users WHERE id = ?", targetID).Scan(&targetRole, &targetSuspended)
+		if err == sql.ErrNoRows {
+			http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
+			return
+		} else if err != nil {
+			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+			return
+		}
+		if targetRole == "admin" {
+			var activeAdmins int
+			_ = h.DB.SQL.QueryRowContext(r.Context(),
+				"SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_suspended = 0").Scan(&activeAdmins)
+			if activeAdmins <= 1 {
+				http.Error(w, `{"error":"cannot suspend the last active admin"}`, http.StatusBadRequest)
+				return
+			}
+		}
+	}
 
 	suspendInt := 0
 	if req.Suspend {
@@ -207,6 +236,12 @@ func (h *AdminHandler) FeedHealth(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) ManualRefreshFeed(w http.ResponseWriter, r *http.Request) {
 	podcastID := chi.URLParam(r, "id")
 
+	// A synchronous feed fetch + parse can exceed the default 15s WriteTimeout for a
+	// slow upstream; extend the write deadline for this response.
+	if rc := http.NewResponseController(w); rc != nil {
+		_ = rc.SetWriteDeadline(time.Now().Add(1 * time.Minute))
+	}
+
 	var feedURL, etag, lastModified string
 	err := h.DB.SQL.QueryRowContext(r.Context(), "SELECT feed_url, etag, last_modified FROM podcasts WHERE id = ?", podcastID).Scan(&feedURL, &etag, &lastModified)
 	if err == sql.ErrNoRows {
@@ -243,13 +278,23 @@ func (h *AdminHandler) SystemStatus(w http.ResponseWriter, r *http.Request) {
 		dbSizeBytes += fi.Size()
 	}
 
-	// Registration Effective Status
+	// Registration Effective Status. `registration_locked` means an environment
+	// override is in force and the DB toggle is ignored (so the UI disables it).
 	regEnabledEnv := "unset (using DB setting)"
-	if h.Config.RegistrationEnabledEnv != nil {
-		if *h.Config.RegistrationEnabledEnv {
+	regLocked := h.Config.RegistrationEnabledEnv != nil
+	regEnabled := true
+	if regLocked {
+		regEnabled = *h.Config.RegistrationEnabledEnv
+		if regEnabled {
 			regEnabledEnv = "enforced true"
 		} else {
 			regEnabledEnv = "enforced false"
+		}
+	} else {
+		var v string
+		if err := h.DB.SQL.QueryRowContext(r.Context(),
+			"SELECT value FROM app_settings WHERE key = 'registration_enabled'").Scan(&v); err == nil && v == "false" {
+			regEnabled = false
 		}
 	}
 
@@ -271,5 +316,7 @@ func (h *AdminHandler) SystemStatus(w http.ResponseWriter, r *http.Request) {
 		"worker_success_count":          metrics.SuccessCount,
 		"worker_failure_count":          metrics.FailureCount,
 		"registration_enabled_override": regEnabledEnv,
+		"registration_enabled":          regEnabled,
+		"registration_locked":           regLocked,
 	})
 }

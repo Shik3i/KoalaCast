@@ -47,8 +47,51 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ suspend: !currentSuspended })
 			});
-			if (res.ok) loadAdminData();
-		} catch (_) {}
+			if (res.ok) {
+				loadAdminData();
+			} else {
+				const d = await res.json().catch(() => ({}));
+				toast.error(d.error || 'Could not update user.');
+			}
+		} catch (_) {
+			toast.error('Network error updating user.');
+		}
+	}
+
+	async function handleRevokeSessions(userId: string, username: string) {
+		if (!confirm(`Sign out all active sessions for ${username}?`)) return;
+		try {
+			const res = await fetch(`/api/v1/admin/users/${userId}/sessions`, { method: 'DELETE' });
+			if (res.ok) {
+				toast.success(`Signed out all sessions for ${username}.`);
+				loadAdminData();
+			} else {
+				toast.error('Could not revoke sessions.');
+			}
+		} catch (_) {
+			toast.error('Network error revoking sessions.');
+		}
+	}
+
+	async function handleToggleRegistration() {
+		if (!systemStatus || systemStatus.registration_locked) return;
+		const enable = !systemStatus.registration_enabled;
+		try {
+			const res = await fetch('/api/v1/admin/registration/toggle', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ enabled: enable })
+			});
+			if (res.ok) {
+				toast.success(enable ? 'Public registration enabled.' : 'Public registration disabled.');
+				loadAdminData();
+			} else {
+				const d = await res.json().catch(() => ({}));
+				toast.error(d.error || 'Could not change registration setting.');
+			}
+		} catch (_) {
+			toast.error('Network error updating registration.');
+		}
 	}
 
 	async function handleRefreshFeed(podcastId: string) {
@@ -102,6 +145,36 @@
 			{/if}
 		</section>
 
+		<!-- Public Registration Control -->
+		{#if systemStatus}
+			<section class="card">
+				<h3>Public Registration</h3>
+				<div class="reg-row">
+					<div class="reg-info">
+						<p class="reg-state">
+							New sign-ups are currently
+							<strong class:on={systemStatus.registration_enabled}>
+								{systemStatus.registration_enabled ? 'enabled' : 'disabled'}
+							</strong>.
+						</p>
+						{#if systemStatus.registration_locked}
+							<p class="reg-hint">
+								Locked by the <code>KC_REGISTRATION_ENABLED</code> environment variable — change it there.
+							</p>
+						{/if}
+					</div>
+					<button
+						class="btn-reg"
+						class:danger={systemStatus.registration_enabled}
+						disabled={systemStatus.registration_locked}
+						onclick={handleToggleRegistration}
+					>
+						{systemStatus.registration_enabled ? 'Disable registration' : 'Enable registration'}
+					</button>
+				</div>
+			</section>
+		{/if}
+
 		<!-- Users Table -->
 		<section class="card">
 			<h3>Registered Users ({users.length})</h3>
@@ -131,9 +204,16 @@
 								</span>
 							</td>
 							<td>
-								<button class="btn-sm" onclick={() => handleToggleSuspend(user.id, user.is_suspended)}>
-									{user.is_suspended ? 'Restore' : 'Suspend'}
-								</button>
+								<div class="row-actions">
+									<button class="btn-sm" onclick={() => handleToggleSuspend(user.id, user.is_suspended)}>
+										{user.is_suspended ? 'Restore' : 'Suspend'}
+									</button>
+									{#if user.active_sessions > 0}
+										<button class="btn-sm" onclick={() => handleRevokeSessions(user.id, user.username)}>
+											Sign out
+										</button>
+									{/if}
+								</div>
 							</td>
 						</tr>
 					{/each}
@@ -278,7 +358,42 @@
 		border-radius: 4px;
 		border: 1px solid var(--border-subtle);
 		background: var(--bg-primary);
+		color: var(--text-primary);
 	}
+	.btn-sm:hover { border-color: var(--accent-green); }
+	.row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+	.reg-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+		margin-top: 0.75rem;
+	}
+	.reg-info { min-width: 0; }
+	.reg-state { font-size: 0.95rem; }
+	.reg-state strong { color: var(--color-danger); }
+	.reg-state strong.on { color: var(--accent-green); }
+	.reg-hint { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; }
+	.reg-hint code {
+		font-family: var(--font-mono, monospace);
+		background: var(--bg-elevated);
+		padding: 0.05rem 0.35rem;
+		border-radius: 4px;
+	}
+	.btn-reg {
+		flex-shrink: 0;
+		background: var(--accent-green);
+		color: #fff;
+		border: none;
+		padding: 0.55rem 1.1rem;
+		border-radius: 8px;
+		font-weight: 700;
+		font-size: 0.88rem;
+	}
+	.btn-reg.danger { background: var(--color-danger); }
+	.btn-reg:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.error-banner {
 		padding: 1rem;

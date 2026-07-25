@@ -44,34 +44,51 @@
 	let isLoading = $state(true);
 	let openMenuId = $state<string | null>(null);
 
+	// Run an async mapper over items with a bounded number of in-flight tasks, so a
+	// user with many subscriptions doesn't fire dozens of simultaneous requests.
+	async function mapWithConcurrency<T, R>(
+		items: T[],
+		limit: number,
+		fn: (item: T) => Promise<R>
+	): Promise<R[]> {
+		const results = new Array<R>(items.length);
+		let cursor = 0;
+		const worker = async () => {
+			while (cursor < items.length) {
+				const idx = cursor++;
+				results[idx] = await fn(items[idx]);
+			}
+		};
+		await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+		return results;
+	}
+
 	onMount(async () => {
 		const subs = await getLocalSubscriptions();
 		subscriptions = subs;
 		modes = Object.fromEntries(subs.map((s) => [s.podcast_id, s.inbox_mode ?? 'all']));
 		completed = await getCompletedEpisodeIds();
 
-		const results = await Promise.all(
-			subs.map(async (sub) => {
-				try {
-					const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes`);
-					if (!res.ok) return [] as InboxEpisode[];
-					const data = await res.json();
-					return ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
-						id: ep.id,
-						podcast_id: sub.podcast_id,
-						podcast_title: sub.title,
-						title: ep.title,
-						description: ep.description,
-						pub_date: ep.pub_date,
-						duration_ms: ep.duration_ms,
-						enclosure_url: ep.enclosure_url,
-						artwork_url: ep.artwork_url || sub.artwork_url
-					})) as InboxEpisode[];
-				} catch {
-					return [] as InboxEpisode[];
-				}
-			})
-		);
+		const results = await mapWithConcurrency(subs, 6, async (sub) => {
+			try {
+				const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes`);
+				if (!res.ok) return [] as InboxEpisode[];
+				const data = await res.json();
+				return ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
+					id: ep.id,
+					podcast_id: sub.podcast_id,
+					podcast_title: sub.title,
+					title: ep.title,
+					description: ep.description,
+					pub_date: ep.pub_date,
+					duration_ms: ep.duration_ms,
+					enclosure_url: ep.enclosure_url,
+					artwork_url: ep.artwork_url || sub.artwork_url
+				})) as InboxEpisode[];
+			} catch {
+				return [] as InboxEpisode[];
+			}
+		});
 		rawEpisodes = results.flat();
 		isLoading = false;
 	});
