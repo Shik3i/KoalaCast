@@ -5,6 +5,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { reveal } from '$lib/actions/reveal';
+	import { optimizeArtwork } from '$lib/artwork';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide, fade } from 'svelte/transition';
 
@@ -295,7 +296,7 @@
 				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
 						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title || pod.trackName}`}></button>
-						<img src={pod.artwork_url || pod.artworkUrl600 || '/placeholder.svg'} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<div class="info">
 							<h4>{pod.title || pod.trackName}</h4>
 							<p class="author">{pod.author || pod.artistName}</p>

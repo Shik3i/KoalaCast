@@ -1,36 +1,29 @@
 # Infrastructure (`infrastructure`)
 
-Deployment building blocks for self-hosting KoalaCast: container images and the
-same-origin reverse proxy.
+Deployment building blocks for self-hosting KoalaCast: ultra-lightweight multi-stage Docker setup.
 
 ```text
 infrastructure/
-├── docker/
-│   ├── Dockerfile.api      Multi-stage build for the Go API (CGO + SQLite)
-│   └── Dockerfile.web      Multi-stage build for the SvelteKit Node server
-└── caddy/
-    └── Caddyfile           Reverse proxy: /api → api, everything else → web
+└── docker/
+    └── Dockerfile      Multi-stage build compiling SvelteKit static SPA + Go binary into 1 Alpine image
 ```
 
-These are orchestrated by the repo-root [`docker-compose.yml`](../docker-compose.yml).
+Orchestrated by the repo-root [`docker-compose.yml`](../docker-compose.yml).
 
 ---
 
-## Container Images
+## Container Image
 
-Both Dockerfiles are multi-stage and produce small, non-root runtime images.
+The Dockerfile is multi-stage and produces a clean, non-root 26MB runtime Alpine image.
 
 | Image | Base (runtime) | Exposes | Notes |
 | :--- | :--- | :--- | :--- |
-| `Dockerfile.api` | `alpine` | `8080` | Builds with `CGO_ENABLED=1` for SQLite; runs as user `koala`; data in `/app/data` |
-| `Dockerfile.web` | `node:20-alpine` | `3000` | Runs the adapter-node server (`node build`); runs as user `koala` |
+| `Dockerfile` | `alpine` | `3000` | Builds Node SvelteKit SPA + Go binary (`CGO_ENABLED=1`); runs `/app/koalacast` as user `koala`; data in `/app/data` |
 
-Build the context from the **repository root** (the Dockerfiles reference
-`services/api/` and `apps/web/`):
+Build the context from the **repository root**:
 
 ```bash
-docker build -f infrastructure/docker/Dockerfile.api -t koalacast-api .
-docker build -f infrastructure/docker/Dockerfile.web -t koalacast-web .
+docker build -f infrastructure/docker/Dockerfile -t koalacast .
 ```
 
 Published images (via the [release workflow](../.github/workflows/docker-release.yml))
@@ -39,23 +32,16 @@ and SBOM attestations on GHCR.
 
 ---
 
-## Caddy Reverse Proxy
+## Native Go Single-Origin Serving
 
-The [`Caddyfile`](caddy/Caddyfile) makes the whole app a **single origin**, which
-is why the web client can use relative `/api/...` URLs:
+The single Go application binary (`koalacast`) serves both the REST API (`/api/v1/*`) and the static SvelteKit SPA (`/*`) natively on port `3000` with zero external reverse proxies or sidecars:
 
 ```
-:8080 {
-    handle /api/*   { reverse_proxy api:8080 }
-    handle /healthz { reverse_proxy api:8080 }
-    handle /readyz  { reverse_proxy api:8080 }
-    handle          { reverse_proxy web:3000 }
-}
+http://localhost:3000
+    ├── /api/v1/*   → Go API Handlers
+    ├── /healthz    → Go Health Probe
+    └── /*          → Go Static File Server (/app/web/build) with index.html SPA fallback
 ```
-
-In `docker-compose.yml` the proxy container's `:8080` is published on host port
-**3000**, so you browse the app at <http://localhost:3000>. The `api`/`web`
-service names resolve over the Compose network.
 
 ---
 
@@ -66,8 +52,7 @@ cp .env.example .env          # set a strong SESSION_SECRET
 docker compose up -d          # or: make docker-up
 ```
 
-- App: <http://localhost:3000> (via Caddy)
-- API (direct, for debugging): <http://localhost:8080>
+- App & API: <http://localhost:3000>
 
 Persistent SQLite data lives in the `koala_data` named volume.
 
@@ -75,6 +60,6 @@ Persistent SQLite data lives in the `koala_data` named volume.
 
 ## Production Notes
 
-- Terminate TLS at Caddy (or an upstream load balancer) and set `SECURE_COOKIES=true`.
-- Set `ORIGIN`/`PUBLIC_BASE_URL` to your public URL.
+- Set `SECURE_COOKIES=true` when running behind a TLS-terminating reverse proxy.
+- Set `PUBLIC_BASE_URL` to your public URL.
 - Keep `SESSION_SECRET` secret and stable across restarts.

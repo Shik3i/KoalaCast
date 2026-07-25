@@ -86,7 +86,7 @@ Enjoy your podcast experience.
 	}
 
 	var resp struct {
-		Cues []TranscriptCue `json:"cues"`
+		Cues []CueItem `json:"cues"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode transcript response: %v", err)

@@ -2,7 +2,11 @@
 	<div class="footer-container">
 		<div class="footer-brand">
 			<div class="brand">
-				<img class="logo-icon" src="/icon-192.png" alt="" width="36" height="36" aria-hidden="true" />
+				<picture>
+					<source type="image/avif" srcset="/icon-36.avif 1x, /icon-72.avif 2x" />
+					<source type="image/webp" srcset="/icon-36.webp 1x, /icon-72.webp 2x" />
+					<img class="logo-icon" src="/icon-36.png" srcset="/icon-36.png 1x, /icon-72.png 2x" alt="" width="36" height="36" aria-hidden="true" />
+				</picture>
 				<span class="brand-title">KoalaCast</span>
 			</div>
 			<p class="tagline">Next-generation, privacy-first podcast player with cross-device sync.</p>

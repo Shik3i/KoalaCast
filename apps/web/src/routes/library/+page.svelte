@@ -15,6 +15,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { reveal } from '$lib/actions/reveal';
+	import { optimizeArtwork } from '$lib/artwork';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
@@ -146,7 +147,7 @@
 			<div class="podcast-grid">
 				{#each subscriptions as sub, i (sub.podcast_id)}
 					<div class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
-						<img src={sub.artwork_url || '/placeholder.svg'} alt={sub.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(sub.artwork_url, 220)} alt={sub.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<div class="details">
 							<h3>{sub.title}</h3>
 							<div class="actions">
@@ -169,7 +170,7 @@
 				{#each recentEpisodes as ep (ep.episode_id)}
 					<div class="ep-row">
 						<button class="ep-play" onclick={() => resume(ep)} aria-label="Resume episode">
-							<img src={ep.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
@@ -211,7 +212,7 @@
 					>
 						<span class="drag-handle" aria-hidden="true"><i class="ph ph-dots-six-vertical"></i></span>
 						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label="Play episode">
-							<img src={item.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
@@ -237,7 +238,7 @@
 				{#each favorites as fav (fav.episode_id)}
 					<div class="ep-row">
 						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label="Play episode">
-							<img src={fav.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(fav.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">

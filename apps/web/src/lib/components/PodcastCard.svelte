@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { optimizeArtwork } from '$lib/artwork';
+
 	interface PodcastItem {
 		id: string;
 		title: string;
@@ -24,7 +26,7 @@
 <div class="podcast-card" onclick={() => onOpen(podcast)} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onOpen(podcast)}>
 	<div class="art-wrap">
 		<img
-			src={podcast.artwork_url || '/placeholder.svg'}
+			src={optimizeArtwork(podcast.artwork_url, 220)}
 			alt={podcast.title}
 			class="art"
 			loading="lazy"

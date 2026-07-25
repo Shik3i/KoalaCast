@@ -1,6 +1,12 @@
 <div align="center">
 
-# 🌿 KoalaCast
+<picture>
+  <source type="image/avif" srcset="apps/web/static/icon-128.avif 1x, apps/web/static/icon-256.avif 2x">
+  <source type="image/webp" srcset="apps/web/static/icon-128.webp 1x, apps/web/static/icon-256.webp 2x">
+  <img src="apps/web/static/icon-128.png" srcset="apps/web/static/icon-128.png 1x, apps/web/static/icon-256.png 2x" alt="KoalaCast Logo" width="128" height="128">
+</picture>
+
+# KoalaCast
 
 **A completely free, open-source, privacy-first podcast player for the web.**
 
@@ -55,7 +61,7 @@ Calm, distraction-free listening — with optional, end-to-end cross-device sync
 | **Sync** | Monotonic cursor pull/push, idempotent writes, conflict resolution, full-resync trigger |
 | **Admin** | Registration toggle, user suspension, feed-health inspection, manual refresh, system metrics |
 | **Backend** | Go + chi, SQLite (WAL), SSRF-safe HTTP transport, background feed worker with ETag/304 + backoff |
-| **Ops** | Multi-stage Docker images, same-origin Caddy proxy, GitHub Actions CI, signed SLSA provenance + SBOM releases |
+| **Ops** | Ultra-lightweight multi-stage Docker image (26MB single Go binary), zero reverse-proxy sidecars, GitHub Actions CI, signed SLSA provenance + SBOM releases |
 
 See the full, always-current breakdown in [docs/current-status.md](docs/current-status.md).
 
@@ -71,13 +77,13 @@ cd KoalaCast
 # 2. Configure — set a strong SESSION_SECRET (32+ chars)
 cp .env.example .env
 
-# 3. Launch (api + web behind a same-origin Caddy proxy)
+# 3. Launch single Go application binary container on port 3000
 docker compose up -d
 ```
 
 Open the app at **<http://localhost:3000>**.
 
-> The Caddy proxy serves the web app and forwards `/api/*` and health probes to the Go backend, so everything runs on a single origin. The API is also published directly on `http://localhost:8080` for debugging.
+> The single Go application binary (`koalacast`) serves both the REST API (`/api/v1/*`) and the static SvelteKit SPA (`/*`) natively on port `3000` with zero external reverse proxies or sidecars.
 
 Prefer `make`? See the [Makefile targets](#development): `make docker-up`, `make docker-down`.
 
@@ -86,24 +92,24 @@ Prefer `make`? See the [Makefile targets](#development): `make docker-up`, `make
 ## Architecture
 
 ```text
-                       http://localhost:3000
-                                │
-                    ┌───────────▼───────────┐
-                    │   Caddy reverse proxy  │
-                    │  /api/* , /healthz ────┼───────────┐
-                    │  /*  ──────────────┐   │           │
-                    └────────────────────┼───┘           │
-                                         │               │
-                           ┌─────────────▼──┐   ┌─────────▼─────────┐
-   Future Android client ─▶│  SvelteKit web │   │   Go REST API      │
-                           │  (adapter-node)│   │   (chi router)     │
-                           └────────────────┘   │        │           │
-                                                 │  SQLite (WAL)      │
-                                                 │  Feed worker pool  │
-                                                 │  iTunes / PodcastIndex
-                                                 └────────┬───────────┘
-                                                          │
-   Web / native audio player ─────────────────────────────▶ Direct publisher audio (CDN)
+                                 http://localhost:3000
+                                          │
+                               ┌──────────▼──────────┐
+                               │   Go REST API       │
+                               │   (chi router)      │
+                               ├─────────────────────┤
+                               │ Native Static SPA   │
+                               │ Server (/web/build) │
+                               └──────────┬──────────┘
+                                          │
+                        ┌─────────────────┼─────────────────┐
+                        │                 │                 │
+                ┌───────▼───────┐ ┌───────▼───────┐ ┌───────▼───────┐
+                │ SQLite (WAL)  │ │ Feed Worker   │ │ In-Memory RAM │
+                │ Database      │ │ Pool          │ │ LRU Cache     │
+                └───────────────┘ └───────┬───────┘ └───────────────┘
+                                          │
+    Web / native audio player ────────────┴────────▶ Direct publisher audio (CDN)
 ```
 
 Deep dives live in [docs/](docs/):
@@ -120,12 +126,12 @@ Deep dives live in [docs/](docs/):
 
 ```text
 KoalaCast/
-├── apps/web/            SvelteKit 5 web client (adapter-node)      → apps/web/README.md
-├── services/api/        Go REST API, SQLite, workers              → services/api/README.md
-├── packages/openapi/    OpenAPI 3 contract for the REST API       → packages/openapi/README.md
-├── infrastructure/      Dockerfiles & Caddy reverse proxy config  → infrastructure/README.md
-├── docs/                Architecture, sync, privacy, feed specs   → docs/README.md
-├── testdata/            Sample RSS feeds for tests                → testdata/README.md
+├── apps/web/            SvelteKit 5 web client (adapter-static SPA) → apps/web/README.md
+├── services/api/        Go REST API, SQLite, workers, SPA server    → services/api/README.md
+├── packages/openapi/    OpenAPI 3 contract for the REST API        → packages/openapi/README.md
+├── infrastructure/      Minimal multi-stage Alpine Dockerfile       → infrastructure/README.md
+├── docs/                Architecture, sync, privacy, feed specs    → docs/README.md
+├── testdata/            Sample RSS feeds for tests                 → testdata/README.md
 ├── docker-compose.yml   Single-command self-host stack
 ├── Makefile             Developer task runner (make help)
 └── .github/workflows/   CI and Docker release pipelines
@@ -147,9 +153,9 @@ Every top-level directory has its own `README.md` describing its contents and co
 
 | Target | Description |
 | :--- | :--- |
-| `make build` | Build the Go API binary and the SvelteKit bundle |
-| `make dev-api` | Run the Go API on `:8080` |
-| `make dev-web` | Run the SvelteKit dev server on `:5173` (proxies `/api` → `:8080`) |
+| `make build` | Build the Go API binary and the SvelteKit static SPA bundle |
+| `make dev-api` | Run the Go API on `:3000` |
+| `make dev-web` | Run the SvelteKit dev server on `:5173` (proxies `/api` → `:3000`) |
 | `make test` | Go tests with `-race` + `svelte-check` |
 | `make fmt` / `make vet` | Format Go sources / run `go vet` |
 | `make docker-build` / `make docker-up` / `make docker-down` | Container workflow |
@@ -158,11 +164,11 @@ Every top-level directory has its own `README.md` describing its contents and co
 ### Manual dev loop
 
 ```bash
-# Terminal 1 — backend on :8080
+# Terminal 1 — backend on :3000
 cd services/api
 SESSION_SECRET=dev-secret-with-at-least-32-characters go run ./cmd/server
 
-# Terminal 2 — frontend on :5173 (Vite proxies /api to :8080)
+# Terminal 2 — frontend on :5173 (Vite proxies /api to :3000)
 cd apps/web
 npm install
 npm run dev
@@ -176,7 +182,7 @@ The backend is configured entirely through environment variables. Copy [`.env.ex
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `PORT` | `8080` | API listen port |
+| `PORT` | `3000` | Server listen port |
 | `SESSION_SECRET` | — | **Required.** 32+ byte secret for session signing |
 | `DATABASE_PATH` | `./data/koalacast.db` | SQLite database file |
 | `KC_REGISTRATION_ENABLED` | unset | Hard override for account registration (else DB-controlled) |

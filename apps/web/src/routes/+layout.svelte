@@ -46,7 +46,11 @@
 <div class="app-container">
 	<header class="navbar">
 		<a class="brand" href="/" aria-label="KoalaCast home">
-			<img class="logo-icon" src="/icon-192.png" alt="" width="40" height="40" aria-hidden="true" />
+			<picture>
+				<source type="image/avif" srcset="/icon-40.avif 1x, /icon-80.avif 2x" />
+				<source type="image/webp" srcset="/icon-40.webp 1x, /icon-80.webp 2x" />
+				<img class="logo-icon" src="/icon-40.png" srcset="/icon-40.png 1x, /icon-80.png 2x" alt="" width="40" height="40" aria-hidden="true" />
+			</picture>
 			<span class="brand-title">KoalaCast</span>
 		</a>
 		<nav class="nav-links">

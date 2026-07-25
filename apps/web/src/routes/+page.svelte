@@ -254,7 +254,7 @@
 	<!-- Clean Hero Header -->
 	<section class="hero-section">
 		<div class="hero-content">
-			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> 🌿 Open Source Podcatcher</span>
+			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> Open Source Podcatcher</span>
 			<h1>Discover & Listen to Podcasts</h1>
 			<p class="subtitle">Stream shows directly from creators. Simple, calm, privacy-first audio playback.</p>
 

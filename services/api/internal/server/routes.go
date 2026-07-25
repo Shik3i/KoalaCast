@@ -3,7 +3,11 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
+
+	"strings"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -22,6 +26,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	r.Use(customMiddleware.RealIP(cfg.TrustedProxies))
 	r.Use(customMiddleware.SecurityHeaders)
 	r.Use(customMiddleware.CORS(cfg.AllowedCORSOrigins))
+	r.Use(middleware.Compress(5))
 	r.Use(customMiddleware.RequestID)
 	r.Use(customMiddleware.Logger(logger))
 	r.Use(middleware.Recoverer)
@@ -69,8 +74,11 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 
 		// Proxy endpoints for CORS-safe Chapters, Transcripts, and Privacy-Safe Cached Images
 		r.Get("/proxy/chapters", proxyHandler.GetChapters)
+		r.Head("/proxy/chapters", proxyHandler.GetChapters)
 		r.Get("/proxy/transcript", proxyHandler.GetTranscript)
+		r.Head("/proxy/transcript", proxyHandler.GetTranscript)
 		r.Get("/proxy/image", proxyHandler.GetImageProxy)
+		r.Head("/proxy/image", proxyHandler.GetImageProxy)
 
 		// Podcasts & Discovery
 		r.Get("/podcasts/discover", podcastHandler.Discover)
@@ -131,6 +139,29 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Get("/admin/status", adminHandler.SystemStatus)
 		})
 	})
+
+	// Native Go Static Web File Server (SvelteKit SPA) with index.html fallback
+	webDir := os.Getenv("WEB_STATIC_DIR")
+	if webDir == "" {
+		webDir = "/app/web/build"
+	}
+
+	if _, err := os.Stat(webDir); err == nil {
+		fileServer := http.FileServer(http.Dir(webDir))
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+
+			path := filepath.Join(webDir, filepath.Clean(r.URL.Path))
+			if info, err := os.Stat(path); err != nil || info.IsDir() {
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+				return
+			}
+			fileServer.ServeHTTP(w, r)
+		})
+	}
 
 	return r
 }

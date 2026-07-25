@@ -11,6 +11,7 @@
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
+	import { optimizeArtwork } from '$lib/artwork';
 	import { reveal } from '$lib/actions/reveal';
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
@@ -189,7 +190,7 @@
 			<div class="settings-list">
 				{#each subscriptions as sub (sub.podcast_id)}
 					<div class="settings-row">
-						<img src={sub.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(sub.artwork_url, 80)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="s-title">{sub.title}</span>
 						<div class="seg">
 							<button class:active={(modes[sub.podcast_id] ?? 'all') === 'all'} onclick={() => setMode(sub.podcast_id, 'all')}>All</button>
@@ -232,7 +233,7 @@
 			{#each feed as ep, i (ep.id)}
 				<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
 					<button class="ep-play" onclick={() => play(ep)} aria-label="Play episode">
-						<img src={ep.artwork_url || '/placeholder.svg'} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 					</button>
 					<div class="ep-body">

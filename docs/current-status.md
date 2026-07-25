@@ -16,8 +16,9 @@
 | **RSS & Atom Feed Parser** | ✅ **Implemented** | Parser supporting RSS 2.0 & Atom 1.0, Podcasting 2.0 tags (`chapters`, `transcript` arrays), `content:encoded`, iTunes durations, zero-time fallback for missing dates, deterministic stable episode identity resolution. |
 | **Background Feed Update Worker**| ✅ **Implemented** | Worker pool checking subscribed feeds, ETag / Last-Modified 304 handling, exponential backoff, error tracking (`consecutive_error_count`), and episode persistence. |
 | **Podcast Search & Direct RSS Feed**| ✅ **Implemented** | `/api/v1/podcasts/search` with Podcast Index integration / graceful fallback, `/api/v1/podcasts/feed` direct RSS URL addition, podcast details, and episode pagination. |
-| **Same-Origin Caddy Proxy** | ✅ **Implemented** | Caddy routing configuration mapping `/` to web app and `/api/v1/*` to Go API. |
-| **Docker Deployment Setup** | ✅ **Implemented** | Multi-stage Dockerfiles (`Dockerfile.api`, `Dockerfile.web`) and single-command `docker-compose.yml`. |
+| **Single Go Binary & Static Server** | ✅ **Implemented** | Go REST API serving static SvelteKit SPA assets (`@sveltejs/adapter-static`) directly on port 3000 with zero external reverse proxies or sidecars. |
+| **RAM LRU Image Proxy & Cache** | ✅ **Implemented** | In-memory 100MB RAM LRU cache (`container/list`) with Catmull-Rom downscaling and `singleflight` thundering herd protection. |
+| **Docker Deployment Setup** | ✅ **Implemented** | Ultra-lightweight multi-stage Dockerfile (26MB Alpine single Go binary) and single-command `docker-compose.yml`. |
 | **SvelteKit Web Player & UI** | ✅ **Implemented** | SvelteKit + Svelte 5 web app with Forest Green design system, Media Session API integration, millisecond position tracking, speed controls, discovery, library, and settings. |
 | **IndexedDB Local Storage Engine** | ✅ **Implemented** | Account-free Local Mode storing subscriptions, queue, playback progress, and favorites strictly inside browser IndexedDB. |
 | **Accounts, Security & Auth** | ✅ **Implemented** | User registration, Argon2id password hashing, grouped 32-byte Base32 recovery code generation (`AAAA-BBBB-...`), HttpOnly session cookies, Bearer device tokens, session revocation. |

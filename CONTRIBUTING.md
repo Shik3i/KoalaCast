@@ -23,10 +23,10 @@ Requirements: **Go 1.25+**, **Node.js 20+**, and optionally **Docker 24+**.
 git clone https://github.com/Shik3i/KoalaCast.git
 cd KoalaCast
 
-# Backend on :8080
+# Backend on :3000
 cd services/api && SESSION_SECRET=dev-secret-with-at-least-32-characters go run ./cmd/server
 
-# Frontend on :5173 (Vite proxies /api to :8080)
+# Frontend on :5173 (Vite proxies /api to :3000)
 cd apps/web && npm install && npm run dev
 ```
 

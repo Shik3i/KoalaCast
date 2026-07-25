@@ -2,10 +2,10 @@
 
 ## Technical Stack
 
-- **Backend**: Go with `net/http` and `go-chi/chi/v5` router.
+- **Backend & Static Web Server**: Go with `net/http` and `go-chi/chi/v5` router, serving both REST API endpoints (`/api/v1/*`) and static web assets natively.
 - **Database**: SQLite embedded engine in Write-Ahead Logging (`WAL`) mode with foreign key enforcement and busy timeout.
-- **Web App**: SvelteKit with Svelte 5, TypeScript, Vanilla CSS design system, IndexedDB for local storage, and browser Media Session API.
-- **Reverse Proxy**: Caddy exposing SvelteKit web assets and `/api/v1/*` endpoints under the same origin.
+- **Web App**: SvelteKit 5 compiled to static Single-Page Application (`@sveltejs/adapter-static`), TypeScript, Vanilla CSS design system, IndexedDB for local storage, and browser Media Session API.
+- **Image Proxy & Cache**: In-memory 100MB RAM LRU cache with Catmull-Rom downscaling and `singleflight` thundering herd protection.
 
 ## Configuration Precedence Hierarchy
 

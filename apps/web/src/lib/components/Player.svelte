@@ -10,6 +10,7 @@
 	import { player } from '$lib/stores/player.svelte';
 	import { dominantColor } from '$lib/color';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
@@ -432,7 +433,7 @@
 			<div class="track-info">
 				<button class="art-btn" onclick={() => (expanded = true)} aria-label="Open full-screen player">
 					<img
-						src={track.artwork_url || '/placeholder.svg'}
+						src={optimizeArtwork(track.artwork_url, 120)}
 						alt={track.title}
 						class="artwork"
 						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
@@ -517,7 +518,7 @@
 	<!-- Full-screen Now Playing -->
 	{#if expanded}
 		<div class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label="Now playing">
-			<div class="np-bg" style="background-image: url({track.artwork_url || '/placeholder.svg'})"></div>
+			<div class="np-bg" style="background-image: url({optimizeArtwork(track.artwork_url, 400)})"></div>
 			<button class="np-close" onclick={() => (expanded = false)} aria-label="Close full-screen player">
 				<i class="ph ph-caret-down" aria-hidden="true"></i>
 			</button>
@@ -525,7 +526,7 @@
 			<div class="np-content">
 				<div class="np-art-wrap" class:playing={isPlaying}>
 					<img
-						src={track.artwork_url || '/placeholder.svg'}
+						src={optimizeArtwork(track.artwork_url, 400)}
 						alt={track.title}
 						class="np-art"
 						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}

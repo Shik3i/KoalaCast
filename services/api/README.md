@@ -1,7 +1,7 @@
 # KoalaCast API (`services/api`)
 
-The Go REST backend for KoalaCast: podcast discovery/search, feed ingestion,
-accounts, cross-device sync, OPML, and admin — backed by SQLite.
+The Go REST backend and static web server for KoalaCast: podcast discovery/search, feed ingestion,
+accounts, cross-device sync, OPML, privacy image proxy, and admin — backed by SQLite.
 
 - **Language:** Go 1.25
 - **Router:** [chi](https://github.com/go-chi/chi) v5
@@ -24,10 +24,10 @@ services/api/
     ├── rss/             RSS/Atom parser + SSRF-safe HTTP client
     ├── worker/          Background feed-refresh worker pool
     └── server/
-        ├── routes.go        Route table
+        ├── routes.go        Route table (API + static SPA file server)
         ├── server.go        HTTP server wiring
-        ├── handlers/        Request handlers (podcasts, auth, sync, opml, admin, health)
-        └── middleware/      Request ID, logging, auth, rate limiting
+        ├── handlers/        Request handlers (podcasts, auth, sync, opml, admin, proxy, health)
+        └── middleware/      Request ID, logging, CORS, Gzip compression, rate limiting
 ```
 
 ---
@@ -37,7 +37,7 @@ services/api/
 ```bash
 # From this directory
 SESSION_SECRET=dev-secret-with-at-least-32-characters go run ./cmd/server
-# API on http://localhost:8080
+# Server on http://localhost:3000
 ```
 
 Or via the repo-root Makefile: `make dev-api`.
@@ -45,7 +45,7 @@ Or via the repo-root Makefile: `make dev-api`.
 ### Build
 
 ```bash
-CGO_ENABLED=1 go build -ldflags="-w -s" -o koalacast-api ./cmd/server
+CGO_ENABLED=1 go build -ldflags="-w -s" -o koalacast ./cmd/server
 ```
 
 > `CGO_ENABLED=1` is required for the SQLite driver.
@@ -61,14 +61,17 @@ Precedence and defaults are documented in
 
 ---
 
-## HTTP API
+## HTTP API & Static SPA Routes
 
 Health probes: `GET /healthz`, `GET /readyz` (also under `/api/v1`).
+Static Web SPA: `GET /*` (serves `/app/web/build` with `index.html` fallback).
 
 All application routes are under `/api/v1`:
 
 | Method | Path | Auth | Purpose |
 | :--- | :--- | :--- | :--- |
+| GET/HEAD | `/proxy/image?url=&w=` | — | Privacy-safe artwork resizer with 100MB RAM LRU cache |
+| GET/HEAD | `/proxy/chapters` · `/proxy/transcript` | — | CORS-safe proxy for chapters & transcripts |
 | GET | `/podcasts/discover` | — | iTunes Top Charts (DB fallback) |
 | GET | `/podcasts/search?q=` | — | Search via Podcast Index or iTunes |
 | POST | `/podcasts/feed` | — | Add/ingest a podcast by RSS URL |
@@ -99,10 +102,9 @@ go vet ./...
 
 ---
 
-## Security Notes
+## Security & Caching Notes
 
-- **All** outbound feed fetches go through the SSRF-safe client in `internal/rss`
-  (`NewSafeHTTPClient`), which blocks loopback/private/link-local/CGNAT/metadata
-  addresses and re-validates on redirects.
-- RSS bodies are size-limited (`FEED_MAX_RESPONSE_BYTES`) to prevent DoS.
-- Passwords use Argon2id; sessions use HttpOnly cookies; auth endpoints are rate-limited.
+- **RAM LRU Cache**: Remote artwork is resized using `golang.org/x/image/draw` and cached 100% in RAM with `singleflight` thundering herd protection.
+- **SSRF Guard**: All outbound feed fetches go through the SSRF-safe client in `internal/rss` (`NewSafeHTTPClient`), which blocks loopback/private/link-local/CGNAT/metadata addresses and re-validates on redirects.
+- **DoS Guard**: RSS bodies are size-limited (`FEED_MAX_RESPONSE_BYTES`) to prevent DoS.
+- **Auth**: Passwords use Argon2id; sessions use HttpOnly cookies; auth endpoints are rate-limited.

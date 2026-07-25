@@ -1,29 +1,101 @@
 package handlers
 
 import (
+	"bytes"
+	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"image"
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
+	"golang.org/x/sync/singleflight"
 )
 
+type lruItem struct {
+	key  string
+	val  []byte
+	size int64
+}
+
+type MemoryLRUCache struct {
+	mu        sync.Mutex
+	items     map[string]*list.Element
+	evictList *list.List
+	maxBytes  int64
+	curBytes  int64
+}
+
+func NewMemoryLRUCache(maxBytes int64) *MemoryLRUCache {
+	return &MemoryLRUCache{
+		items:     make(map[string]*list.Element),
+		evictList: list.New(),
+		maxBytes:  maxBytes,
+	}
+}
+
+func (c *MemoryLRUCache) Get(key string) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if elem, ok := c.items[key]; ok {
+		c.evictList.MoveToFront(elem)
+		return elem.Value.(*lruItem).val, true
+	}
+	return nil, false
+}
+
+func (c *MemoryLRUCache) Put(key string, data []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	dataLen := int64(len(data))
+	if dataLen > c.maxBytes {
+		return
+	}
+
+	if elem, ok := c.items[key]; ok {
+		c.evictList.MoveToFront(elem)
+		item := elem.Value.(*lruItem)
+		c.curBytes += dataLen - item.size
+		item.size = dataLen
+		item.val = data
+	} else {
+		item := &lruItem{key: key, val: data, size: dataLen}
+		elem := c.evictList.PushFront(item)
+		c.items[key] = elem
+		c.curBytes += dataLen
+	}
+
+	for c.curBytes > c.maxBytes {
+		oldest := c.evictList.Back()
+		if oldest == nil {
+			break
+		}
+		c.evictList.Remove(oldest)
+		item := oldest.Value.(*lruItem)
+		delete(c.items, item.key)
+		c.curBytes -= item.size
+	}
+}
+
 type ProxyHandler struct {
-	httpClient *http.Client
+	httpClient   *http.Client
+	memCache     *MemoryLRUCache
+	requestGroup singleflight.Group
 }
 
 func NewProxyHandler() *ProxyHandler {
@@ -32,12 +104,14 @@ func NewProxyHandler() *ProxyHandler {
 			ConnectTimeout: 10 * time.Second,
 			AllowLoopback:  true,
 		}),
+		// Bounded 100 MB In-Memory RAM LRU cache
+		memCache: NewMemoryLRUCache(100 * 1024 * 1024),
 	}
 }
 
 // GetImageProxy fetches an external image, resizes it, converts/compresses it to optimized JPEG,
-// and caches it permanently on disk to guarantee 100% privacy (no direct client requests to 3rd parties)
-// and high performance.
+// and caches it entirely in RAM (In-Memory) to guarantee zero disk I/O, privacy, and maximum performance.
+// Uses singleflight to coalesce duplicate concurrent requests (Thundering Herd protection).
 func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
 	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
@@ -56,85 +130,88 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 	hHasher.Write([]byte(rawURL + "_" + strconv.Itoa(targetW)))
 	cacheKey := hex.EncodeToString(hHasher.Sum(nil))
 
-	cacheDir := os.Getenv("IMAGE_CACHE_DIR")
-	if cacheDir == "" {
-		cacheDir = "/tmp/koalacast_img_cache"
-	}
-	_ = os.MkdirAll(cacheDir, 0755)
-
-	cacheFile := filepath.Join(cacheDir, cacheKey+".jpg")
-
-	if info, err := os.Stat(cacheFile); err == nil && info.Size() > 0 {
+	// 1. Fast path: Check In-Memory RAM LRU Cache (0 ms, 0 Disk I/O)
+	if cachedData, ok := h.memCache.Get(cacheKey); ok {
 		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Content-Length", strconv.Itoa(len(cachedData)))
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		http.ServeFile(w, r, cacheFile)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(cachedData)
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	// 2. Coalesce duplicate concurrent image processing using singleflight
+	res, err, _ := h.requestGroup.Do(cacheKey, func() (interface{}, error) {
+		// Double-check cache in case another goroutine completed it
+		if cachedData, ok := h.memCache.Get(cacheKey); ok {
+			return cachedData, nil
+		}
+
+		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("invalid url")
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+
+		resp, err := h.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch remote image")
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("remote image non-200")
+		}
+
+		limitReader := io.LimitReader(resp.Body, 15*1024*1024)
+		img, _, err := image.Decode(limitReader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode image")
+		}
+
+		bounds := img.Bounds()
+		srcW := bounds.Dx()
+		srcH := bounds.Dy()
+		if srcW == 0 || srcH == 0 {
+			return nil, fmt.Errorf("invalid image dimensions")
+		}
+
+		dstW := targetW
+		dstH := (srcH * dstW) / srcW
+		if dstH < 1 {
+			dstH = 1
+		}
+
+		dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+		draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
+
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 82}); err != nil {
+			return nil, fmt.Errorf("encode failed")
+		}
+
+		imgBytes := buf.Bytes()
+		h.memCache.Put(cacheKey, imgBytes)
+		return imgBytes, nil
+	})
+
 	if err != nil {
-		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
-		return
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-
-	resp, err := h.httpClient.Do(req)
-	if err != nil {
-		http.Error(w, `{"error":"failed to fetch remote image"}`, http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, `{"error":"remote image non-200"}`, http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
 		return
 	}
 
-	limitReader := io.LimitReader(resp.Body, 15*1024*1024)
-	img, _, err := image.Decode(limitReader)
-	if err != nil {
-		http.Error(w, `{"error":"failed to decode image"}`, http.StatusUnprocessableEntity)
+	imgBytes, ok := res.([]byte)
+	if !ok {
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
-
-	bounds := img.Bounds()
-	srcW := bounds.Dx()
-	srcH := bounds.Dy()
-	if srcW == 0 || srcH == 0 {
-		http.Error(w, `{"error":"invalid image dimensions"}`, http.StatusUnprocessableEntity)
-		return
-	}
-
-	dstW := targetW
-	dstH := (srcH * dstW) / srcW
-	if dstH < 1 {
-		dstH = 1
-	}
-
-	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
-
-	tmpFile := cacheFile + ".tmp"
-	f, err := os.Create(tmpFile)
-	if err != nil {
-		http.Error(w, `{"error":"cache write failed"}`, http.StatusInternalServerError)
-		return
-	}
-
-	if err := jpeg.Encode(f, dst, &jpeg.Options{Quality: 82}); err != nil {
-		f.Close()
-		_ = os.Remove(tmpFile)
-		http.Error(w, `{"error":"encode failed"}`, http.StatusInternalServerError)
-		return
-	}
-	f.Close()
-
-	_ = os.Rename(tmpFile, cacheFile)
 
 	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(imgBytes)))
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	http.ServeFile(w, r, cacheFile)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(imgBytes)
 }
 
 type ChapterItem struct {
@@ -156,51 +233,49 @@ func (h *ProxyHandler) GetChapters(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
 		return
 	}
-	req.Header.Set("User-Agent", "KoalaCast/1.0")
+	req.Header.Set("User-Agent", "KoalaCast/1.0 Podcast Player")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
 
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		http.Error(w, `{"error":"failed to fetch chapters"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to fetch chapters json"}`, http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, `{"error":"remote server returned non-200"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"chapters endpoint returned non-200"}`, http.StatusBadGateway)
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	limitReader := io.LimitReader(resp.Body, 2*1024*1024)
+	bodyBytes, err := io.ReadAll(limitReader)
 	if err != nil {
-		http.Error(w, `{"error":"failed to read chapter content"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to read chapters response"}`, http.StatusBadGateway)
 		return
 	}
 
-	var raw struct {
+	var parsed struct {
 		Chapters []ChapterItem `json:"chapters"`
 	}
+	if err := json.Unmarshal(bodyBytes, &parsed); err == nil && len(parsed.Chapters) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_ = json.NewEncoder(w).Encode(map[string]any{"chapters": parsed.Chapters})
+		return
+	}
 
-	if err := json.Unmarshal(body, &raw); err != nil {
-		// Fallback: try decoding array directly
-		var arr []ChapterItem
-		if errArr := json.Unmarshal(body, &arr); errArr == nil {
-			raw.Chapters = arr
-		} else {
-			http.Error(w, `{"error":"failed to parse JSON chapters"}`, http.StatusUnprocessableEntity)
-			return
-		}
+	var rawArray []ChapterItem
+	if err := json.Unmarshal(bodyBytes, &rawArray); err == nil && len(rawArray) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_ = json.NewEncoder(w).Encode(map[string]any{"chapters": rawArray})
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"chapters": raw.Chapters,
-	})
-}
-
-type TranscriptCue struct {
-	Start float64 `json:"start"`
-	End   float64 `json:"end"`
-	Text  string  `json:"text"`
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(bodyBytes)
 }
 
 func (h *ProxyHandler) GetTranscript(w http.ResponseWriter, r *http.Request) {
@@ -215,78 +290,58 @@ func (h *ProxyHandler) GetTranscript(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
 		return
 	}
-	req.Header.Set("User-Agent", "KoalaCast/1.0")
+	req.Header.Set("User-Agent", "KoalaCast/1.0 Podcast Player")
+	req.Header.Set("Accept", "text/vtt, text/plain, application/x-subrip, application/json, */*")
 
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		http.Error(w, `{"error":"failed to fetch transcript"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to fetch transcript"}`, http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, `{"error":"remote server returned non-200"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"transcript endpoint returned non-200"}`, http.StatusBadGateway)
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 5*1024*1024))
+	limitReader := io.LimitReader(resp.Body, 5*1024*1024)
+	bodyBytes, err := io.ReadAll(limitReader)
 	if err != nil {
-		http.Error(w, `{"error":"failed to read transcript content"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to read transcript response"}`, http.StatusBadGateway)
 		return
 	}
 
-	cues := parseTranscriptBody(string(body))
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "json") || strings.HasSuffix(url, ".json") {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(bodyBytes)
+		return
+	}
 
+	parsedCues := parseSRTOrVTT(string(bodyBytes))
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"cues": cues,
-	})
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_ = json.NewEncoder(w).Encode(map[string]any{"cues": parsedCues})
 }
 
-var timestampRegex = regexp.MustCompile(`(?:(\d+):)?(\d{2}):(\d{2})[\.,](\d{3})`)
-
-func parseTimestampToSeconds(s string) float64 {
-	m := timestampRegex.FindStringSubmatch(s)
-	if len(m) < 5 {
-		return 0
-	}
-	h, _ := strconv.Atoi(m[1])
-	min, _ := strconv.Atoi(m[2])
-	sec, _ := strconv.Atoi(m[3])
-	ms, _ := strconv.Atoi(m[4])
-
-	return float64(h*3600+min*60+sec) + float64(ms)/1000.0
+type CueItem struct {
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
+	Text  string  `json:"text"`
 }
 
-func parseTranscriptBody(content string) []TranscriptCue {
-	// First try JSON format (Podcast Index JSON transcript format)
-	var jsonDoc struct {
-		Segments []struct {
-			StartTime float64 `json:"startTime"`
-			EndTime   float64 `json:"endTime"`
-			Body      string  `json:"body"`
-		} `json:"segments"`
-	}
-
-	if err := json.Unmarshal([]byte(content), &jsonDoc); err == nil && len(jsonDoc.Segments) > 0 {
-		cues := make([]TranscriptCue, 0, len(jsonDoc.Segments))
-		for _, s := range jsonDoc.Segments {
-			cues = append(cues, TranscriptCue{
-				Start: s.StartTime,
-				End:   s.EndTime,
-				Text:  strings.TrimSpace(s.Body),
-			})
-		}
-		return cues
-	}
-
-	// Fallback to WebVTT / SRT parser
+func parseSRTOrVTT(content string) []CueItem {
+	var cues []CueItem
 	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-	var cues []TranscriptCue
-	var currentCue *TranscriptCue
 
-	for i := 0; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
+	timeRegexp := regexp.MustCompile(`(?:(\d{2}):)?(\d{2}):(\d{2})[\.,](\d{3})\s*-->\s*(?:(\d{2}):)?(\d{2}):(\d{2})[\.,](\d{3})`)
+
+	var currentCue *CueItem
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if line == "" || line == "WEBVTT" || strings.HasPrefix(line, "NOTE") {
 			if currentCue != nil && currentCue.Text != "" {
 				cues = append(cues, *currentCue)
@@ -295,33 +350,22 @@ func parseTranscriptBody(content string) []TranscriptCue {
 			continue
 		}
 
-		if strings.Contains(line, "-->") {
-			parts := strings.Split(line, "-->")
-			if len(parts) == 2 {
-				if currentCue != nil && currentCue.Text != "" {
-					cues = append(cues, *currentCue)
-				}
-				startSec := parseTimestampToSeconds(strings.TrimSpace(parts[0]))
-				endSec := parseTimestampToSeconds(strings.TrimSpace(parts[1]))
-				currentCue = &TranscriptCue{
-					Start: startSec,
-					End:   endSec,
-					Text:  "",
-				}
+		matches := timeRegexp.FindStringSubmatch(line)
+		if len(matches) > 0 {
+			if currentCue != nil && currentCue.Text != "" {
+				cues = append(cues, *currentCue)
 			}
+			startSec := parseTimestampToSeconds(matches[1], matches[2], matches[3], matches[4])
+			endSec := parseTimestampToSeconds(matches[5], matches[6], matches[7], matches[8])
+			currentCue = &CueItem{Start: startSec, End: endSec, Text: ""}
 			continue
 		}
 
 		if currentCue != nil {
-			// Strip HTML / formatting tags like <v Speaker>
-			cleanLine := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(line, "")
-			cleanLine = strings.TrimSpace(cleanLine)
-			if cleanLine != "" {
-				if currentCue.Text != "" {
-					currentCue.Text += " " + cleanLine
-				} else {
-					currentCue.Text = cleanLine
-				}
+			if currentCue.Text != "" {
+				currentCue.Text += " " + line
+			} else {
+				currentCue.Text = line
 			}
 		}
 	}
@@ -331,4 +375,12 @@ func parseTranscriptBody(content string) []TranscriptCue {
 	}
 
 	return cues
+}
+
+func parseTimestampToSeconds(hStr, mStr, sStr, msStr string) float64 {
+	h, _ := strconv.Atoi(hStr)
+	m, _ := strconv.Atoi(mStr)
+	s, _ := strconv.Atoi(sStr)
+	ms, _ := strconv.Atoi(msStr)
+	return float64(h*3600+m*60+s) + float64(ms)/1000.0
 }

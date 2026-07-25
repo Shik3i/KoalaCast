@@ -44,9 +44,9 @@ func LoadConfig() (*Config, error) {
 
 	cfg := &Config{
 		AppEnv:                appEnv,
-		Port:                  getEnv("PORT", "8080"),
-		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
-		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:8080/api/v1"),
+		Port:                  getEnv("PORT", "3000"),
+		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:3000"),
+		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:3000/api/v1"),
 		DatabasePath:          getEnv("DATABASE_PATH", "./data/koalacast.db"),
 		SessionSecret:         os.Getenv("SESSION_SECRET"),
 		PodcastIndexKey:       os.Getenv("PODCAST_INDEX_KEY"),

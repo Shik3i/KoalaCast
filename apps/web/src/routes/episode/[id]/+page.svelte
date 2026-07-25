@@ -13,6 +13,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { dominantColor } from '$lib/color';
+	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 
 	let episodeId = $state('');
@@ -248,7 +249,7 @@
 {:else if episode}
 	<div class="episode-page" style={accentVars}>
 		<div class="episode-header">
-			<img src={episode.artwork_url || podcast?.artwork_url || '/placeholder.svg'} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+			<img src={optimizeArtwork(episode.artwork_url || podcast?.artwork_url, 350)} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 
 			<div class="meta">
 				<h2>{episode.title}</h2>
@@ -303,7 +304,7 @@
 						{#each chaptersList as ch, i}
 							<button class="chapter-row" onclick={() => seekToCue(ch.startTime)}>
 								<span class="ch-time">{formatDuration(ch.startTime * 1000)}</span>
-								{#if ch.img}<img src={ch.img} alt="" class="ch-img" />{/if}
+								{#if ch.img}<img src={optimizeArtwork(ch.img, 120)} alt="" class="ch-img" />{/if}
 								<span class="ch-title">{ch.title || `Chapter ${i + 1}`}</span>
 								<i class="ph-fill ph-play ch-play" aria-hidden="true"></i>
 							</button>
