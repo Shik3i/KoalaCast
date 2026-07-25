@@ -1,0 +1,74 @@
+name: Tests
+
+# Reusable test suite. Called by CI (on every push/PR) and gated in front of the
+# Docker release so nothing ships without a green build.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Go backend (vet, fmt, race tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Track the toolchain declared in go.mod instead of a hard-coded version.
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+
+      - name: gofmt (check)
+        working-directory: services/api
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        working-directory: services/api
+        run: go vet ./...
+
+      - name: go test (race)
+        working-directory: services/api
+        run: go test -race -count=1 ./...
+
+  frontend:
+    name: SvelteKit frontend (check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Type check
+        working-directory: apps/web
+        run: npm run check
+
+      - name: Production build
+        working-directory: apps/web
+        run: npm run build
+
+  openapi:
+    name: OpenAPI lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npx -y @redocly/cli lint packages/openapi/openapi.yaml

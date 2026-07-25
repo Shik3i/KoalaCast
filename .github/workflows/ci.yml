@@ -1,99 +1,61 @@
-name: CI Pipeline
+name: CI
 
+# Fast feedback on every change: the shared test suite plus a real image build and
+# runtime smoke test. Does NOT publish anything — releases are separate workflows.
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  backend-test:
-    name: Go Backend Verification
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache-dependency-path: services/api/go.sum
-
-      - name: Verify Go Formatting
-        run: |
-          if [ -n "$(gofmt -l services/api/)" ]; then
-            echo "The following Go files are not formatted properly:"
-            gofmt -l services/api/
-            exit 1
-          fi
-
-      - name: Run Go Vet
-        run: |
-          cd services/api
-          go vet ./...
-
-      - name: Run Go Unit & Race Tests
-        run: |
-          cd services/api
-          go test -v -race ./...
-
-  frontend-test:
-    name: SvelteKit Frontend Verification
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-
-      - name: Install Frontend Dependencies
-        run: |
-          cd apps/web
-          npm ci
-
-      - name: Run Type Checks
-        run: |
-          cd apps/web
-          npm run check
-
-      - name: Run Production Build
-        run: |
-          cd apps/web
-          npm run build
-
-  openapi-lint:
-    name: OpenAPI Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Lint OpenAPI Spec
-        run: |
-          npx -y @redocly/cli lint packages/openapi/openapi.yaml
+  tests:
+    uses: ./.github/workflows/tests.yml
 
   docker-build:
-    name: Docker & Compose Verification
+    name: Docker image build + smoke test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Validate Docker Compose Config
-        run: |
-          docker compose config
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Images
+      - name: Validate docker compose config
+        run: docker compose config -q
+
+      - name: Build image (single-arch, load into the runner)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: koalacast:ci
+          cache-from: type=gha,scope=ci
+          cache-to: type=gha,mode=max,scope=ci
+
+      - name: Smoke test the running container
         run: |
-          docker compose build
+          docker run -d --name kc \
+            -e SESSION_SECRET=ci-session-secret-0123456789abcdef \
+            -p 3000:3000 koalacast:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/healthz >/dev/null 2>&1; then
+              echo "container healthy"
+              docker rm -f kc >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::container did not become healthy in time"
+          docker logs kc
+          docker rm -f kc >/dev/null
+          exit 1

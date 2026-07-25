@@ -20,10 +20,10 @@ The Dockerfile is multi-stage and produces a clean, non-root 26MB runtime Alpine
 | :--- | :--- | :--- | :--- |
 | `Dockerfile` | `alpine` | `3000` | Builds Node SvelteKit SPA + Go binary (`CGO_ENABLED=1`); runs `/app/koalacast` as user `koala`; data in `/app/data` |
 
-Build the context from the **repository root**:
+Build the context from the **repository root** (single `Dockerfile` at the repo root):
 
 ```bash
-docker build -f infrastructure/docker/Dockerfile -t koalacast .
+docker build -t koalacast .
 ```
 
 Published images (via the [release workflow](../.github/workflows/docker-release.yml))

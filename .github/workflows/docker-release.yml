@@ -1,109 +1,130 @@
-name: Docker Release & SLSA Provenance Attestation
+name: Release · Docker image
 
+# Builds and publishes ONLY the Docker image. Trigger it independently of the
+# Android release:
+#   - push a semver tag  ->  git tag v0.1.0 && git push origin v0.1.0
+#   - or run it manually ->  Actions ▸ "Release · Docker image" ▸ Run workflow
+# (Android has its own workflow keyed on `android-v*` tags, so a `v*` tag never
+#  triggers an APK build and vice-versa.)
 on:
   push:
-    branches:
-      - main
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
   workflow_dispatch:
-
-# Cancel superseded runs on the same ref (never cancel tag releases).
-concurrency:
-  group: docker-release-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    inputs:
+      extra_tag:
+        description: 'Optional extra image tag to publish (e.g. latest, edge). Blank = :sha-<short> only.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
+
+# Never cancel an in-progress release.
+concurrency:
+  group: docker-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  # Gate: never publish an image that doesn't pass the suite.
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   build-and-push:
-    name: Build, Attest & Release (${{ matrix.name }})
+    name: Build, attest & push
+    needs: tests
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: api
-            image_suffix: koalacast-api
-            dockerfile: infrastructure/docker/Dockerfile.api
-          - name: web
-            image_suffix: koalacast-web
-            dockerfile: infrastructure/docker/Dockerfile.web
-
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # keyless signing for attestations
+      attestations: write
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # GHCR image paths must be lowercase; the owner login may contain capitals.
-      - name: Compute Lowercase Image Name
+      # GHCR paths must be lowercase; the owner login can contain capitals.
+      - name: Compute lowercase image name
         id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image_suffix }}" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/koalacast" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU (Multi-Architecture Support)
+      - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry (GHCR)
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker Metadata & Tags
+      - name: Docker metadata & tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=${{ github.event.inputs.extra_tag }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.extra_tag != '' }}
             type=sha,format=short
 
-      - name: Build and Push Docker Image
-        id: build-push
+      - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-          # SLSA provenance and SBOM are published as signed attestations below;
-          # disable buildx's unsigned inline variants to avoid duplicate metadata.
+          cache-from: type=gha,scope=release
+          cache-to: type=gha,mode=max,scope=release
+          # Provenance & SBOM are published below as signed, registry-pushed
+          # attestations; disable buildx's own unsigned inline variants.
           provenance: false
           sbom: false
 
-      - name: Generate SLSA Build Provenance Attestation
+      - name: Attest build provenance (SLSA)
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ steps.image.outputs.name }}
-          subject-digest: ${{ steps.build-push.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
       - name: Generate SBOM (Syft)
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.image.outputs.name }}@${{ steps.build-push.outputs.digest }}
+          image: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: sbom.spdx.json
           upload-artifact: false
 
-      - name: Generate SBOM Attestation
+      - name: Attest SBOM
         uses: actions/attest-sbom@v1
         with:
           subject-name: ${{ steps.image.outputs.name }}
-          subject-digest: ${{ steps.build-push.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           sbom-path: sbom.spdx.json
           push-to-registry: true
+
+      - name: Summary
+        run: |
+          {
+            echo "### Docker image published :rocket:"
+            echo ""
+            echo "**Image:** \`${{ steps.image.outputs.name }}\`"
+            echo "**Digest:** \`${{ steps.build.outputs.digest }}\`"
+            echo ""
+            echo "Tags:"
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
