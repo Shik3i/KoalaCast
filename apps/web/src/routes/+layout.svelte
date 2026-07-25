@@ -17,6 +17,8 @@
 	let { children } = $props();
 
 	let isAdmin = $state(false);
+	let scrollY = $state(0);
+	const isScrolled = $derived(scrollY > 20);
 
 	const baseLinks = [
 		{ href: '/inbox', icon: 'ph-tray', label: 'New' },
@@ -46,8 +48,10 @@
 	}
 </script>
 
+<svelte:window bind:scrollY />
+
 <div class="app-container">
-	<header class="navbar">
+	<header class="navbar" class:scrolled={isScrolled}>
 		<a class="brand" href="/" aria-label="KoalaCast home">
 			<picture>
 				<source type="image/avif" srcset="/icon-40.avif 1x, /icon-80.avif 2x" />
@@ -105,6 +109,13 @@
 		z-index: 50;
 		backdrop-filter: blur(14px) saturate(140%);
 		-webkit-backdrop-filter: blur(14px) saturate(140%);
+		transition: padding 0.25s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)), background 0.25s ease, box-shadow 0.25s ease;
+	}
+
+	.navbar.scrolled {
+		padding: 0.45rem 2rem;
+		background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 	}
 
 	.brand {
@@ -117,7 +128,10 @@
 		color: var(--text-primary);
 		border-radius: 12px;
 		padding: 0.2rem 0.4rem;
-		transition: var(--transition-smooth);
+		transition: var(--transition-smooth), font-size 0.25s ease;
+	}
+	.navbar.scrolled .brand {
+		font-size: 1.15rem;
 	}
 	.brand:hover {
 		text-decoration: none;
@@ -139,7 +153,12 @@
 		object-fit: contain;
 		display: block;
 		border-radius: 0.65rem;
-		transition: transform 0.3s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+		transition: transform 0.3s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)), width 0.25s ease, height 0.25s ease;
+	}
+
+	.navbar.scrolled .logo-icon {
+		width: 2rem;
+		height: 2rem;
 	}
 
 	.nav-links {
@@ -158,8 +177,14 @@
 		padding: 0.5rem 0.9rem;
 		border-radius: 12px;
 		color: var(--text-secondary);
-		transition: var(--transition-smooth);
+		transition: var(--transition-smooth), padding 0.25s ease, font-size 0.25s ease;
 	}
+
+	.navbar.scrolled .nav-links a {
+		padding: 0.35rem 0.75rem;
+		font-size: 0.88rem;
+	}
+
 	.nav-links a :global(.ph) {
 		font-size: 1.2rem;
 		transition: transform 0.25s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
@@ -227,6 +252,7 @@
 
 	@media (max-width: 640px) {
 		.navbar { padding: 0.75rem 1rem; }
+		.navbar.scrolled { padding: 0.45rem 1rem; }
 		.nav-links { display: none; }
 		.main-content { padding: 1.5rem 1rem; padding-bottom: 5rem; }
 		.main-content.has-player { padding-bottom: 200px; }
