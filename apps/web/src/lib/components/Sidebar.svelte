@@ -10,6 +10,7 @@
 	} from '$lib/idb/db';
 	import { t } from '$lib/i18n';
 	import { sync } from '$lib/stores/sync.svelte';
+	import { shell } from '$lib/stores/shell.svelte';
 	import {
 		getPodcastPlaybackSettings,
 		savePodcastPlaybackSettings,
@@ -96,14 +97,26 @@
 </script>
 
 <aside class="quiet-rail" aria-label={t('quiet.nav.primary')}>
-	<a class="quiet-brand" href="/" aria-label={t('nav.brandHome')}>
-		<picture>
-			<source type="image/avif" srcset="/icon-40.avif 1x, /icon-80.avif 2x" />
-			<source type="image/webp" srcset="/icon-40.webp 1x, /icon-80.webp 2x" />
-			<img src="/icon-40.png" srcset="/icon-40.png 1x, /icon-80.png 2x" width="28" height="28" alt="" />
-		</picture>
-		<span>KoalaCast</span>
-	</a>
+	<header class="rail-header">
+		<a class="quiet-brand" href="/" aria-label={t('nav.brandHome')}>
+			<picture>
+				<source type="image/avif" srcset="/icon-40.avif 1x, /icon-80.avif 2x" />
+				<source type="image/webp" srcset="/icon-40.webp 1x, /icon-80.webp 2x" />
+				<img src="/icon-40.png" srcset="/icon-40.png 1x, /icon-80.png 2x" width="28" height="28" alt="" />
+			</picture>
+			<span>KoalaCast</span>
+		</a>
+		<button
+			class="rail-toggle"
+			type="button"
+			onclick={() => shell.toggleLeft()}
+			aria-label={shell.leftCollapsed ? t('quiet.shell.expandNavigation') : t('quiet.shell.collapseNavigation')}
+			aria-expanded={!shell.leftCollapsed}
+			title={shell.leftCollapsed ? t('quiet.shell.expandNavigation') : t('quiet.shell.collapseNavigation')}
+		>
+			<i class="ph {shell.leftCollapsed ? 'ph-caret-right' : 'ph-caret-left'}" aria-hidden="true"></i>
+		</button>
+	</header>
 
 	<nav class="quiet-nav">
 		{#each links as link}
@@ -123,19 +136,19 @@
 		</nav>
 	{:else if path.startsWith('/podcast/')}
 		<section class="rail-context show-context">
-			<p class="rail-eyebrow">Your history with this show</p>
+			<p class="rail-eyebrow">{t('quiet.show.history')}</p>
 			<strong class="show-total">{formatDuration(showStats.listenedMs)}</strong>
-			<span>{showStats.finished} of {showStats.episodes} episodes finished · avg {showStats.averageSpeed.toFixed(2)}×</span>
-			<p class="rail-eyebrow settings-label">Per-show settings</p>
-			<label>Skip intro <input type="number" min="0" max="600" value={showSettings.skipIntroSeconds} onchange={(event) => updateShowSetting({ skipIntroSeconds: Number(event.currentTarget.value) })} /> s</label>
-			<label>Skip outro <input type="number" min="0" max="600" value={showSettings.skipOutroSeconds} onchange={(event) => updateShowSetting({ skipOutroSeconds: Number(event.currentTarget.value) })} /> s</label>
-			<label>Speed
+			<span>{t('quiet.show.summary', { finished: showStats.finished, episodes: showStats.episodes, speed: showStats.averageSpeed.toFixed(2) })}</span>
+			<p class="rail-eyebrow settings-label">{t('quiet.show.settings')}</p>
+			<label>{t('quiet.show.skipIntro')} <input type="number" min="0" max="600" value={showSettings.skipIntroSeconds} onchange={(event) => updateShowSetting({ skipIntroSeconds: Number(event.currentTarget.value) })} /> {t('quiet.show.seconds')}</label>
+			<label>{t('quiet.show.skipOutro')} <input type="number" min="0" max="600" value={showSettings.skipOutroSeconds} onchange={(event) => updateShowSetting({ skipOutroSeconds: Number(event.currentTarget.value) })} /> {t('quiet.show.seconds')}</label>
+			<label>{t('quiet.show.speed')}
 				<select value={showSettings.speed ?? ''} onchange={(event) => updateShowSetting({ speed: event.currentTarget.value ? Number(event.currentTarget.value) : null })}>
-					<option value="">Global</option>
+					<option value="">{t('quiet.show.globalSpeed')}</option>
 					{#each [1, 1.1, 1.2, 1.25, 1.3, 1.5, 1.75, 2] as speed}<option value={speed}>{speed}×</option>{/each}
 				</select>
 			</label>
-			<label class="auto-queue"><input type="checkbox" checked={showSettings.autoQueueNew} onchange={(event) => updateShowSetting({ autoQueueNew: event.currentTarget.checked })} /> Auto-queue new</label>
+			<label class="auto-queue"><input type="checkbox" checked={showSettings.autoQueueNew} onchange={(event) => updateShowSetting({ autoQueueNew: event.currentTarget.checked })} /> {t('quiet.show.autoQueue')}</label>
 		</section>
 	{:else if path.startsWith('/admin')}
 		<section class="rail-context">
@@ -175,9 +188,19 @@
 		</section>
 	{/if}
 
-	<div class="rail-bottom">
-		<span class="rail-eyebrow">{sync.enabled ? t('quiet.profile.syncActive') : t('quiet.profile.localOnly')}</span>
-		<strong>{t('quiet.profile.private')}</strong>
-		<span>{sync.enabled ? t('quiet.profile.onAccount') : t('quiet.profile.onDevice')}</span>
-	</div>
+	<footer class="rail-bottom" aria-label={t('footer.links')}>
+		<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer" title={t('footer.legalNotice')}>
+			<i class="ph ph-scales" aria-hidden="true"></i><span>{t('footer.legalNotice')}</span>
+		</a>
+		<a href="/privacy" title={t('footer.privacy')}>
+			<i class="ph ph-shield-check" aria-hidden="true"></i><span>{t('footer.privacy')}</span>
+		</a>
+		<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer" title={t('footer.github')}>
+			<i class="ph ph-github-logo" aria-hidden="true"></i><span>{t('footer.github')}</span>
+		</a>
+		<a href="https://github.com/Shik3i/KoalaCast/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" title={t('footer.license')}>
+			<i class="ph ph-file-text" aria-hidden="true"></i><span>{t('footer.license')}</span>
+		</a>
+		<small>{t('footer.copyright')}</small>
+	</footer>
 </aside>

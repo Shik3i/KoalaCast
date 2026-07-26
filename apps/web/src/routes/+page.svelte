@@ -13,6 +13,12 @@
 	import { t } from '$lib/i18n';
 	import { listeningSession, type SessionMinutes } from '$lib/stores/session.svelte';
 	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
+	import {
+		arrangeDiscover,
+		formatEpisodeMinutes,
+		type DiscoverMood,
+		type DiscoverSort
+	} from '$lib/discover/home';
 
 	interface PodcastItem {
 		id: string;
@@ -23,14 +29,21 @@
 		category?: string;
 		categories?: string[];
 		description?: string;
+		latestDurationMs?: number;
+		latestPublishedAt?: number;
+		sourceRank?: number;
+	}
+
+	interface LatestTrack extends CurrentTrack {
+		pub_date?: number;
 	}
 
 	const PAGE_SIZE = 60;
 	const moods = [
-		{ label: 'Calm', icon: 'ph-waves', fit: [4, 7, 11] },
-		{ label: 'Curious', icon: 'ph-lightbulb', fit: [7, 12, 18] },
-		{ label: 'Company', icon: 'ph-users-three', fit: [3, 5, 9] },
-		{ label: 'Focus', icon: 'ph-crosshair', fit: [2, 4, 7] }
+		{ id: 'calm' as const, labelKey: 'quiet.discover.moodCalm' as const, icon: 'ph-waves' },
+		{ id: 'curious' as const, labelKey: 'quiet.discover.moodCurious' as const, icon: 'ph-lightbulb' },
+		{ id: 'company' as const, labelKey: 'quiet.discover.moodCompany' as const, icon: 'ph-users-three' },
+		{ id: 'focus' as const, labelKey: 'quiet.discover.moodFocus' as const, icon: 'ph-crosshair' }
 	];
 
 	let mounted = $state(false);
@@ -39,17 +52,20 @@
 	let subscribedFeeds = $state<string[]>([]);
 	let searchQuery = $state('');
 	let selectedCategory = $state('All');
-	let selectedMood = $state('Calm');
-	let sort = $state<'momentum' | 'rank' | 'length' | 'newest'>('momentum');
+	let selectedMood = $state<DiscoverMood>('calm');
+	let sort = $state<DiscoverSort>('momentum');
+	let fitsSession = $state(false);
+	let isHydratingMetadata = $state(false);
 	let isLoading = $state(true);
 	let isLoadingMore = $state(false);
 	let limit = $state(PAGE_SIZE);
+	let visibleChartCount = $state(12);
 	let reachedEnd = $state(false);
 	let searchInput: HTMLInputElement;
 	let requestId = 0;
+	const metadataRequests = new Map<string, Promise<void>>();
 
 	const categories = ['All', ...GENRES.map((genre) => genre.name)];
-	const sessionIndex = $derived(listeningSession.minutes === 25 ? 0 : listeningSession.minutes === 40 ? 1 : 2);
 	const filtered = $derived(
 		podcasts.filter((pod) => {
 			if (prefs.isHidden(pod.categories)) return false;
@@ -57,9 +73,19 @@
 			return !query || pod.title.toLowerCase().includes(query) || pod.author.toLowerCase().includes(query);
 		})
 	);
-	const spotlight = $derived(filtered[0] ?? null);
-	const picks = $derived(filtered.slice(1, 4));
-	const chart = $derived(filtered.slice(4, 16));
+	const arranged = $derived(
+		arrangeDiscover(filtered, {
+			mood: selectedMood,
+			sort,
+			sessionMinutes: listeningSession.minutes,
+			fitsSession
+		}) as PodcastItem[]
+	);
+	const spotlight = $derived(arranged[0] ?? null);
+	const picks = $derived(arranged.slice(1, 4));
+	const chart = $derived(arranged.slice(4, 4 + visibleChartCount));
+	const hasMoreResults = $derived(chart.length < Math.max(0, arranged.length - 4) || !reachedEnd);
+	const selectedMoodLabel = $derived(t(moods.find((mood) => mood.id === selectedMood)?.labelKey ?? 'quiet.discover.moodCalm'));
 
 	onMount(async () => {
 		mounted = true;
@@ -114,7 +140,10 @@
 					}
 				}
 			}
-			podcasts = merged.length ? merged : FEATURED_PODCASTS;
+			podcasts = (merged.length ? merged : FEATURED_PODCASTS).map((podcast, index) => ({
+				...podcast,
+				sourceRank: index
+			}));
 			reachedEnd = merged.length < limit;
 		} catch {
 			podcasts = FEATURED_PODCASTS;
@@ -131,14 +160,21 @@
 		if (category === selectedCategory) return;
 		selectedCategory = category;
 		limit = PAGE_SIZE;
+		visibleChartCount = 12;
 		await loadDiscover();
 	}
 
 	async function loadMore() {
-		if (isLoadingMore || reachedEnd) return;
+		if (isLoadingMore) return;
+		visibleChartCount += 12;
+		if (visibleChartCount <= Math.max(0, arranged.length - 4) || reachedEnd) {
+			if (fitsSession || sort === 'length' || sort === 'newest') await hydrateVisibleMetadata();
+			return;
+		}
 		isLoadingMore = true;
 		limit += PAGE_SIZE;
 		await loadDiscover();
+		if (fitsSession || sort === 'length' || sort === 'newest') await hydrateVisibleMetadata();
 	}
 
 	function isSubscribed(podcast: PodcastItem) {
@@ -167,7 +203,7 @@
 		goto(`/podcast/${id}?feed_url=${encodeURIComponent(podcast.feed_url || '')}`);
 	}
 
-	async function latestTrack(podcast: PodcastItem): Promise<CurrentTrack | null> {
+	async function latestTrack(podcast: PodcastItem): Promise<LatestTrack | null> {
 		const id = await resolvePodcastId(podcast);
 		try {
 			const response = await fetch(`/api/v1/podcasts/${id}/episodes`);
@@ -183,11 +219,82 @@
 				artwork_url: episode.artwork_url || podcast.artwork_url || '',
 				enclosure_url: episode.enclosure_url,
 				duration_ms: episode.duration_ms || 0,
-				categories: podcast.categories || (podcast.category ? [podcast.category] : [])
+				categories: podcast.categories || (podcast.category ? [podcast.category] : []),
+				pub_date: episode.pub_date || 0
 			};
 		} catch {
 			return null;
 		}
+	}
+
+	function podcastKey(podcast: PodcastItem) {
+		return podcast.feed_url || podcast.id;
+	}
+
+	async function hydrateMetadata(podcast: PodcastItem) {
+		if (podcast.latestDurationMs !== undefined || podcast.latestPublishedAt !== undefined) return;
+		const key = podcastKey(podcast);
+		const existing = metadataRequests.get(key);
+		if (existing) return existing;
+		const request = (async () => {
+			const track = await latestTrack(podcast);
+			if (!track) return;
+			podcasts = podcasts.map((item) =>
+				podcastKey(item) === key
+					? {
+							...item,
+							latestDurationMs: track.duration_ms || 0,
+							latestPublishedAt: track.pub_date ? track.pub_date * 1000 : 0
+						}
+					: item
+			);
+		})();
+		metadataRequests.set(key, request);
+		try {
+			return await request;
+		} finally {
+			metadataRequests.delete(key);
+		}
+	}
+
+	async function hydrateVisibleMetadata() {
+		if (isHydratingMetadata) return;
+		isHydratingMetadata = true;
+		try {
+			await Promise.all(filtered.slice(0, 4 + visibleChartCount).map(hydrateMetadata));
+		} finally {
+			isHydratingMetadata = false;
+		}
+	}
+
+	async function toggleFitsSession() {
+		if (fitsSession) {
+			fitsSession = false;
+			return;
+		}
+		await hydrateVisibleMetadata();
+		fitsSession = true;
+	}
+
+	async function changeSort(next: DiscoverSort) {
+		if (next === 'length' || next === 'newest') await hydrateVisibleMetadata();
+		sort = next;
+	}
+
+	function toggleUILanguage() {
+		prefs.setUILanguage(prefs.uiLanguage === 'en' ? 'de' : 'en');
+	}
+
+	function plainSummary(value: string | undefined, author: string) {
+		if (!value) return t('quiet.discover.fallbackDescription', { author });
+		return value
+			.replace(/<[^>]*>/g, ' ')
+			.replace(/&nbsp;/gi, ' ')
+			.replace(/&amp;/gi, '&')
+			.replace(/&quot;/gi, '"')
+			.replace(/&#(?:39|x27);/gi, "'")
+			.replace(/\s+/g, ' ')
+			.trim();
 	}
 
 	async function playLatest(podcast: PodcastItem) {
@@ -258,16 +365,18 @@
 	{#if !spotlight}<h1 class="sr-only">Discover podcasts with KoalaCast</h1>{/if}
 	<header class="discover-topbar">
 		<div class="mobile-title">
-			<strong>Discover</strong>
+			<strong>{t('quiet.nav.discover')}</strong>
 			<span>{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
 		</div>
 		<label class="global-search">
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-			<input bind:this={searchInput} bind:value={searchQuery} aria-label="Search podcasts" placeholder="Search shows, people, topics — or “calm, under 30 min”" />
+			<input bind:this={searchInput} bind:value={searchQuery} aria-label={t('quiet.discover.searchLabel')} placeholder={t('quiet.discover.searchPlaceholder')} />
 			<kbd>⌘K</kbd>
 		</label>
-		<span class="edition-date">{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()} · {prefs.languages.join(' / ').toUpperCase()}</span>
-		<span class="avatar" aria-label="Profile">JK</span>
+		<span class="edition-date">{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
+		<button class="language-switch" type="button" onclick={toggleUILanguage} aria-label={`${t('quiet.discover.changeLanguage')}: ${prefs.uiLanguage.toUpperCase()}`} title={t('quiet.discover.changeLanguage')}>
+			{prefs.uiLanguage.toUpperCase()}
+		</button>
 	</header>
 
 	{#if isLoading}
@@ -278,40 +387,40 @@
 	{:else if spotlight}
 		<section class="spotlight">
 			<div class="spotlight-copy">
-				<div class="spotlight-meta"><span>Cover story</span><span>#1 · {spotlight.author}</span></div>
+				<div class="spotlight-meta"><span>{t('quiet.discover.coverStory')}</span><span>#1 · {spotlight.author}</span></div>
 				<h1>{spotlight.title}</h1>
-				<p>{spotlight.description || `A considered listen from ${spotlight.author}, selected from today's chart in your chosen languages.`}</p>
+				<p>{plainSummary(spotlight.description, spotlight.author)}</p>
 				<div class="spotlight-actions">
-					<button class="primary" onclick={() => playLatest(spotlight)}><i class="ph-fill ph-play"></i> Play now</button>
-					<button onclick={() => queueLatest(spotlight)}><i class="ph ph-list-plus"></i> Queue next</button>
-					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> Save</button>
+					<button class="primary" onclick={() => playLatest(spotlight)}><i class="ph-fill ph-play"></i> {t('quiet.discover.playNow')}</button>
+					<button onclick={() => queueLatest(spotlight)}><i class="ph ph-list-plus"></i> {t('quiet.discover.queueNext')}</button>
+					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> {t('quiet.discover.save')}</button>
 					<span>P / Q / S</span>
 				</div>
 			</div>
 			<div class="spotlight-art">
 				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} loading="eager" fetchpriority="high" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 				<div class="waveform" aria-hidden="true">{#each [8,16,12,24,18,28,13,21,17,26,11,20,15,23,9,18] as height}<i style:height={`${height}px`}></i>{/each}</div>
-				<span>Today’s cover story · open to explore</span>
+				<span>{t('quiet.discover.coverCaption')}</span>
 			</div>
 		</section>
 	{/if}
 
 	<section class="session-section">
 		<div class="session-control">
-			<span>I have</span>
-			<div role="group" aria-label="Session length">
+			<span>{t('quiet.discover.iHave')}</span>
+			<div role="group" aria-label={t('quiet.discover.sessionLength')}>
 				{#each [25, 40, 60] as minutes}
 					<button class:active={listeningSession.minutes === minutes} onclick={() => listeningSession.set(minutes as SessionMinutes)}>{minutes} min</button>
 				{/each}
 			</div>
-			<p>— filters the tiles, the chart and “trim queue”</p>
+			<p>— {t('quiet.discover.sessionHint')}</p>
 		</div>
 		<div class="mood-grid">
 			{#each moods as mood}
-				<button class:active={selectedMood === mood.label} onclick={() => (selectedMood = mood.label)}>
+				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => (selectedMood = mood.id)}>
 					<i class="ph {mood.icon}" aria-hidden="true"></i>
-					<strong>{mood.label}</strong>
-					<span>{mood.fit[sessionIndex]} fit {listeningSession.minutes} min</span>
+					<strong>{t(mood.labelKey)}</strong>
+					<span>{t('quiet.discover.matches', { count: filtered.length })}</span>
 				</button>
 			{/each}
 		</div>
@@ -319,15 +428,15 @@
 
 	{#if picks.length}
 		<section class="reasoned-picks">
-			<header><h2>Because you chose “{selectedMood}”</h2><span>{picks.length} picks · reasons included</span></header>
+			<header><h2>{t('quiet.discover.becauseMood', { mood: selectedMoodLabel })}</h2><span>{t('quiet.discover.picksIncluded', { count: picks.length })}</span></header>
 			<div>
 				{#each picks as podcast, index}
 					<button onclick={() => openPodcast(podcast)}>
 						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span>
 							<strong>{podcast.title}</strong>
-							<small>{index === 0 ? 'A measured pace for a focused session.' : index === 1 ? 'A useful change of subject without the shouting.' : 'Clear voices and enough detail to stay curious.'}</small>
-							<em>{podcast.category || podcast.author} · selected for {listeningSession.minutes} min</em>
+							<small>{index === 0 ? t('quiet.discover.reasonCalm') : index === 1 ? t('quiet.discover.reasonChange') : t('quiet.discover.reasonCurious')}</small>
+							<em>{podcast.category || podcast.author} · {t('quiet.discover.selectedFor', { count: listeningSession.minutes })}</em>
 						</span>
 					</button>
 				{/each}
@@ -337,45 +446,65 @@
 
 	<section class="chart-section">
 		<header class="chart-head">
-			<div><h2>Top & trending</h2><span>{filtered.length} shows match</span></div>
-			<div class="sort-tabs" role="group" aria-label="Sort podcast chart">
-				{#each ['momentum', 'rank', 'length', 'newest'] as option}
-					<button aria-pressed={sort === option} class:active={sort === option} onclick={() => (sort = option as typeof sort)}>{option}</button>
+			<div><h2>{t('quiet.discover.topTrending')}</h2><span>{t('quiet.discover.matches', { count: arranged.length })}</span></div>
+			<div class="sort-tabs" role="group" aria-label={t('quiet.discover.sortChart')}>
+				{#each [
+					{ id: 'momentum' as const, key: 'quiet.discover.sortMomentum' as const },
+					{ id: 'rank' as const, key: 'quiet.discover.sortRank' as const },
+					{ id: 'length' as const, key: 'quiet.discover.sortLength' as const },
+					{ id: 'newest' as const, key: 'quiet.discover.sortNewest' as const }
+				] as option}
+					<button aria-pressed={sort === option.id} class:active={sort === option.id} onclick={() => changeSort(option.id)}>{t(option.key)}</button>
 				{/each}
 			</div>
 		</header>
 		<div class="chart-filters">
-			<button>Fits {listeningSession.minutes} min <i class="ph ph-x" aria-hidden="true"></i></button>
-			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label="Category">
+			<button
+				class:active={fitsSession}
+				aria-pressed={fitsSession}
+				disabled={isHydratingMetadata}
+				onclick={toggleFitsSession}
+				aria-label={fitsSession ? t('quiet.discover.disableFits', { count: listeningSession.minutes }) : t('quiet.discover.enableFits', { count: listeningSession.minutes })}
+			>
+				{isHydratingMetadata ? t('quiet.discover.loadingDurations') : t('quiet.discover.fitsFilter', { count: listeningSession.minutes })}
+				<i class="ph {fitsSession ? 'ph-x' : 'ph-funnel'}" aria-hidden="true"></i>
+			</button>
+			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label={t('search.genreFilter')}>
 				{#each categories as category}<option value={category}>{genreLabel(category)}</option>{/each}
 			</select>
-			<span>{Math.min(chart.length, 12)} of {filtered.length} shown</span>
+			<span>{t('quiet.discover.shown', { shown: chart.length, total: arranged.length })}</span>
 		</div>
 
 		<div class="chart-list">
 			{#each chart as podcast, index (podcast.feed_url || podcast.id)}
 				<article class="chart-row">
 					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
-					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={`Open ${podcast.title}`}>
+					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={t('discover.openPodcast', { title: podcast.title })}>
 						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 					</button>
 					<button class="chart-title" onclick={() => openPodcast(podcast)}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>
 					</button>
-					<div class="spark" role="img" aria-label="Momentum">
+					<div class="spark" role="img" aria-label={t('quiet.discover.momentum')}>
 						{#each [5, 8, 7, 11, 9, 15, 13, 18, 16, 22] as value}<i style:height={`${value}px`}></i>{/each}
 					</div>
-					<span class="fit">{listeningSession.minutes}m</span>
+					<span class="fit">{formatEpisodeMinutes(podcast.latestDurationMs) ?? '—'}</span>
 					<div class="row-actions">
-						<button onclick={() => playLatest(podcast)} aria-label={`Play latest episode of ${podcast.title}`}><i class="ph-fill ph-play"></i></button>
-						<button onclick={() => queueLatest(podcast)} aria-label={`Queue latest episode of ${podcast.title}`}><i class="ph ph-list-plus"></i></button>
+						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play"></i></button>
+						<button onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus"></i></button>
 					</div>
 				</article>
 			{/each}
+			{#if fitsSession && arranged.length === 0}
+				<div class="empty-filter">
+					<p>{t('quiet.discover.noFitResults')}</p>
+					<button type="button" onclick={() => (fitsSession = false)}>{t('quiet.discover.clearTimeFilter')}</button>
+				</div>
+			{/if}
 		</div>
 		<footer class="chart-footer">
-			<span>J/K to move · Enter to open · S to subscribe</span>
-			{#if !reachedEnd}<button onclick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? t('common.loading') : 'Load 12 more ↓'}</button>{/if}
+			<span>{t('quiet.discover.keyboardHint')}</span>
+			{#if hasMoreResults}<button onclick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? t('common.loading') : t('quiet.discover.loadMore')}</button>{/if}
 		</footer>
 	</section>
 </div>
@@ -392,11 +521,11 @@
 		display: flex; align-items: center; gap: 9px; min-width: 0; height: 38px; padding: 0 10px;
 		background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; color: var(--ink-4);
 	}
-	.global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
+	.global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
 	.global-search input::placeholder { color: var(--ink-4); }
-	kbd { padding: 3px 5px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); }
-	.edition-date { color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; }
-	.avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
+	kbd { padding: 3px 5px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.edition-date { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .08em; }
+	.language-switch { display: grid; place-items: center; min-width: 34px; height: 30px; padding: 0 7px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--accent-ink); font: 700 10px/1 var(--font-mono); }
 
 	.spotlight {
 		position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 208px; gap: 24px; min-height: 286px;
@@ -405,70 +534,73 @@
 	}
 	.spotlight.loading > div:first-child { display: flex; flex-direction: column; gap: 20px; }
 	.spotlight-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
-	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 	.spotlight-meta span:first-child { padding: 5px 7px; border-radius: 4px; background: var(--accent-fill); color: var(--accent-on); }
 	.spotlight h1 { display: -webkit-box; max-width: 720px; overflow: hidden; font: 700 clamp(34px, 4vw, 46px)/.95 var(--font-display); font-stretch: condensed; letter-spacing: -.045em; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; text-transform: uppercase; }
 	.spotlight p { display: -webkit-box; max-width: 58ch; margin-top: 13px; overflow: hidden; color: var(--ink-3); font-size: 15px; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 	.spotlight-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }
 	.spotlight-actions button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.spotlight-actions span { margin-left: 4px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); }
+	.spotlight-actions span { margin-left: 4px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
-	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 8px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 9px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.waveform { display: flex; align-items: center; gap: 3px; height: 32px; margin-top: -32px; padding: 0 9px; background: rgba(5,10,7,.76); }
 	.waveform i { flex: 1; max-width: 4px; background: var(--data-bar); }
 
 	.session-section { padding: 18px 22px 22px; border-bottom: 1px solid var(--border-hair); }
 	.session-control { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-	.session-control > span { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+	.session-control > span { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 	.session-control > div { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; }
-	.session-control button { min-height: 29px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.session-control button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.session-control button.active { background: var(--accent-fill); color: var(--accent-on); }
-	.session-control p { color: var(--ink-4); font-size: 11px; }
+	.session-control p { color: var(--ink-4); font-size: 13px; }
 	.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
 	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: linear-gradient(150deg,#2a4a3a,#12201a); color: var(--ink); }
 	:global(:root[data-theme='light']) .mood-grid button { background: linear-gradient(150deg,#edf5f0,#dceae1); }
 	.mood-grid button.active { background: linear-gradient(150deg,#7fd0aa,#3e9c76); color: var(--accent-on); border-color: transparent; }
 	.mood-grid i { grid-row: 1 / 3; font-size: 22px; }
-	.mood-grid strong { font: 700 14px/1.2 var(--font-ui); }
-	.mood-grid span { font: 600 8px/1.2 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+	.mood-grid strong { font: 700 16px/1.2 var(--font-ui); }
+	.mood-grid span { font: 600 9px/1.2 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
 
 	.reasoned-picks, .chart-section { padding: 20px 22px; border-bottom: 1px solid var(--border-hair); }
 	.reasoned-picks > header, .chart-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
-	.reasoned-picks h2, .chart-head h2 { font-size: 17px; letter-spacing: -.02em; }
-	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.reasoned-picks h2, .chart-head h2 { font-size: 20px; letter-spacing: -.02em; }
+	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 	.reasoned-picks > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 	.reasoned-picks button { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
 	.reasoned-picks img { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background: var(--bg-tile); }
 	.reasoned-picks button > span { display: flex; flex-direction: column; min-width: 0; }
-	.reasoned-picks strong { overflow: hidden; font: 700 12px/1.25 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
-	.reasoned-picks small { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ink-3); font-size: 10px; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 7px/1 var(--font-mono); font-style: normal; text-transform: uppercase; }
+	.reasoned-picks strong { overflow: hidden; font: 700 14px/1.25 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+	.reasoned-picks small { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ink-3); font-size: 12px; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 8px/1 var(--font-mono); font-style: normal; text-transform: uppercase; }
 
 	.chart-head > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 	.sort-tabs { display: flex; gap: 2px; }
-	.sort-tabs button { padding: 5px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.sort-tabs button { min-height: 30px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
 	.sort-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
-	.chart-filters button, .chart-filters select { height: 26px; padding: 0 8px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
-	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
-	.chart-row { display: grid; grid-template-columns: 28px 44px minmax(0, 1fr) 76px 48px 62px; gap: 8px; align-items: center; min-height: 58px; border-bottom: 1px solid var(--border-row); }
-	.rank, .fit { color: var(--ink-4); font: 600 9px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+	.chart-filters button, .chart-filters select { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-filters button.active { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--accent-on); }
+	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 82px 52px 66px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
+	.rank, .fit { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 	.chart-art, .chart-title, .row-actions button { border: 0; background: transparent; color: inherit; }
-	.chart-art img { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; background: var(--bg-tile); }
+	.chart-art img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; background: var(--bg-tile); }
 	.chart-title { display: flex; flex-direction: column; min-width: 0; text-align: left; }
 	.chart-title strong, .chart-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.chart-title strong { color: var(--ink-2); font: 700 12px/1.3 var(--font-ui); }
-	.chart-title span { color: var(--ink-4); font: 500 9px/1.4 var(--font-sans); }
+	.chart-title strong { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
+	.chart-title span { color: var(--ink-4); font: 500 11px/1.4 var(--font-sans); }
 	.spark { display: flex; align-items: end; gap: 3px; height: 24px; }
 	.spark i { width: 4px; background: var(--data-bar); }
 	.spark i:nth-last-child(-n+3) { background: var(--accent-fill); }
 	.row-actions { display: flex; gap: 4px; justify-content: end; }
 	.row-actions button { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-footer button { padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }
+	.empty-filter { display: grid; justify-items: start; gap: 10px; padding: 22px 0; color: var(--ink-3); font-size: 13px; }
+	.empty-filter button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--ink-2); }
 
 	@media (max-width: 820px) {
 		.discover-topbar { grid-template-columns: minmax(0,1fr) 30px; padding: 10px 14px; }
@@ -490,7 +622,9 @@
 		.mobile-title { display: flex; align-items: center; justify-content: space-between; }
 		.mobile-title strong { font: 800 17px/1 var(--font-ui); }
 		.mobile-title span { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; }
-		.discover-topbar .avatar { display: none; }
+		.discover-topbar { position: relative; }
+		.discover-topbar .language-switch { position: absolute; top: 12px; right: 16px; }
+		.mobile-title { padding-right: 46px; }
 		.global-search kbd { display: none; }
 		.session-section { display: contents; }
 		.session-control { order: 1; padding: 16px; border-bottom: 1px solid var(--border-hair); }

@@ -21,6 +21,7 @@
 	import { player } from '$lib/stores/player.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
+	import { shell } from '$lib/stores/shell.svelte';
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
 
@@ -63,10 +64,22 @@
 
 <Seo />
 <a class="skip-link" href="#main-content">{t('common.skipToContent')}</a>
-<div class="quiet-app" class:has-player={player.isActive}>
+<div
+	class="quiet-app"
+	class:has-player={player.isActive}
+	class:left-collapsed={shell.leftCollapsed}
+	class:right-collapsed={shell.rightCollapsed}
+	class:without-running-order={!showRunningOrder}
+>
 	<Sidebar isAdmin={currentUser?.role === 'admin'} />
 	<main class="quiet-main" id="main-content" tabindex="-1">
 		{@render children()}
+		<footer class="mobile-legal" aria-label={t('footer.mobileLinks')}>
+			<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">{t('footer.legalNotice')}</a>
+			<a href="/privacy">{t('footer.privacy')}</a>
+			<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer">{t('footer.github')}</a>
+			<a href="https://github.com/Shik3i/KoalaCast/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">{t('footer.license')}</a>
+		</footer>
 	</main>
 	{#if showRunningOrder}
 		<RunningOrder />

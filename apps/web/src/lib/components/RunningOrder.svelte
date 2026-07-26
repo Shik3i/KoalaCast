@@ -4,6 +4,7 @@
 	import { reorderLocalQueue } from '$lib/idb/db';
 	import { t } from '$lib/i18n';
 	import { listeningSession } from '$lib/stores/session.svelte';
+	import { shell } from '$lib/stores/shell.svelte';
 
 	let now = $state(Date.now());
 	let dragIndex = $state<number | null>(null);
@@ -94,8 +95,20 @@
 
 <aside class="running-order" aria-label={t('quiet.queue.title')}>
 	<header>
-		<h2>{t('quiet.queue.title')}</h2>
-		<span>{player.queue.length} · {duration(queueMs / player.playbackSpeed)}</span>
+		<div>
+			<h2>{t('quiet.queue.title')}</h2>
+			<span>{player.queue.length} · {duration(queueMs / player.playbackSpeed)}</span>
+		</div>
+		<button
+			class="queue-toggle"
+			type="button"
+			onclick={() => shell.toggleRight()}
+			aria-label={shell.rightCollapsed ? t('quiet.shell.expandQueue') : t('quiet.shell.collapseQueue')}
+			aria-expanded={!shell.rightCollapsed}
+			title={shell.rightCollapsed ? t('quiet.shell.expandQueue') : t('quiet.shell.collapseQueue')}
+		>
+			<i class="ph {shell.rightCollapsed ? 'ph-caret-left' : 'ph-caret-right'}" aria-hidden="true"></i>
+		</button>
 	</header>
 
 	{#if player.current}
@@ -103,7 +116,7 @@
 			<span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
 			<div>
 				<strong>{player.current.title}</strong>
-				<span>{t('quiet.queue.playingNow')} · {duration(currentRemainingMs / player.playbackSpeed)} left</span>
+					<span>{t('quiet.queue.playingNow')} · {t('quiet.queue.remaining', { duration: duration(currentRemainingMs / player.playbackSpeed) })}</span>
 			</div>
 		</div>
 	{/if}
@@ -116,7 +129,7 @@
 				ondragover={(event) => event.preventDefault()}
 				ondrop={() => drop(index)}
 			>
-				<button class="drag" onkeydown={(event) => handleQueueKey(event, item, index)} aria-label={`${t('quiet.queue.drag')}; arrow keys move, Delete removes`}>
+				<button class="drag" onkeydown={(event) => handleQueueKey(event, item, index)} aria-label={`${t('quiet.queue.drag')}; ${t('quiet.queue.keyboardMoveRemove')}`}>
 					<i class="ph ph-dots-six-vertical"></i>
 				</button>
 				<span class="queue-number">{index + 1}.</span>
@@ -135,7 +148,7 @@
 	</ol>
 
 	<div class="queue-actions">
-		<button onclick={trim}>Trim to {listeningSession.minutes}m</button>
+		<button onclick={trim}>{t('quiet.queue.trim', { count: listeningSession.minutes })}</button>
 		<button onclick={shuffle}>{t('quiet.queue.shuffle')}</button>
 		<button onclick={() => player.clearQueue()}>{t('quiet.queue.clear')}</button>
 	</div>
@@ -144,6 +157,6 @@
 	<footer>
 		<span>{t('quiet.queue.endsAt')}</span>
 		<strong>{new Date(endsAtMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
-		<small>{player.playbackSpeed}× · {t('quiet.queue.shows', { count: player.queue.length })} · {player.sleepTimerEndsAt || player.sleepAtEpisodeEnd ? 'sleep timer on' : 'sleep timer off'}</small>
+		<small>{player.playbackSpeed}× · {t('quiet.queue.shows', { count: player.queue.length })} · {player.sleepTimerEndsAt || player.sleepAtEpisodeEnd ? t('quiet.queue.sleepOn') : t('quiet.queue.sleepOff')}</small>
 	</footer>
 </aside>
