@@ -105,7 +105,7 @@
 		<div class="queue-now">
 			<span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
 			<div>
-				<strong>{player.current.title}</strong>
+				<strong title={player.current.title}>{player.current.title}</strong>
 					<span>{t('quiet.queue.playingNow')} · {t('quiet.queue.remaining', { duration: duration(currentRemainingMs / player.playbackSpeed) })}</span>
 			</div>
 		</div>
@@ -119,17 +119,17 @@
 				ondragover={(event) => event.preventDefault()}
 				ondrop={() => drop(index)}
 			>
-				<button class="drag" onkeydown={(event) => handleQueueKey(event, item, index)} aria-label={`${t('quiet.queue.drag')}; ${t('quiet.queue.keyboardMoveRemove')}`}>
-					<i class="ph ph-dots-six-vertical"></i>
+				<button class="drag" onkeydown={(event) => handleQueueKey(event, item, index)} aria-label={`${t('quiet.queue.drag')}; ${t('quiet.queue.keyboardMoveRemove')}`} title={`${t('quiet.queue.drag')}; ${t('quiet.queue.keyboardMoveRemove')}`}>
+					<i class="ph ph-dots-six-vertical" aria-hidden="true"></i>
 				</button>
 				<span class="queue-number">{index + 1}.</span>
 				<div>
-					<strong>{item.title}</strong>
-					<span>{item.podcast_title} · {t('quiet.queue.ends')} {finishTime(index)}</span>
+					<strong title={item.title}>{item.title}</strong>
+					<span title={item.podcast_title}>{item.podcast_title} · {t('quiet.queue.ends')} {finishTime(index)}</span>
 				</div>
 				<span>{duration(item.duration_ms)}</span>
-				<button class="remove" onclick={() => remove(item)} aria-label={t('quiet.queue.remove')}>
-					<i class="ph ph-x"></i>
+				<button class="remove" onclick={() => remove(item)} aria-label={t('quiet.queue.remove')} title={t('quiet.queue.remove')}>
+					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			</li>
 		{:else}

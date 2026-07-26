@@ -546,7 +546,7 @@
 			<div class="progress-track" style="--progress: {progressPercent}%"></div>
 
 			<div class="track-info">
-				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')}>
+				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')} title={t('player.openFullscreen')}>
 					<img
 						src={optimizeArtwork(track.artwork_url, 120)}
 						alt={track.title}
@@ -560,10 +560,10 @@
 					<a class="podcast-title" href={`/podcast/${track.podcast_id}`}>{track.podcast_title}</a>
 					<span class="mobile-player-meta">-{formatTime(remainingMs)} · {player.playbackSpeed}×{#if player.upNext} · next: {player.upNext.title}{/if}</span>
 				</div>
-				<button class="track-icon" class:active={isFav} onclick={toggleFavorite} aria-label={isFav ? t('player.removeFavorite') : t('player.saveEpisode')}>
+				<button class="track-icon" class:active={isFav} onclick={toggleFavorite} aria-label={isFav ? t('player.removeFavorite') : t('player.saveEpisode')} title={isFav ? t('player.removeFavorite') : t('player.saveEpisode')}>
 					<i class="{isFav ? 'ph-fill' : 'ph'} ph-bookmark-simple"></i>
 				</button>
-				<a class="track-icon" href={`/podcast/${track.podcast_id}`} aria-label={t('player.openShow')}>
+				<a class="track-icon" href={`/podcast/${track.podcast_id}`} aria-label={t('player.openShow')} title={t('player.openShow')}>
 					<i class="ph ph-arrow-square-out"></i>
 				</a>
 				{#if isPlaying}
@@ -584,19 +584,19 @@
 					</div>
 				{/if}
 				<div class="controls">
-					<button class="ctrl transport-edge" onclick={() => seekTo(0)} aria-label={t('player.restartEpisode')}>
+					<button class="ctrl transport-edge" onclick={() => seekTo(0)} aria-label={t('player.restartEpisode')} title={t('player.restartEpisode')}>
 						<i class="ph ph-skip-back" aria-hidden="true"></i>
 					</button>
-					<button class="ctrl jump-control" onclick={() => skip(-15)} aria-label={t('player.skipBack')}>
+					<button class="ctrl jump-control" onclick={() => skip(-15)} aria-label={t('player.skipBack')} title={t('player.skipBack')}>
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>15</small>
 					</button>
-					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')}>
+					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')} title={isPlaying ? t('player.pause') : t('player.play')}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
-					<button class="ctrl jump-control" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
+					<button class="ctrl jump-control" onclick={() => skip(30)} aria-label={t('player.skipForward30')} title={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
 					</button>
-					<button class="ctrl transport-edge" onclick={() => player.playNext()} aria-label={t('player.nextEpisode')}>
+					<button class="ctrl transport-edge" onclick={() => player.playNext()} aria-label={t('player.nextEpisode')} title={t('player.nextEpisode')}>
 						<i class="ph ph-skip-forward" aria-hidden="true"></i>
 					</button>
 				</div>
@@ -617,9 +617,9 @@
 			</div>
 
 			<div class="extras">
-				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label={t('player.speed')}>{player.playbackSpeed}×</button>
+				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label={t('player.speed')} title={t('player.speed')}>{player.playbackSpeed}×</button>
 				<div class="vol-wrap">
-					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label={t('player.volume')}>
+					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label={t('player.volume')} title={t('player.volume')}>
 						<i class="ph {volIcon}" aria-hidden="true"></i>
 					</button>
 					{#if showVolume}
@@ -639,7 +639,7 @@
 				<a class="queue-button" href="/library?view=queue" aria-label={t('player.openQueue')}>
 					<i class="ph ph-list-numbers"></i><span>Queue {player.queue.length}</span>
 				</a>
-				<button class="ctrl close-track" onclick={() => player.stop()} aria-label={t('player.closePlayer')}>
+				<button class="ctrl close-track" onclick={() => player.stop()} aria-label={t('player.closePlayer')} title={t('player.closePlayer')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			</div>
@@ -650,7 +650,7 @@
 	{#if expanded}
 		<div class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label={t('player.nowPlaying')}>
 			<div class="np-bg" style="background-image: url({optimizeArtwork(track.artwork_url, 400)})"></div>
-			<button class="np-close" onclick={() => (expanded = false)} aria-label={t('player.closeFullscreen')}>
+			<button class="np-close" onclick={() => (expanded = false)} aria-label={t('player.closeFullscreen')} title={t('player.closeFullscreen')}>
 				<i class="ph ph-caret-down" aria-hidden="true"></i>
 			</button>
 
@@ -684,13 +684,13 @@
 				</div>
 
 				<div class="np-controls">
-					<button class="np-ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')}>
+					<button class="np-ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')} title={t('player.skipBack10')}>
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>10</small>
 					</button>
-					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')}>
+					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')} title={isPlaying ? t('player.pause') : t('player.play')}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
+					<button class="np-ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')} title={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
 					</button>
 				</div>
@@ -701,13 +701,13 @@
 				</div>
 
 				<div class="np-extras">
-					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? t('player.removeFavorite') : t('player.addFavorite')}>
+					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? t('player.removeFavorite') : t('player.addFavorite')} title={isFav ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')}>
+					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
 						<i class="ph ph-speaker-high" aria-hidden="true"></i> {t('player.boost')}
 					</button>
-					<button class="np-pill-btn" class:active={skipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')}>
+					<button class="np-pill-btn" class:active={skipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
 						<i class="ph ph-waveform" aria-hidden="true"></i> {t('player.trimSilence')}
 					</button>
 					<div class="speed-selector">
@@ -716,7 +716,7 @@
 						{/each}
 					</div>
 					{#if chapters.length > 0}
-						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')}>
+						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')} title={t('player.toggleChapters')}>
 							<i class="ph ph-list-numbers" aria-hidden="true"></i> Chapters ({chapters.length})
 						</button>
 					{/if}
@@ -734,7 +734,7 @@
 					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
 						<div class="drawer-header">
 							<h4><i class="ph ph-list-numbers" aria-hidden="true"></i> Episode Chapters ({chapters.length})</h4>
-							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label={t('player.closeChapters')}>
+							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label={t('player.closeChapters')} title={t('player.closeChapters')}>
 								<i class="ph ph-x" aria-hidden="true"></i>
 							</button>
 						</div>
@@ -761,7 +761,7 @@
 				{#if player.upNext}
 					<button class="np-upnext" onclick={() => player.upNext && player.playFromQueue(player.upNext)}>
 						<span class="upnext-label"><i class="ph ph-queue" aria-hidden="true"></i> {t('player.upNext')}</span>
-						<span class="upnext-title">{player.upNext.title}</span>
+						<span class="upnext-title" title={player.upNext.title}>{player.upNext.title}</span>
 						<i class="ph ph-play" aria-hidden="true"></i>
 					</button>
 				{/if}
@@ -930,6 +930,7 @@
 		transition: transform 0.15s ease, background 0.4s ease, box-shadow 0.4s ease;
 	}
 	.play-btn:hover { filter: brightness(1.08); transform: scale(1.06); }
+	.play-btn i, .np-play i { display: block; line-height: 1; }
 
 	.timeline {
 		display: flex;

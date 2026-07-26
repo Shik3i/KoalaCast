@@ -227,16 +227,16 @@
 			<div class="podcast-grid">
 				{#each visibleSubscriptions as sub, i (sub.podcast_id)}
 					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 40, 320) }} use:longPress={sub.podcast_id}>
-						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={t('library.openShow', { title: sub.title })}>
+						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={t('library.openShow', { title: sub.title })} title={sub.title}>
 							<img src={optimizeArtwork(sub.artwork_url, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						</a>
 						<div class="details cover-overlay">
-							<h3>{sub.title}</h3>
+							<h3 title={sub.title}>{sub.title}</h3>
 							<p>{t('library.subscribedHint')}</p>
 							<div class="actions">
-								<a href={`/podcast/${sub.podcast_id}`} class="round-action primary" aria-label={t('common.viewEpisodes')}><i class="ph-fill ph-play"></i></a>
-								<button class="round-action" onclick={() => goto(`/podcast/${sub.podcast_id}`)} aria-label={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus"></i></button>
-								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')}><i class="ph ph-dots-three"></i></button>
+								<a href={`/podcast/${sub.podcast_id}`} class="round-action primary" aria-label={t('common.viewEpisodes')} title={t('common.viewEpisodes')}><i class="ph-fill ph-play" aria-hidden="true"></i></a>
+								<button class="round-action" onclick={() => goto(`/podcast/${sub.podcast_id}`)} aria-label={t('library.openShow', { title: sub.title })} title={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
+								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')} title={t('common.unsubscribe')}><i class="ph ph-dots-three" aria-hidden="true"></i></button>
 							</div>
 						</div>
 					</article>
@@ -253,13 +253,13 @@
 			<div class="episode-list">
 				{#each recentEpisodes as ep (ep.episode_id)}
 					<div class="ep-row">
-						<button class="ep-play" onclick={() => resume(ep)} aria-label={t('library.resumeEpisode')}>
+						<button class="ep-play" onclick={() => resume(ep)} aria-label={t('library.resumeEpisode')} title={t('library.resumeEpisode')}>
 							<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
-							<a class="ep-title" href={`/episode/${ep.episode_id}`}>{ep.title || t('common.episode')}</a>
-							<span class="ep-sub">{ep.podcast_title || ''}</span>
+							<a class="ep-title" href={`/episode/${ep.episode_id}`} title={ep.title || t('common.episode')}>{ep.title || t('common.episode')}</a>
+							<span class="ep-sub" title={ep.podcast_title || undefined}>{ep.podcast_title || ''}</span>
 							<span class="ep-bar" aria-hidden="true">
 								<span class="ep-bar-fill" style="width:{Math.round(ep.progress_percent)}%"></span>
 							</span>
@@ -295,23 +295,23 @@
 						ondrop={onDrop}
 					>
 						<div class="reorder-btns">
-							<button class="reorder-btn" onclick={() => moveItem(i, -1)} disabled={i === 0} aria-label={t('library.moveUp')}>
+							<button class="reorder-btn" onclick={() => moveItem(i, -1)} disabled={i === 0} aria-label={t('library.moveUp')} title={t('library.moveUp')}>
 								<i class="ph ph-caret-up" aria-hidden="true"></i>
 							</button>
-							<button class="reorder-btn" onclick={() => moveItem(i, 1)} disabled={i === queue.length - 1} aria-label={t('library.moveDown')}>
+							<button class="reorder-btn" onclick={() => moveItem(i, 1)} disabled={i === queue.length - 1} aria-label={t('library.moveDown')} title={t('library.moveDown')}>
 								<i class="ph ph-caret-down" aria-hidden="true"></i>
 							</button>
 						</div>
 						<span class="drag-handle" aria-hidden="true" title={t('library.dragToReorder')}><i class="ph ph-dots-six-vertical"></i></span>
-						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label={t('library.playEpisode')}>
+						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label={t('library.playEpisode')} title={t('library.playEpisode')}>
 							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
-							<a class="ep-title" href={`/episode/${item.episode_id}`}>{item.title || t('common.episode')}</a>
-							<span class="ep-sub">{item.podcast_title || t('library.queued')}</span>
+							<a class="ep-title" href={`/episode/${item.episode_id}`} title={item.title || t('common.episode')}>{item.title || t('common.episode')}</a>
+							<span class="ep-sub" title={item.podcast_title || t('library.queued')}>{item.podcast_title || t('library.queued')}</span>
 						</div>
-						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label={t('library.removeFromQueue')}>
+						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label={t('library.removeFromQueue')} title={t('library.removeFromQueue')}>
 							<i class="ph ph-x" aria-hidden="true"></i>
 						</button>
 					</div>
@@ -329,15 +329,15 @@
 			<div class="episode-list">
 				{#each favorites as fav (fav.episode_id)}
 					<div class="ep-row">
-						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label={t('library.playEpisode')}>
+						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label={t('library.playEpisode')} title={t('library.playEpisode')}>
 							<img src={optimizeArtwork(fav.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
-							<a class="ep-title" href={`/episode/${fav.episode_id}`}>{fav.title || t('common.episode')}</a>
-							<span class="ep-sub">{fav.podcast_title || ''}</span>
+							<a class="ep-title" href={`/episode/${fav.episode_id}`} title={fav.title || t('common.episode')}>{fav.title || t('common.episode')}</a>
+							<span class="ep-sub" title={fav.podcast_title || undefined}>{fav.podcast_title || ''}</span>
 						</div>
-						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label={t('library.removeFromFavorites')}>
+						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label={t('library.removeFromFavorites')} title={t('library.removeFromFavorites')}>
 							<i class="ph-fill ph-heart" aria-hidden="true"></i>
 						</button>
 					</div>
@@ -503,10 +503,11 @@
 		background: rgba(0, 0, 0, 0.4);
 		color: #fff;
 		font-size: 1.4rem;
-		opacity: 0;
+		opacity: 0.82;
 		transition: opacity 0.2s ease;
 	}
 	.ep-play:hover .ep-play-icon { opacity: 1; }
+	.ep-play-icon i { display: block; line-height: 1; }
 
 	.ep-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 	.ep-title {
@@ -671,6 +672,7 @@
 		color: #dcebe4;
 	}
 	.quiet-cover-card .round-action.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+	.quiet-cover-card .round-action i { display: block; font-size: 15px; line-height: 1; }
 	@media (prefers-reduced-motion: reduce) { .quiet-cover-card .cover-overlay { transition: none; } }
 	.episode-list { gap: 0; border-top: 1px solid var(--border-hair); }
 	.ep-row { border: 0; border-bottom: 1px solid var(--border-row); border-radius: 0; background: transparent; box-shadow: none; }

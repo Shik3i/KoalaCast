@@ -69,7 +69,7 @@
 	<section class="rail-context subscriptions">
 		<p class="rail-eyebrow">{t('quiet.nav.subscriptions')}</p>
 		{#each subscriptions.slice(0, 6) as sub}
-			<a href={`/podcast/${sub.podcast_id}`}>
+			<a href={`/podcast/${sub.podcast_id}`} title={sub.title}>
 				<span class="rail-dot" aria-hidden="true"></span>
 				<span class="truncate">{sub.title}</span>
 			</a>

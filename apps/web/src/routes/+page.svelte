@@ -438,7 +438,7 @@
 			<header><h2>{t('quiet.discover.becauseMood', { mood: selectedMoodLabel })}</h2><span>{t('quiet.discover.picksIncluded', { count: picks.length })}</span></header>
 			<div>
 				{#each picks as podcast}
-					<button onclick={() => openPodcast(podcast)}>
+					<button onclick={() => openPodcast(podcast)} title={podcast.title}>
 						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span>
 							<strong>{podcast.title}</strong>
@@ -504,16 +504,16 @@
 			{#each chart as podcast, index (podcast.feed_url || podcast.id)}
 				<article class="chart-row">
 					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
-					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={t('discover.openPodcast', { title: podcast.title })}>
+					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={t('discover.openPodcast', { title: podcast.title })} title={t('discover.openPodcast', { title: podcast.title })}>
 						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 					</button>
-					<button class="chart-title" onclick={() => openPodcast(podcast)}>
+					<button class="chart-title" onclick={() => openPodcast(podcast)} title={podcast.title}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>
 					</button>
 					<span class="fit">{formatEpisodeMinutes(podcast.latestDurationMs) ?? '—'}</span>
 					<div class="row-actions">
-						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play"></i></button>
-						<button onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus"></i></button>
+						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })} title={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play" aria-hidden="true"></i></button>
+						<button onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })} title={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
 					</div>
 				</article>
 			{/each}
@@ -616,6 +616,7 @@
 	.chart-title span { color: var(--ink-4); font: 500 11px/1.4 var(--font-sans); }
 	.row-actions { display: flex; gap: 4px; justify-content: end; }
 	.row-actions button { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--border-ui); border-radius: 4px; }
+	.row-actions button i { display: block; font-size: 14px; line-height: 1; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-footer button { padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }

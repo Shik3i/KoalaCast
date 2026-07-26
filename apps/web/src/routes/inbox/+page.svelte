@@ -302,14 +302,14 @@
 				</header>
 				{#each group.episodes as ep, i (ep.id)}
 					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
-					<button class="ep-play" onclick={() => play(ep)} aria-label={t('inbox.playEpisode')}>
+					<button class="ep-play" onclick={() => play(ep)} aria-label={t('inbox.playEpisode')} title={t('inbox.playEpisode')}>
 						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 					</button>
 					<div class="ep-body">
-						<a class="ep-title" href={`/episode/${ep.id}`}>{ep.title}</a>
+						<a class="ep-title" href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a>
 						<span class="ep-meta">
-							<span class="ep-show">{ep.podcast_title}</span>
+							<span class="ep-show" title={ep.podcast_title}>{ep.podcast_title}</span>
 							{#if ep.pub_date}<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}{/if}
 							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
 							{#if completed.has(ep.id)}<span class="played-tag">{t('common.played')}</span>{/if}
@@ -321,7 +321,7 @@
 					</button>
 
 					<div class="row-menu">
-						<button class="ep-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('common.moreActions')}>
+						<button class="ep-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('common.moreActions')} title={t('common.moreActions')}>
 							<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
 						</button>
 						{#if openMenuId === ep.id}
@@ -507,10 +507,11 @@
 		background: rgba(0, 0, 0, 0.4);
 		color: #fff;
 		font-size: 1.4rem;
-		opacity: 0;
+		opacity: 0.82;
 		transition: opacity 0.2s ease;
 	}
 	.ep-play:hover .ep-play-icon { opacity: 1; }
+	.ep-play-icon i { display: block; line-height: 1; }
 
 	.ep-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 	.ep-title {

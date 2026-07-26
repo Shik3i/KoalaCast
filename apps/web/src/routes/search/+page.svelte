@@ -288,11 +288,11 @@
 				aria-label={t('search.title')}
 			/>
 			{#if searchQuery}
-				<button type="button" class="clear" onclick={clearSearch} aria-label={t('common.clearSearch')} transition:fade={{ duration: 120 }}>
+				<button type="button" class="clear" onclick={clearSearch} aria-label={t('common.clearSearch')} title={t('common.clearSearch')} transition:fade={{ duration: 120 }}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			{/if}
-			<button type="submit" class="go" disabled={isSearching} aria-label={isSearching ? t('common.loading') : t('search.submit')}>
+			<button type="submit" class="go" disabled={isSearching} aria-label={isSearching ? t('common.loading') : t('search.submit')} title={isSearching ? t('common.loading') : t('search.submit')}>
 				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}{t('search.submit')}{/if}
 			</button>
 		</form>
@@ -383,7 +383,7 @@
 				{#each recentSearches as q}
 					<button class="recent-chip" onclick={() => runRecent(q)}>{q}</button>
 				{/each}
-				<button class="recent-clear" onclick={clearHistory} aria-label={t('search.clearHistory')}>
+				<button class="recent-clear" onclick={clearHistory} aria-label={t('search.clearHistory')} title={t('search.clearHistory')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			</div>
@@ -459,7 +459,7 @@
 			<div class="results-grid">
 				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
-						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title || pod.trackName })}></button>
+						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title || pod.trackName })} title={pod.title || pod.trackName}></button>
 						<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<div class="info">
 							<h4>{pod.title || pod.trackName}</h4>

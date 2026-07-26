@@ -21,7 +21,7 @@
 		>
 			<i class="ph-fill {icons[item.type]}" aria-hidden="true"></i>
 			<span>{item.message}</span>
-			<button onclick={() => toast.dismiss(item.id)} aria-label={t('common.dismissNotification')}>
+			<button onclick={() => toast.dismiss(item.id)} aria-label={t('common.dismissNotification')} title={t('common.dismissNotification')}>
 				<i class="ph ph-x" aria-hidden="true"></i>
 			</button>
 		</div>

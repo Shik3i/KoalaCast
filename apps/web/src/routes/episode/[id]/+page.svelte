@@ -354,7 +354,7 @@
 				{:else if chaptersList.length > 0}
 					<div class="chapters-list">
 						{#each chaptersList as ch, i}
-							<button class="chapter-row" onclick={() => seekToCue(ch.startTime)}>
+							<button class="chapter-row" onclick={() => seekToCue(ch.startTime)} title={ch.title || `Chapter ${i + 1}`}>
 								<span class="ch-time">{formatDuration(ch.startTime * 1000)}</span>
 								{#if ch.img}<img src={optimizeArtwork(ch.img, 120)} alt="" class="ch-img" />{/if}
 								<span class="ch-title">{ch.title || `Chapter ${i + 1}`}</span>
@@ -494,7 +494,7 @@
 		transition: transform 0.15s ease, filter 0.2s ease;
 	}
 	.btn-play:hover { filter: brightness(1.08); transform: translateY(-2px); }
-	.btn-play :global(.ph) { font-size: 1.15rem; }
+	.btn-play :global(.ph), .btn-play :global(.ph-fill) { display: block; font-size: 1.15rem; line-height: 1; }
 
 	.btn-secondary {
 		background: var(--bg-elevated);

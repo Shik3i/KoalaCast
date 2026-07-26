@@ -446,7 +446,7 @@
 							aria-label={t('podcast.filterEpisodes')}
 						/>
 						{#if searchQuery}
-							<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')}>
+							<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')} title={t('common.clearSearch')}>
 								<i class="ph ph-x" aria-hidden="true"></i>
 							</button>
 						{/if}
@@ -495,12 +495,12 @@
 						<div class="episode-list" transition:slide={{ duration: 240 }}>
 							{#each group.episodes as ep (ep.id)}
 								<div class="episode-row" class:current={player.current?.episode_id === ep.id} class:played={playedIds.has(ep.id)}>
-									<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label={t('podcast.playEpisode')}>
+									<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label={t('podcast.playEpisode')} title={t('podcast.playEpisode')}>
 										<i class="ph-fill {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
 									</button>
 
 									<div class="ep-info">
-										<h4><a href={`/episode/${ep.id}`}>{ep.title}</a></h4>
+										<h4><a href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a></h4>
 										<p class="ep-desc">{epDescription(ep)}</p>
 										<span class="ep-meta">
 											{ep.pub_date ? prefs.formatDate(ep.pub_date) : t('podcast.noDate')}
@@ -515,7 +515,7 @@
 										<i class="{playedIds.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
 									</button>
 								<div class="row-menu">
-									<button class="btn-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('podcast.moreActions')}>
+									<button class="btn-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('podcast.moreActions')} title={t('podcast.moreActions')}>
 										<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
 									</button>
 									{#if openMenuId === ep.id}
@@ -876,6 +876,7 @@
 		transition: transform 0.2s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)), filter 0.2s ease;
 	}
 	.btn-play:hover { transform: scale(1.1); filter: brightness(1.08); }
+	.btn-play i { display: block; font-size: 1.35rem; line-height: 1; }
 	.btn-play.playing { animation: pulse-ring 1.8s ease-in-out infinite; }
 
 	.episode-row.current { border-color: var(--show-accent, var(--accent-green)); background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 8%, var(--bg-surface)); }

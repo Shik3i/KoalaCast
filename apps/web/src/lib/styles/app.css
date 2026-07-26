@@ -778,13 +778,15 @@ html.is-resizing-rails * {
 .rail-context a {
 	display: flex;
 	align-items: center;
+	justify-content: flex-start;
 	gap: 8px;
 	min-width: 0;
 	padding: 6px 4px;
 	color: var(--ink-3);
 	font-size: 12px;
+	text-align: left;
 }
-.rail-context a span:last-child { margin-left: auto; }
+.rail-context a .truncate { flex: 1 1 auto; }
 .rail-eyebrow {
 	color: var(--ink-4);
 	font: 600 9px/1.4 var(--font-mono);
@@ -792,7 +794,7 @@ html.is-resizing-rails * {
 	text-transform: uppercase;
 }
 .rail-dot { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: var(--data-bar); }
-.truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.truncate { min-width: 0; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .rail-empty { color: var(--ink-4); font-size: 11px; }
 .rail-bottom {
 	display: grid;
