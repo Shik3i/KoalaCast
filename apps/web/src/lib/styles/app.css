@@ -653,12 +653,18 @@ p { text-wrap: pretty; }
 		var(--rail-resizer-width) var(--right-rail-width);
 	width: min(100%, calc(var(--left-rail-width) + var(--right-rail-width) + (2 * var(--rail-resizer-width)) + 1400px));
 }
+.quiet-app.empty-running-order:has(.running-order) {
+	--right-rail-width: 150px !important;
+}
+.quiet-app.empty-running-order .running-order header { padding-inline: 12px; }
+.quiet-app.empty-running-order .running-order .queue-empty { padding-inline: 12px !important; }
 
 .quiet-main {
 	min-width: 0;
 	min-height: 100dvh;
 	background: var(--bg-panel);
 }
+.offline-banner { position: sticky; top: 0; z-index: 80; display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 6px 12px; background: var(--color-warning-bg); color: var(--ink-2); font: 700 10px/1 var(--font-mono); text-transform: uppercase; }
 
 .quiet-app.has-player .quiet-main,
 .quiet-app.has-player .quiet-rail,

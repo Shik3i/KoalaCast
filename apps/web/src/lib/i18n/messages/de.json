@@ -8,12 +8,17 @@
 		"signIn": "Anmelden",
 		"admin": "Admin",
 		"primary": "Hauptnavigation",
+		"more": "Mehr",
+		"moreHint": "Hörstatistiken, Konto, Datenschutz und Einstellungen.",
+		"profileMenu": "Profil",
 		"brandHome": "KoalaCast Startseite"
 	},
 	"common": {
 		"loading": "Wird geladen…",
 		"retry": "Erneut versuchen",
 		"cancel": "Abbrechen",
+		"confirm": "Bestätigen",
+		"offline": "Offline — lokale Bibliothek und zwischengespeicherte Daten bleiben verfügbar",
 		"save": "Speichern",
 		"close": "Schließen",
 		"copy": "Kopieren",
@@ -99,6 +104,7 @@
 		"openPodcast": "{title} öffnen",
 		"subscribeSuccess": "{title} abonniert",
 		"subscribeError": "Abonnieren fehlgeschlagen. Bitte versuche es erneut."
+		,"openError": "Dieser Podcast-Feed konnte nicht geöffnet werden. Suche nach einer anderen Quelle."
 	},
 	"search": {
 		"title": "Podcasts suchen",
@@ -112,7 +118,7 @@
 		"languageFilter": "Sprachen",
 		"genreFilter": "Genre",
 		"allGenres": "Alle Genres",
-		"clearFilters": "Filter entfernen",
+		"clearFilters": "Alle Sprachen durchsuchen",
 		"resetFilters": "Auf meine Einstellungen zurücksetzen",
 		"filterHint": "Aus deinen Einstellungen vorbelegt. Entferne sie, um in allen Sprachen zu suchen.",
 		"addByRss": "Podcast über RSS-URL hinzufügen",
@@ -186,6 +192,8 @@
 		"title": "Dein Hören",
 		"since": "Seit {date}",
 		"trackingStarts": "Tracking beginnt mit deiner nächsten Wiedergabe",
+		"emptyTitle": "Deine Hörgeschichte beginnt hier",
+		"emptyBody": "Spiele eine Episode, um deine privaten Hörstatistiken zu starten. Muster und Rankings erscheinen erst mit aussagekräftigen Daten.",
 		"summary": "{subscriptions} Abos · {shows} gehörte Sendungen",
 		"rangeLabel": "Zeitraum der Statistik",
 		"thisYear": "Dieses Jahr",
@@ -312,7 +320,12 @@
 		"viewGlobalStats": "Globale Statistiken ansehen",
 		"globalStatsEnabled": "Teilnahme an globalen Statistiken aktiviert.",
 		"globalStatsDisabled": "Teilnahme an globalen Statistiken deaktiviert.",
-		"globalStatsSaveError": "Die Einstellung für globale Statistiken konnte nicht gespeichert werden."
+		"globalStatsSaveError": "Die Einstellung für globale Statistiken konnte nicht gespeichert werden.",
+		"syncing": "Synchronisierung läuft…",
+		"syncError": "Synchronisierungsfehler — neuer Versuch erfolgt automatisch",
+		"syncedAt": "Synchronisiert · zuletzt {time}",
+		"syncReady": "Synchronisierung bereit",
+		"syncDescription": "Abos, Fortschritt und Hörstatistiken werden automatisch zwischen deinen Geräten synchronisiert."
 	},
 	"globalStats": {
 		"summaryLabel": "Globale Zusammenfassung",
@@ -346,6 +359,8 @@
 		"introOutro": "Intros & Outros",
 		"noData": "Für diesen Zeitraum gibt es noch keine freigegebenen Hördaten.",
 		"loadError": "Die globalen Statistiken konnten nicht geladen werden.",
+		"errorHint": "Du bist möglicherweise offline oder der Server ist vorübergehend nicht erreichbar. Lokale Hördaten gingen nicht verloren.",
+		"cachedData": "Offline-Ansicht: Zuletzt erfolgreich geladene globale Statistiken.",
 		"privacy": "Es werden nur Konten mit aktivierter freiwilliger Teilnahme berücksichtigt. Ausschalten entfernt das Konto sofort aus Gesamtwerten und Ranglisten.",
 		"manageConsent": "Teilnahme in den Einstellungen verwalten"
 	},
@@ -381,6 +396,19 @@
 		"signingIn": "Anmeldung läuft…",
 		"noAccount": "Noch kein Konto?",
 		"createAccount": "Neues Konto erstellen"
+		,"showPassword": "Passwort anzeigen"
+		,"hidePassword": "Passwort verbergen"
+		,"recoverAccount": "Konto wiederherstellen"
+	},
+	"recover": {
+		"title": "Konto wiederherstellen",
+		"subtitle": "Verwende den Wiederherstellungscode aus der Registrierung. Alle bestehenden Sitzungen werden abgemeldet.",
+		"code": "Wiederherstellungscode",
+		"newPassword": "Neues Passwort",
+		"submit": "Passwort zurücksetzen",
+		"success": "Passwort geändert",
+		"saveCode": "Speichere diesen neuen Wiederherstellungscode jetzt. Der bisherige Code funktioniert nicht mehr.",
+		"error": "Das Konto konnte nicht wiederhergestellt werden."
 	},
 	"register": {
 		"pageTitle": "Konto erstellen — KoalaCast",
@@ -511,6 +539,7 @@
 		"markUnplayed": "Als ungehört markieren",
 		"noDate": "Ohne Datum",
 		"notFound": "Podcast-Details nicht gefunden.",
+		"loadError": "Der Feed konnte nicht aufgelöst oder geladen werden. Versuche es erneut oder suche nach einer anderen Quelle.",
 		"searchEpisodes": "Folgen dieser Sendung durchsuchen…",
 		"filterEpisodes": "Folgen nach Titel oder Beschreibung filtern",
 		"noEpisodesMatch": "Keine Folgen passen zu deiner Suche oder deinem Filter.",
@@ -568,6 +597,10 @@
 			"moodCompany": "Gesellig",
 			"moodFocus": "Fokus",
 			"moodEffect": "Gewichtet passende Themen höher",
+			"moodEffectCalm": "Ruhiges Hören mit niedriger Intensität",
+			"moodEffectCurious": "Breitere Themen und neue Perspektiven",
+			"moodEffectCompany": "Gesprächige Shows mit warmen Stimmen",
+			"moodEffectFocus": "Kompakte Episoden mit wenig Ablenkung",
 			"moodReason": "Passt thematisch zu deiner Auswahl „{mood}“.",
 			"fits": "{count} passend",
 			"becauseMood": "Weil du „{mood}“ gewählt hast",
@@ -589,6 +622,7 @@
 			"loadingDurations": "Echte Folgenlängen werden geprüft…",
 			"shown": "{shown} von {total} angezeigt",
 			"durationUnknown": "Länge unbekannt",
+			"durationUnknownShort": "Unbekannt",
 			"keyboardHint": "Titelgeschichte: P abspielen · Q einreihen · S speichern",
 			"noFitResults": "Keine neueste Folge mit bestätigter Länge passt in diese Zeit.",
 			"clearTimeFilter": "Alle Längen anzeigen",
@@ -599,7 +633,7 @@
 			"discover": "Entdecken",
 			"new": "Neu",
 			"library": "Mediathek",
-			"profile": "Profil",
+			"profile": "Hören",
 			"settings": "Einstellungen",
 			"subscriptions": "Abonniert",
 			"noSubscriptions": "Deine Abos erscheinen hier."
@@ -688,6 +722,7 @@
 		"title": "Admin",
 		"signupsAre": "Neue Registrierungen sind derzeit",
 		"confirmRevokeAll": "Alle aktiven Sitzungen von {username} abmelden?",
+		"confirmSuspend": "Dieses Konto sperren? Der Zugriff bleibt bis zur Wiederherstellung gesperrt.",
 		"accessDenied": "Admin-Zugriff verweigert oder nicht autorisiert.",
 		"metricsNetworkError": "Netzwerkfehler beim Abrufen der Admin-Metriken.",
 		"workerActive": "Aktiv",

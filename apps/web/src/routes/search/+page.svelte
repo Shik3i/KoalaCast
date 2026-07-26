@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
@@ -36,11 +37,10 @@
 	// The term the visible results came from.
 	let lastExecutedQuery = $state('');
 
-	const activeFilterCount = $derived(filterLanguages.length + (filterGenre ? 1 : 0));
 	const hasNonDefaultFilters = $derived(
-		activeFilterCount > 0 &&
-			!(filterGenre === '' && sameLanguages(filterLanguages, prefs.languages))
+		filterGenre !== '' || !sameLanguages(filterLanguages, prefs.languages)
 	);
+	const activeFilterCount = $derived((filterGenre ? 1 : 0) + (sameLanguages(filterLanguages, prefs.languages) ? 0 : 1));
 
 	function sameLanguages(a: string[], b: string[]): boolean {
 		return a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
@@ -101,6 +101,14 @@
 		try {
 			recentSearches = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
 		} catch (_) {}
+		const initialQuery = $page.url.searchParams.get('q')?.trim() || '';
+		const initialLanguages = $page.url.searchParams.get('languages')?.split(',').filter(Boolean);
+		if (initialLanguages?.length) filterLanguages = initialLanguages;
+		filterGenre = $page.url.searchParams.get('genre') || '';
+		if (initialQuery) {
+			searchQuery = initialQuery;
+			void executeSearch(initialQuery);
+		}
 	});
 
 	function rememberSearch(query: string) {
@@ -159,6 +167,11 @@
 		const params = new URLSearchParams({ q: query, region: regionForLanguage(filterLanguages[0] ?? 'en') });
 		if (filterLanguages.length > 0) params.set('languages', filterLanguages.join(','));
 		if (filterGenre) params.set('category', filterGenre);
+		const visibleParams = new URLSearchParams();
+		visibleParams.set('q', query.trim());
+		if (filterLanguages.length) visibleParams.set('languages', filterLanguages.join(','));
+		if (filterGenre) visibleParams.set('genre', filterGenre);
+		replaceState(`/search?${visibleParams}`, {});
 
 		try {
 			const res = await fetch(`/api/v1/podcasts/search?${params}`);
@@ -197,7 +210,12 @@
 						return;
 					}
 				}
-			} catch (_) {}
+				toast.error(t('discover.openError'));
+				return;
+			} catch (_) {
+				toast.error(t('discover.openError'));
+				return;
+			}
 		}
 
 		goto(`/podcast/${pod.id}?feed_url=${encodeURIComponent(feedUrl || '')}`);
@@ -292,9 +310,7 @@
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			{/if}
-			<button type="submit" class="go" disabled={isSearching} aria-label={isSearching ? t('common.loading') : t('search.submit')} title={isSearching ? t('common.loading') : t('search.submit')}>
-				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}{t('search.submit')}{/if}
-			</button>
+			<button type="submit" class="sr-only">{t('search.submit')}</button>
 		</form>
 
 		<!-- Filters. Languages are pre-selected from Settings so the default search
@@ -315,7 +331,7 @@
 				<i class="ph ph-caret-down chev" aria-hidden="true"></i>
 			</button>
 
-			{#if activeFilterCount > 0}
+			{#if hasNonDefaultFilters}
 				<button class="filter-clear" onclick={clearFilters}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 					{t('search.clearFilters')}
@@ -419,11 +435,13 @@
 	{/if}
 
 	<!-- Results Grid -->
-	<section class="results-section">
+	<section class="results-section" aria-live="polite">
 		<div class="results-head">
 			<h3>
 				{#if isSearching}
 					{t('search.searchingLive')}
+				{:else if !lastExecutedQuery}
+					{t('search.title')}
 				{:else}
 					{t('search.results', { count: visibleResults.length })}
 				{/if}
@@ -459,15 +477,17 @@
 			<div class="results-grid">
 				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
-						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title || pod.trackName })} title={pod.title || pod.trackName}></button>
-						<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<button class="art-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title || pod.trackName })} title={pod.title || pod.trackName}>
+							<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						</button>
 						<div class="info">
-							<h4>{pod.title || pod.trackName}</h4>
+							<h4><button onclick={() => openPodcastShow(pod)} title={pod.title || pod.trackName}>{pod.title || pod.trackName}</button></h4>
 							<p class="author">{pod.author || pod.artistName}</p>
 
 							<button
 								class="btn-sub"
 								class:subscribed={isSubscribed(pod)}
+								disabled={isSubscribed(pod)}
 								onclick={(e) => handleAddPodcast(e, pod)}
 							>
 								{#if isSubscribed(pod)}
@@ -721,27 +741,13 @@
 		cursor: pointer;
 		transition: transform 0.2s ease, border-color 0.2s ease;
 	}
+	.art-hit, .info h4 button { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+	.info h4 button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; }
 
 	.result-card:hover {
 		transform: translateY(-4px);
 		border-color: var(--accent-green);
 	}
-
-	.card-hit {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		background: none;
-		border: none;
-		padding: 0;
-		cursor: pointer;
-	}
-	.card-hit:focus-visible {
-		outline: 2px solid var(--focus-ring);
-		outline-offset: -2px;
-		border-radius: 12px;
-	}
-	.result-card .btn-sub { position: relative; z-index: 2; }
 
 	.artwork {
 		width: 100%;

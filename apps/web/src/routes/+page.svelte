@@ -40,10 +40,10 @@
 
 	const PAGE_SIZE = 60;
 	const moods = [
-		{ id: 'calm' as const, labelKey: 'quiet.discover.moodCalm' as const, icon: 'ph-waves' },
-		{ id: 'curious' as const, labelKey: 'quiet.discover.moodCurious' as const, icon: 'ph-lightbulb' },
-		{ id: 'company' as const, labelKey: 'quiet.discover.moodCompany' as const, icon: 'ph-users-three' },
-		{ id: 'focus' as const, labelKey: 'quiet.discover.moodFocus' as const, icon: 'ph-crosshair' }
+		{ id: 'calm' as const, labelKey: 'quiet.discover.moodCalm' as const, effectKey: 'quiet.discover.moodEffectCalm' as const, icon: 'ph-waves' },
+		{ id: 'curious' as const, labelKey: 'quiet.discover.moodCurious' as const, effectKey: 'quiet.discover.moodEffectCurious' as const, icon: 'ph-lightbulb' },
+		{ id: 'company' as const, labelKey: 'quiet.discover.moodCompany' as const, effectKey: 'quiet.discover.moodEffectCompany' as const, icon: 'ph-users-three' },
+		{ id: 'focus' as const, labelKey: 'quiet.discover.moodFocus' as const, effectKey: 'quiet.discover.moodEffectFocus' as const, icon: 'ph-crosshair' }
 	];
 
 	let mounted = $state(false);
@@ -69,8 +69,7 @@
 	const filtered = $derived(
 		podcasts.filter((pod) => {
 			if (prefs.isHidden(pod.categories)) return false;
-			const query = searchQuery.trim().toLowerCase();
-			return !query || pod.title.toLowerCase().includes(query) || pod.author.toLowerCase().includes(query);
+			return true;
 		})
 	);
 	const arranged = $derived(
@@ -140,13 +139,14 @@
 					}
 				}
 			}
-			podcasts = (merged.length ? merged : FEATURED_PODCASTS).map((podcast, index) => ({
+			const safeFallback = languages.includes('en') ? FEATURED_PODCASTS : [];
+			podcasts = (merged.length ? merged : safeFallback).map((podcast, index) => ({
 				...podcast,
 				sourceRank: index
 			}));
 			reachedEnd = merged.length < limit;
 		} catch {
-			podcasts = FEATURED_PODCASTS;
+			podcasts = languages.includes('en') ? FEATURED_PODCASTS : [];
 			reachedEnd = true;
 		} finally {
 			if (id === requestId) {
@@ -181,7 +181,7 @@
 		return subscribedIds.includes(podcast.id) || (!!podcast.feed_url && subscribedFeeds.includes(podcast.feed_url));
 	}
 
-	async function resolvePodcastId(podcast: PodcastItem) {
+	async function resolvePodcastId(podcast: PodcastItem): Promise<string | null> {
 		if (podcast.feed_url) {
 			try {
 				const response = await fetch('/api/v1/podcasts/feed', {
@@ -193,18 +193,31 @@
 					const resolved = await response.json();
 					if (resolved.id) return resolved.id as string;
 				}
-			} catch {}
+				return null;
+			} catch {
+				return null;
+			}
 		}
 		return podcast.id;
 	}
 
 	async function openPodcast(podcast: PodcastItem) {
 		const id = await resolvePodcastId(podcast);
+		if (!id) {
+			toast.error(t('discover.openError'));
+			return;
+		}
 		goto(`/podcast/${id}?feed_url=${encodeURIComponent(podcast.feed_url || '')}`);
+	}
+
+	function openGlobalSearch() {
+		const query = searchQuery.trim();
+		goto(query ? `/search?q=${encodeURIComponent(query)}` : '/search');
 	}
 
 	async function latestTrack(podcast: PodcastItem): Promise<LatestTrack | null> {
 		const id = await resolvePodcastId(podcast);
+		if (!id) return null;
 		try {
 			const response = await fetch(`/api/v1/podcasts/${id}/episodes`);
 			if (!response.ok) return null;
@@ -267,16 +280,6 @@
 		}
 	}
 
-	async function toggleFitsSession() {
-		if (listeningSession.minutes === null) return;
-		if (fitsSession) {
-			fitsSession = false;
-			return;
-		}
-		await hydrateVisibleMetadata();
-		fitsSession = true;
-	}
-
 	async function changeSort(next: DiscoverSort) {
 		if (next === 'length' || next === 'newest') await hydrateVisibleMetadata();
 		sort = next;
@@ -286,9 +289,10 @@
 		prefs.setUILanguage(prefs.uiLanguage === 'en' ? 'de' : 'en');
 	}
 
-	function setSessionMinutes(minutes: SessionMinutes | null) {
+	async function setSessionMinutes(minutes: SessionMinutes | null) {
 		listeningSession.set(minutes);
-		if (minutes === null) fitsSession = false;
+		fitsSession = minutes !== null;
+		if (minutes !== null) await hydrateVisibleMetadata();
 	}
 
 	function plainSummary(value: string | undefined, author: string) {
@@ -376,7 +380,7 @@
 		</div>
 		<label class="global-search">
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-			<input bind:this={searchInput} bind:value={searchQuery} aria-label={t('quiet.discover.searchLabel')} placeholder={t('quiet.discover.searchPlaceholder')} />
+			<input bind:this={searchInput} bind:value={searchQuery} onkeydown={(event) => event.key === 'Enter' && openGlobalSearch()} aria-label={t('quiet.discover.searchLabel')} placeholder={t('quiet.discover.searchPlaceholder')} />
 			<kbd>⌘K</kbd>
 		</label>
 		<span class="edition-date">{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
@@ -403,11 +407,18 @@
 					<span>P / Q / S</span>
 				</div>
 			</div>
-			<div class="spotlight-art">
+			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
 				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} loading="eager" fetchpriority="high" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 				<div class="waveform" aria-hidden="true">{#each [8,16,12,24,18,28,13,21,17,26,11,20,15,23,9,18] as height}<i style:height={`${height}px`}></i>{/each}</div>
 				<span>{t('quiet.discover.coverCaption')}</span>
-			</div>
+			</button>
+		</section>
+	{:else}
+		<section class="discover-empty">
+			<i class="ph ph-translate" aria-hidden="true"></i>
+			<h1>{t('quiet.discover.pageTitle')}</h1>
+			<p>{t('discover.noResultsInLanguages')}</p>
+			<a href="/settings#languages">{t('nav.settings')}</a>
 		</section>
 	{/if}
 
@@ -427,7 +438,7 @@
 				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => (selectedMood = mood.id)}>
 					<i class="ph {mood.icon}" aria-hidden="true"></i>
 					<strong>{t(mood.labelKey)}</strong>
-					<span>{t('quiet.discover.moodEffect')}</span>
+					<span>{t(mood.effectKey)}</span>
 				</button>
 			{/each}
 		</div>
@@ -471,18 +482,6 @@
 			</div>
 		</header>
 		<div class="chart-filters">
-			{#if listeningSession.minutes !== null}
-				<button
-					class:active={fitsSession}
-					aria-pressed={fitsSession}
-					disabled={isHydratingMetadata}
-					onclick={toggleFitsSession}
-					aria-label={fitsSession ? t('quiet.discover.disableFits', { count: listeningSession.minutes }) : t('quiet.discover.enableFits', { count: listeningSession.minutes })}
-				>
-					{isHydratingMetadata ? t('quiet.discover.loadingDurations') : t('quiet.discover.fitsFilter', { count: listeningSession.minutes })}
-					<i class="ph {fitsSession ? 'ph-x' : 'ph-funnel'}" aria-hidden="true"></i>
-				</button>
-			{/if}
 			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label={t('search.genreFilter')} disabled={isLoading}>
 				{#each categories as category}<option value={category}>{genreLabel(category)}</option>{/each}
 			</select>
@@ -510,7 +509,7 @@
 					<button class="chart-title" onclick={() => openPodcast(podcast)} title={podcast.title}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>
 					</button>
-					<span class="fit">{formatEpisodeMinutes(podcast.latestDurationMs) ?? '—'}</span>
+					<span class="fit" title={podcast.latestDurationMs === undefined ? t('quiet.discover.durationUnknown') : undefined}>{isHydratingMetadata && podcast.latestDurationMs === undefined ? t('common.loading') : formatEpisodeMinutes(podcast.latestDurationMs) ?? t('quiet.discover.durationUnknownShort')}</span>
 					<div class="row-actions">
 						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })} title={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play" aria-hidden="true"></i></button>
 						<button onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })} title={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
@@ -555,6 +554,11 @@
 		padding: 24px 22px; overflow: hidden; background: radial-gradient(85% 150% at 0 0, rgba(127,208,170,.13), transparent 62%);
 		border-bottom: 1px solid var(--border-hair);
 	}
+	.discover-empty { display: grid; justify-items: start; gap: 10px; margin: 32px 22px; padding: 24px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
+	.discover-empty > i { color: var(--accent-ink); font-size: 28px; }
+	.discover-empty h1 { font-size: 24px; }
+	.discover-empty p { color: var(--ink-3); }
+	.discover-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
 	.spotlight.loading > div:first-child { display: flex; flex-direction: column; gap: 20px; }
 	.spotlight-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
 	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -565,7 +569,7 @@
 	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }
 	.spotlight-actions button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.spotlight-actions span { margin-left: 4px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
-	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
 	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
 	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 10px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.waveform { display: flex; align-items: center; gap: 3px; height: 32px; margin-top: -32px; padding: 0 9px; background: rgba(5,10,7,.76); }
@@ -603,8 +607,7 @@
 	.sort-tabs button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.sort-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
-	.chart-filters button, .chart-filters select { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
-	.chart-filters button.active { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--accent-on); }
+	.chart-filters select { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 52px 66px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
 	.rank, .fit { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -615,7 +618,7 @@
 	.chart-title strong { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.chart-title span { color: var(--ink-4); font: 500 11px/1.4 var(--font-sans); }
 	.row-actions { display: flex; gap: 4px; justify-content: end; }
-	.row-actions button { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--border-ui); border-radius: 4px; }
+	.row-actions button { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.row-actions button i { display: block; font-size: 14px; line-height: 1; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
@@ -658,6 +661,9 @@
 		.spotlight p { display: none; }
 		.spotlight-actions { width: 100%; }
 		.spotlight-actions .primary { flex: 1; justify-content: center; }
+		.spotlight-actions > span { display: none; }
+		.spotlight-art { width: min(72vw, 300px); align-self: center; }
+		.spotlight-actions button, .session-control button, .sort-tabs button, .chart-filters select, .row-actions button { min-height: 44px; }
 		.reasoned-picks, .chart-section { padding: 16px; }
 		.mood-grid { grid-template-columns: repeat(2, 1fr); }
 		.session-control p { flex-basis: 100%; }

@@ -32,10 +32,11 @@
 		listener_leaderboard: RankedListener[];
 	};
 
-	let range = $state<Range>('year');
+	let range = $state<Range>('90days');
 	let stats = $state<GlobalStats | null>(null);
 	let loading = $state(true);
 	let error = $state('');
+	let stale = $state(false);
 	let requestId = 0;
 
 	const maxWeekday = $derived(Math.max(1, ...(stats?.weekday_totals ?? [])));
@@ -70,13 +71,27 @@
 		const id = ++requestId;
 		loading = true;
 		error = '';
+		stale = false;
 		try {
 			const res = await fetch(`/api/v1/stats/global?range=${range}`);
 			if (!res.ok) throw new Error(`global stats failed: ${res.status}`);
 			const data = await res.json();
-			if (id === requestId) stats = data;
+			if (id === requestId) {
+				stats = data;
+				localStorage.setItem(`koalacast_global_stats_${range}`, JSON.stringify(data));
+			}
 		} catch (_) {
-			if (id === requestId) error = t('globalStats.loadError');
+			if (id === requestId) {
+				try {
+					const cached = localStorage.getItem(`koalacast_global_stats_${range}`);
+					if (cached) {
+						stats = JSON.parse(cached);
+						stale = true;
+					} else error = t('globalStats.loadError');
+				} catch {
+					error = t('globalStats.loadError');
+				}
+			}
 		} finally {
 			if (id === requestId) loading = false;
 		}
@@ -119,8 +134,13 @@
 	{#if loading}
 		<div class="state-box"><i class="ph ph-spinner-gap spinner" aria-hidden="true"></i> {t('common.loading')}</div>
 	{:else if error}
-		<div class="state-box error" role="alert">{error} <button onclick={load}>{t('common.retry')}</button></div>
+		<div class="state-box error" role="alert">
+			<strong>{error}</strong>
+			<span>{t('globalStats.errorHint')}</span>
+			<div><button onclick={load}>{t('common.retry')}</button><a href="/settings#privacy">{t('globalStats.manageConsent')}</a></div>
+		</div>
 	{:else if stats}
+		{#if stale}<p class="stale-note" role="status">{t('globalStats.cachedData')}</p>{/if}
 		<section class="kpi-grid" aria-label={t('globalStats.summaryLabel')}>
 			<article><span>{t('globalStats.totalListening')}</span><strong>{duration(stats.total_wall_ms, true)}</strong><small>{stats.listening_sessions.toLocaleString()} {t('globalStats.sessions')}</small></article>
 			<article><span>{t('globalStats.participants')}</span><strong>{stats.participants.toLocaleString()}</strong><small>{t('globalStats.optInAccounts')}</small></article>
@@ -129,7 +149,7 @@
 		</section>
 
 		{#if stats.total_wall_ms === 0}
-			<div class="state-box">{t('globalStats.noData')}</div>
+			<div class="state-box">{t('globalStats.noData')} <a href="/settings#privacy">{t('globalStats.manageConsent')}</a></div>
 		{:else}
 			<section class="panel activity-panel">
 				<div class="panel-head"><div><p class="eyebrow">{t('globalStats.weeks', { count: 26 })}</p><h2>{t('globalStats.communityActivity')}</h2></div><strong>{duration(stats.total_wall_ms)}</strong></div>

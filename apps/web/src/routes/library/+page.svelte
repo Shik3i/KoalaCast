@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
+	import { confirmDialog } from '$lib/stores/confirm.svelte';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -90,7 +91,7 @@
 
 	async function emptyQueue() {
 		if (!queue.length) return;
-		if (confirm(t('library.confirmClearQueue'))) {
+		if (await confirmDialog.ask(t('library.confirmClearQueue'))) {
 			await player.clearQueue();
 			queue = [];
 			toast.success(t('toast.queueCleared'));
@@ -132,7 +133,7 @@
 	}
 
 	async function handleUnsubscribe(id: string) {
-		if (confirm(t('library.confirmUnsubscribe'))) {
+		if (await confirmDialog.ask(t('library.confirmUnsubscribe'))) {
 			await removeLocalSubscription(id);
 			subscriptions = subscriptions.filter((s) => s.podcast_id !== id);
 			toast.success(t('toast.unsubscribed'));
@@ -192,14 +193,16 @@
 <div class="library-page">
 	<div class="lib-head">
 		<div><h2>{t('library.title')}</h2><p class="sub">{t('library.showCount', { count: subscriptions.length })}</p></div>
-		<label class="library-filter">
-			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-			<input bind:value={libraryQuery} placeholder={t('library.filterPlaceholder')} aria-label={t('library.filterPlaceholder')} />
-		</label>
-		<div class="library-sort" role="group" aria-label={t('library.sortLabel')}>
-			<button aria-pressed={librarySort === 'recent'} class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>{t('library.sortRecent')}</button>
-			<button aria-pressed={librarySort === 'az'} class:active={librarySort === 'az'} onclick={() => (librarySort = 'az')}>A–Z</button>
-		</div>
+		{#if activeTab === 'subscriptions' && subscriptions.length > 0}
+			<label class="library-filter">
+				<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+				<input bind:value={libraryQuery} placeholder={t('library.filterPlaceholder')} aria-label={t('library.filterPlaceholder')} />
+			</label>
+			<div class="library-sort" role="group" aria-label={t('library.sortLabel')}>
+				<button aria-pressed={librarySort === 'recent'} class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>{t('library.sortRecent')}</button>
+				<button aria-pressed={librarySort === 'az'} class:active={librarySort === 'az'} onclick={() => (librarySort = 'az')}>A–Z</button>
+			</div>
+		{/if}
 	</div>
 
 	<div class="tabs collection-tabs" role="tablist" aria-label={t('library.sections')}>
@@ -221,7 +224,10 @@
 		{#if subscriptions.length === 0}
 			<div class="empty-state">
 				<p>{t('library.emptySubscriptions')}</p>
-				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
+				<div class="empty-actions">
+					<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
+					<a href="/settings#opml" class="btn secondary">{t('settings.opmlTitle')}</a>
+				</div>
 			</div>
 		{:else}
 			<div class="podcast-grid">
@@ -468,6 +474,8 @@
 		font-weight: 700;
 	}
 	.btn:hover { text-decoration: none; background: var(--accent-green-hover); }
+	.empty-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+	.btn.secondary { border: 1px solid var(--border-ui); background: transparent; color: var(--text-primary); }
 
 	/* In-progress episode list */
 	.episode-list { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -663,8 +671,8 @@
 	.quiet-cover-card .round-action {
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
+		width: 44px;
+		height: 44px;
 		padding: 0;
 		border: 1px solid #4a6558;
 		border-radius: 50%;
@@ -688,9 +696,11 @@
 	@media (max-width: 560px) {
 		.library-page { padding: 16px; }
 		.collection-tabs { overflow-x: auto; flex-wrap: nowrap; }
-		.podcast-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+		.podcast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 		.quiet-cover-card .cover-overlay { padding: 8px; }
 		.quiet-cover-card .cover-overlay h3 { font-size: 11px; }
 		.quiet-cover-card .cover-overlay p { display: none; }
+		.quiet-cover-card .cover-overlay { opacity: 1; pointer-events: auto; background: linear-gradient(0deg, rgba(5,10,7,.96) 8%, rgba(5,10,7,.52) 58%, transparent 78%); }
+		.tabs button, .reorder-btn, .ep-remove, .ep-play { min-height: 44px; min-width: 44px; }
 	}
 </style>

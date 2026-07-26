@@ -8,6 +8,7 @@
 	let passwordInput = $state('');
 	let isLoggingIn = $state(false);
 	let authError = $state('');
+	let showPassword = $state(false);
 
 	async function handleLogin(e: Event) {
 		e.preventDefault();
@@ -75,14 +76,20 @@
 
 			<div class="form-group">
 				<label for="password">{t('login.password')}</label>
-				<input
-					id="password"
-					type="password"
-					bind:value={passwordInput}
-					placeholder={t('login.passwordPlaceholder')}
-					required
-					autocomplete="current-password"
-				/>
+				<div class="password-field">
+					<input
+						id="password"
+						type={showPassword ? 'text' : 'password'}
+						bind:value={passwordInput}
+						placeholder={t('login.passwordPlaceholder')}
+						required
+						autocomplete="current-password"
+					/>
+					<button type="button" onclick={() => (showPassword = !showPassword)} aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} title={showPassword ? t('login.hidePassword') : t('login.showPassword')}>
+						<i class="ph {showPassword ? 'ph-eye-slash' : 'ph-eye'}" aria-hidden="true"></i>
+					</button>
+				</div>
+				<a class="recover-link" href="/recover">{t('login.recoverAccount')}</a>
 			</div>
 
 			<button type="submit" class="btn btn-primary" disabled={isLoggingIn}>
@@ -194,6 +201,10 @@
 		font-size: 0.95rem;
 		transition: border-color 0.2s ease;
 	}
+	.password-field { position: relative; display: flex; }
+	.password-field input { width: 100%; padding-right: 48px; }
+	.password-field button { position: absolute; right: 2px; top: 2px; display: grid; place-items: center; width: 44px; height: 40px; border: 0; background: transparent; color: var(--text-secondary); }
+	.recover-link { align-self: flex-end; color: var(--accent-green); font-size: .82rem; font-weight: 700; }
 
 	input:focus {
 		outline: none;

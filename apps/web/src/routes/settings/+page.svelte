@@ -16,6 +16,7 @@
 	import { GENRES, genreLabel } from '$lib/genres';
 	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
 	import { LOCALES, t } from '$lib/i18n';
+	import { confirmDialog } from '$lib/stores/confirm.svelte';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
 	function cycleGenre(name: string) {
@@ -216,7 +217,7 @@
 	}
 
 	async function handleResetLocalData() {
-		if (confirm(t('settings.confirmReset'))) {
+		if (await confirmDialog.ask(t('settings.confirmReset'))) {
 			await clearAllLocalData();
 			toast.success(t('settings.localDataReset'));
 		}
@@ -314,10 +315,23 @@
 	<div class="settings-head">
 		<h2><i class="ph-fill ph-gear-six" aria-hidden="true"></i> {t('settings.title')}</h2>
 		<p class="page-sub">{t('settings.subtitle')}</p>
+		<p class="settings-status">
+			<strong>{authUser ? t('settings.loggedInAs') + ' ' + authUser.username : t('settings.localBrowserMode')}</strong>
+			<span>{authUser ? (sync.lastSyncedAt ? new Date(sync.lastSyncedAt).toLocaleTimeString() : t('settings.syncNow')) : t('profileStats.localOnly')}</span>
+			<span>{t('settings.globalStatsOptIn')}: {globalStatsOptIn ? t('common.on') : t('common.off')}</span>
+		</p>
 	</div>
+	<nav class="settings-nav" aria-label={t('settings.title')}>
+		<a href="#appearance">{t('settings.appearance')}</a>
+		<a href="#discovery">{t('quiet.nav.discover')}</a>
+		<a href="#playback">{t('settings.episodeDates')}</a>
+		<a href="#privacy">{t('settings.privacy')}</a>
+		<a href="#account">{t('settings.accountSync')}</a>
+		<a href="#data">{t('settings.dataManagement')}</a>
+	</nav>
 
 	<!-- Theme Selection Card -->
-	<section class="card">
+	<section class="card" id="appearance">
 		<h3><i class="ph ph-palette" aria-hidden="true"></i> {t('settings.appearance')}</h3>
 		<p class="subtitle">{t('settings.appearanceHint')}</p>
 
@@ -382,7 +396,10 @@
 			{/each}
 		</div>
 
-		<p class="subtitle setting-label">{t('settings.episodeDates')}</p>
+	</section>
+
+	<section class="card" id="playback">
+		<h3><i class="ph ph-play-circle" aria-hidden="true"></i> {t('settings.episodeDates')}</h3>
 		<div class="theme-selector">
 			<button
 				type="button"
@@ -408,7 +425,7 @@
 	<!-- Interface Language Card — what KoalaCast itself is displayed in. Kept
 	     separate from content languages: wanting a German UI and wanting only
 	     German podcasts are two different preferences. -->
-	<section class="card" id="interface-language">
+	<section class="card" id="discovery">
 		<h3><i class="ph ph-globe" aria-hidden="true"></i> {t('settings.interfaceLanguage')}</h3>
 		<p class="subtitle">{t('settings.interfaceLanguageHint')}</p>
 		<div class="language-grid">
@@ -512,7 +529,7 @@
 	</section>
 
 	<!-- OPML Import / Export Card -->
-	<section class="card">
+	<section class="card" id="opml">
 		<h3><i class="ph ph-arrows-down-up" aria-hidden="true"></i> {t('settings.opmlTitle')}</h3>
 		<p class="subtitle">{t('settings.opmlHint')}</p>
 
@@ -544,23 +561,23 @@
 		</div>
 	</section>
 
-	<section class="card">
+	<section class="card" id="account">
 		<h3><i class="ph ph-user-circle" aria-hidden="true"></i> {t('settings.accountSync')}</h3>
 		{#if authUser}
-			<p class="subtitle">{t('settings.loggedInAs')} <strong>{authUser.username}</strong> ({authUser.role}). Subscriptions, progress, and listening statistics sync automatically across your devices.</p>
+			<p class="subtitle">{t('settings.loggedInAs')} <strong>{authUser.username}</strong> ({authUser.role}). {t('settings.syncDescription')}</p>
 			
 			<div class="sync-row">
 				<div class="sync-info">
 					<span class="sync-state">
 						<span class="sync-dot {sync.status}"></span>
 						{#if sync.status === 'syncing'}
-							Syncing…
+							{t('settings.syncing')}
 						{:else if sync.status === 'error'}
-							Sync error — will retry automatically
+							{t('settings.syncError')}
 						{:else if sync.lastSyncedAt}
-							Synced · last {new Date(sync.lastSyncedAt).toLocaleTimeString()}
+							{t('settings.syncedAt', { time: new Date(sync.lastSyncedAt).toLocaleTimeString() })}
 						{:else}
-							Sync ready
+							{t('settings.syncReady')}
 						{/if}
 					</span>
 				</div>
@@ -587,7 +604,7 @@
 		{/if}
 	</section>
 
-	<section class="card">
+	<section class="card" id="data">
 		<h3><i class="ph ph-database" aria-hidden="true"></i> {t('settings.dataManagement')}</h3>
 		<button class="btn-danger" onclick={handleResetLocalData}>{t('settings.resetLocalData')}</button>
 	</section>
@@ -599,6 +616,12 @@
 		flex-direction: column;
 		gap: 1.5rem;
 	}
+	.settings-status { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; color: var(--text-muted); font-size: .8rem; }
+	.settings-status strong { color: var(--text-primary); }
+	.settings-nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 6px; overflow-x: auto; padding: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; background: color-mix(in srgb, var(--bg-surface) 94%, transparent); backdrop-filter: blur(12px); }
+	.settings-nav a { flex: 0 0 auto; padding: 8px 10px; border-radius: 5px; color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
+	.settings-nav a:hover, .settings-nav a:focus-visible { background: var(--accent-wash); color: var(--accent-ink); }
+	.card { scroll-margin-top: 64px; }
 
 	.settings-head h2 {
 		font-size: clamp(1.6rem, 3vw, 2.1rem);
@@ -789,10 +812,6 @@
 		right: 0.65rem;
 		color: var(--accent-green);
 		font-size: 1rem;
-	}
-
-	.setting-label {
-		margin-top: 1.35rem;
 	}
 
 	.genre-grid {
@@ -1056,5 +1075,11 @@
 	}
 	@media (max-width: 620px) {
 		.consent-row { align-items: flex-start; flex-direction: column; }
+		.theme-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+		.theme-btn { justify-content: center; min-width: 0; padding-inline: .45rem; }
+		.palette-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.palette-card { grid-template-columns: 38px minmax(0, 1fr); min-height: 62px; }
+		.palette-swatches { width: 38px; height: 38px; }
+		.palette-copy small { display: none; }
 	}
 </style>

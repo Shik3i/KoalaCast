@@ -6,6 +6,8 @@ Disallow: /inbox
 Disallow: /library
 Disallow: /login
 Disallow: /profile
+Disallow: /more
+Disallow: /recover
 Disallow: /register
 Disallow: /search
 Disallow: /settings

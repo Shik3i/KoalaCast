@@ -70,16 +70,16 @@ func (h *PodcastHandler) resolveLanguages(ctx context.Context, results []itunes.
 	}
 }
 
-// filterByLanguage drops results that are definitely not in one of the wanted
-// languages. Results whose language could not be determined are kept — see
-// lang.Matches for why. An empty wanted list returns the input untouched.
+// filterByLanguage is strict when a listener explicitly chose languages:
+// unknown-language feeds are excluded instead of silently breaking the filter.
+// Clearing the language filter remains the explicit way to search everything.
 func filterByLanguage(results []itunes.PodcastResult, wanted []string) []itunes.PodcastResult {
 	if len(wanted) == 0 {
 		return results
 	}
 	out := make([]itunes.PodcastResult, 0, len(results))
 	for _, r := range results {
-		if lang.Matches(r.Language, wanted) {
+		if lang.Normalize(r.Language) != "" && lang.Matches(r.Language, wanted) {
 			out = append(out, r)
 		}
 	}

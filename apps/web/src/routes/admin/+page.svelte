@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
+	import { confirmDialog } from '$lib/stores/confirm.svelte';
 	import { onMount } from 'svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -8,6 +9,11 @@
 	let feedHealth = $state<any[]>([]);
 	let isLoading = $state(true);
 	let errorMsg = $state('');
+	let lastRefreshedAt = $state(0);
+	let userQuery = $state('');
+	let feedQuery = $state('');
+	const filteredUsers = $derived(users.filter((user) => user.username.toLowerCase().includes(userQuery.trim().toLowerCase())));
+	const filteredFeeds = $derived(feedHealth.filter((feed) => `${feed.title || ''} ${feed.feed_url || ''}`.toLowerCase().includes(feedQuery.trim().toLowerCase())));
 
 	onMount(() => {
 		loadAdminData();
@@ -25,7 +31,10 @@
 			]);
 
 			if (!statusRes.ok || !usersRes.ok || !healthRes.ok) {
-				errorMsg = t('admin.accessDenied');
+				const statuses = [statusRes.status, usersRes.status, healthRes.status];
+				errorMsg = statuses.some((status) => status === 401 || status === 403)
+					? t('admin.accessDenied')
+					: t('admin.metricsNetworkError');
 				return;
 			}
 
@@ -34,6 +43,7 @@
 			users = userData.users || [];
 			const healthData = await healthRes.json();
 			feedHealth = healthData.feeds || [];
+			lastRefreshedAt = Date.now();
 		} catch (err: any) {
 			errorMsg = t('admin.metricsNetworkError');
 		} finally {
@@ -42,6 +52,7 @@
 	}
 
 	async function handleToggleSuspend(userId: string, currentSuspended: boolean) {
+		if (!currentSuspended && !(await confirmDialog.ask(t('admin.confirmSuspend')))) return;
 		try {
 			const res = await fetch(`/api/v1/admin/users/${userId}/suspend`, {
 				method: 'POST',
@@ -60,7 +71,7 @@
 	}
 
 	async function handleRevokeSessions(userId: string, username: string) {
-		if (!confirm(t('admin.confirmRevokeAll', { username }))) return;
+		if (!(await confirmDialog.ask(t('admin.confirmRevokeAll', { username })))) return;
 		try {
 			const res = await fetch(`/api/v1/admin/users/${userId}/sessions`, { method: 'DELETE' });
 			if (res.ok) {
@@ -110,6 +121,10 @@
 	<div class="admin-head">
 		<h2><i class="ph-fill ph-shield-star" aria-hidden="true"></i> {t('admin.title')}</h2>
 		<p class="admin-sub">{t('admin.subtitle')}</p>
+		<div class="admin-refresh">
+			<span>{lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : '—'}</span>
+			<button onclick={loadAdminData} disabled={isLoading}>{t('admin.refresh')}</button>
+		</div>
 	</div>
 
 	{#if isLoading}
@@ -179,6 +194,7 @@
 		<!-- Users Table -->
 		<section class="card" id="users">
 			<h3>{t('admin.registeredUsers', { count: users.length })}</h3>
+			<input class="table-search" bind:value={userQuery} type="search" placeholder={t('admin.username')} aria-label={t('admin.username')} />
 			{#if users.length === 0}
 				<p class="empty-note">{t('admin.noUsers')}</p>
 			{:else}
@@ -194,7 +210,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each users as user}
+					{#each filteredUsers as user}
 						<tr>
 							<td><strong>{user.username}</strong></td>
 							<td>{user.role}</td>
@@ -206,7 +222,7 @@
 							</td>
 							<td>
 								<div class="row-actions">
-									<button class="btn-sm" onclick={() => handleToggleSuspend(user.id, user.is_suspended)}>
+									<button class="btn-sm" class:danger={!user.is_suspended} onclick={() => handleToggleSuspend(user.id, user.is_suspended)}>
 										{user.is_suspended ? t('admin.restore') : t('admin.suspend')}
 									</button>
 									{#if user.active_sessions > 0}
@@ -227,6 +243,7 @@
 		<!-- Feed Health Table -->
 		<section class="card" id="feeds">
 			<h3>{t('admin.feedHealth')}</h3>
+			<input class="table-search" bind:value={feedQuery} type="search" placeholder={t('admin.podcastTitle')} aria-label={t('admin.podcastTitle')} />
 			{#if feedHealth.length === 0}
 				<p class="empty-note">{t('admin.noFeeds')}</p>
 			{:else}
@@ -242,9 +259,15 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each feedHealth as feed}
+					{#each filteredFeeds as feed}
 						<tr>
-							<td>{feed.title || feed.feed_url}</td>
+							<td>
+								<details>
+									<summary>{feed.title || feed.feed_url}</summary>
+									<code>{feed.feed_url}</code>
+									{#if feed.last_error}<small>{feed.last_error}</small>{/if}
+								</details>
+							</td>
 							<td>{feed.consecutive_errors}</td>
 							<td>{feed.last_error_category || 'OK'}</td>
 							<td>{feed.last_http_status || '-'}</td>
@@ -279,6 +302,10 @@
 	}
 	.admin-head h2 :global(.ph-fill) { color: var(--accent-ink); }
 	.admin-sub { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .05em; margin-top: 7px; text-transform: uppercase; }
+	.admin-refresh { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.admin-refresh button, .table-search { min-height: 44px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-panel); color: var(--ink-2); }
+	.admin-refresh button { padding: 0 12px; font: inherit; text-transform: uppercase; }
+	.table-search { width: min(360px, 100%); margin-top: 12px; padding: 0 12px; }
 
 	.card {
 		background: var(--bg-sunken);
@@ -345,6 +372,9 @@
 	.admin-table th { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.admin-table td { color: var(--ink-3); font-size: 12px; }
 	.admin-table td strong { color: var(--ink-2); font-family: var(--font-ui); }
+	.admin-table details { max-width: 360px; }
+	.admin-table summary { cursor: pointer; color: var(--ink-2); font-weight: 700; }
+	.admin-table details code, .admin-table details small { display: block; margin-top: 5px; overflow-wrap: anywhere; color: var(--ink-4); }
 
 	.badge {
 		padding: 0.2rem 0.5rem;
@@ -370,6 +400,7 @@
 		text-transform: uppercase;
 	}
 	.btn-sm:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
+	.btn-sm.danger { border-color: var(--color-danger-border); color: var(--color-danger); }
 	.row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
 	.reg-row {

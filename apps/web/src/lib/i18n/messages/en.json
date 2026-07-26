@@ -8,12 +8,17 @@
 		"signIn": "Sign In",
 		"admin": "Admin",
 		"primary": "Primary",
+		"more": "More",
+		"moreHint": "Listening statistics, account, privacy and settings.",
+		"profileMenu": "Profile",
 		"brandHome": "KoalaCast home"
 	},
 	"common": {
 		"loading": "Loading…",
 		"retry": "Retry",
 		"cancel": "Cancel",
+		"confirm": "Confirm",
+		"offline": "Offline — local library and cached data remain available",
 		"save": "Save",
 		"close": "Close",
 		"copy": "Copy",
@@ -99,6 +104,7 @@
 		"openPodcast": "Open {title}",
 		"subscribeSuccess": "Subscribed to {title}",
 		"subscribeError": "Could not subscribe. Please try again."
+		,"openError": "This podcast feed could not be opened. Try searching for another source."
 	},
 	"search": {
 		"title": "Search podcasts",
@@ -112,7 +118,7 @@
 		"languageFilter": "Languages",
 		"genreFilter": "Genre",
 		"allGenres": "All genres",
-		"clearFilters": "Clear filters",
+		"clearFilters": "Search all languages",
 		"resetFilters": "Reset to my settings",
 		"filterHint": "Pre-set from your settings. Clear them to search all languages.",
 		"addByRss": "Add a podcast by RSS URL",
@@ -186,6 +192,8 @@
 		"title": "Your listening",
 		"since": "Since {date}",
 		"trackingStarts": "Tracking starts with your next play",
+		"emptyTitle": "Your listening story starts here",
+		"emptyBody": "Play any episode to begin private listening statistics. Patterns and rankings appear only after there is meaningful data.",
 		"summary": "{subscriptions} subscriptions · {shows} shows touched",
 		"rangeLabel": "Statistics range",
 		"thisYear": "This year",
@@ -312,7 +320,12 @@
 		"viewGlobalStats": "View global statistics",
 		"globalStatsEnabled": "Global statistics participation enabled.",
 		"globalStatsDisabled": "Global statistics participation disabled.",
-		"globalStatsSaveError": "The global statistics preference could not be saved."
+		"globalStatsSaveError": "The global statistics preference could not be saved.",
+		"syncing": "Syncing…",
+		"syncError": "Sync error — will retry automatically",
+		"syncedAt": "Synced · last {time}",
+		"syncReady": "Sync ready",
+		"syncDescription": "Subscriptions, progress, and listening statistics sync automatically across your devices."
 	},
 	"globalStats": {
 		"summaryLabel": "Global summary",
@@ -346,6 +359,8 @@
 		"introOutro": "Intros & outros",
 		"noData": "No opted-in listening data exists for this range yet.",
 		"loadError": "Global statistics could not be loaded.",
+		"errorHint": "You may be offline or the server may be temporarily unavailable. No local listening data was lost.",
+		"cachedData": "Offline view: showing the last successfully loaded global statistics.",
 		"privacy": "Only accounts with the voluntary setting enabled are included. Turning it off removes the account from these aggregates and rankings immediately.",
 		"manageConsent": "Manage participation in Settings"
 	},
@@ -381,6 +396,19 @@
 		"signingIn": "Signing in…",
 		"noAccount": "Don't have an account yet?",
 		"createAccount": "Create a new account"
+		,"showPassword": "Show password"
+		,"hidePassword": "Hide password"
+		,"recoverAccount": "Recover account"
+	},
+	"recover": {
+		"title": "Recover account",
+		"subtitle": "Use the recovery code you saved when creating your account. All existing sessions will be signed out.",
+		"code": "Recovery code",
+		"newPassword": "New password",
+		"submit": "Reset password",
+		"success": "Password changed",
+		"saveCode": "Save this new recovery code now. The previous code no longer works.",
+		"error": "The account could not be recovered."
 	},
 	"register": {
 		"pageTitle": "Register Account — KoalaCast",
@@ -511,6 +539,7 @@
 		"markUnplayed": "Mark unplayed",
 		"noDate": "No date",
 		"notFound": "Podcast details not found.",
+		"loadError": "The feed could not be resolved or loaded. Retry, or find another source in Search.",
 		"searchEpisodes": "Search episodes in this show…",
 		"filterEpisodes": "Filter episodes by title or description",
 		"noEpisodesMatch": "No episodes match your search or filter.",
@@ -568,6 +597,10 @@
 			"moodCompany": "Company",
 			"moodFocus": "Focus",
 			"moodEffect": "Prioritizes matching topics",
+			"moodEffectCalm": "Measured, low-intensity listening",
+			"moodEffectCurious": "Broader topics and fresh perspectives",
+			"moodEffectCompany": "Conversational shows with warm voices",
+			"moodEffectFocus": "Concise episodes with fewer distractions",
 			"moodReason": "Matches your “{mood}” preference based on its topics.",
 			"fits": "{count} fit",
 			"becauseMood": "Because you chose “{mood}”",
@@ -589,6 +622,7 @@
 			"loadingDurations": "Checking real episode lengths…",
 			"shown": "{shown} of {total} shown",
 			"durationUnknown": "Length unknown",
+			"durationUnknownShort": "Unknown",
 			"keyboardHint": "Cover story shortcuts: P play · Q queue · S save",
 			"noFitResults": "No latest episodes with a verified length fit this session.",
 			"clearTimeFilter": "Show all lengths",
@@ -599,7 +633,7 @@
 			"discover": "Discover",
 			"new": "New",
 			"library": "Library",
-			"profile": "Profile",
+			"profile": "Listening",
 			"settings": "Settings",
 			"subscriptions": "Subscribed",
 			"noSubscriptions": "Your subscriptions appear here."
@@ -688,6 +722,7 @@
 		"title": "Admin",
 		"signupsAre": "New sign-ups are currently",
 		"confirmRevokeAll": "Sign out all active sessions for {username}?",
+		"confirmSuspend": "Suspend this account? The user will lose access until restored.",
 		"accessDenied": "Admin access denied or unauthorized.",
 		"metricsNetworkError": "Network error fetching admin metrics.",
 		"workerActive": "Active",

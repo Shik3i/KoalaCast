@@ -19,6 +19,7 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { player } from '$lib/stores/player.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
@@ -28,15 +29,16 @@
 
 	let { children } = $props();
 	let currentUser = $state<{ user_id: string; username: string; role: string } | null>(null);
+	let online = $state(true);
 
 	const path = $derived($page.url.pathname);
 	const showRunningOrder = $derived(path === '/');
 	const appLinks = $derived([
 		{ href: '/', icon: 'ph-newspaper', label: t('quiet.nav.discover') },
+		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('nav.new') },
 		{ href: '/library', icon: 'ph-squares-four', label: t('nav.library') },
-		{ href: '/profile', icon: 'ph-user-circle', label: t('quiet.nav.profile') },
-		{ href: '/global-stats', icon: 'ph-chart-line-up', label: t('globalStats.mobileNav') }
+		{ href: '/more', icon: 'ph-dots-three-circle', label: t('nav.profileMenu') }
 	]);
 
 	onMount(() => {
@@ -49,6 +51,16 @@
 				}
 			})
 			.catch(() => {});
+	});
+	onMount(() => {
+		online = navigator.onLine;
+		const update = () => (online = navigator.onLine);
+		window.addEventListener('online', update);
+		window.addEventListener('offline', update);
+		return () => {
+			window.removeEventListener('online', update);
+			window.removeEventListener('offline', update);
+		};
 	});
 
 	$effect(() => {
@@ -72,12 +84,14 @@
 	class:left-compact={shell.leftCompact}
 	class:right-collapsed={shell.rightCollapsed}
 	class:right-compact={shell.rightCompact}
+	class:empty-running-order={showRunningOrder && !player.current && player.queue.length === 0}
 	class:without-running-order={!showRunningOrder}
 	style={`--left-rail-width:${shell.leftWidth}px;--right-rail-width:${shell.rightWidth}px`}
 >
 	<Sidebar isAdmin={currentUser?.role === 'admin'} />
 	<RailResizer side="left" controls="navigation-rail" label={t('quiet.shell.resizeNavigation')} />
 	<main class="quiet-main" id="main-content" tabindex="-1">
+		{#if !online}<div class="offline-banner" role="status"><i class="ph ph-wifi-slash" aria-hidden="true"></i>{t('common.offline')}</div>{/if}
 		{@render children()}
 		<footer class="mobile-legal" aria-label={t('footer.mobileLinks')}>
 			<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">{t('footer.legalNotice')}</a>
@@ -102,4 +116,5 @@
 
 	<Player />
 	<Toast />
+	<ConfirmDialog />
 </div>

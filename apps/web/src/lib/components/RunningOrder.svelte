@@ -137,18 +137,20 @@
 		{/each}
 	</ol>
 
-	<div class="queue-actions">
-		{#if listeningSession.minutes !== null}
-			<button onclick={trim}>{t('quiet.queue.trim', { count: listeningSession.minutes })}</button>
-		{/if}
-		<button onclick={shuffle}>{t('quiet.queue.shuffle')}</button>
-		<button onclick={() => player.clearQueue()}>{t('quiet.queue.clear')}</button>
-	</div>
-	<p class="queue-hint">{t('quiet.queue.hint')}</p>
+	{#if player.queue.length > 0 || player.current}
+		<div class="queue-actions">
+			{#if listeningSession.minutes !== null}
+				<button onclick={trim}>{t('quiet.queue.trim', { count: listeningSession.minutes })}</button>
+			{/if}
+			{#if player.queue.length > 1}<button onclick={shuffle}>{t('quiet.queue.shuffle')}</button>{/if}
+			{#if player.queue.length > 0}<button onclick={() => player.clearQueue()}>{t('quiet.queue.clear')}</button>{/if}
+		</div>
+		{#if player.queue.length > 1}<p class="queue-hint">{t('quiet.queue.hint')}</p>{/if}
 
-	<footer>
-		<span>{t('quiet.queue.endsAt')}</span>
-		<strong>{new Date(endsAtMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
-		<small>{player.playbackSpeed}× · {t('quiet.queue.shows', { count: player.queue.length })} · {player.sleepTimerEndsAt || player.sleepAtEpisodeEnd ? t('quiet.queue.sleepOn') : t('quiet.queue.sleepOff')}</small>
-	</footer>
+		<footer>
+			<span>{t('quiet.queue.endsAt')}</span>
+			<strong>{new Date(endsAtMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
+			<small>{player.playbackSpeed}× · {t('quiet.queue.shows', { count: player.queue.length })} · {player.sleepTimerEndsAt || player.sleepAtEpisodeEnd ? t('quiet.queue.sleepOn') : t('quiet.queue.sleepOff')}</small>
+		</footer>
+	{/if}
 </aside>

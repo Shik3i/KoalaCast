@@ -14,7 +14,7 @@
 
 	type Range = 'year' | '90days' | 'all';
 
-	let range = $state<Range>('year');
+	let range = $state<Range>('90days');
 	let sessions = $state<LocalListeningSession[]>([]);
 	let history = $state<LocalPlaybackState[]>([]);
 	let subscriptionCount = $state(0);
@@ -107,17 +107,24 @@
 			</p>
 		</div>
 		<div class="range-tabs" role="group" aria-label={t('profileStats.rangeLabel')}>
-			<button aria-pressed={range === 'year'} class:active={range === 'year'} onclick={() => (range = 'year')}>{t('profileStats.thisYear')}</button>
 			<button aria-pressed={range === '90days'} class:active={range === '90days'} onclick={() => (range = '90days')}>{t('profileStats.days90')}</button>
+			<button aria-pressed={range === 'year'} class:active={range === 'year'} onclick={() => (range = 'year')}>{t('profileStats.thisYear')}</button>
 			<button aria-pressed={range === 'all'} class:active={range === 'all'} onclick={() => (range = 'all')}>{t('profileStats.allTime')}</button>
 		</div>
 	</header>
 
+	{#if sessions.length === 0 && history.length === 0}
+		<section class="stats-empty">
+			<i class="ph ph-headphones" aria-hidden="true"></i>
+			<h2>{t('profileStats.emptyTitle')}</h2>
+			<p>{t('profileStats.emptyBody')}</p>
+			<a href="/">{t('quiet.nav.discover')}</a>
+		</section>
+	{:else}
 	<section class="kpi-grid">
 		<article><span>{t('profileStats.listened')}</span><strong>{duration(stats.totalWallMs, true)}</strong><p>{t('profileStats.listenedHint')}</p></article>
 		<article><span>{t('profileStats.episodesFinished')}</span><strong>{stats.completedCount}</strong><p>{t('profileStats.trackedShows', { count: stats.showTotals.length })}</p></article>
 		<article><span>{t('profileStats.longestStreak')}</span><strong>{t('profileStats.days', { count: stats.longestStreak })}</strong><p>{t('profileStats.streakHint')}</p></article>
-		<article><span>{t('profileStats.averagePerDay')}</span><strong>{duration(averagePerDay)}</strong><p>{t('profileStats.averageHint')}</p></article>
 	</section>
 
 	<section class="activity-card" id="activity">
@@ -210,10 +217,16 @@
 		</div>
 		<button onclick={exportData}><i class="ph ph-download-simple"></i> {t('profileStats.exportJson')}</button>
 	</section>
+	{/if}
 </div>
 
 <style>
 	.profile-page { padding: 24px 22px 36px; }
+	.stats-empty { display: grid; justify-items: start; gap: 10px; max-width: 620px; margin: 48px auto; padding: 28px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
+	.stats-empty > i { color: var(--accent-ink); font-size: 32px; }
+	.stats-empty h2 { font-size: 24px; }
+	.stats-empty p { color: var(--ink-3); }
+	.stats-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
 	.profile-head { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 14px; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-hair); }
 	.profile-avatar { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-fill); color: var(--accent-on); font-size: 24px; }
 	.profile-head h1 { font-size: 30px; letter-spacing: -.04em; }
@@ -269,5 +282,5 @@
 	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 36px; padding: 9px 11px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); text-transform: uppercase; }
 	@media (max-width: 1050px) { .profile-analysis { grid-template-columns: 1fr; }.breakdowns { grid-template-columns: repeat(3,1fr); }.ranking-list a { grid-template-columns: 22px 36px minmax(0,1fr) 80px 46px; } }
 	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px 1fr; }.profile-avatar { width: 54px; height: 54px; }.range-tabs { grid-column: 1 / -1; overflow-x: auto; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
-	@media (max-width: 520px) { .profile-page { padding: 16px; }.heatmap { grid-auto-columns: 9px; overflow-x: auto; }.heatmap span:nth-child(-n+91) { display: none; }.ranking-list a { grid-template-columns: 22px 34px minmax(0,1fr) 56px; }.ranking-list em { display: none; }.privacy-card { align-items: flex-start; flex-direction: column; } }
+	@media (max-width: 520px) { .profile-page { padding: 16px; }.heatmap { grid-auto-columns: 9px; overflow-x: auto; }.ranking-list a { grid-template-columns: 22px 34px minmax(0,1fr) 56px; }.ranking-list em { display: none; }.privacy-card { align-items: flex-start; flex-direction: column; } }
 </style>

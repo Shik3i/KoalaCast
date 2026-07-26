@@ -102,9 +102,8 @@ func TestDiscover_FiltersEnglishOutOfGermanRequest(t *testing.T) {
 	if got["The Daily"] {
 		t.Error("expected the English show to be filtered out of a German-only request")
 	}
-	// A feed with no <language> tag is kept rather than silently hidden.
-	if !got["Untagged Show"] {
-		t.Error("expected the language-less show to be kept")
+	if got["Untagged Show"] {
+		t.Error("expected the language-less show to be excluded from an explicit language filter")
 	}
 }
 

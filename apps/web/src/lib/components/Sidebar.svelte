@@ -17,6 +17,7 @@
 	const path = $derived($page.url.pathname);
 	const links = $derived([
 		{ href: '/', icon: 'ph-newspaper', label: t('quiet.nav.discover') },
+		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('quiet.nav.new'), count: recentCount },
 		{ href: '/library', icon: 'ph-squares-four', label: t('quiet.nav.library') },
 		{ href: '/profile', icon: 'ph-user-circle', label: t('quiet.nav.profile') },

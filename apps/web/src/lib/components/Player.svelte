@@ -1506,7 +1506,7 @@
 	.eq-bars { display: none; }
 	.center { gap: 5px; }
 	.controls { gap: 18px; }
-	.ctrl { width: 28px; height: 28px; color: var(--ink-3); font-size: 16px; opacity: 1; }
+		.ctrl { width: 44px; height: 44px; color: var(--ink-3); font-size: 16px; opacity: 1; }
 	.ctrl:hover { background: transparent; color: var(--ink); }
 	.jump-control { position: relative; }
 	.jump-control small { position: absolute; font: 700 9px/1 var(--font-mono); }
@@ -1589,7 +1589,7 @@
 		.controls { gap: 4px; }
 		.controls .transport-edge:first-child,
 		.controls .jump-control:first-of-type { display: none; }
-		.play-btn { width: 38px; height: 38px; }
+		.play-btn { width: 44px; height: 44px; }
 		.timeline { display: none; }
 	}
 </style>

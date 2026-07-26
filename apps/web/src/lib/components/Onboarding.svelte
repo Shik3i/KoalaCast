@@ -8,9 +8,25 @@
 
 	let cardEl: HTMLElement | null = $state(null);
 	onMount(() => cardEl?.focus());
+
+	function handleDialogKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Tab' || !cardEl) return;
+		const controls = [...cardEl.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+			.filter((element) => !element.hasAttribute('disabled'));
+		if (!controls.length) return;
+		const first = controls[0];
+		const last = controls[controls.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && prefs.completeOnboarding()} />
+<svelte:window onkeydown={handleDialogKeydown} />
 
 <div class="ob-overlay" transition:fade={{ duration: 180 }} role="dialog" aria-modal="true" aria-label={t('onboarding.dialogLabel')}>
 	<div class="ob-card" bind:this={cardEl} tabindex="-1" transition:scale={{ duration: 240, start: 0.96 }}>
@@ -79,7 +95,7 @@
 		overflow-y: auto;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 24px;
+		border-radius: 8px;
 		box-shadow: var(--shadow-xl);
 		padding: 2rem;
 	}
@@ -88,14 +104,14 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		background: #52b788;
-		color: #0b1411;
+		background: var(--accent-fill);
+		color: var(--accent-on);
 		font-size: 0.72rem;
 		font-weight: 900;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: 0.25rem 0.7rem;
-		border-radius: 999px;
+		border-radius: 4px;
 	}
 	.ob-card h2 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; margin: 0.9rem 0 0.4rem; letter-spacing: -0.02em; }
 	.ob-card > p { color: var(--text-secondary); line-height: 1.55; margin-bottom: 1.5rem; }
@@ -130,7 +146,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.65rem 0.9rem;
-		border-radius: 12px;
+		border-radius: 6px;
 		border: 1.5px solid var(--border-subtle);
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
@@ -154,6 +170,8 @@
 	}
 
 	.ob-actions {
+		position: sticky;
+		bottom: -2rem;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -173,15 +191,21 @@
 	}
 	.ob-skip:hover { color: var(--text-primary); }
 	.ob-done {
-		background: var(--accent-green);
-		color: var(--accent-button-text);
+		background: var(--accent-fill);
+		color: var(--accent-on);
 		border: none;
 		padding: 0.75rem 1.6rem;
-		border-radius: 12px;
+		border-radius: 5px;
 		font-weight: 700;
 		font-size: 0.95rem;
 		cursor: pointer;
 		transition: filter 0.2s ease, transform 0.15s ease;
 	}
 	.ob-done:hover { filter: brightness(1.08); transform: translateY(-1px); }
+	@media (max-width: 560px) {
+		.ob-overlay { padding: 0; place-items: stretch; }
+		.ob-card { width: 100%; max-height: 100dvh; border-radius: 0; padding: 1rem; }
+		.ob-actions { bottom: -1rem; margin-inline: -1rem; padding: 1rem; background: var(--bg-surface); }
+		.ob-lang-grid, .ob-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
 </style>

@@ -626,7 +626,8 @@
 		.head-actions { width: 100%; }
 		.ep-row { grid-template-columns: 48px minmax(0,1fr) 36px; gap: 9px; min-height: 68px; }
 		.ep-play { width: 48px; height: 48px; }
-		.row-menu { display: none; }
+		.row-menu { display: block; }
+		.ep-mark, .ep-kebab, .switch, .btn-ghost { min-width: 44px; min-height: 44px; }
 		.day-header span { display: none; }
 	}
 </style>

@@ -27,6 +27,7 @@
 	let podcast = $state<any>(null);
 	let episodes = $state<any[]>([]);
 	let isLoading = $state(true);
+	let loadError = $state('');
 	let isSubscribed = $state(false);
 	let showAccent = $state<string | null>(null);
 	let playedIds = $state<Set<string>>(new Set());
@@ -105,6 +106,7 @@
 	async function loadPodcastData(id: string) {
 		const reqId = ++loadReqId;
 		isLoading = true;
+		loadError = '';
 		try {
 			// Check if id is an iTunes ID or feed URL passed via query param
 			const urlParams = new URLSearchParams(window.location.search);
@@ -165,9 +167,12 @@
 				}
 				// Collapse the "older than a year" tier by default.
 				collapsedTiers = new Set(['older']);
+			} else {
+				loadError = t('podcast.loadError');
 			}
 		} catch (err) {
 			console.error(err);
+			loadError = t('podcast.loadError');
 		} finally {
 			if (reqId === loadReqId) isLoading = false;
 		}
@@ -540,7 +545,12 @@
 {:else}
 	<div class="error-state">
 		<i class="ph ph-warning-circle" aria-hidden="true"></i>
-		<p>{t('podcast.notFound')}</p>
+		<h1>{t('podcast.notFound')}</h1>
+		<p>{loadError || t('podcast.loadError')}</p>
+		<div>
+			<button onclick={() => loadPodcastData(podcastId)}>{t('common.retry')}</button>
+			<a href="/search">{t('nav.search')}</a>
+		</div>
 	</div>
 {/if}
 
@@ -550,6 +560,12 @@
 		flex-direction: column;
 		gap: 3rem;
 	}
+	.error-state { display: grid; justify-items: start; gap: 10px; max-width: 560px; margin: 64px auto; padding: 24px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
+	.error-state > i { color: var(--accent-ink); font-size: 28px; }
+	.error-state h1 { font-size: 24px; }
+	.error-state p { color: var(--ink-3); }
+	.error-state div { display: flex; gap: 8px; }
+	.error-state button, .error-state a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
 
 	.podcast-header {
 		display: flex;
@@ -1154,11 +1170,11 @@
 	}
 	.episode-row:hover { transform: none; border-color: var(--border-row); background: var(--bg-sunken); }
 	.episode-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
-	.btn-play { width: 34px; height: 34px; background: var(--accent-fill); color: var(--accent-on); box-shadow: none; }
+	.btn-play { width: 44px; height: 44px; background: var(--accent-fill); color: var(--accent-on); box-shadow: none; }
 	.ep-info h4 { font: 700 14px/1.3 var(--font-ui); }
 	.ep-desc { color: var(--ink-3); font-size: 10px; }
 	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); text-transform: uppercase; }
-	.btn-mark, .btn-kebab { width: 32px; height: 32px; border: 1px solid var(--border-ui); border-radius: 4px; }
+	.btn-mark, .btn-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
 
 	@media (max-width: 900px) {
