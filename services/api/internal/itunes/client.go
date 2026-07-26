@@ -89,6 +89,15 @@ func NewITunesClient() *ITunesClient {
 	}
 }
 
+// NewITunesClientWithHTTPClient allows callers to provide a custom transport,
+// primarily for deterministic tests that must not depend on Apple's availability.
+func NewITunesClientWithHTTPClient(httpClient *http.Client) *ITunesClient {
+	if httpClient == nil {
+		return NewITunesClient()
+	}
+	return &ITunesClient{httpClient: httpClient}
+}
+
 // FetchTopPodcasts returns the current overall top trending podcasts (US chart).
 // Kept for backward compatibility; delegates to FetchTopChart.
 func (c *ITunesClient) FetchTopPodcasts(limit int) ([]PodcastResult, error) {

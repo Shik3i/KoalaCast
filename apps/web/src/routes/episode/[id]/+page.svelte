@@ -100,7 +100,8 @@
 				podcast_title: podcast?.title || '',
 				artwork_url: episode.artwork_url || podcast?.artwork_url || '',
 				enclosure_url: episode.enclosure_url,
-				duration_ms: episode.duration_ms
+				duration_ms: episode.duration_ms,
+				categories: podcast?.categories || (podcast?.category ? [podcast.category] : [])
 			});
 			isFavorite = true;
 			toast.success(t('toast.addedToFavorites'));
@@ -116,7 +117,8 @@
 			podcast_title: podcast?.title || '',
 			artwork_url: episode.artwork_url || podcast?.artwork_url || '',
 			enclosure_url: episode.enclosure_url,
-			duration_ms: episode.duration_ms
+			duration_ms: episode.duration_ms,
+			categories: podcast?.categories || (podcast?.category ? [podcast.category] : [])
 		});
 	}
 
@@ -131,7 +133,8 @@
 			podcast_title: podcast?.title || '',
 			artwork_url: episode.artwork_url || podcast?.artwork_url || '',
 			enclosure_url: episode.enclosure_url,
-			duration_ms: episode.duration_ms
+			duration_ms: episode.duration_ms,
+			categories: podcast?.categories || (podcast?.category ? [podcast.category] : [])
 		});
 		toast.success(t('toast.addedToQueue'));
 	}

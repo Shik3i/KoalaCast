@@ -17,6 +17,7 @@
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { listeningSession } from '$lib/stores/session.svelte';
 
 	interface InboxEpisode {
 		id: string;
@@ -65,6 +66,7 @@
 	}
 
 	onMount(async () => {
+		listeningSession.load();
 		const subs = await getLocalSubscriptions();
 		subscriptions = subs;
 		modes = Object.fromEntries(subs.map((s) => [s.podcast_id, s.inbox_mode ?? 'all']));
@@ -111,6 +113,17 @@
 		if (unplayedOnly) out = out.filter((ep) => !completed.has(ep.id));
 		return out.sort((a, b) => (b.pub_date ?? 0) - (a.pub_date ?? 0));
 	});
+	const groupedFeed = $derived.by(() => {
+		const groups = new Map<string, { date: Date; episodes: InboxEpisode[] }>();
+		for (const episode of feed) {
+			const date = new Date((episode.pub_date || 0) * 1000);
+			const key = episode.pub_date ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` : 'undated';
+			const group = groups.get(key) ?? { date, episodes: [] };
+			group.episodes.push(episode);
+			groups.set(key, group);
+		}
+		return [...groups.values()];
+	});
 
 	async function setMode(podcast_id: string, mode: InboxMode) {
 		modes = { ...modes, [podcast_id]: mode };
@@ -127,6 +140,38 @@
 			enclosure_url: ep.enclosure_url,
 			duration_ms: ep.duration_ms
 		};
+	}
+
+	async function queueAllThatFit() {
+		let elapsed = 0;
+		let count = 0;
+		for (const episode of feed) {
+			const adjusted = (episode.duration_ms || 0) / player.playbackSpeed;
+			if (!adjusted || elapsed + adjusted > listeningSession.minutes * 60_000) continue;
+			await player.addToQueue({
+				episode_id: episode.id,
+				podcast_id: episode.podcast_id,
+				title: episode.title,
+				podcast_title: episode.podcast_title,
+				artwork_url: episode.artwork_url || '',
+				enclosure_url: episode.enclosure_url,
+				duration_ms: episode.duration_ms || 0
+			});
+			elapsed += adjusted;
+			count += 1;
+		}
+		toast.success(`Queued ${count} episode${count === 1 ? '' : 's'} for your ${listeningSession.minutes} minute session.`);
+	}
+
+	async function markAllPlayed() {
+		await Promise.all(feed.map((episode) => setEpisodePlayed(epMeta(episode), true)));
+		completed = new Set([...completed, ...feed.map((episode) => episode.id)]);
+	}
+
+	function groupLabel(date: Date) {
+		if (!date.getTime()) return 'Undated';
+		const label = date.toLocaleDateString([], { weekday: 'long', day: '2-digit', month: 'long' });
+		return date.toDateString() === new Date().toDateString() ? `Today · ${label}` : label;
 	}
 
 	async function togglePlayed(ep: InboxEpisode) {
@@ -188,6 +233,8 @@
 		</div>
 		{#if subscriptions.length > 0}
 			<div class="head-actions">
+				<button class="btn-ghost" onclick={queueAllThatFit}><i class="ph ph-list-plus"></i> Queue all that fit</button>
+				<button class="btn-ghost" onclick={markAllPlayed}><i class="ph ph-checks"></i> Mark all played</button>
 				<label class="switch">
 					<input type="checkbox" bind:checked={unplayedOnly} />
 					<span>{t('inbox.unplayedOnly')}</span>
@@ -247,8 +294,13 @@
 			<button class="menu-backdrop" onclick={() => (openMenuId = null)} aria-label={t('common.closeMenu')} tabindex="-1"></button>
 		{/if}
 		<div class="episode-list">
-			{#each feed as ep, i (ep.id)}
-				<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
+			{#each groupedFeed as group}
+				<header class="day-header">
+					<strong>{groupLabel(group.date)}</strong>
+					<span>{group.episodes.length} episodes · {formatDuration(group.episodes.reduce((sum, episode) => sum + (episode.duration_ms || 0), 0))}</span>
+				</header>
+				{#each group.episodes as ep, i (ep.id)}
+					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
 					<button class="ep-play" onclick={() => play(ep)} aria-label={t('inbox.playEpisode')}>
 						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
@@ -282,7 +334,8 @@
 							</div>
 						{/if}
 					</div>
-				</div>
+					</div>
+				{/each}
 			{/each}
 		</div>
 	{/if}
@@ -513,5 +566,65 @@
 
 	@media (max-width: 640px) {
 		.settings-row .s-title { font-size: 0.82rem; }
+	}
+
+	/* Quiet Edition 4b */
+	.inbox-page { gap: 0; padding: 20px 22px 32px; }
+	.head { align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-hair); }
+	.head h2 { gap: 0; font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
+	.head h2 :global(.ph-fill) { display: none; }
+	.sub { color: var(--ink-4); font: 600 9px/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+	.head-actions { gap: 6px; }
+	.switch { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.btn-ghost { min-height: 32px; padding: 0 10px; border-color: var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.settings-panel { margin: 14px 0; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); box-shadow: none; }
+	.episode-list { gap: 0; }
+	.day-header {
+		position: sticky;
+		top: 0;
+		z-index: 4;
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 9px 7px;
+		background: var(--bg-sunken);
+		border-bottom: 1px solid var(--border-hair);
+		color: var(--ink-4);
+		font: 600 8px/1 var(--font-mono);
+		letter-spacing: .07em;
+		text-transform: uppercase;
+	}
+	.ep-row {
+		display: grid;
+		grid-template-columns: 56px minmax(0, 1fr) 36px 36px;
+		gap: 12px;
+		align-items: center;
+		min-height: 76px;
+		padding: 10px 5px;
+		border: 0;
+		border-bottom: 1px solid var(--border-row);
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+	.ep-row:hover { transform: none; border-color: var(--border-row); background: var(--bg-sunken); }
+	.ep-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
+	.ep-play { width: 56px; height: 56px; border-radius: 5px; background: var(--bg-tile); }
+	.ep-play-icon { background: rgba(5,10,7,.62); }
+	.ep-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
+	.ep-meta { color: var(--ink-4); font: 500 9px/1.4 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+	.ep-show { color: var(--ink-3); }
+	.ep-mark, .ep-kebab { width: 32px; height: 32px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); }
+	.empty-state { margin-top: 16px; border-radius: 8px; box-shadow: none; }
+	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
+
+	@media (max-width: 560px) {
+		.inbox-page { padding: 16px; }
+		.head { align-items: flex-start; }
+		.head-actions { width: 100%; }
+		.ep-row { grid-template-columns: 48px minmax(0,1fr) 36px; gap: 9px; min-height: 68px; }
+		.ep-play { width: 48px; height: 48px; }
+		.row-menu { display: none; }
+		.day-header span { display: none; }
 	}
 </style>

@@ -221,14 +221,6 @@
 		color: var(--text-primary);
 	}
 
-	code {
-		background: var(--bg-elevated);
-		padding: 0.15rem 0.4rem;
-		border-radius: 6px;
-		font-size: 0.88em;
-		color: var(--accent-green);
-	}
-
 	a {
 		color: var(--accent-green);
 		text-decoration: underline;

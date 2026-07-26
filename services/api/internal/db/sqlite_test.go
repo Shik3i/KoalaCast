@@ -25,7 +25,7 @@ func TestOpenDB_Migrations(t *testing.T) {
 	defer db.Close()
 
 	// Verify tables were created by migration
-	tables := []string{"users", "sessions", "podcasts", "episodes", "subscriptions", "playback_states", "sync_log"}
+	tables := []string{"users", "sessions", "podcasts", "episodes", "subscriptions", "playback_states", "listening_sessions", "sync_log"}
 	for _, table := range tables {
 		var name string
 		err := db.SQL.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)

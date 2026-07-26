@@ -93,7 +93,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		paragraphs: [
 			'Account and session records are personal data when they relate to an identifiable user. For registered accounts, KoalaCast stores a public username, account status, role, account creation/login timestamps, and a bcrypt password hash. It does not require an email address and never stores the password itself. Account data is retained until deletion is requested or required for account administration.',
 			'Login uses one essential HttpOnly session cookie (koalacast_session). Only a SHA-256 hash of its random token is stored on the server. Sessions expire after 30 days by default, are invalidated on logout, and are removed after expiry. This cookie is strictly necessary for requested login functionality, so no consent banner is required for it.',
-			'Optional cross-device sync synchronizes user subscriptions, episode queue, and playback progress to the server\'s SQLite database.'
+			'Optional cross-device sync synchronizes user subscriptions, episode queue, playback progress, and listening-session statistics to the server\'s SQLite database.'
 		],
 		legalBasis: 'Art. 6(1)(b) GDPR, providing the requested account and sync service, and Art. 6(1)(f) GDPR, account security.'
 	},

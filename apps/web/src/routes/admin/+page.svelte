@@ -118,7 +118,7 @@
 		<div class="error-banner">{errorMsg}</div>
 	{:else}
 		<!-- System Metrics -->
-		<section class="card">
+		<section class="card" id="metrics">
 			<h3>{t('admin.metrics')}</h3>
 			{#if systemStatus}
 				<div class="metrics-grid">
@@ -148,7 +148,7 @@
 
 		<!-- Public Registration Control -->
 		{#if systemStatus}
-			<section class="card">
+			<section class="card" id="registration">
 				<h3>{t('admin.publicRegistration')}</h3>
 				<div class="reg-row">
 					<div class="reg-info">
@@ -177,7 +177,7 @@
 		{/if}
 
 		<!-- Users Table -->
-		<section class="card">
+		<section class="card" id="users">
 			<h3>{t('admin.registeredUsers', { count: users.length })}</h3>
 			{#if users.length === 0}
 				<p class="empty-note">{t('admin.noUsers')}</p>
@@ -225,7 +225,7 @@
 		</section>
 
 		<!-- Feed Health Table -->
-		<section class="card">
+		<section class="card" id="feeds">
 			<h3>{t('admin.feedHealth')}</h3>
 			{#if feedHealth.length === 0}
 				<p class="empty-note">{t('admin.noFeeds')}</p>
@@ -265,52 +265,56 @@
 	.admin-page {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 12px;
+		padding: 24px 22px 36px;
 	}
 
 	.admin-head h2 {
-		font-size: clamp(1.6rem, 3vw, 2.1rem);
-		font-weight: 800;
-		letter-spacing: -0.02em;
+		color: var(--ink-strong);
+		font: 800 30px/1 var(--font-ui);
+		letter-spacing: -.04em;
 		display: flex;
 		align-items: center;
-		gap: 0.55rem;
+		gap: 9px;
 	}
-	.admin-head h2 :global(.ph-fill) { color: var(--accent-green); }
-	.admin-sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
+	.admin-head h2 :global(.ph-fill) { color: var(--accent-ink); }
+	.admin-sub { color: var(--ink-4); font: 600 9px/1.5 var(--font-mono); letter-spacing: .06em; margin-top: 7px; text-transform: uppercase; }
 
 	.card {
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 14px;
-		padding: 1.5rem;
+		background: var(--bg-sunken);
+		border: 1px solid var(--border-hair);
+		border-radius: 8px;
+		padding: 18px;
 	}
+	.card h3 { color: var(--ink-2); font: 700 17px/1.2 var(--font-ui); letter-spacing: -.02em; }
 
 	.metrics-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-		gap: 1rem;
-		margin-top: 1rem;
+		gap: 10px;
+		margin-top: 14px;
 	}
 
 	.metric-box {
-		background: var(--bg-primary);
-		padding: 1rem;
+		background: var(--bg-panel);
+		border: 1px solid var(--border-hair);
+		padding: 14px;
 		border-radius: 6px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
+		display: grid;
+		gap: 6px;
 	}
 
 	.metric-box .val {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: var(--accent-green);
+		color: var(--ink-strong);
+		font: 800 24px/1 var(--font-ui);
+		letter-spacing: -.035em;
 	}
 
 	.metric-box .lbl {
-		font-size: 0.85rem;
-		color: var(--text-secondary);
+		color: var(--ink-4);
+		font: 600 8px/1 var(--font-mono);
+		letter-spacing: .08em;
+		text-transform: uppercase;
 	}
 
 	/* Let wide tables scroll on their own instead of blowing out the mobile layout. */
@@ -321,47 +325,51 @@
 	}
 
 	.empty-note {
-		color: var(--text-muted);
-		font-size: 0.9rem;
-		margin-top: 0.75rem;
+		color: var(--ink-4);
+		font-size: 12px;
+		margin-top: 12px;
 	}
 
 	.admin-table {
 		width: 100%;
 		border-collapse: collapse;
-		margin-top: 1rem;
+		margin-top: 14px;
 		min-width: 480px;
 	}
 
 	.admin-table th, .admin-table td {
-		padding: 0.75rem;
+		padding: 11px 9px;
 		text-align: left;
-		border-bottom: 1px solid var(--border-subtle);
+		border-bottom: 1px solid var(--border-row);
 	}
+	.admin-table th { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.admin-table td { color: var(--ink-3); font-size: 12px; }
+	.admin-table td strong { color: var(--ink-2); font-family: var(--font-ui); }
 
 	.badge {
 		padding: 0.2rem 0.5rem;
 		border-radius: 4px;
-		background: var(--accent-light);
-		color: var(--accent-green-hover);
-		font-size: 0.8rem;
-		font-weight: 600;
+		background: var(--accent-wash);
+		color: var(--accent-ink);
+		font: 600 8px/1 var(--font-mono);
+		text-transform: uppercase;
 	}
 
 	.badge.suspended {
-		background: #f8d7da;
-		color: #721c24;
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+		color: var(--color-danger);
 	}
 
 	.btn-sm {
-		font-size: 0.8rem;
-		padding: 0.3rem 0.6rem;
+		font: 600 8px/1 var(--font-mono);
+		padding: 7px 9px;
 		border-radius: 4px;
-		border: 1px solid var(--border-subtle);
-		background: var(--bg-primary);
-		color: var(--text-primary);
+		border: 1px solid var(--border-ui);
+		background: transparent;
+		color: var(--ink-2);
+		text-transform: uppercase;
 	}
-	.btn-sm:hover { border-color: var(--accent-green); }
+	.btn-sm:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
 	.row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
 	.reg-row {
@@ -370,36 +378,33 @@
 		justify-content: space-between;
 		gap: 1rem;
 		flex-wrap: wrap;
-		margin-top: 0.75rem;
+		margin-top: 12px;
 	}
 	.reg-info { min-width: 0; }
-	.reg-state { font-size: 0.95rem; }
+	.reg-state { color: var(--ink-3); font-size: 12px; }
 	.reg-state strong { color: var(--color-danger); }
 	.reg-state strong.on { color: var(--accent-green); }
-	.reg-hint { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; }
-	.reg-hint code {
-		font-family: var(--font-mono, monospace);
-		background: var(--bg-elevated);
-		padding: 0.05rem 0.35rem;
-		border-radius: 4px;
-	}
+	.reg-hint { font-size: 10px; color: var(--ink-4); margin-top: 5px; }
 	.btn-reg {
 		flex-shrink: 0;
-		background: var(--accent-green);
-		color: #fff;
+		background: var(--accent-fill);
+		color: var(--accent-on);
 		border: none;
-		padding: 0.55rem 1.1rem;
-		border-radius: 8px;
-		font-weight: 700;
-		font-size: 0.88rem;
+		padding: 9px 11px;
+		border-radius: 5px;
+		font: 700 9px/1 var(--font-mono);
+		text-transform: uppercase;
 	}
 	.btn-reg.danger { background: var(--color-danger); }
 	.btn-reg:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.error-banner {
-		padding: 1rem;
-		background: #f8d7da;
-		color: #721c24;
+		padding: 12px;
+		border: 1px solid color-mix(in srgb, var(--color-danger) 55%, transparent);
+		background: color-mix(in srgb, var(--color-danger) 13%, var(--bg-sunken));
+		color: var(--ink);
 		border-radius: 6px;
 	}
+	.loading { color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	@media (max-width: 560px) { .admin-page { padding: 16px; }.metrics-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }.card { padding: 14px; } }
 </style>

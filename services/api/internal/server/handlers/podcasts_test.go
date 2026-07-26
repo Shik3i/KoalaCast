@@ -3,12 +3,14 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -17,10 +19,30 @@ import (
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 )
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
+
 func TestPodcastHandler_SearchUnconfigured(t *testing.T) {
 	idxClient := podcastindex.NewClient("", "")
+	httpClient := &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host != "itunes.apple.com" || req.URL.Query().Get("term") != "test" {
+				t.Fatalf("unexpected iTunes request: %s", req.URL.String())
+			}
+			body := `{"resultCount":1,"results":[{"trackId":42,"trackName":"Test Cast","artistName":"Koala","feedUrl":"https://example.com/feed.xml"}]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
 	handler := &PodcastHandler{
 		PodcastIndex: idxClient,
+		ITunes:       itunes.NewITunesClientWithHTTPClient(httpClient),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/podcasts/search?q=test", nil)

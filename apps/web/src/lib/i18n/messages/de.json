@@ -202,7 +202,7 @@
 		"accountSync": "Konto & Cloud-Sync",
 		"syncNow": "Jetzt synchronisieren",
 		"manageAccount": "Konto & Geräte verwalten",
-		"signInPrompt": "Melde dich an oder registriere ein Konto, um Abos, Lieblingsfolgen und Wiedergabeverlauf auf all deinen Geräten zu synchronisieren.",
+		"signInPrompt": "Melde dich an oder registriere ein Konto, um Abos, Favoriten, Wiedergabefortschritt und Hörstatistiken auf all deinen Geräten zu synchronisieren.",
 		"dataManagement": "Datenverwaltung",
 		"revokeSession": "Sitzung widerrufen",
 		"importingOpml": "OPML wird importiert…",
@@ -366,6 +366,60 @@
 		"chapters": "Kapitel",
 		"episodeChapters": "Kapitel der Folge",
 		"transcript": "Transkript"
+	},
+	"quiet": {
+		"nav": {
+			"primary": "Hauptnavigation",
+			"discover": "Entdecken",
+			"new": "Neu",
+			"library": "Mediathek",
+			"profile": "Profil",
+			"settings": "Einstellungen",
+			"subscriptions": "Abonniert",
+			"noSubscriptions": "Deine Abos erscheinen hier."
+		},
+		"profile": {
+			"sections": "Profilbereiche",
+			"stats": "Statistik",
+			"activity": "Aktivität",
+			"rankings": "Ranglisten",
+			"timeSaved": "Gesparte Zeit",
+			"dataPrivacy": "Daten & Datenschutz",
+			"localOnly": "Auf diesem Gerät gespeichert",
+			"syncActive": "Konto-Sync aktiv",
+			"private": "Privat konzipiert",
+			"onDevice": "Keine Drittanbieter-Analyse. Dein Hörverlauf bleibt lokal.",
+			"onAccount": "Hörstatistiken werden zwischen deinen angemeldeten Geräten synchronisiert."
+		},
+		"library": {
+			"collections": "Sammlungen",
+			"allShows": "Alle Shows",
+			"inProgress": "Angefangen",
+			"savedEpisodes": "Gespeicherte Folgen",
+			"queue": "Warteschlange"
+		},
+		"inbox": {
+			"filters": "Eingang filtern",
+			"all": "Alle",
+			"fits": "Passt in deine Zeit",
+			"started": "Angefangen",
+			"downloaded": "Heruntergeladen"
+		},
+		"queue": {
+			"title": "Als Nächstes",
+			"playingNow": "Läuft gerade",
+			"ends": "Endet",
+			"drag": "Zum Sortieren ziehen",
+			"remove": "Aus der Warteschlange entfernen",
+			"empty": "Füge eine Folge hinzu, um deine Reihenfolge zu planen.",
+			"trim": "Auf 40 Min.",
+			"shuffle": "Mischen",
+			"clear": "Leeren",
+			"hint": "Ziehen zum Sortieren · Entfernen löscht",
+			"endsAt": "Warteschlange endet um",
+			"summary": "Bei 1,25× · {count} Shows · Sleeptimer aus",
+			"shows": "{count} Shows"
+		}
 	},
 	"admin": {
 		"loading": "Admin-Dashboard wird geladen…",

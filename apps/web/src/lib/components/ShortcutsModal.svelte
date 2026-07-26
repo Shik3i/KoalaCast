@@ -11,18 +11,21 @@
 	function handleOverlayKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') close();
 	}
+
+	function handleOverlayClick(e: MouseEvent) {
+		if (e.target === e.currentTarget) close();
+	}
 </script>
 
 {#if show}
 	<div
 		class="modal-overlay"
-		onclick={close}
+		onclick={handleOverlayClick}
 		onkeydown={handleOverlayKeydown}
 		role="presentation"
 	>
 		<div
 			class="modal-content"
-			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
 			aria-label={t('shortcuts.title')}

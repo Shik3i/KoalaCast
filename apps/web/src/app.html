@@ -3,8 +3,8 @@
 	<head>
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="description" content="KoalaCast - Free, open-source, privacy-first podcast player with cross-device sync." />
-		<meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#13221c" media="(prefers-color-scheme: dark)" />
+		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#06100c" media="(prefers-color-scheme: dark)" />
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
 		<link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
 		<link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icon-40.png" />
@@ -17,6 +17,8 @@
 					var saved = localStorage.getItem('koalacast_theme');
 					if (saved === 'dark' || saved === 'light') {
 						document.documentElement.setAttribute('data-theme', saved);
+					} else if (saved !== 'system') {
+						document.documentElement.setAttribute('data-theme', 'dark');
 					}
 				} catch (e) {}
 			})();

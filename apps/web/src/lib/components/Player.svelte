@@ -3,16 +3,19 @@
 	import { onMount } from 'svelte';
 	import {
 		saveLocalPlaybackState,
+		saveLocalListeningSession,
 		getLocalPlaybackState,
 		isLocalFavorite,
 		addLocalFavorite,
-		removeLocalFavorite
+		removeLocalFavorite,
+		type LocalListeningSession
 	} from '../idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { dominantColor } from '$lib/color';
-	import Toast from './Toast.svelte';
 	import ShortcutsModal from './ShortcutsModal.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { sync } from '$lib/stores/sync.svelte';
+	import { getPodcastPlaybackSettings, type PodcastPlaybackSettings } from '$lib/stores/podcast-settings';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 
@@ -20,16 +23,18 @@
 	let isPlaying = $state(false);
 	let currentTimeMs = $state(0);
 	let durationMs = $state(0);
-	let playbackSpeed = $state(1.0);
 	let showShortcutsModal = $state(false);
-	let sleepTimerEndsAt = $state<number | null>(null);
-	let sleepAtEpisodeEnd = $state(false);
 	let loadError = $state(false);
 	let expanded = $state(false);
 	let showAccent = $state<string | null>(null);
 	let isFav = $state(false);
 	let showVolume = $state(false);
 	let lastToken = 0;
+	let activeSession: LocalListeningSession | null = null;
+	let lastListeningSampleAt = 0;
+	let trackSettings: PodcastPlaybackSettings = getPodcastPlaybackSettings('');
+	let pendingIntroOutroSkippedMs = 0;
+	let outroHandled = false;
 
 	import { audioEngine } from '$lib/audio/engine';
 
@@ -105,7 +110,7 @@
 		skipSilence = !skipSilence;
 		audioEngine.skipSilence = skipSilence;
 		if (!skipSilence && audioEl) {
-			audioEl.playbackRate = playbackSpeed;
+			audioEl.playbackRate = player.playbackSpeed;
 		}
 		if (audioEl) audioEngine.init(audioEl);
 		audioEngine.resume();
@@ -125,6 +130,10 @@
 		if (!t || !audioEl) return;
 
 		if (audioEl.src !== t.enclosure_url) {
+			trackSettings = getPodcastPlaybackSettings(t.podcast_id);
+			player.setPlaybackSpeed(trackSettings.speed ?? player.defaultPlaybackSpeed, false);
+			outroHandled = false;
+			pendingIntroOutroSkippedMs = 0;
 			loadError = false;
 			audioEl.src = t.enclosure_url;
 			currentTimeMs = 0;
@@ -138,15 +147,22 @@
 
 	async function loadSavedPosition(epId: string) {
 		const state = await getLocalPlaybackState(epId);
-		if (!state || state.position_ms <= 0 || state.completed || !audioEl) return;
+		if (!audioEl) return;
 		const el = audioEl;
-		const seconds = state.position_ms / 1000;
+		const resume = !!state && state.position_ms > 0 && !state.completed;
+		const seconds = resume ? (state?.position_ms ?? 0) / 1000 : trackSettings.skipIntroSeconds;
+		if (seconds <= 0) return;
 		const apply = () => {
 			// A different track may have loaded while we awaited IndexedDB; only seek
 			// if this episode is still the active one.
 			if (!track || track.episode_id !== epId) return;
 			el.currentTime = seconds;
-			currentTimeMs = state.position_ms;
+			currentTimeMs = seconds * 1000;
+			player.positionMs = currentTimeMs;
+			if (!resume) {
+				if (activeSession) activeSession.intro_outro_skipped_ms += currentTimeMs;
+				else pendingIntroOutroSkippedMs += currentTimeMs;
+			}
 		};
 		// Seeking before metadata is ready is silently dropped by the browser, so
 		// wait for loadedmetadata when the element hasn't parsed the header yet.
@@ -162,6 +178,8 @@
 
 	function seekTo(ms: number) {
 		if (!audioEl) return;
+		const forwardMs = ms - currentTimeMs;
+		if (forwardMs > 2_000 && activeSession) activeSession.manual_skipped_ms += forwardMs;
 		audioEl.currentTime = ms / 1000;
 		currentTimeMs = ms;
 		saveProgress('SEEK');
@@ -169,13 +187,17 @@
 
 	function skip(seconds: number) {
 		if (!audioEl) return;
+		if (seconds > 0 && activeSession) {
+			const remaining = Math.max(0, (audioEl.duration || Infinity) - audioEl.currentTime);
+			activeSession.manual_skipped_ms += Math.round(Math.min(seconds, remaining) * 1000);
+		}
 		audioEl.currentTime = Math.max(0, Math.min(audioEl.duration || 0, audioEl.currentTime + seconds));
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		saveProgress('SEEK');
 	}
 
 	function cycleSpeed() {
-		const idx = speeds.indexOf(playbackSpeed);
+		const idx = speeds.indexOf(player.playbackSpeed);
 		setSpeed(speeds[(idx + 1) % speeds.length] ?? 1.0);
 	}
 
@@ -184,38 +206,103 @@
 	);
 
 	function setSpeed(speed: number) {
-		playbackSpeed = speed;
-		if (audioEl) audioEl.playbackRate = speed;
-		try {
-			localStorage.setItem('koalacast_playback_speed', speed.toString());
-		} catch (_) {}
+		player.setPlaybackSpeed(speed);
+		if (audioEl) audioEl.playbackRate = player.playbackSpeed;
 	}
 
 	function setSleepTimer(value: string) {
-		sleepAtEpisodeEnd = value === 'episode';
-		if (value === '' ) sleepTimerEndsAt = null;
-		else if (value === 'episode') sleepTimerEndsAt = null;
-		else sleepTimerEndsAt = Date.now() + Number(value) * 60 * 1000;
+		player.setSleepTimer(value);
 	}
 
 	const progressPercent = $derived(
 		durationMs > 0 ? Math.min(100, (currentTimeMs / durationMs) * 100) : 0
 	);
+	const remainingMs = $derived(Math.max(0, (durationMs || track?.duration_ms || 0) - currentTimeMs));
+
+	function startListeningSession() {
+		if (!track || activeSession) return;
+		const timestamp = Date.now();
+		activeSession = {
+			id: crypto.randomUUID(),
+			episode_id: track.episode_id,
+			podcast_id: track.podcast_id,
+			title: track.title,
+			podcast_title: track.podcast_title,
+			categories: track.categories,
+			started_at: timestamp,
+			ended_at: timestamp,
+			wall_clock_ms: 0,
+			audio_listened_ms: 0,
+			speed_saved_ms: 0,
+			silence_saved_ms: 0,
+			manual_skipped_ms: 0,
+			intro_outro_skipped_ms: 0,
+			speed_weighted_ms: 0
+		};
+		activeSession.intro_outro_skipped_ms = pendingIntroOutroSkippedMs;
+		pendingIntroOutroSkippedMs = 0;
+		lastListeningSampleAt = timestamp;
+	}
+
+	function sampleListening() {
+		if (!activeSession || !isPlaying || !audioEl) return;
+		const timestamp = Date.now();
+		// Ignore long gaps caused by suspended tabs or stalled media. Normal
+		// `timeupdate` cadence remains well below this ceiling.
+		const wallMs = Math.max(0, Math.min(timestamp - lastListeningSampleAt, 5_000));
+		lastListeningSampleAt = timestamp;
+		if (!wallMs) return;
+
+		const baseSpeed = player.playbackSpeed;
+		const actualSpeed = audioEl.playbackRate || baseSpeed;
+		const baseAudioMs = wallMs * baseSpeed;
+		activeSession.ended_at = timestamp;
+		activeSession.wall_clock_ms += wallMs;
+		activeSession.audio_listened_ms += baseAudioMs;
+		activeSession.speed_weighted_ms += wallMs * baseSpeed;
+		activeSession.speed_saved_ms += Math.max(0, wallMs * (baseSpeed - 1));
+		activeSession.silence_saved_ms += Math.max(0, wallMs * (actualSpeed - baseSpeed));
+	}
+
+	async function flushListeningSession(final = false) {
+		if (!activeSession) return;
+		sampleListening();
+		const session = activeSession;
+		const trackedSkipMs =
+			session.silence_saved_ms + session.manual_skipped_ms + session.intro_outro_skipped_ms;
+		if (session.wall_clock_ms >= 1_000 || trackedSkipMs > 0) {
+			await saveLocalListeningSession({ ...session, ended_at: Date.now() });
+			if (final && sync.enabled) sync.syncNow();
+		}
+		if (final) {
+			activeSession = null;
+			lastListeningSampleAt = 0;
+		}
+	}
 
 	function handleTimeUpdate() {
 		if (!audioEl) return;
+		sampleListening();
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		durationMs = Math.round((audioEl.duration || 0) * 1000);
+		player.positionMs = currentTimeMs;
+		player.durationMs = durationMs || track?.duration_ms || 0;
 
 		if (skipSilence && isPlaying && audioEngine.isSilent()) {
-			audioEl.playbackRate = Math.min(3.0, playbackSpeed * 2.0);
-		} else if (audioEl.playbackRate !== playbackSpeed) {
-			audioEl.playbackRate = playbackSpeed;
+			audioEl.playbackRate = Math.min(3.0, player.playbackSpeed * 2.0);
+		} else if (audioEl.playbackRate !== player.playbackSpeed) {
+			audioEl.playbackRate = player.playbackSpeed;
 		}
 
-		if (sleepTimerEndsAt && Date.now() >= sleepTimerEndsAt) {
+		if (player.sleepTimerEndsAt && Date.now() >= player.sleepTimerEndsAt) {
 			audioEl.pause();
-			sleepTimerEndsAt = null;
+			player.sleepTimerEndsAt = null;
+		}
+		const remaining = Math.max(0, durationMs - currentTimeMs);
+		if (!outroHandled && trackSettings.skipOutroSeconds > 0 && remaining > 0 && remaining <= trackSettings.skipOutroSeconds * 1000) {
+			outroHandled = true;
+			if (activeSession) activeSession.intro_outro_skipped_ms += remaining;
+			audioEl.currentTime = durationMs / 1000;
 		}
 
 		if ('mediaSession' in navigator && durationMs > 0) {
@@ -230,11 +317,13 @@
 	}
 
 	async function handleEnded() {
+		sampleListening();
 		isPlaying = false;
+		await flushListeningSession(true);
 		await saveProgress('MARK_PLAYED', true);
 		// Stop here if a "sleep at end of episode" timer is armed.
-		if (sleepAtEpisodeEnd) {
-			sleepAtEpisodeEnd = false;
+		if (player.sleepAtEpisodeEnd) {
+			player.sleepAtEpisodeEnd = false;
 			return;
 		}
 		// Otherwise autoplay the next queued episode, if any.
@@ -266,7 +355,8 @@
 			podcast_title: track.podcast_title,
 			artwork_url: track.artwork_url,
 			enclosure_url: track.enclosure_url,
-			duration_ms: durationMs || track.duration_ms
+			duration_ms: durationMs || track.duration_ms,
+			categories: track.categories
 		});
 	}
 
@@ -340,7 +430,8 @@
 				podcast_title: track.podcast_title,
 				artwork_url: track.artwork_url,
 				enclosure_url: track.enclosure_url,
-				duration_ms: track.duration_ms
+				duration_ms: track.duration_ms,
+				categories: track.categories
 			});
 			isFav = true;
 			toast.success(t('toast.addedToFavorites'));
@@ -372,7 +463,10 @@
 		player.loadQueue();
 
 		autoSaveTimer = setInterval(() => {
-			if (isPlaying) saveProgress('PROGRESS_TICK');
+			if (isPlaying) {
+				saveProgress('PROGRESS_TICK');
+				flushListeningSession();
+			}
 		}, 30000);
 
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -396,8 +490,14 @@
 		};
 
 		window.addEventListener('keydown', handleKeyDown);
+		const handleVisibility = () => {
+			if (document.visibilityState === 'hidden') flushListeningSession();
+		};
+		document.addEventListener('visibilitychange', handleVisibility);
 		return () => {
 			window.removeEventListener('keydown', handleKeyDown);
+			document.removeEventListener('visibilitychange', handleVisibility);
+			flushListeningSession(true);
 			if (autoSaveTimer) clearInterval(autoSaveTimer);
 		};
 	});
@@ -420,10 +520,13 @@
 	onplay={() => {
 		isPlaying = true;
 		loadError = false;
+		startListeningSession();
 	}}
 	oncanplay={() => (loadError = false)}
 	onpause={() => {
+		sampleListening();
 		isPlaying = false;
+		flushListeningSession(true);
 		saveProgress('PROGRESS_TICK');
 	}}
 	onerror={() => {
@@ -455,7 +558,14 @@
 				<div class="meta">
 					<a class="track-title" href={`/episode/${track.episode_id}`}>{track.title}</a>
 					<a class="podcast-title" href={`/podcast/${track.podcast_id}`}>{track.podcast_title}</a>
+					<span class="mobile-player-meta">-{formatTime(remainingMs)} · {player.playbackSpeed}×{#if player.upNext} · next: {player.upNext.title}{/if}</span>
 				</div>
+				<button class="track-icon" class:active={isFav} onclick={toggleFavorite} aria-label={isFav ? 'Remove from favorites' : 'Save episode'}>
+					<i class="{isFav ? 'ph-fill' : 'ph'} ph-bookmark-simple"></i>
+				</button>
+				<a class="track-icon" href={`/podcast/${track.podcast_id}`} aria-label="Open show">
+					<i class="ph ph-arrow-square-out"></i>
+				</a>
 				{#if isPlaying}
 					<div class="eq-bars" aria-label={t('player.audioPlaying')}>
 						<span class="bar bar1"></span>
@@ -474,14 +584,20 @@
 					</div>
 				{/if}
 				<div class="controls">
-					<button class="ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')}>
-						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
+					<button class="ctrl transport-edge" onclick={() => seekTo(0)} aria-label="Restart episode">
+						<i class="ph ph-skip-back" aria-hidden="true"></i>
+					</button>
+					<button class="ctrl jump-control" onclick={() => skip(-15)} aria-label="Skip back 15 seconds">
+						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>15</small>
 					</button>
 					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
-					<button class="ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
-						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
+					<button class="ctrl jump-control" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
+						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
+					</button>
+					<button class="ctrl transport-edge" onclick={() => player.playNext()} aria-label="Next episode">
+						<i class="ph ph-skip-forward" aria-hidden="true"></i>
 					</button>
 				</div>
 
@@ -496,12 +612,12 @@
 						onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
 						aria-label={t('player.timeline')}
 					/>
-					<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
+					<span class="time">-{formatTime(remainingMs)}</span>
 				</div>
 			</div>
 
 			<div class="extras">
-				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label={t('player.speed')}>{playbackSpeed}×</button>
+				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label={t('player.speed')}>{player.playbackSpeed}×</button>
 				<div class="vol-wrap">
 					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label={t('player.volume')}>
 						<i class="ph {volIcon}" aria-hidden="true"></i>
@@ -513,13 +629,16 @@
 					{/if}
 				</div>
 				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
-					<option value="">💤 {t('player.sleepOff')}</option>
+					<option value="">◐ {t('player.sleepOff')}</option>
 					<option value="episode">{t('player.endOfEpisode')}</option>
 					<option value="15">15 min</option>
 					<option value="30">30 min</option>
 					<option value="45">45 min</option>
 					<option value="60">60 min</option>
 				</select>
+				<a class="queue-button" href="/library?view=queue" aria-label="Open queue">
+					<i class="ph ph-list-numbers"></i><span>Queue {player.queue.length}</span>
+				</a>
 				<button class="ctrl close-track" onclick={() => player.stop()} aria-label={t('player.closePlayer')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
@@ -593,7 +712,7 @@
 					</button>
 					<div class="speed-selector">
 						{#each speeds as spd}
-							<button onclick={() => setSpeed(spd)} class:active={playbackSpeed === spd}>{spd}x</button>
+							<button onclick={() => setSpeed(spd)} class:active={player.playbackSpeed === spd}>{spd}x</button>
 						{/each}
 					</div>
 					{#if chapters.length > 0}
@@ -922,49 +1041,6 @@
 		background: var(--show-accent, var(--accent-green));
 		color: #fff;
 		opacity: 1;
-	}
-
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		backdrop-filter: blur(4px);
-		display: grid;
-		place-items: center;
-		z-index: 200;
-		animation: fade-in 0.2s ease;
-	}
-
-	.modal-content {
-		background: var(--bg-surface);
-		color: var(--text-primary);
-		padding: 1.75rem;
-		border-radius: var(--radius-lg, 18px);
-		border: 1px solid var(--border-subtle);
-		max-width: 360px;
-		width: 90%;
-		box-shadow: var(--shadow-xl, 0 20px 50px rgba(0, 0, 0, 0.4));
-	}
-
-	.modal-content ul {
-		list-style: none;
-		padding: 0;
-		margin: 1rem 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-	}
-
-	.modal-content li { display: flex; align-items: center; gap: 0.6rem; }
-
-	kbd {
-		background: var(--bg-elevated);
-		border: 1px solid var(--border-subtle);
-		border-bottom-width: 2px;
-		padding: 0.15rem 0.5rem;
-		border-radius: 6px;
-		font-family: monospace;
-		font-size: 0.8rem;
 	}
 
 	.eq-bars {
@@ -1381,5 +1457,138 @@
 		.play-btn:hover { transform: none; }
 		.np-overlay { animation: none; }
 		.np-art-wrap.playing { animation: none; }
+	}
+
+	/* Quiet Edition 4b transport */
+	.player-shell {
+		padding: 0;
+		animation: none;
+	}
+	.player-bar {
+		width: 100%;
+		max-width: none;
+		min-height: 89px;
+		margin: 0;
+		padding: 12px 20px;
+		grid-template-columns: minmax(220px,1fr) minmax(420px,1.7fr) minmax(220px,1fr);
+		gap: 22px;
+		border: 0;
+		border-top: 1px solid var(--border-ui);
+		border-radius: 0;
+		background: var(--bg-transport);
+		color: var(--ink);
+		box-shadow: none;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		overflow: visible;
+	}
+	.progress-track { display: none; }
+	.track-info { gap: 9px; }
+	.artwork { width: 52px; height: 52px; border-radius: 5px; box-shadow: none; background: var(--bg-tile); }
+	.art-expand { border-radius: 5px; }
+	.track-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
+	.podcast-title { color: var(--ink-3); font: 400 11px/1.3 var(--font-sans); }
+	.mobile-player-meta { display: none; }
+	.track-icon {
+		display: grid;
+		place-items: center;
+		flex: 0 0 auto;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--ink-3);
+		font-size: 16px;
+	}
+	.track-icon.active { color: var(--accent-ink); }
+	.eq-bars { display: none; }
+	.center { gap: 5px; }
+	.controls { gap: 18px; }
+	.ctrl { width: 28px; height: 28px; color: var(--ink-3); font-size: 16px; opacity: 1; }
+	.ctrl:hover { background: transparent; color: var(--ink); }
+	.jump-control { position: relative; }
+	.jump-control small { position: absolute; font: 700 7px/1 var(--font-mono); }
+	.play-btn {
+		width: 40px;
+		height: 40px;
+		background: var(--accent-fill);
+		color: var(--accent-on);
+		font-size: 17px;
+		box-shadow: none;
+	}
+	:global(:root[data-theme='light']) .play-btn { background: var(--accent-ink); color: #fff; }
+	.play-btn:hover { transform: none; filter: none; }
+	.timeline { gap: 11px; }
+	.timeline input[type='range'] {
+		height: 4px;
+		background: linear-gradient(90deg, var(--accent-fill) 0%, var(--accent-fill) var(--progress,0%), var(--track) var(--progress,0%));
+	}
+	.timeline input[type='range']::-webkit-slider-thumb { width: 12px; height: 12px; background: var(--ink); box-shadow: none; }
+	.timeline input[type='range']::-moz-range-thumb { width: 12px; height: 12px; background: var(--ink); }
+	.time { min-width: 40px; color: var(--ink-3); font: 500 9px/1 var(--font-mono); opacity: 1; }
+	.extras { gap: 6px; }
+	.speed-cycle { height: 29px; min-width: 46px; padding: 0 6px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
+	.vol-wrap .ctrl { border: 0; }
+	.extras select {
+		height: 29px;
+		max-width: 62px;
+		padding: 0 5px;
+		border: 1px solid var(--border-ui);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--ink-3);
+		font: 600 9px/1 var(--font-mono);
+	}
+	.queue-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		height: 29px;
+		padding: 0 7px;
+		border: 1px solid var(--border-ui);
+		border-radius: 4px;
+		color: var(--ink-2);
+		font: 700 9px/1 var(--font-mono);
+		text-transform: uppercase;
+	}
+	.queue-button i { color: var(--accent-ink); font-size: 15px; }
+	.close-track { width: 28px; }
+
+	@media (max-width: 980px) {
+		.player-bar { grid-template-columns: minmax(190px,1fr) minmax(360px,1.5fr); }
+		.extras { display: none; }
+	}
+	@media (max-width: 720px) {
+		.player-shell { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+		.player-bar {
+			display: grid;
+			grid-template-columns: minmax(0,1fr) auto;
+			grid-template-areas: 'info controls';
+			min-height: 67px;
+			padding: 7px 11px;
+			gap: 8px;
+		}
+		.track-info { grid-area: info; }
+		.artwork { width: 42px; height: 42px; }
+		.track-icon, .eq-bars { display: none; }
+		.podcast-title { display: none; }
+		.mobile-player-meta {
+			display: block;
+			max-width: 42vw;
+			overflow: hidden;
+			color: var(--ink-4);
+			font: 500 8px/1.35 var(--font-mono);
+			text-overflow: ellipsis;
+			text-transform: uppercase;
+			white-space: nowrap;
+		}
+		.progress-track { display: block; right: 0; width: var(--progress, 0%); background: var(--accent-fill); }
+		.center { grid-area: controls; }
+		.controls { gap: 4px; }
+		.controls .transport-edge:first-child,
+		.controls .jump-control:first-of-type { display: none; }
+		.play-btn { width: 38px; height: 38px; }
+		.timeline { display: none; }
 	}
 </style>

@@ -13,16 +13,20 @@ import {
 	getLocalSubscriptions,
 	getLocalFavorites,
 	getAllLocalPlaybackStates,
+	getLocalListeningSessions,
+	getLocalListeningSession,
 	getTombstones,
 	getLocalPlaybackState,
 	saveLocalSubscription,
 	saveLocalPlaybackState,
+	saveLocalListeningSession,
 	addLocalFavorite,
 	removeLocalSubscriptionSilent,
 	removeLocalFavoriteSilent,
 	type LocalSubscription,
 	type LocalFavorite,
-	type LocalPlaybackState
+	type LocalPlaybackState,
+	type LocalListeningSession
 } from '$lib/idb/db';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
@@ -33,7 +37,7 @@ const INTERVAL_MS = 45_000;
 interface SyncOperation {
 	client_op_id: string;
 	device_id: string;
-	entity_type: 'subscription' | 'favorite' | 'playback_state';
+	entity_type: 'subscription' | 'favorite' | 'playback_state' | 'listening_session';
 	action: 'upsert' | 'delete';
 	entity_id: string;
 	payload: unknown;
@@ -85,6 +89,23 @@ class SyncStore {
 	#setCursor(v: number) {
 		try {
 			localStorage.setItem(this.#cursorKey(), String(v));
+		} catch {
+			/* ignore */
+		}
+	}
+	#sessionWatermarkKey(): string {
+		return `koalacast_synced_listening_sessions_${this.userId}`;
+	}
+	#getSessionWatermarks(): Record<string, number> {
+		try {
+			return JSON.parse(localStorage.getItem(this.#sessionWatermarkKey()) || '{}');
+		} catch {
+			return {};
+		}
+	}
+	#setSessionWatermarks(value: Record<string, number>) {
+		try {
+			localStorage.setItem(this.#sessionWatermarkKey(), JSON.stringify(value));
 		} catch {
 			/* ignore */
 		}
@@ -225,6 +246,21 @@ class SyncStore {
 			});
 		}
 
+		const listeningSessions = await getLocalListeningSessions();
+		const sessionWatermarks = this.#getSessionWatermarks();
+		for (const session of listeningSessions) {
+			if ((sessionWatermarks[session.id] || 0) >= session.ended_at) continue;
+			ops.push({
+				client_op_id: `l:${session.id}:${session.ended_at}`,
+				device_id: dev,
+				entity_type: 'listening_session',
+				action: 'upsert',
+				entity_id: session.id,
+				payload: session satisfies LocalListeningSession,
+				client_timestamp: session.ended_at
+			});
+		}
+
 		const tombstones = await getTombstones();
 		for (const t of tombstones) {
 			if (t.entity_type !== 'subscription' && t.entity_type !== 'favorite') continue;
@@ -241,13 +277,20 @@ class SyncStore {
 
 		if (ops.length === 0) return;
 
-		const res = await fetch('/api/v1/sync', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ operations: ops, client_schema_version: 1 })
-		});
-		if (res.status === 401) throw new SyncAuthError();
-		if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
+		for (let index = 0; index < ops.length; index += 250) {
+			const batch = ops.slice(index, index + 250);
+			const res = await fetch('/api/v1/sync', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ operations: batch, client_schema_version: 2 })
+			});
+			if (res.status === 401) throw new SyncAuthError();
+			if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
+			for (const op of batch) {
+				if (op.entity_type === 'listening_session') sessionWatermarks[op.entity_id] = op.client_timestamp;
+			}
+			this.#setSessionWatermarks(sessionWatermarks);
+		}
 		// Deliberately do NOT advance the cursor here: letting the next pull re-read
 		// our own ops (idempotent) avoids skipping a concurrent device's ops that
 		// landed at a lower cursor.
@@ -285,7 +328,8 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 				podcast_title: p.podcast_title,
 				artwork_url: p.artwork_url,
 				enclosure_url: p.enclosure_url,
-				duration_ms: p.duration_ms
+				duration_ms: p.duration_ms,
+				categories: p.categories
 			});
 		}
 	} else if (cs.entity_type === 'playback_state') {
@@ -308,7 +352,32 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 			podcast_title: p.podcast_title,
 			artwork_url: p.artwork_url,
 			enclosure_url: p.enclosure_url,
-			duration_ms: p.duration_ms
+			duration_ms: p.duration_ms,
+			categories: p.categories
+		});
+	} else if (cs.entity_type === 'listening_session') {
+		if (isDelete || !cs.payload || typeof cs.payload !== 'object') return;
+		const p = cs.payload as Partial<LocalListeningSession>;
+		const id = p.id || cs.entity_id;
+		const incomingWhen = p.ended_at || cs.client_timestamp || 0;
+		const existing = await getLocalListeningSession(id);
+		if (existing && existing.ended_at >= incomingWhen) return;
+		await saveLocalListeningSession({
+			id,
+			episode_id: p.episode_id || '',
+			podcast_id: p.podcast_id || '',
+			title: p.title || 'Episode',
+			podcast_title: p.podcast_title || 'Podcast',
+			categories: Array.isArray(p.categories) ? p.categories.filter((value): value is string => typeof value === 'string') : undefined,
+			started_at: p.started_at || incomingWhen || Date.now(),
+			ended_at: incomingWhen || Date.now(),
+			wall_clock_ms: Math.max(0, p.wall_clock_ms || 0),
+			audio_listened_ms: Math.max(0, p.audio_listened_ms || 0),
+			speed_saved_ms: Math.max(0, p.speed_saved_ms || 0),
+			silence_saved_ms: Math.max(0, p.silence_saved_ms || 0),
+			manual_skipped_ms: Math.max(0, p.manual_skipped_ms || 0),
+			intro_outro_skipped_ms: Math.max(0, p.intro_outro_skipped_ms || 0),
+			speed_weighted_ms: Math.max(0, p.speed_weighted_ms || 0)
 		});
 	}
 }

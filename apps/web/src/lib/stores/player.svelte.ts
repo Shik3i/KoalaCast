@@ -21,6 +21,7 @@ export interface CurrentTrack {
 	artwork_url: string;
 	enclosure_url: string;
 	duration_ms: number;
+	categories?: string[];
 }
 
 function itemToTrack(i: LocalQueueItem): CurrentTrack {
@@ -31,7 +32,8 @@ function itemToTrack(i: LocalQueueItem): CurrentTrack {
 		podcast_title: i.podcast_title ?? '',
 		artwork_url: i.artwork_url,
 		enclosure_url: i.enclosure_url,
-		duration_ms: i.duration_ms
+		duration_ms: i.duration_ms,
+		categories: i.categories
 	};
 }
 
@@ -43,14 +45,24 @@ class PlayerStore {
 	// The upcoming episodes, mirrored from IndexedDB (never includes what's playing).
 	queue = $state<CurrentTrack[]>([]);
 	volume = $state(1);
+	playbackSpeed = $state(1);
+	defaultPlaybackSpeed = $state(1);
+	sleepTimerEndsAt = $state<number | null>(null);
+	sleepAtEpisodeEnd = $state(false);
+	positionMs = $state(0);
+	durationMs = $state(0);
 
 	play(track: CurrentTrack) {
 		this.current = track;
+		this.positionMs = 0;
+		this.durationMs = track.duration_ms;
 		this.playToken++;
 	}
 
 	stop() {
 		this.current = null;
+		this.positionMs = 0;
+		this.durationMs = 0;
 	}
 
 	get isActive() {
@@ -66,6 +78,21 @@ class PlayerStore {
 		try {
 			localStorage.setItem('koalacast_volume', String(this.volume));
 		} catch (_) {}
+	}
+
+	setPlaybackSpeed(speed: number, persist = true) {
+		this.playbackSpeed = Math.max(0.25, Math.min(4, speed));
+		if (persist) this.defaultPlaybackSpeed = this.playbackSpeed;
+		if (!persist) return;
+		try {
+			localStorage.setItem('koalacast_playback_speed', String(this.playbackSpeed));
+		} catch (_) {}
+	}
+
+	setSleepTimer(value: string) {
+		this.sleepAtEpisodeEnd = value === 'episode';
+		if (value === '' || value === 'episode') this.sleepTimerEndsAt = null;
+		else this.sleepTimerEndsAt = Date.now() + Number(value) * 60_000;
 	}
 
 	async loadQueue() {
@@ -87,6 +114,7 @@ class PlayerStore {
 			artwork_url: track.artwork_url,
 			enclosure_url: track.enclosure_url,
 			duration_ms: track.duration_ms,
+			categories: track.categories,
 			position_order: Date.now(),
 			added_at: Date.now()
 		});

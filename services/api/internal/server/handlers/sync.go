@@ -19,7 +19,7 @@ type SyncHandler struct {
 type SyncPushOperation struct {
 	ClientOpID      string          `json:"client_op_id"`
 	DeviceID        string          `json:"device_id"`
-	EntityType      string          `json:"entity_type"` // "subscription", "playback_state", "favorite", "queue", "settings"
+	EntityType      string          `json:"entity_type"` // "subscription", "playback_state", "listening_session", "favorite", "queue", "settings"
 	Action          string          `json:"action"`      // "upsert", "delete", "queue_op"
 	EntityID        string          `json:"entity_id"`
 	Payload         json.RawMessage `json:"payload"`
@@ -48,6 +48,24 @@ type QueueOperationPayload struct {
 	ItemID          string `json:"item_id"`
 	EpisodeID       string `json:"episode_id"`
 	ReferenceItemID string `json:"reference_item_id"`
+}
+
+type ListeningSessionPayload struct {
+	ID                  string   `json:"id"`
+	EpisodeID           string   `json:"episode_id"`
+	PodcastID           string   `json:"podcast_id"`
+	Title               string   `json:"title"`
+	PodcastTitle        string   `json:"podcast_title"`
+	Categories          []string `json:"categories"`
+	StartedAt           int64    `json:"started_at"`
+	EndedAt             int64    `json:"ended_at"`
+	WallClockMS         int64    `json:"wall_clock_ms"`
+	AudioListenedMS     int64    `json:"audio_listened_ms"`
+	SpeedSavedMS        int64    `json:"speed_saved_ms"`
+	SilenceSavedMS      int64    `json:"silence_saved_ms"`
+	ManualSkippedMS     int64    `json:"manual_skipped_ms"`
+	IntroOutroSkippedMS int64    `json:"intro_outro_skipped_ms"`
+	SpeedWeightedMS     int64    `json:"speed_weighted_ms"`
 }
 
 func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +209,14 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(op.Payload, &p); err == nil {
 				h.applyPlaybackState(ctx, tx, authUser.ID, p, currentCursor, nowMs)
 			}
+		} else if op.EntityType == "listening_session" && op.Action == "upsert" {
+			var p ListeningSessionPayload
+			if err := json.Unmarshal(op.Payload, &p); err == nil {
+				if p.ID == "" {
+					p.ID = op.EntityID
+				}
+				h.applyListeningSession(ctx, tx, authUser.ID, p, currentCursor)
+			}
 		} else if op.EntityType == "subscription" {
 			h.applySubscription(ctx, tx, authUser.ID, op, currentCursor, nowMs)
 		} else if op.EntityType == "favorite" {
@@ -225,6 +251,42 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 		"applied_ops":    appliedOps,
 		"current_cursor": currentCursor,
 	})
+}
+
+func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, userID string, p ListeningSessionPayload, syncVer int64) {
+	if p.ID == "" || p.StartedAt <= 0 || p.EndedAt < p.StartedAt {
+		return
+	}
+	categories, _ := json.Marshal(p.Categories)
+	_, _ = tx.ExecContext(ctx, `
+		INSERT INTO listening_sessions (
+			id, user_id, episode_id, podcast_id, title, podcast_title, categories_json,
+			started_at, ended_at, wall_clock_ms, audio_listened_ms, speed_saved_ms,
+			silence_saved_ms, manual_skipped_ms, intro_outro_skipped_ms,
+			speed_weighted_ms, sync_version
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, id) DO UPDATE SET
+			episode_id = excluded.episode_id,
+			podcast_id = excluded.podcast_id,
+			title = excluded.title,
+			podcast_title = excluded.podcast_title,
+			categories_json = excluded.categories_json,
+			started_at = excluded.started_at,
+			ended_at = excluded.ended_at,
+			wall_clock_ms = excluded.wall_clock_ms,
+			audio_listened_ms = excluded.audio_listened_ms,
+			speed_saved_ms = excluded.speed_saved_ms,
+			silence_saved_ms = excluded.silence_saved_ms,
+			manual_skipped_ms = excluded.manual_skipped_ms,
+			intro_outro_skipped_ms = excluded.intro_outro_skipped_ms,
+			speed_weighted_ms = excluded.speed_weighted_ms,
+			sync_version = excluded.sync_version
+		WHERE excluded.ended_at >= listening_sessions.ended_at
+	`, p.ID, userID, p.EpisodeID, p.PodcastID, p.Title, p.PodcastTitle, string(categories),
+		p.StartedAt, p.EndedAt, max(p.WallClockMS, 0), max(p.AudioListenedMS, 0),
+		max(p.SpeedSavedMS, 0), max(p.SilenceSavedMS, 0), max(p.ManualSkippedMS, 0),
+		max(p.IntroOutroSkippedMS, 0), max(p.SpeedWeightedMS, 0), syncVer)
 }
 
 func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID string, p PlaybackStatePayload, syncVer, nowMs int64) {

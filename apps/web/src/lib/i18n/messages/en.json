@@ -202,7 +202,7 @@
 		"accountSync": "Account & Cloud Sync",
 		"syncNow": "Sync now",
 		"manageAccount": "Manage Account & Devices",
-		"signInPrompt": "Sign in or register an account to sync your subscriptions, favorite episodes, and playback history across all your devices.",
+		"signInPrompt": "Sign in or register an account to sync subscriptions, favorites, playback progress, and listening statistics across all your devices.",
 		"dataManagement": "Data Management",
 		"revokeSession": "Revoke session",
 		"importingOpml": "Importing OPML…",
@@ -366,6 +366,60 @@
 		"chapters": "Chapters",
 		"episodeChapters": "Episode Chapters",
 		"transcript": "Transcript"
+	},
+	"quiet": {
+		"nav": {
+			"primary": "Primary navigation",
+			"discover": "Discover",
+			"new": "New",
+			"library": "Library",
+			"profile": "Profile",
+			"settings": "Settings",
+			"subscriptions": "Subscribed",
+			"noSubscriptions": "Your subscriptions appear here."
+		},
+		"profile": {
+			"sections": "Profile sections",
+			"stats": "Stats",
+			"activity": "Activity",
+			"rankings": "Rankings",
+			"timeSaved": "Time saved",
+			"dataPrivacy": "Data & privacy",
+			"localOnly": "Stored on this device",
+			"syncActive": "Account sync active",
+			"private": "Private by design",
+			"onDevice": "No third-party analytics. Your listening stays local.",
+			"onAccount": "Listening statistics sync across your signed-in devices."
+		},
+		"library": {
+			"collections": "Collections",
+			"allShows": "All shows",
+			"inProgress": "In progress",
+			"savedEpisodes": "Saved episodes",
+			"queue": "Queue"
+		},
+		"inbox": {
+			"filters": "Filter inbox",
+			"all": "All",
+			"fits": "Fits your session",
+			"started": "Started",
+			"downloaded": "Downloaded"
+		},
+		"queue": {
+			"title": "Running order",
+			"playingNow": "Playing now",
+			"ends": "Ends",
+			"drag": "Drag to reorder",
+			"remove": "Remove from queue",
+			"empty": "Queue an episode to build your running order.",
+			"trim": "Trim to 40m",
+			"shuffle": "Shuffle",
+			"clear": "Clear",
+			"hint": "Drag to reorder · Delete removes",
+			"endsAt": "Queue ends at",
+			"summary": "At 1.25× · {count} shows · sleep timer off",
+			"shows": "{count} shows"
+		}
 	},
 	"admin": {
 		"loading": "Loading admin dashboard…",

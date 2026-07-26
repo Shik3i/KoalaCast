@@ -24,6 +24,18 @@
 	let favorites = $state<LocalFavorite[]>([]);
 	let activeTab = $state<'subscriptions' | 'episodes' | 'queue' | 'favorites'>('subscriptions');
 	let dragIndex = $state<number | null>(null);
+	let libraryQuery = $state('');
+	let librarySort = $state<'recent' | 'az' | 'played'>('recent');
+	let activeCover = $state<string | null>(null);
+	let longPressTimer: number | null = null;
+
+	const visibleSubscriptions = $derived.by(() => {
+		let list = subscriptions.filter((subscription) =>
+			subscription.title.toLowerCase().includes(libraryQuery.trim().toLowerCase())
+		);
+		if (librarySort === 'az') list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+		return list;
+	});
 
 	onMount(async () => {
 		subscriptions = await getLocalSubscriptions();
@@ -52,7 +64,8 @@
 			podcast_title: fav.podcast_title || '',
 			artwork_url: fav.artwork_url || '',
 			enclosure_url: fav.enclosure_url,
-			duration_ms: fav.duration_ms || 0
+			duration_ms: fav.duration_ms || 0,
+			categories: fav.categories
 		});
 	}
 
@@ -134,18 +147,59 @@
 			podcast_title: item.podcast_title || '',
 			artwork_url: item.artwork_url || '',
 			enclosure_url: item.enclosure_url,
-			duration_ms: item.duration_ms || 0
+			duration_ms: item.duration_ms || 0,
+			categories: item.categories
 		});
+	}
+
+	function longPress(node: HTMLElement, podcastId: string) {
+		const start = (event: PointerEvent) => {
+			if (event.pointerType !== 'touch') return;
+			if (longPressTimer !== null) window.clearTimeout(longPressTimer);
+			longPressTimer = window.setTimeout(() => {
+				activeCover = podcastId;
+				longPressTimer = null;
+			}, 450);
+		};
+		const cancel = () => {
+			if (longPressTimer !== null) window.clearTimeout(longPressTimer);
+			longPressTimer = null;
+		};
+		node.addEventListener('pointerdown', start);
+		node.addEventListener('pointerup', cancel);
+		node.addEventListener('pointercancel', cancel);
+		node.addEventListener('pointermove', cancel);
+		return {
+			destroy() {
+				cancel();
+				node.removeEventListener('pointerdown', start);
+				node.removeEventListener('pointerup', cancel);
+				node.removeEventListener('pointercancel', cancel);
+				node.removeEventListener('pointermove', cancel);
+			}
+		};
 	}
 </script>
 
+<svelte:window onpointerdown={(event) => {
+	if (!(event.target as HTMLElement)?.closest?.('.quiet-cover-card')) activeCover = null;
+}} />
+
 <div class="library-page">
 	<div class="lib-head">
-		<h2><i class="ph-fill ph-books" aria-hidden="true"></i> {t('library.title')}</h2>
-		<p class="sub">{t('library.subtitle')}</p>
+		<div><h2>{t('library.title')}</h2><p class="sub">{subscriptions.length} shows</p></div>
+		<label class="library-filter">
+			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+			<input bind:value={libraryQuery} placeholder="Filter library" />
+		</label>
+		<div class="library-sort" role="tablist" aria-label="Sort library">
+			<button class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>Recent</button>
+			<button class:active={librarySort === 'az'} onclick={() => (librarySort = 'az')}>A–Z</button>
+			<button class:active={librarySort === 'played'} onclick={() => (librarySort = 'played')}>Most played</button>
+		</div>
 	</div>
 
-	<div class="tabs" role="tablist">
+	<div class="tabs collection-tabs" role="tablist">
 		<button role="tab" aria-selected={activeTab === 'subscriptions'} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
 			<i class="ph ph-books" aria-hidden="true"></i> {t('library.subscriptions')} <span class="count">{subscriptions.length}</span>
 		</button>
@@ -168,17 +222,21 @@
 			</div>
 		{:else}
 			<div class="podcast-grid">
-				{#each subscriptions as sub, i (sub.podcast_id)}
-					<div class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
-						<img src={optimizeArtwork(sub.artwork_url, 220)} alt={sub.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
-						<div class="details">
+				{#each visibleSubscriptions as sub, i (sub.podcast_id)}
+					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 40, 320) }} use:longPress={sub.podcast_id}>
+						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={`Open ${sub.title}`}>
+							<img src={optimizeArtwork(sub.artwork_url, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						</a>
+						<div class="details cover-overlay">
 							<h3>{sub.title}</h3>
+							<p>Subscribed · open for episodes</p>
 							<div class="actions">
-								<a href={`/podcast/${sub.podcast_id}`} class="btn-sm">{t('common.viewEpisodes')}</a>
-								<button class="btn-sm text-danger" onclick={() => handleUnsubscribe(sub.podcast_id)}>{t('common.unsubscribe')}</button>
+								<a href={`/podcast/${sub.podcast_id}`} class="round-action primary" aria-label={t('common.viewEpisodes')}><i class="ph-fill ph-play"></i></a>
+								<button class="round-action" onclick={() => goto(`/podcast/${sub.podcast_id}`)} aria-label="Open show"><i class="ph ph-list-plus"></i></button>
+								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')}><i class="ph ph-dots-three"></i></button>
 							</div>
 						</div>
-					</div>
+					</article>
 				{/each}
 			</div>
 		{/if}
@@ -397,19 +455,6 @@
 		align-items: center;
 	}
 
-	.btn-sm {
-		font-size: 0.85rem;
-		padding: 0.35rem 0.75rem;
-		border-radius: 4px;
-		border: 1px solid var(--border-subtle);
-		background: var(--bg-primary);
-		color: var(--text-primary);
-	}
-
-	.text-danger {
-		color: var(--color-danger);
-	}
-
 	.btn {
 		display: inline-block;
 		margin-top: 1rem;
@@ -539,5 +584,108 @@
 
 	@media (max-width: 640px) {
 		.ep-pct { display: none; }
+	}
+
+	/* Quiet Edition 4b */
+	.library-page { gap: 0; padding: 20px 22px 30px; }
+	.lib-head {
+		display: grid;
+		grid-template-columns: auto minmax(180px, 1fr) auto;
+		align-items: center;
+		gap: 18px;
+		margin-bottom: 14px;
+	}
+	.lib-head h2 { font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
+	.lib-head .sub { color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.library-filter {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 36px;
+		padding: 0 10px;
+		background: var(--bg-sunken);
+		border: 1px solid var(--border-ui);
+		border-radius: 5px;
+		color: var(--ink-4);
+	}
+	.library-filter input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
+	.library-sort { display: flex; gap: 2px; }
+	.library-sort button {
+		padding: 6px 8px;
+		border: 0;
+		border-radius: 3px;
+		background: transparent;
+		color: var(--ink-4);
+		font: 600 8px/1 var(--font-mono);
+		text-transform: uppercase;
+	}
+	.library-sort button.active { background: var(--accent-wash); color: var(--accent-ink); }
+	.collection-tabs { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-hair); }
+	.tabs button { border-radius: 4px; box-shadow: none; font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.tabs button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+	.podcast-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+	.podcast-card.quiet-cover-card {
+		position: relative;
+		aspect-ratio: 1;
+		overflow: hidden;
+		padding: 0;
+		border: 0;
+		border-radius: 6px;
+		background: var(--bg-tile);
+		box-shadow: none;
+	}
+	.quiet-cover-card .artwork { width: 100%; height: 100%; border-radius: 0; object-fit: cover; }
+	.quiet-cover-card .cover-link { position: absolute; inset: 0; }
+	.quiet-cover-card .cover-overlay {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: end;
+		gap: 4px;
+		padding: 12px;
+		background: linear-gradient(0deg, rgba(5,10,7,.96) 12%, rgba(5,10,7,.72) 58%, rgba(5,10,7,.15));
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity .16s ease;
+	}
+	.quiet-cover-card:hover .cover-overlay,
+	.quiet-cover-card:focus-visible .cover-overlay,
+	.quiet-cover-card:focus-within .cover-overlay,
+	.quiet-cover-card.long-pressed .cover-overlay { opacity: 1; pointer-events: auto; }
+	.quiet-cover-card .cover-overlay h3 { color: #eaf6f0; font: 700 14px/1.15 var(--font-ui); }
+	.quiet-cover-card .cover-overlay p { color: #a9c8ba; font: 500 8px/1.35 var(--font-mono); text-transform: uppercase; }
+	.quiet-cover-card .actions { display: flex; gap: 5px; margin-top: 6px; }
+	.quiet-cover-card .round-action {
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 1px solid #4a6558;
+		border-radius: 50%;
+		background: rgba(5,10,7,.7);
+		color: #dcebe4;
+	}
+	.quiet-cover-card .round-action.primary { background: #7fd0aa; border-color: #7fd0aa; color: #06100c; }
+	@media (prefers-reduced-motion: reduce) { .quiet-cover-card .cover-overlay { transition: none; } }
+	.episode-list { gap: 0; border-top: 1px solid var(--border-hair); }
+	.ep-row { border: 0; border-bottom: 1px solid var(--border-row); border-radius: 0; background: transparent; box-shadow: none; }
+	.ep-row:hover { transform: none; background: var(--bg-sunken); }
+	.empty-state { box-shadow: none; border-radius: 8px; }
+
+	@media (max-width: 1180px) { .podcast-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+	@media (max-width: 820px) {
+		.lib-head { grid-template-columns: 1fr; gap: 10px; }
+		.library-sort { overflow-x: auto; }
+		.podcast-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+	}
+	@media (max-width: 560px) {
+		.library-page { padding: 16px; }
+		.collection-tabs { overflow-x: auto; flex-wrap: nowrap; }
+		.podcast-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+		.quiet-cover-card .cover-overlay { padding: 8px; }
+		.quiet-cover-card .cover-overlay h3 { font-size: 11px; }
+		.quiet-cover-card .cover-overlay p { display: none; }
 	}
 </style>

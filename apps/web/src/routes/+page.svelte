@@ -2,22 +2,17 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { FEATURED_PODCASTS } from '$lib/data/featured';
-	import {
-		saveLocalSubscription,
-		getLocalSubscriptions,
-		getRecentPlaybackStates,
-		type LocalPlaybackState
-	} from '$lib/idb/db';
-	import { player } from '$lib/stores/player.svelte';
+	import { saveLocalSubscription, getLocalSubscriptions, addLocalFavorite } from '$lib/idb/db';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
-	import { reveal } from '$lib/actions/reveal';
-	import Skeleton from '$lib/components/Skeleton.svelte';
 	import Onboarding from '$lib/components/Onboarding.svelte';
+	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { GENRES, genreLabel } from '$lib/genres';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { detectBrowserLanguages, regionForLanguage } from '$lib/data/languages';
 	import { t } from '$lib/i18n';
+	import { listeningSession, type SessionMinutes } from '$lib/stores/session.svelte';
+	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
 
 	interface PodcastItem {
 		id: string;
@@ -30,103 +25,103 @@
 		description?: string;
 	}
 
-	let mounted = $state(false);
-	let forYou = $state<PodcastItem[]>([]);
-
 	const PAGE_SIZE = 60;
+	const moods = [
+		{ label: 'Calm', icon: 'ph-waves', fit: [4, 7, 11] },
+		{ label: 'Curious', icon: 'ph-lightbulb', fit: [7, 12, 18] },
+		{ label: 'Company', icon: 'ph-users-three', fit: [3, 5, 9] },
+		{ label: 'Focus', icon: 'ph-crosshair', fit: [2, 4, 7] }
+	];
 
-	let discoverPodcasts = $state<PodcastItem[]>([]);
+	let mounted = $state(false);
+	let podcasts = $state<PodcastItem[]>([]);
 	let subscribedIds = $state<string[]>([]);
 	let subscribedFeeds = $state<string[]>([]);
-	let continueItems = $state<LocalPlaybackState[]>([]);
-	let selectedCategory = $state<string>('All');
-	let searchQuery = $state<string>('');
+	let searchQuery = $state('');
+	let selectedCategory = $state('All');
+	let selectedMood = $state('Calm');
+	let sort = $state<'momentum' | 'rank' | 'length' | 'newest'>('momentum');
 	let isLoading = $state(true);
 	let isLoadingMore = $state(false);
-	let isSubmitting = $state(false);
 	let limit = $state(PAGE_SIZE);
 	let reachedEnd = $state(false);
-	// Monotonic id so a slow earlier discover response can't overwrite a newer one
-	// (e.g. quick category switches or a load-more landing after a category change).
-	let discoverReqId = 0;
+	let searchInput: HTMLInputElement;
+	let requestId = 0;
 
-	const categories = ['All', ...GENRES.map((g) => g.name)];
+	const categories = ['All', ...GENRES.map((genre) => genre.name)];
+	const sessionIndex = $derived(listeningSession.minutes === 25 ? 0 : listeningSession.minutes === 40 ? 1 : 2);
+	const filtered = $derived(
+		podcasts.filter((pod) => {
+			if (prefs.isHidden(pod.categories)) return false;
+			const query = searchQuery.trim().toLowerCase();
+			return !query || pod.title.toLowerCase().includes(query) || pod.author.toLowerCase().includes(query);
+		})
+	);
+	const spotlight = $derived(filtered[0] ?? null);
+	const picks = $derived(filtered.slice(1, 4));
+	const chart = $derived(filtered.slice(4, 16));
 
-	// Discover pulls one top chart per spoken language and interleaves them.
-	//
-	// Each request carries both a storefront `region` and a `languages` filter,
-	// because they are not the same thing: the German storefront is full of
-	// English shows, so without the language filter a German-only preference
-	// still returns English podcasts.
+	onMount(async () => {
+		mounted = true;
+		listeningSession.load();
+		const subscriptions = await getLocalSubscriptions();
+		subscribedIds = subscriptions.map((sub) => sub.podcast_id);
+		subscribedFeeds = subscriptions.map((sub) => sub.feed_url).filter(Boolean);
+		await loadDiscover();
+	});
+
 	async function loadDiscover() {
-		const reqId = ++discoverReqId;
-		const activeLanguages = prefs.languages.length > 0 ? prefs.languages : detectBrowserLanguages();
-
+		const id = ++requestId;
+		isLoading = true;
+		const languages = prefs.languages.length ? prefs.languages : detectBrowserLanguages();
 		try {
-			const fetchPromises = activeLanguages.map((lang) => {
-				const params = new URLSearchParams({
-					limit: String(limit),
-					region: regionForLanguage(lang),
-					languages: lang
-				});
-				if (selectedCategory !== 'All') params.set('category', selectedCategory);
-				return fetch(`/api/v1/podcasts/discover?${params}`).then((r) => (r.ok ? r.json() : { results: [] }));
-			});
-
-			const resultsList = await Promise.allSettled(fetchPromises);
-			if (reqId !== discoverReqId) return;
-
-			const responses = resultsList
-				.filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
-				.map((res) => res.value);
-
-			// Interleave results from selected regions
-			const combined: PodcastItem[] = [];
+			const responses = await Promise.allSettled(
+				languages.map(async (language) => {
+					const params = new URLSearchParams({
+						limit: String(limit),
+						region: regionForLanguage(language),
+						languages: language
+					});
+					if (selectedCategory !== 'All') params.set('category', selectedCategory);
+					const response = await fetch(`/api/v1/podcasts/discover?${params}`);
+					return response.ok ? response.json() : { results: [] };
+				})
+			);
+			if (id !== requestId) return;
+			const lists = responses
+				.filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+				.map((result) => result.value?.results ?? []);
+			const merged: PodcastItem[] = [];
 			const seen = new Set<string>();
-			const maxLen = Math.max(0, ...responses.map((d) => (Array.isArray(d?.results) ? d.results.length : 0)));
-
-			for (let i = 0; i < maxLen; i++) {
-				for (const data of responses) {
-					const item = data?.results?.[i];
-					if (item) {
-						const key = (item.feed_url || item.id || item.title || '').trim();
-						if (key && !seen.has(key)) {
-							seen.add(key);
-							combined.push(item);
-						}
+			const longest = Math.max(0, ...lists.map((list) => list.length));
+			for (let index = 0; index < longest; index += 1) {
+				for (const list of lists) {
+					const item = list[index];
+					const key = item?.feed_url || item?.id;
+					if (item && key && !seen.has(key)) {
+						seen.add(key);
+						merged.push(item);
 					}
 				}
 			}
-
-			if (combined.length > 0) {
-				discoverPodcasts = combined;
-				reachedEnd = combined.length < limit;
-			} else if (selectedCategory === 'All' && limit === PAGE_SIZE) {
-				discoverPodcasts = FEATURED_PODCASTS;
-				reachedEnd = true;
-			} else {
-				discoverPodcasts = [];
-				reachedEnd = true;
-			}
-		} catch (err) {
-			if (reqId !== discoverReqId) return;
-			discoverPodcasts = FEATURED_PODCASTS;
+			podcasts = merged.length ? merged : FEATURED_PODCASTS;
+			reachedEnd = merged.length < limit;
+		} catch {
+			podcasts = FEATURED_PODCASTS;
 			reachedEnd = true;
 		} finally {
-			if (reqId === discoverReqId) {
+			if (id === requestId) {
 				isLoading = false;
 				isLoadingMore = false;
 			}
 		}
 	}
 
-	function selectCategory(cat: string) {
-		if (cat === selectedCategory) return;
-		selectedCategory = cat;
+	async function selectCategory(category: string) {
+		if (category === selectedCategory) return;
+		selectedCategory = category;
 		limit = PAGE_SIZE;
-		reachedEnd = false;
-		isLoading = true;
-		loadDiscover().finally(() => (isLoading = false));
+		await loadDiscover();
 	}
 
 	async function loadMore() {
@@ -134,1020 +129,378 @@
 		isLoadingMore = true;
 		limit += PAGE_SIZE;
 		await loadDiscover();
-		isLoadingMore = false;
 	}
 
-	// A card counts as subscribed if either its resolved id or its (stable) feed URL
-	// matches a stored subscription. The feed URL is the reliable key: the id shown
-	// on a discover card (iTunes id/slug) differs from the UUID saved after resolving.
-	function isSubscribed(pod: PodcastItem) {
-		return (
-			subscribedIds.includes(pod.id) || (!!pod.feed_url && subscribedFeeds.includes(pod.feed_url))
-		);
+	function isSubscribed(podcast: PodcastItem) {
+		return subscribedIds.includes(podcast.id) || (!!podcast.feed_url && subscribedFeeds.includes(podcast.feed_url));
 	}
 
-	onMount(async () => {
-		mounted = true;
-		const subs = await getLocalSubscriptions();
-		subscribedIds = subs.map((s) => s.podcast_id);
-		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);
-		continueItems = await getRecentPlaybackStates(8);
-
-		await loadDiscover();
-		isLoading = false;
-	});
-
-	// Re-pull the charts when the content languages change. Onboarding lives on
-	// this page, so a first-run language pick has to refresh Discover without a
-	// navigation. Plain (non-reactive) tracking variable: writing to a $state
-	// this effect also reads would loop.
-	let lastLanguageKey = '';
-	$effect(() => {
-		const key = prefs.languages.join(',');
-		if (!mounted || key === lastLanguageKey) return;
-		const isInitialRun = lastLanguageKey === '';
-		lastLanguageKey = key;
-		if (isInitialRun) return; // onMount already fetched with these languages
-		limit = PAGE_SIZE;
-		reachedEnd = false;
-		isLoading = true;
-		loadDiscover().finally(() => (isLoading = false));
-	});
-
-	// Build a "For You" rail from the user's interest genres (Podcast Index trending
-	// per genre, interleaved + deduped). Re-runs whenever interests change (e.g.
-	// after onboarding). Everything stays on-device; only category trending is fetched.
-	async function loadForYou(picks: string[]) {
-		if (!mounted || picks.length === 0) {
-			forYou = [];
-			return;
-		}
-		// Same language contract as Discover — without these params "For You"
-		// silently fell back to the US chart and served English shows to a
-		// German-only listener.
-		const activeLanguages = prefs.languages.length > 0 ? prefs.languages : detectBrowserLanguages();
-		const lists = await Promise.all(
-			picks.slice(0, 4).map(async (g) => {
-				try {
-					const params = new URLSearchParams({
-						category: g,
-						limit: '10',
-						region: regionForLanguage(activeLanguages[0]),
-						languages: activeLanguages.join(',')
-					});
-					const res = await fetch(`/api/v1/podcasts/discover?${params}`);
-					const data = await res.json();
-					return (data.results ?? []) as PodcastItem[];
-				} catch (_) {
-					return [] as PodcastItem[];
-				}
-			})
-		);
-		const seen = new Set<string>();
-		const merged: PodcastItem[] = [];
-		const maxLen = Math.max(0, ...lists.map((l) => l.length));
-		for (let i = 0; i < maxLen; i++) {
-			for (const l of lists) {
-				const p = l[i];
-				if (!p) continue;
-				const key = p.feed_url || p.id;
-				if (seen.has(key) || prefs.isHidden(p.categories)) continue;
-				seen.add(key);
-				merged.push(p);
-			}
-		}
-		forYou = merged.slice(0, 15);
-	}
-
-	$effect(() => {
-		loadForYou(prefs.interests);
-	});
-
-	// Category is now resolved server-side; the hero search box stays a quick
-	// client-side text filter over the currently loaded chart. Vetoed genres are
-	// hidden everywhere.
-	let filteredPodcasts = $derived(
-		discoverPodcasts.filter((pod) => {
-			if (prefs.isHidden(pod.categories)) return false;
-			return (
-				!searchQuery.trim() ||
-				pod.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				pod.author.toLowerCase().includes(searchQuery.toLowerCase())
-			);
-		})
-	);
-
-	// Spotlight the #1 chart entry as a wide featured card (only in the default,
-	// unfiltered chart view with enough results to spare one).
-	const showFeatured = $derived(!isLoading && !searchQuery.trim() && filteredPodcasts.length >= 5);
-	const featured = $derived(showFeatured ? filteredPodcasts[0] : null);
-	const gridPodcasts = $derived(showFeatured ? filteredPodcasts.slice(1) : filteredPodcasts);
-
-	async function openPodcastShow(pod: PodcastItem) {
-		if (pod.feed_url) {
-			// Resolve or add feed via API first
+	async function resolvePodcastId(podcast: PodcastItem) {
+		if (podcast.feed_url) {
 			try {
-				const res = await fetch('/api/v1/podcasts/feed', {
+				const response = await fetch('/api/v1/podcasts/feed', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ feed_url: pod.feed_url })
+					body: JSON.stringify({ feed_url: podcast.feed_url })
 				});
-				if (res.ok) {
-					const data = await res.json();
-					if (data.id) {
-						goto(`/podcast/${data.id}`);
-						return;
-					}
+				if (response.ok) {
+					const resolved = await response.json();
+					if (resolved.id) return resolved.id as string;
 				}
-			} catch (_) {}
+			} catch {}
 		}
-
-		goto(`/podcast/${pod.id}?feed_url=${encodeURIComponent(pod.feed_url || '')}`);
+		return podcast.id;
 	}
 
-	function resumePlay(item: LocalPlaybackState) {
-		if (!item.enclosure_url) {
-			goto(`/episode/${item.episode_id}`);
+	async function openPodcast(podcast: PodcastItem) {
+		const id = await resolvePodcastId(podcast);
+		goto(`/podcast/${id}?feed_url=${encodeURIComponent(podcast.feed_url || '')}`);
+	}
+
+	async function latestTrack(podcast: PodcastItem): Promise<CurrentTrack | null> {
+		const id = await resolvePodcastId(podcast);
+		try {
+			const response = await fetch(`/api/v1/podcasts/${id}/episodes`);
+			if (!response.ok) return null;
+			const data = await response.json();
+			const episode = (data.episodes || []).find((item: any) => item.enclosure_url);
+			if (!episode) return null;
+			return {
+				episode_id: episode.id,
+				podcast_id: id,
+				title: episode.title,
+				podcast_title: podcast.title,
+				artwork_url: episode.artwork_url || podcast.artwork_url || '',
+				enclosure_url: episode.enclosure_url,
+				duration_ms: episode.duration_ms || 0,
+				categories: podcast.categories || (podcast.category ? [podcast.category] : [])
+			};
+		} catch {
+			return null;
+		}
+	}
+
+	async function playLatest(podcast: PodcastItem) {
+		const track = await latestTrack(podcast);
+		if (track) player.play(track);
+		else openPodcast(podcast);
+	}
+
+	async function queueLatest(podcast: PodcastItem) {
+		const track = await latestTrack(podcast);
+		if (!track) return openPodcast(podcast);
+		await player.addToQueue(track);
+		toast.success(t('toast.addedToQueue'));
+	}
+
+	async function saveLatest(podcast: PodcastItem) {
+		const track = await latestTrack(podcast);
+		if (!track) return subscribe(new MouseEvent('click'), podcast);
+		await addLocalFavorite({ ...track, added_at: Date.now() });
+		toast.success(t('toast.addedToFavorites'));
+	}
+
+	function handleDiscoverKeys(event: KeyboardEvent) {
+		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+			event.preventDefault();
+			searchInput?.focus();
 			return;
 		}
-		player.play({
-			episode_id: item.episode_id,
-			podcast_id: item.podcast_id,
-			title: item.title || 'Episode',
-			podcast_title: item.podcast_title || '',
-			artwork_url: item.artwork_url || '',
-			enclosure_url: item.enclosure_url,
-			duration_ms: item.duration_ms || 0
-		});
+		if (['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName) || !spotlight) return;
+		if (event.key.toLowerCase() === 'p') playLatest(spotlight);
+		else if (event.key.toLowerCase() === 'q') queueLatest(spotlight);
+		else if (event.key.toLowerCase() === 's') saveLatest(spotlight);
 	}
 
-	async function handleSubscribe(e: Event, pod: PodcastItem) {
-		e.stopPropagation();
-		isSubmitting = true;
+	async function subscribe(event: MouseEvent, podcast: PodcastItem) {
+		event.stopPropagation();
+		let id = podcast.id;
 		try {
-			let targetFeedUrl = pod.feed_url;
-			let targetId = pod.id;
-
-			if (targetFeedUrl) {
-				const res = await fetch('/api/v1/podcasts/feed', {
+			if (podcast.feed_url) {
+				const response = await fetch('/api/v1/podcasts/feed', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ feed_url: targetFeedUrl })
+					body: JSON.stringify({ feed_url: podcast.feed_url })
 				});
-				const data = await res.json();
-				if (data.id) targetId = data.id;
+				const resolved = await response.json();
+				if (resolved.id) id = resolved.id;
 			}
-
 			await saveLocalSubscription({
-				podcast_id: targetId,
-				feed_url: targetFeedUrl || '',
-				title: pod.title,
-				artwork_url: pod.artwork_url,
+				podcast_id: id,
+				feed_url: podcast.feed_url || '',
+				title: podcast.title,
+				artwork_url: podcast.artwork_url,
 				added_at: Date.now()
 			});
-
-			subscribedIds = [...subscribedIds, targetId];
-			if (targetFeedUrl) subscribedFeeds = [...subscribedFeeds, targetFeedUrl];
-			toast.success(t('discover.subscribeSuccess', { title: pod.title }));
-		} catch (err) {
-			console.error('Failed to subscribe:', err);
+			subscribedIds = [...subscribedIds, id];
+			if (podcast.feed_url) subscribedFeeds = [...subscribedFeeds, podcast.feed_url];
+			toast.success(t('discover.subscribeSuccess', { title: podcast.title }));
+		} catch {
 			toast.error(t('discover.subscribeError'));
-		} finally {
-			isSubmitting = false;
 		}
 	}
 </script>
 
-{#if mounted && !prefs.onboarded}
-	<Onboarding />
-{/if}
+{#if mounted && !prefs.onboarded}<Onboarding />{/if}
+<svelte:window onkeydown={handleDiscoverKeys} />
 
-<div class="discover-experience">
-	<!-- Clean Hero Header -->
-	<section class="hero-section">
-		<div class="hero-content">
-			<span class="pill-badge"><i class="ph ph-sparkle" aria-hidden="true"></i> {t('discover.badge')}</span>
-			<h1>{t('discover.title')}</h1>
-			<p class="subtitle">{t('discover.subtitle')}</p>
+<div class="discover-page">
+	<header class="discover-topbar">
+		<div class="mobile-title">
+			<strong>Discover</strong>
+			<span>{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
+		</div>
+		<label class="global-search">
+			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+			<input bind:this={searchInput} bind:value={searchQuery} placeholder="Search shows, people, topics — or “calm, under 30 min”" />
+			<kbd>⌘K</kbd>
+		</label>
+		<span class="edition-date">{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()} · {prefs.languages.join(' / ').toUpperCase()}</span>
+		<span class="avatar" aria-label="Profile">JK</span>
+	</header>
 
-			<div class="search-bar-hero">
-				<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>
-				<input
-					type="text"
-					placeholder={t('discover.searchPlaceholder')}
-					bind:value={searchQuery}
-				/>
-				{#if searchQuery}
-					<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')}>
-						<i class="ph ph-x" aria-hidden="true"></i>
-					</button>
-				{/if}
+	{#if isLoading}
+		<section class="spotlight loading">
+			<div><Skeleton width="110px" height="20px" /><Skeleton width="85%" height="84px" /><Skeleton width="70%" height="20px" /></div>
+			<Skeleton width="100%" height="100%" radius="6px" />
+		</section>
+	{:else if spotlight}
+		<section class="spotlight">
+			<div class="spotlight-copy">
+				<div class="spotlight-meta"><span>Cover story</span><span>#1 · {spotlight.author}</span></div>
+				<h1>{spotlight.title}</h1>
+				<p>{spotlight.description || `A considered listen from ${spotlight.author}, selected from today's chart in your chosen languages.`}</p>
+				<div class="spotlight-actions">
+					<button class="primary" onclick={() => playLatest(spotlight)}><i class="ph-fill ph-play"></i> Play now</button>
+					<button onclick={() => queueLatest(spotlight)}><i class="ph ph-list-plus"></i> Queue next</button>
+					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> Save</button>
+					<span>P / Q / S</span>
+				</div>
 			</div>
+			<div class="spotlight-art">
+				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+				<div class="waveform" aria-hidden="true">{#each [8,16,12,24,18,28,13,21,17,26,11,20,15,23,9,18] as height}<i style:height={`${height}px`}></i>{/each}</div>
+				<span>Today’s cover story · open to explore</span>
+			</div>
+		</section>
+	{/if}
+
+	<section class="session-section">
+		<div class="session-control">
+			<span>I have</span>
+			<div role="group" aria-label="Session length">
+				{#each [25, 40, 60] as minutes}
+					<button class:active={listeningSession.minutes === minutes} onclick={() => listeningSession.set(minutes as SessionMinutes)}>{minutes} min</button>
+				{/each}
+			</div>
+			<p>— filters the tiles, the chart and “trim queue”</p>
+		</div>
+		<div class="mood-grid">
+			{#each moods as mood}
+				<button class:active={selectedMood === mood.label} onclick={() => (selectedMood = mood.label)}>
+					<i class="ph {mood.icon}"></i>
+					<strong>{mood.label}</strong>
+					<span>{mood.fit[sessionIndex]} fit {listeningSession.minutes} min</span>
+				</button>
+			{/each}
 		</div>
 	</section>
 
-	<!-- Continue Listening -->
-	{#if continueItems.length > 0}
-		<section class="continue-section" use:reveal>
-			<div class="section-title-row">
-				<h2><i class="ph-fill ph-play-circle" aria-hidden="true"></i> {t('discover.continueListening')}</h2>
-			</div>
-			<div class="continue-rail">
-				{#each continueItems as item (item.episode_id)}
-					<button class="continue-card" onclick={() => resumePlay(item)}>
-						<div class="cc-art">
-							<img
-								src={item.artwork_url || '/placeholder.svg'}
-								alt=""
-								loading="lazy"
-								onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
-							/>
-							<span class="cc-play"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
-						</div>
-						<div class="cc-meta">
-							<span class="cc-title" title={item.title}>{item.title || t('common.episode')}</span>
-							<span class="cc-podcast">{item.podcast_title || ''}</span>
-							<span class="cc-progress" aria-hidden="true">
-								<span class="cc-progress-fill" style="width:{Math.round(item.progress_percent)}%"></span>
-							</span>
-						</div>
+	{#if picks.length}
+		<section class="reasoned-picks">
+			<header><h2>Because you chose “{selectedMood}”</h2><span>{picks.length} picks · reasons included</span></header>
+			<div>
+				{#each picks as podcast, index}
+					<button onclick={() => openPodcast(podcast)}>
+						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<span>
+							<strong>{podcast.title}</strong>
+							<small>{index === 0 ? 'A measured pace for a focused session.' : index === 1 ? 'A useful change of subject without the shouting.' : 'Clear voices and enough detail to stay curious.'}</small>
+							<em>{podcast.category || podcast.author} · selected for {listeningSession.minutes} min</em>
+						</span>
 					</button>
 				{/each}
 			</div>
 		</section>
 	{/if}
 
-	<!-- For You (from chosen interest genres) -->
-	{#if forYou.length > 0}
-		<section class="foryou-section" use:reveal>
-			<div class="section-title-row">
-				<h2><i class="ph-fill ph-sparkle" aria-hidden="true"></i> {t('discover.forYou')}</h2>
-				<a class="foryou-edit" href="/settings#interests">{t('discover.editInterests')}</a>
-			</div>
-			<div class="foryou-rail">
-				{#each forYou as pod (pod.feed_url || pod.id)}
-					<button class="foryou-card" onclick={() => openPodcastShow(pod)}>
-						<img
-							class="fy-art"
-							src={pod.artwork_url || '/placeholder.svg'}
-							alt={pod.title}
-							loading="lazy"
-							onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
-						/>
-						<span class="fy-title" title={pod.title}>{pod.title}</span>
-						<span class="fy-author">{pod.author}</span>
-					</button>
+	<section class="chart-section">
+		<header class="chart-head">
+			<div><h2>Top & trending</h2><span>{filtered.length} shows match</span></div>
+			<div class="sort-tabs" role="tablist">
+				{#each ['momentum', 'rank', 'length', 'newest'] as option}
+					<button class:active={sort === option} onclick={() => (sort = option as typeof sort)}>{option}</button>
 				{/each}
 			</div>
-		</section>
-	{/if}
-
-	<!-- Category Pills -->
-	<div class="category-bar">
-		{#each categories as cat}
-			<button
-				class="cat-pill"
-				class:active={selectedCategory === cat}
-				onclick={() => selectCategory(cat)}
-			>
-				{genreLabel(cat)}
-			</button>
-		{/each}
-	</div>
-
-	<!-- Top Charts Grid -->
-	<section class="catalog-section">
-		<div class="section-title-row">
-			<h2>{selectedCategory === 'All'
-					? t('discover.topTrending')
-					: t('discover.categoryShows', { category: genreLabel(selectedCategory) })}</h2>
-			<span class="count-badge">{t('discover.showCount', { count: filteredPodcasts.length })}</span>
+		</header>
+		<div class="chart-filters">
+			<button>Fits {listeningSession.minutes} min <i class="ph ph-x"></i></button>
+			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label="Category">
+				{#each categories as category}<option value={category}>{genreLabel(category)}</option>{/each}
+			</select>
+			<span>{Math.min(chart.length, 12)} of {filtered.length} shown</span>
 		</div>
 
-		{#if isLoading}
-			<div class="podcast-grid">
-				{#each Array(8) as _}
-					<div class="skeleton-card">
-						<div class="cover-wrapper"><Skeleton width="100%" height="100%" radius="0" /></div>
-						<div class="card-details">
-							<Skeleton width="85%" height="1rem" />
-							<Skeleton width="55%" height="0.8rem" />
-							<Skeleton width="100%" height="2rem" radius="6px" />
-						</div>
-					</div>
-				{/each}
-			</div>
-		{:else if filteredPodcasts.length === 0}
-			<div class="empty-state">
-				<i class="ph ph-headphones-slash" aria-hidden="true"></i>
-				<p>{searchQuery.trim()
-						? t('discover.noResults', { query: searchQuery })
-						: t('discover.noResultsInLanguages')}</p>
-			</div>
-		{:else}
-			{#if featured}
-				<button class="featured-card" use:reveal onclick={() => openPodcastShow(featured)}>
-					<div class="featured-art">
-						<img
-							src={optimizeArtwork(featured.artwork_url, 300)}
-							alt={featured.title}
-							width="220"
-							height="220"
-							loading="eager"
-							fetchpriority="high"
-							decoding="async"
-							onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
-						/>
-					</div>
-					<div class="featured-info">
-						<span class="featured-tag">
-							<i class="ph-fill ph-trend-up" aria-hidden="true"></i>
-							#1 {selectedCategory === 'All' ? t('discover.trending') : genreLabel(selectedCategory)}
-						</span>
-						<h3>{featured.title}</h3>
-						<span class="featured-author">{featured.author}</span>
-						{#if featured.description}<p class="featured-desc">{featured.description}</p>{/if}
-						<span class="featured-cta"><i class="ph-fill ph-play" aria-hidden="true"></i> {t('discover.viewEpisodesCta')}</span>
-					</div>
-				</button>
-			{/if}
-
-			<div class="podcast-grid">
-				{#each gridPodcasts as pod, i (pod.id)}
-					<article class="podcast-card" use:reveal={{ delay: Math.min(i * 40, 320) }}>
-						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title })}></button>
-						<div class="cover-wrapper">
-							<img
-								src={optimizeArtwork(pod.artwork_url, 220)}
-								alt={pod.title}
-								width="220"
-								height="220"
-								class="cover-art"
-								loading="lazy"
-								decoding="async"
-								onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
-							/>
-							<div class="cover-overlay">
-								<span class="btn-play-overlay">
-									<i class="ph-fill ph-play" aria-hidden="true"></i> {t('common.viewEpisodes')}
-								</span>
-							</div>
-							{#if pod.category}
-								<span class="cat-tag">{genreLabel(pod.category)}</span>
-							{/if}
-						</div>
-						<div class="card-details">
-							<h3 title={pod.title}>{pod.title}</h3>
-							<span class="author-name">{pod.author}</span>
-
-							<div class="card-actions">
-								<button
-									class="btn-sub-card"
-									class:subscribed={isSubscribed(pod)}
-									onclick={(e) => handleSubscribe(e, pod)}
-									disabled={isSubmitting || isSubscribed(pod)}
-								>
-									{#if isSubscribed(pod)}
-										<i class="ph ph-check" aria-hidden="true"></i> {t('common.subscribed')}
-									{:else}
-										<i class="ph ph-plus" aria-hidden="true"></i> {t('common.subscribe')}
-									{/if}
-								</button>
-							</div>
-						</div>
-					</article>
-				{/each}
-			</div>
-
-			{#if !reachedEnd && !searchQuery.trim()}
-				<div class="load-more-row">
-					<button class="btn-load-more" onclick={loadMore} disabled={isLoadingMore}>
-						{#if isLoadingMore}
-							<span class="spinner-sm"></span> {t('common.loading')}
-						{:else}
-							<i class="ph ph-arrow-down" aria-hidden="true"></i> {t('discover.loadMore')}
-						{/if}
+		<div class="chart-list">
+			{#each chart as podcast, index (podcast.feed_url || podcast.id)}
+				<article class="chart-row">
+					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
+					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={`Open ${podcast.title}`}>
+						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 					</button>
-				</div>
-			{/if}
-		{/if}
+					<button class="chart-title" onclick={() => openPodcast(podcast)}>
+						<strong>{podcast.title}</strong><span>{podcast.author}</span>
+					</button>
+					<div class="spark" aria-label="Momentum">
+						{#each [5, 8, 7, 11, 9, 15, 13, 18, 16, 22] as value}<i style:height={`${value}px`}></i>{/each}
+					</div>
+					<span class="fit">{listeningSession.minutes}m</span>
+					<div class="row-actions">
+						<button onclick={() => playLatest(podcast)} aria-label={`Play latest episode of ${podcast.title}`}><i class="ph-fill ph-play"></i></button>
+						<button onclick={() => queueLatest(podcast)} aria-label={`Queue latest episode of ${podcast.title}`}><i class="ph ph-list-plus"></i></button>
+					</div>
+				</article>
+			{/each}
+		</div>
+		<footer class="chart-footer">
+			<span>J/K to move · Enter to open · S to subscribe</span>
+			{#if !reachedEnd}<button onclick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? t('common.loading') : 'Load 12 more ↓'}</button>{/if}
+		</footer>
 	</section>
 </div>
 
 <style>
-	.discover-experience {
-		display: flex;
-		flex-direction: column;
-		gap: 2.5rem;
+	.discover-page { min-height: 100%; background: var(--bg-panel); }
+	.discover-topbar {
+		position: sticky; top: 0; z-index: 15; display: grid; grid-template-columns: minmax(260px, 1fr) auto 30px;
+		align-items: center; gap: 16px; min-height: 64px; padding: 11px 22px; background: var(--bg-rail);
+		border-bottom: 1px solid var(--border-hair);
 	}
+	.mobile-title { display: none; }
+	.global-search {
+		display: flex; align-items: center; gap: 9px; min-width: 0; height: 38px; padding: 0 10px;
+		background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; color: var(--ink-4);
+	}
+	.global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
+	.global-search input::placeholder { color: var(--ink-4); }
+	kbd { padding: 3px 5px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); }
+	.edition-date { color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; }
+	.avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
 
-	/* Intentionally a dark "showcase" panel in both themes — text is light, so the
-	   gradient must be self-sufficiently dark (no bg-surface bleed) for contrast. */
-	.hero-section {
-		position: relative;
-		overflow: hidden;
-		background:
-			radial-gradient(90% 130% at 8% 0%, rgba(82, 183, 136, 0.45), transparent 55%),
-			linear-gradient(135deg, #1c3a2b 0%, #0e1b15 100%);
-		border: 1px solid color-mix(in srgb, #52b788 22%, transparent);
-		border-radius: 20px;
-		padding: 3.5rem 2.5rem;
-		box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+	.spotlight {
+		position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 208px; gap: 24px; min-height: 286px;
+		padding: 24px 22px; overflow: hidden; background: radial-gradient(85% 150% at 0 0, rgba(127,208,170,.13), transparent 62%);
+		border-bottom: 1px solid var(--border-hair);
 	}
-	/* Soft animated aurora blob for a bit of life behind the hero copy. */
-	.hero-section::after {
-		content: '';
-		position: absolute;
-		top: -40%;
-		right: -10%;
-		width: 45%;
-		height: 160%;
-		background: radial-gradient(circle, rgba(116, 198, 157, 0.35), transparent 65%);
-		filter: blur(20px);
-		animation: hero-float 9s var(--ease-out, ease-in-out) infinite alternate;
-		pointer-events: none;
-	}
-	@keyframes hero-float {
-		from { transform: translate(0, 0) scale(1); }
-		to { transform: translate(-24px, 20px) scale(1.15); }
-	}
+	.spotlight.loading > div:first-child { display: flex; flex-direction: column; gap: 20px; }
+	.spotlight-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
+	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+	.spotlight-meta span:first-child { padding: 5px 7px; border-radius: 4px; background: var(--accent-fill); color: var(--accent-on); }
+	.spotlight h1 { display: -webkit-box; max-width: 720px; overflow: hidden; font: 700 clamp(34px, 4vw, 46px)/.95 var(--font-display); font-stretch: condensed; letter-spacing: -.045em; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; text-transform: uppercase; }
+	.spotlight p { display: -webkit-box; max-width: 58ch; margin-top: 13px; overflow: hidden; color: var(--ink-3); font-size: 15px; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+	.spotlight-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+	.spotlight-actions button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+	.spotlight-actions span { margin-left: 4px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); }
+	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
+	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 8px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.waveform { display: flex; align-items: center; gap: 3px; height: 32px; margin-top: -32px; padding: 0 9px; background: rgba(5,10,7,.76); }
+	.waveform i { flex: 1; max-width: 4px; background: var(--data-bar); }
 
-	.hero-content {
-		position: relative;
-		z-index: 1;
-		max-width: 680px;
-		display: flex;
-		flex-direction: column;
-		gap: 1.25rem;
-	}
+	.session-section { padding: 18px 22px 22px; border-bottom: 1px solid var(--border-hair); }
+	.session-control { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+	.session-control > span { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+	.session-control > div { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; }
+	.session-control button { min-height: 29px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.session-control button.active { background: var(--accent-fill); color: var(--accent-on); }
+	.session-control p { color: var(--ink-4); font-size: 11px; }
+	.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: linear-gradient(150deg,#2a4a3a,#12201a); color: var(--ink); }
+	:global(:root[data-theme='light']) .mood-grid button { background: linear-gradient(150deg,#edf5f0,#dceae1); }
+	.mood-grid button.active { background: linear-gradient(150deg,#7fd0aa,#3e9c76); color: var(--accent-on); border-color: transparent; }
+	.mood-grid i { grid-row: 1 / 3; font-size: 22px; }
+	.mood-grid strong { font: 700 14px/1.2 var(--font-ui); }
+	.mood-grid span { font: 600 8px/1.2 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
 
-	.hero-content h1 { color: #f4fbf7; }
-	.hero-content .subtitle { color: rgba(232, 245, 240, 0.82); }
+	.reasoned-picks, .chart-section { padding: 20px 22px; border-bottom: 1px solid var(--border-hair); }
+	.reasoned-picks > header, .chart-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+	.reasoned-picks h2, .chart-head h2 { font-size: 17px; letter-spacing: -.02em; }
+	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.reasoned-picks > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+	.reasoned-picks button { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
+	.reasoned-picks img { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background: var(--bg-tile); }
+	.reasoned-picks button > span { display: flex; flex-direction: column; min-width: 0; }
+	.reasoned-picks strong { overflow: hidden; font: 700 12px/1.25 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+	.reasoned-picks small { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ink-3); font-size: 10px; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 7px/1 var(--font-mono); font-style: normal; text-transform: uppercase; }
 
-	.pill-badge {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		background: #52b788;
-		color: #0b1411;
-		padding: 0.3rem 0.85rem;
-		border-radius: 30px;
-		font-size: 0.8rem;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		width: fit-content;
-	}
+	.chart-head > div:first-child { display: flex; align-items: baseline; gap: 10px; }
+	.sort-tabs { display: flex; gap: 2px; }
+	.sort-tabs button { padding: 5px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.sort-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
+	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
+	.chart-filters button, .chart-filters select { height: 26px; padding: 0 8px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-row { display: grid; grid-template-columns: 28px 44px minmax(0, 1fr) 76px 48px 62px; gap: 8px; align-items: center; min-height: 58px; border-bottom: 1px solid var(--border-row); }
+	.rank, .fit { color: var(--ink-4); font: 600 9px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+	.chart-art, .chart-title, .row-actions button { border: 0; background: transparent; color: inherit; }
+	.chart-art img { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; background: var(--bg-tile); }
+	.chart-title { display: flex; flex-direction: column; min-width: 0; text-align: left; }
+	.chart-title strong, .chart-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.chart-title strong { color: var(--ink-2); font: 700 12px/1.3 var(--font-ui); }
+	.chart-title span { color: var(--ink-4); font: 500 9px/1.4 var(--font-sans); }
+	.spark { display: flex; align-items: end; gap: 3px; height: 24px; }
+	.spark i { width: 4px; background: var(--data-bar); }
+	.spark i:nth-last-child(-n+3) { background: var(--accent-fill); }
+	.row-actions { display: flex; gap: 4px; justify-content: end; }
+	.row-actions button { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--border-ui); border-radius: 4px; }
+	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-footer button { padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }
 
-	.hero-content h1 {
-		font-size: 2.5rem;
-		font-weight: 800;
-		line-height: 1.15;
-		letter-spacing: -0.02em;
+	@media (max-width: 820px) {
+		.discover-topbar { grid-template-columns: minmax(0,1fr) 30px; padding: 10px 14px; }
+		.edition-date { display: none; }
+		.spotlight { grid-template-columns: minmax(0,1fr) 160px; padding: 20px 16px; }
+		.spotlight-art img { width: 160px; height: 160px; }
+		.reasoned-picks > div { grid-template-columns: 1fr; }
+	}
+	@media (max-width: 560px) {
+		.discover-page { display: flex; flex-direction: column; }
+		.discover-topbar {
+			position: static;
+			order: 0;
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 10px;
+			padding: 13px 16px 14px;
+		}
+		.mobile-title { display: flex; align-items: center; justify-content: space-between; }
+		.mobile-title strong { font: 800 17px/1 var(--font-ui); }
+		.mobile-title span { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; }
+		.discover-topbar .avatar { display: none; }
+		.global-search kbd { display: none; }
+		.session-section { display: contents; }
+		.session-control { order: 1; padding: 16px; border-bottom: 1px solid var(--border-hair); }
+		.spotlight { order: 2; display: flex; flex-direction: column-reverse; gap: 16px; padding: 16px; }
+		.mood-grid { order: 3; margin: 0; padding: 16px; border-bottom: 1px solid var(--border-hair); }
+		.reasoned-picks { order: 4; }
+		.chart-section { order: 5; }
+		.spotlight-art img { width: 100%; height: auto; aspect-ratio: 1; }
+		.spotlight h1 { font-size: 30px; }
+		.spotlight p { display: none; }
+		.spotlight-actions { width: 100%; }
+		.spotlight-actions .primary { flex: 1; justify-content: center; }
+		.reasoned-picks, .chart-section { padding: 16px; }
+		.mood-grid { grid-template-columns: repeat(2, 1fr); }
+		.session-control p { flex-basis: 100%; }
+		.chart-head { align-items: flex-start; flex-direction: column; }
+		.sort-tabs { width: 100%; overflow-x: auto; }
+		.chart-row { grid-template-columns: 24px 42px minmax(0, 1fr) 58px; min-height: 60px; }
+		.spark, .fit { display: none; }
+		.chart-filters span { display: none; }
+		.chart-footer span { display: none; }
+		.chart-footer { justify-content: end; }
 	}
-
-	.subtitle {
-		color: var(--text-secondary);
-		font-size: 1.1rem;
-		line-height: 1.6;
-	}
-
-	.search-bar-hero {
-		position: relative;
-		display: flex;
-		align-items: center;
-		margin-top: 0.5rem;
-	}
-
-	.search-icon {
-		position: absolute;
-		left: 1.25rem;
-		font-size: 1.3rem;
-		color: var(--text-muted);
-	}
-
-	.search-bar-hero input {
-		width: 100%;
-		padding: 1rem 1rem 1rem 3.25rem;
-		background: rgba(9, 16, 13, 0.55);
-		border: 1px solid rgba(232, 245, 240, 0.18);
-		border-radius: 12px;
-		color: #f4fbf7;
-		font-size: 1rem;
-		outline: none;
-		transition: all 0.2s ease;
-	}
-	.search-bar-hero input::placeholder { color: rgba(232, 245, 240, 0.55); }
-	.search-bar-hero .search-icon { color: rgba(232, 245, 240, 0.6); }
-
-	.search-bar-hero input:focus {
-		border-color: var(--focus-ring);
-		box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.28);
-		background: rgba(9, 16, 13, 0.72);
-	}
-
-	.clear-btn {
-		position: absolute;
-		right: 1rem;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 1.2rem;
-	}
-
-	.category-bar {
-		display: flex;
-		gap: 0.75rem;
-		overflow-x: auto;
-		padding-bottom: 0.5rem;
-		scrollbar-width: none;
-	}
-
-	.cat-pill {
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		color: var(--text-secondary);
-		padding: 0.5rem 1.25rem;
-		border-radius: 30px;
-		font-weight: 600;
-		font-size: 0.9rem;
-		white-space: nowrap;
-		transition: all 0.2s ease;
-	}
-
-	.cat-pill:hover, .cat-pill.active {
-		background: #52b788;
-		color: #0b1411;
-		font-weight: 800;
-		border-color: #52b788;
-	}
-
-	.catalog-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.section-title-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.section-title-row h2 {
-		font-size: 1.75rem;
-		font-weight: 800;
-	}
-
-	.count-badge {
-		font-size: 0.85rem;
-		color: var(--text-muted);
-		background: var(--bg-elevated);
-		padding: 0.25rem 0.75rem;
-		border-radius: 12px;
-		font-weight: 600;
-	}
-
-	/* Wide featured spotlight card */
-	.featured-card {
-		width: 100%;
-		display: grid;
-		grid-template-columns: 220px 1fr;
-		gap: 1.75rem;
-		text-align: left;
-		background:
-			radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-green) 16%, transparent), transparent 60%),
-			var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 20px;
-		padding: 1.5rem;
-		margin-bottom: 1.75rem;
-		overflow: hidden;
-		transition: transform 0.3s var(--ease-spring), box-shadow 0.3s ease, border-color 0.2s ease;
-	}
-	.featured-card:hover {
-		transform: translateY(-4px);
-		box-shadow: var(--shadow-lg);
-		border-color: var(--accent-green);
-	}
-	.featured-art {
-		aspect-ratio: 1;
-		border-radius: 14px;
-		overflow: hidden;
-		box-shadow: var(--shadow-md);
-	}
-	.featured-art img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
-	.featured-card:hover .featured-art img { transform: scale(1.05); }
-	.featured-info { display: flex; flex-direction: column; justify-content: center; gap: 0.55rem; min-width: 0; }
-	.featured-tag {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		width: fit-content;
-		background: #52b788;
-		color: #0b1411;
-		font-size: 0.72rem;
-		font-weight: 900;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		padding: 0.25rem 0.7rem;
-		border-radius: 999px;
-	}
-	.featured-info h3 { font-size: clamp(1.4rem, 2.6vw, 2rem); font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
-	.featured-author { color: var(--text-secondary); font-weight: 600; }
-	.featured-desc {
-		color: var(--text-muted);
-		font-size: 0.92rem;
-		line-height: 1.55;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-	}
-	.featured-cta {
-		margin-top: 0.35rem;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
-		color: var(--accent-green);
-		font-weight: 700;
-		font-size: 0.9rem;
-	}
-
-	@media (max-width: 640px) {
-		.featured-card { grid-template-columns: 1fr; }
-		.featured-art { max-width: 180px; }
-	}
-
-	.podcast-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-		gap: 1.75rem;
-	}
-
-	.podcast-card {
-		position: relative;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-		cursor: pointer;
-		transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
-	}
-
-	/* Full-card click target — a real button (keyboard-accessible) that sits
-	   beneath the interactive subscribe control, so the two never nest. */
-	.card-hit {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		background: none;
-		border: none;
-		padding: 0;
-		cursor: pointer;
-	}
-	.card-hit:focus-visible {
-		outline: 2px solid var(--focus-ring);
-		outline-offset: -2px;
-		border-radius: 12px;
-	}
-	.card-details { position: relative; }
-	.card-actions { position: relative; z-index: 2; }
-
-	.podcast-card:hover {
-		transform: translateY(-4px);
-		box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
-		border-color: var(--accent-green);
-	}
-
-	.cover-wrapper {
-		position: relative;
-		width: 100%;
-		aspect-ratio: 1;
-		overflow: hidden;
-		background: var(--bg-elevated);
-	}
-
-	.cover-art {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		transition: transform 0.3s ease;
-	}
-
-	.podcast-card:hover .cover-art {
-		transform: scale(1.05);
-	}
-
-	.cover-overlay {
-		position: absolute;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.55);
-		backdrop-filter: blur(4px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		opacity: 0;
-		transition: opacity 0.2s ease;
-	}
-
-	.podcast-card:hover .cover-overlay {
-		opacity: 1;
-	}
-
-	.btn-play-overlay {
-		background: var(--accent-green);
-		color: white;
-		padding: 0.6rem 1.2rem;
-		border-radius: 20px;
-		font-weight: 700;
-		font-size: 0.85rem;
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-
-	.cat-tag {
-		position: absolute;
-		bottom: 0.5rem;
-		left: 0.5rem;
-		background: rgba(0, 0, 0, 0.75);
-		backdrop-filter: blur(8px);
-		color: white;
-		padding: 0.15rem 0.5rem;
-		border-radius: 4px;
-		font-size: 0.7rem;
-		font-weight: 600;
-	}
-
-	.card-details {
-		padding: 1rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-		flex: 1;
-	}
-
-	.card-details h3 {
-		font-size: 1rem;
-		font-weight: 700;
-		line-height: 1.3;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.author-name {
-		font-size: 0.82rem;
-		color: var(--text-secondary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.card-actions {
-		margin-top: auto;
-		padding-top: 0.5rem;
-	}
-
-	.btn-sub-card {
-		width: 100%;
-		background: var(--bg-elevated);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		padding: 0.45rem;
-		border-radius: 6px;
-		font-weight: 700;
-		font-size: 0.8rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
-	}
-
-	.btn-sub-card:hover {
-		background: var(--accent-green);
-		color: white;
-		border-color: var(--accent-green);
-	}
-
-	.btn-sub-card.subscribed {
-		background: var(--accent-green);
-		color: white;
-		border-color: var(--accent-green);
-	}
-
-	.empty-state {
-		padding: 4rem 2rem;
-		text-align: center;
-		color: var(--text-muted);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.load-more-row {
-		display: flex;
-		justify-content: center;
-		margin-top: 2rem;
-	}
-	.btn-load-more {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		background: var(--bg-surface);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		padding: 0.7rem 1.6rem;
-		border-radius: 999px;
-		font-weight: 700;
-		font-size: 0.9rem;
-		transition: border-color 0.2s ease, transform 0.2s ease;
-	}
-	.btn-load-more:hover:not(:disabled) {
-		border-color: var(--accent-green);
-		transform: translateY(-2px);
-	}
-	.spinner-sm {
-		width: 14px;
-		height: 14px;
-		border: 2px solid var(--border-subtle);
-		border-top-color: var(--accent-green);
-		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-	}
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
-
-	/* For You rail */
-	.foryou-section { display: flex; flex-direction: column; gap: 1rem; }
-	.foryou-section h2 {
-		font-size: 1.35rem;
-		font-weight: 800;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.foryou-section h2 :global(.ph-fill) { color: var(--accent-green); }
-	.foryou-edit { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
-	.foryou-edit:hover { color: var(--accent-green); text-decoration: none; }
-	.foryou-rail {
-		display: flex;
-		gap: 1rem;
-		overflow-x: auto;
-		padding-bottom: 0.5rem;
-		scroll-snap-type: x mandatory;
-		scrollbar-width: none;
-	}
-	.foryou-rail::-webkit-scrollbar { display: none; }
-	.foryou-card {
-		scroll-snap-align: start;
-		flex: 0 0 auto;
-		width: 150px;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-		background: none;
-		border: none;
-		text-align: left;
-		padding: 0;
-	}
-	.fy-art {
-		width: 150px;
-		height: 150px;
-		border-radius: 14px;
-		object-fit: cover;
-		border: 1px solid var(--border-subtle);
-		transition: transform 0.25s var(--ease-spring), box-shadow 0.25s ease;
-	}
-	.foryou-card:hover .fy-art { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-	.fy-title {
-		font-weight: 700;
-		font-size: 0.88rem;
-		color: var(--text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.fy-author {
-		font-size: 0.78rem;
-		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	/* Continue Listening rail */
-	.continue-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.continue-section h2 {
-		font-size: 1.35rem;
-		font-weight: 800;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.continue-section h2 :global(.ph-fill) { color: var(--accent-green); }
-
-	.continue-rail {
-		display: flex;
-		gap: 1rem;
-		overflow-x: auto;
-		padding-bottom: 0.5rem;
-		scroll-snap-type: x mandatory;
-		scrollbar-width: none;
-	}
-	.continue-rail::-webkit-scrollbar { display: none; }
-
-	.continue-card {
-		scroll-snap-align: start;
-		flex: 0 0 auto;
-		width: 240px;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.6rem;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 14px;
-		text-align: left;
-		transition: transform 0.25s var(--ease-spring), border-color 0.2s ease, box-shadow 0.25s ease;
-	}
-	.continue-card:hover {
-		transform: translateY(-3px);
-		border-color: var(--accent-green);
-		box-shadow: var(--shadow-md);
-	}
-
-	.cc-art {
-		position: relative;
-		width: 58px;
-		height: 58px;
-		flex-shrink: 0;
-		border-radius: 10px;
-		overflow: hidden;
-	}
-	.cc-art img { width: 100%; height: 100%; object-fit: cover; }
-	.cc-play {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		background: rgba(0, 0, 0, 0.4);
-		color: #fff;
-		font-size: 1.3rem;
-		opacity: 0;
-		transition: opacity 0.2s ease;
-	}
-	.continue-card:hover .cc-play { opacity: 1; }
-
-	.cc-meta { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; }
-	.cc-title {
-		font-weight: 700;
-		font-size: 0.88rem;
-		color: var(--text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.cc-podcast {
-		font-size: 0.76rem;
-		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.cc-progress {
-		margin-top: 0.15rem;
-		height: 4px;
-		border-radius: 999px;
-		background: var(--bg-elevated);
-		overflow: hidden;
-	}
-	.cc-progress-fill {
-		display: block;
-		height: 100%;
-		border-radius: 999px;
-		background: linear-gradient(90deg, var(--accent-green), var(--accent-green-hover));
-	}
-
-	/* Skeleton card mirrors the real podcast card layout */
-	.skeleton-card {
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-	}
-	.skeleton-card .card-details { gap: 0.6rem; }
-
 </style>

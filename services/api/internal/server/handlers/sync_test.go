@@ -117,3 +117,50 @@ func TestSyncHandler_PlaybackConflictResolution(t *testing.T) {
 
 	_ = tx.Rollback()
 }
+
+func TestSyncHandler_ListeningSessionUpsertKeepsNewestAggregate(t *testing.T) {
+	tempDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	database, err := db.OpenDB(filepath.Join(tempDir, "listening.db"), logger)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer database.Close()
+
+	ctx := context.Background()
+	nowMs := time.Now().UnixMilli()
+	if _, err := database.SQL.ExecContext(ctx, `
+		INSERT INTO users (id, username, normalized_username, password_hash, recovery_code_hash, created_at, updated_at)
+		VALUES ('u-listen', 'listener', 'listener', 'hash', 'recovery', ?, ?)
+	`, nowMs, nowMs); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	handler := &SyncHandler{DB: database}
+	tx, err := database.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	base := ListeningSessionPayload{
+		ID: "session-1", EpisodeID: "episode-1", PodcastID: "podcast-1",
+		Title: "Episode", PodcastTitle: "Podcast", Categories: []string{"Technology"},
+		StartedAt: nowMs, EndedAt: nowMs + 60_000, WallClockMS: 60_000,
+		AudioListenedMS: 75_000, SpeedSavedMS: 15_000, SpeedWeightedMS: 75_000,
+	}
+	handler.applyListeningSession(ctx, tx, "u-listen", base, 1)
+	stale := base
+	stale.EndedAt = nowMs + 30_000
+	stale.WallClockMS = 30_000
+	handler.applyListeningSession(ctx, tx, "u-listen", stale, 2)
+
+	var wallMs, syncVersion int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT wall_clock_ms, sync_version FROM listening_sessions WHERE user_id = 'u-listen' AND id = 'session-1'
+	`).Scan(&wallMs, &syncVersion); err != nil {
+		t.Fatalf("read session: %v", err)
+	}
+	if wallMs != 60_000 || syncVersion != 1 {
+		t.Fatalf("stale aggregate overwrote newest: wall=%d sync=%d", wallMs, syncVersion)
+	}
+	_ = tx.Rollback()
+}

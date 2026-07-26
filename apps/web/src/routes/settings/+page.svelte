@@ -416,7 +416,7 @@
 	<section class="card">
 		<h3><i class="ph ph-user-circle" aria-hidden="true"></i> {t('settings.accountSync')}</h3>
 		{#if authUser}
-			<p class="subtitle">{t('settings.loggedInAs')} <strong>{authUser.username}</strong> ({authUser.role}). Subscriptions and progress sync automatically across your devices.</p>
+			<p class="subtitle">{t('settings.loggedInAs')} <strong>{authUser.username}</strong> ({authUser.role}). Subscriptions, progress, and listening statistics sync automatically across your devices.</p>
 			
 			<div class="sync-row">
 				<div class="sync-info">
@@ -660,14 +660,6 @@
 		gap: 0.35rem;
 	}
 
-	.form-group input {
-		padding: 0.65rem 1rem;
-		border: 1px solid var(--border-subtle);
-		border-radius: 6px;
-		background: var(--bg-primary);
-		color: var(--text-primary);
-	}
-
 	.opml-actions, .btn-group, .account-actions {
 		display: flex;
 		gap: 1rem;
@@ -758,7 +750,6 @@
 		gap: 0.5rem;
 		margin: 0.25rem 0 0.5rem;
 	}
-	.sessions-list h4 { font-size: 0.9rem; font-weight: 700; color: var(--text-secondary); }
 	.session-row {
 		display: flex;
 		align-items: center;

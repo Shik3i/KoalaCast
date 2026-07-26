@@ -28,6 +28,28 @@ export interface LocalPlaybackState {
 	artwork_url?: string;
 	enclosure_url?: string;
 	duration_ms?: number;
+	categories?: string[];
+}
+
+// Fine-grained listening telemetry. Each record covers one uninterrupted play
+// segment (play → pause/end). It stays local in guest mode and participates in
+// account sync after sign-in.
+export interface LocalListeningSession {
+	id: string;
+	episode_id: string;
+	podcast_id: string;
+	title: string;
+	podcast_title: string;
+	categories?: string[];
+	started_at: number;
+	ended_at: number;
+	wall_clock_ms: number;
+	audio_listened_ms: number;
+	speed_saved_ms: number;
+	silence_saved_ms: number;
+	manual_skipped_ms: number;
+	intro_outro_skipped_ms: number;
+	speed_weighted_ms: number;
 }
 
 export interface LocalQueueItem {
@@ -41,6 +63,7 @@ export interface LocalQueueItem {
 	duration_ms: number;
 	position_order: number;
 	added_at: number;
+	categories?: string[];
 }
 
 // Persist a new queue order (drag-to-reorder). Rewrites position_order to match
@@ -67,11 +90,13 @@ export interface LocalFavorite {
 	artwork_url?: string;
 	enclosure_url?: string;
 	duration_ms?: number;
+	categories?: string[];
 }
 
 const DB_NAME = 'koalacast_local_db';
-// v2 drops the never-used 'history' object store.
-const DB_VERSION = 2;
+// v2 dropped the never-used 'history' store. v3 adds local-only listening
+// sessions for accurate Profile analytics.
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -99,6 +124,11 @@ export function getLocalDB(): Promise<IDBPDatabase> {
 				// cross-device sync (an "upsert-only" sync would resurrect removed items).
 				if (!db.objectStoreNames.contains('tombstones')) {
 					db.createObjectStore('tombstones', { keyPath: 'id' });
+				}
+				if (!db.objectStoreNames.contains('listening_sessions')) {
+					const sessions = db.createObjectStore('listening_sessions', { keyPath: 'id' });
+					sessions.createIndex('started_at', 'started_at');
+					sessions.createIndex('podcast_id', 'podcast_id');
 				}
 				// v1 created a 'history' store that was never read or written; drop it
 				// when upgrading an existing database.
@@ -175,6 +205,7 @@ export async function setEpisodePlayed(
 		artwork_url?: string;
 		enclosure_url?: string;
 		duration_ms?: number;
+		categories?: string[];
 	},
 	played: boolean
 ): Promise<void> {
@@ -194,7 +225,8 @@ export async function setEpisodePlayed(
 		podcast_title: meta.podcast_title ?? existing?.podcast_title,
 		artwork_url: meta.artwork_url ?? existing?.artwork_url,
 		enclosure_url: meta.enclosure_url ?? existing?.enclosure_url,
-		duration_ms: meta.duration_ms ?? existing?.duration_ms
+		duration_ms: meta.duration_ms ?? existing?.duration_ms,
+		categories: meta.categories ?? existing?.categories
 	});
 }
 
@@ -213,6 +245,23 @@ export async function getRecentPlaybackStates(limit = 12): Promise<LocalPlayback
 		.filter((s) => !s.completed && s.position_ms > 5000 && s.progress_percent < 98)
 		.sort((a, b) => b.last_played_at - a.last_played_at)
 		.slice(0, limit);
+}
+
+// Listening analytics source records.
+export async function saveLocalListeningSession(session: LocalListeningSession): Promise<void> {
+	const db = await getLocalDB();
+	await db.put('listening_sessions', session);
+}
+
+export async function getLocalListeningSessions(): Promise<LocalListeningSession[]> {
+	const db = await getLocalDB();
+	const sessions: LocalListeningSession[] = await db.getAllFromIndex('listening_sessions', 'started_at');
+	return sessions.sort((a, b) => a.started_at - b.started_at);
+}
+
+export async function getLocalListeningSession(id: string): Promise<LocalListeningSession | undefined> {
+	const db = await getLocalDB();
+	return db.get('listening_sessions', id);
 }
 
 // Queue
@@ -318,4 +367,5 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('favorites');
 	await db.clear('settings');
 	await db.clear('tombstones');
+	await db.clear('listening_sessions');
 }
