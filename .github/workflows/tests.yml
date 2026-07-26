@@ -13,9 +13,9 @@ jobs:
     name: Go backend (vet, fmt, race tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           # Track the toolchain declared in go.mod instead of a hard-coded version.
           go-version-file: services/api/go.mod
@@ -43,11 +43,11 @@ jobs:
     name: SvelteKit frontend (check + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
@@ -78,8 +78,8 @@ jobs:
     name: OpenAPI lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
       - run: npx -y @redocly/cli lint packages/openapi/openapi.yaml

@@ -40,7 +40,7 @@ jobs:
       id-token: write # keyless signing for attestations
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # GHCR paths must be lowercase; the owner login can contain capitals.
       - name: Compute lowercase image name

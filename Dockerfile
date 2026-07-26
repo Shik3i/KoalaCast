@@ -15,7 +15,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.6.1@sha256:923441d7c25f1e2eb5789f
 # Pinned to BUILDPLATFORM and built exactly once: the output is a bundle of
 # static files with no architecture-specific content, so building it per target
 # platform was pure waste.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS builder-web
+FROM --platform=$BUILDPLATFORM node:24-alpine AS builder-web
 WORKDIR /app
 COPY apps/web/package.json apps/web/package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm npm ci
