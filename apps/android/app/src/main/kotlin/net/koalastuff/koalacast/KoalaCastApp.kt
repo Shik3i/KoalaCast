@@ -45,6 +45,7 @@ import net.koalastuff.koalacast.feature.inbox.InboxScreen
 import net.koalastuff.koalacast.feature.onboarding.OnboardingScreen
 import net.koalastuff.koalacast.feature.player.MiniPlayer
 import net.koalastuff.koalacast.feature.player.NowPlayingScreen
+import net.koalastuff.koalacast.feature.profile.ProfileScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastViewModel
 import net.koalastuff.koalacast.feature.search.SearchScreen
@@ -139,6 +140,16 @@ fun KoalaCastApp(
 
                 composable(Routes.SETTINGS) {
                     SettingsScreen(contentPadding = statusBarPadding())
+                }
+
+                composable(Routes.PROFILE) {
+                    ProfileScreen(
+                        onOpenPodcast = { podcastId ->
+                            navController.navigate(Routes.podcast("", podcastId))
+                        },
+                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                        contentPadding = statusBarPadding(),
+                    )
                 }
 
                 composable(

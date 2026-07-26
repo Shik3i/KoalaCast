@@ -26,6 +26,12 @@ private fun phosphor(name: String, pathData: String): ImageVector =
     ).build()
 
 object PhosphorIcons {
+    /** phosphor regular/user-circle */
+    val UserCircle: ImageVector by lazy { phosphor("UserCircle", "M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-65.8,162.65a79.68,79.68,0,0,1,131.6,0,87.83,87.83,0,0,1-131.6,0ZM96,120a32,32,0,1,1,32,32A32,32,0,0,1,96,120Zm109.68,54.4a95.8,95.8,0,0,0-44.74-28.25,48,48,0,1,0-65.88,0A95.8,95.8,0,0,0,50.32,174.4,88,88,0,1,1,155.52,211.1a64,64,0,0,0-55,0A87.76,87.76,0,0,1,50.32,174.4Z") }
+
+    /** phosphor fill/user-circle-fill */
+    val UserCircleFill: ImageVector by lazy { phosphor("UserCircleFill", "M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,48a32,32,0,1,1-32,32A32,32,0,0,1,128,72Zm65.8,114.65a79.67,79.67,0,0,1-131.6,0,64,64,0,0,1,131.6,0Z") }
+
     /** phosphor regular/tray */
     val Tray: ImageVector by lazy { phosphor("Tray", "M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16v96H180.69L157.66,129a8,8,0,0,0-5.66-2.34H104A8,8,0,0,0,98.34,129L75.31,152H40V56ZM40,200V168H78.63a8,8,0,0,0,5.66-2.34l23-23h41.38l23,23a8,8,0,0,0,5.66,2.34H216v32Z") }
 

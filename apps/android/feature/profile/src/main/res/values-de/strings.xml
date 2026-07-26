@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_title">Hörprofil</string>
+    <string name="profile_settings">Einstellungen</string>
+    <string name="profile_tracking_starts">Aufzeichnung beginnt mit der ersten Wiedergabe</string>
+    <string name="profile_summary">%1$s · %2$d Abos · %3$d Sendungen gehört</string>
+    <string name="profile_year">Dieses Jahr</string>
+    <string name="profile_90_days">90 Tage</string>
+    <string name="profile_all">Gesamt</string>
+    <string name="profile_listened">Gehört</string>
+    <string name="profile_finished">Folgen abgeschlossen</string>
+    <string name="profile_streak">Längste Serie</string>
+    <string name="profile_days">%d Tage</string>
+    <string name="profile_daily">Ø pro aktivem Tag</string>
+    <string name="profile_activity">Aktivität</string>
+    <string name="profile_active_days">%d aktive Tage</string>
+    <string name="profile_most_played">Meistgehört</string>
+    <string name="profile_by_time">Nach Hörzeit</string>
+    <string name="profile_no_rankings">Mit deiner Hörzeit entstehen hier deine Top-Sendungen.</string>
+    <string name="profile_weekday">Nach Wochentag</string>
+    <string name="profile_hour">Nach Uhrzeit</string>
+    <string name="profile_categories">Kategorien</string>
+    <string name="profile_time_saved">Gesparte Zeit</string>
+    <string name="profile_baseline">Verglichen mit Wiedergabe bei 1×</string>
+    <string name="profile_total_saved">Insgesamt gespart</string>
+    <string name="profile_speed">Variable Geschwindigkeit</string>
+    <string name="profile_silence">Stille kürzen</string>
+    <string name="profile_intro">Intro und Outro</string>
+    <string name="profile_manual">Manuell vorgespult</string>
+    <string name="profile_average_speed">Durchschnittliches Hörtempo: %.2f×</string>
+    <string name="profile_privacy">Deine Daten</string>
+    <string name="profile_local_body">Dein Hörverlauf bleibt auf diesem Gerät, solange du dich nicht ausdrücklich anmeldest und Sync aktivierst.</string>
+    <string name="profile_export">JSON exportieren</string>
+</resources>
