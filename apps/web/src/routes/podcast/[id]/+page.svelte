@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t, type MessageKey } from '$lib/i18n';
 	import { page } from '$app/stores';
 	import {
 		saveLocalSubscription,
 		removeLocalSubscription,
 		getLocalSubscriptions,
 		getCompletedEpisodeIds,
+		getAllLocalPlaybackStates,
+		getLocalListeningSessions,
 		setEpisodePlayed
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
@@ -15,7 +17,11 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { slide } from 'svelte/transition';
 	import { optimizeArtwork } from '$lib/artwork';
-	import { getPodcastPlaybackSettings } from '$lib/stores/podcast-settings';
+	import {
+		getPodcastPlaybackSettings,
+		savePodcastPlaybackSettings,
+		type PodcastPlaybackSettings
+	} from '$lib/stores/podcast-settings';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -28,6 +34,8 @@
 	let openMenuId = $state<string | null>(null);
 	let searchQuery = $state('');
 	let filterUnplayedOnly = $state(false);
+	let showStats = $state({ listenedMs: 0, finished: 0, episodes: 0, averageSpeed: 1 });
+	let showSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
 
 	const filteredEpisodes = $derived.by(() => {
 		let list = episodes;
@@ -49,10 +57,10 @@
 	const DAY = 86400;
 	// Recency tiers, newest first. Anything older than a year collapses by default.
 	const TIERS = [
-		{ key: 'week', label: 'This week', maxAgeDays: 7 },
-		{ key: 'month', label: 'This month', maxAgeDays: 30 },
-		{ key: 'year', label: 'Earlier this year', maxAgeDays: 365 },
-		{ key: 'older', label: 'Older than a year', maxAgeDays: Infinity }
+		{ key: 'week', labelKey: 'podcast.tierWeek', maxAgeDays: 7 },
+		{ key: 'month', labelKey: 'podcast.tierMonth', maxAgeDays: 30 },
+		{ key: 'year', labelKey: 'podcast.tierYear', maxAgeDays: 365 },
+		{ key: 'older', labelKey: 'podcast.tierOlder', maxAgeDays: Infinity }
 	];
 
 	// Group episodes into recency tiers based on pub_date (unix seconds).
@@ -72,7 +80,7 @@
 			(g) => g.episodes.length > 0
 		);
 		if (buckets.undated.length > 0) {
-			out.push({ key: 'undated', label: 'Undated', maxAgeDays: Infinity, episodes: buckets.undated });
+			out.push({ key: 'undated', labelKey: 'podcast.undated', maxAgeDays: Infinity, episodes: buckets.undated });
 		}
 		return out;
 	});
@@ -141,7 +149,7 @@
 				if (reqId !== loadReqId) return;
 				isSubscribed = subs.some((s) => s.podcast_id === podcast.id);
 				playedIds = await getCompletedEpisodeIds();
-				const showSettings = getPodcastPlaybackSettings(podcast.id);
+				await loadShowControls(podcast.id);
 				const newest = episodes.find((episode) => episode.enclosure_url && !playedIds.has(episode.id));
 				if (showSettings.autoQueueNew && newest) {
 					await player.addToQueue({
@@ -163,6 +171,30 @@
 		} finally {
 			if (reqId === loadReqId) isLoading = false;
 		}
+	}
+
+	async function loadShowControls(id: string) {
+		showSettings = getPodcastPlaybackSettings(id);
+		const [sessions, states] = await Promise.all([
+			getLocalListeningSessions(),
+			getAllLocalPlaybackStates()
+		]);
+		const showSessions = sessions.filter((session) => session.podcast_id === id);
+		const showStates = states.filter((state) => state.podcast_id === id);
+		const wallMs = showSessions.reduce((sum, session) => sum + session.wall_clock_ms, 0);
+		const weighted = showSessions.reduce((sum, session) => sum + session.speed_weighted_ms, 0);
+		showStats = {
+			listenedMs: wallMs,
+			finished: showStates.filter((state) => state.completed).length,
+			episodes: showStates.length,
+			averageSpeed: wallMs ? weighted / wallMs : 1
+		};
+	}
+
+	function updateShowSetting(patch: Partial<PodcastPlaybackSettings>) {
+		if (!podcast?.id) return;
+		showSettings = { ...showSettings, ...patch };
+		savePodcastPlaybackSettings(podcast.id, showSettings);
 	}
 
 	async function handleSubscribe() {
@@ -249,11 +281,7 @@
 			else next.delete(ep.id);
 		}
 		playedIds = next;
-		toast.success(
-			played
-				? `Marked ${list.length} episode${list.length === 1 ? '' : 's'} as played.`
-				: `Marked ${list.length} episode${list.length === 1 ? '' : 's'} as unplayed.`
-		);
+		toast.success(t(played ? 'inbox.markedPlayed' : 'inbox.markedUnplayed', { count: list.length }));
 	}
 
 	function toggleTier(key: string) {
@@ -314,9 +342,9 @@
 				onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
 			/>
 			<div class="meta">
-				<span class="badge">{episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}</span>
+				<span class="badge">{t('podcast.episodeCount', { count: episodes.length })}</span>
 				<h2>{podcast.title}</h2>
-				<span class="author">By {podcast.author}</span>
+				<span class="author">{t('podcast.byAuthor', { author: podcast.author })}</span>
 				<p class="desc">{podcast.description}</p>
 
 				<div class="actions">
@@ -327,14 +355,14 @@
 					{/if}
 					<button class="btn-subscribe" class:subscribed={isSubscribed} onclick={handleSubscribe}>
 						{#if isSubscribed}
-							<i class="ph ph-check" aria-hidden="true"></i> Subscribed
+							<i class="ph ph-check" aria-hidden="true"></i> {t('common.subscribed')}
 						{:else}
-							<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
+							<i class="ph ph-plus" aria-hidden="true"></i> {t('common.subscribe')}
 						{/if}
 					</button>
 					{#if podcast.funding_url}
 						<a class="btn-funding" href={podcast.funding_url} target="_blank" rel="noopener noreferrer">
-							<i class="ph-fill ph-heart" aria-hidden="true"></i> {podcast.funding_text || 'Support Show'}
+							<i class="ph-fill ph-heart" aria-hidden="true"></i> {podcast.funding_text || t('podcast.supportShow')}
 						</a>
 					{/if}
 					{#if podcast.value_recipient}
@@ -351,13 +379,49 @@
 			</div>
 		</header>
 
+		<section class="show-controls" aria-labelledby="show-controls-title">
+			<div class="show-history">
+				<p class="control-eyebrow">{t('quiet.show.history')}</p>
+				<strong>{formatDuration(showStats.listenedMs) || '0m'}</strong>
+				<span>{t('quiet.show.summary', {
+					finished: showStats.finished,
+					episodes: showStats.episodes,
+					speed: showStats.averageSpeed.toFixed(2)
+				})}</span>
+			</div>
+			<div class="show-settings">
+				<p class="control-eyebrow" id="show-controls-title">{t('quiet.show.settings')}</p>
+				<label>
+					<span>{t('quiet.show.skipIntro')}</span>
+					<input type="number" min="0" max="600" value={showSettings.skipIntroSeconds} onchange={(event) => updateShowSetting({ skipIntroSeconds: Number(event.currentTarget.value) })} />
+					<small>{t('quiet.show.seconds')}</small>
+				</label>
+				<label>
+					<span>{t('quiet.show.skipOutro')}</span>
+					<input type="number" min="0" max="600" value={showSettings.skipOutroSeconds} onchange={(event) => updateShowSetting({ skipOutroSeconds: Number(event.currentTarget.value) })} />
+					<small>{t('quiet.show.seconds')}</small>
+				</label>
+				<label>
+					<span>{t('quiet.show.speed')}</span>
+					<select value={showSettings.speed ?? ''} onchange={(event) => updateShowSetting({ speed: event.currentTarget.value ? Number(event.currentTarget.value) : null })}>
+						<option value="">{t('quiet.show.globalSpeed')}</option>
+						{#each [1, 1.1, 1.2, 1.25, 1.3, 1.5, 1.75, 2] as speed}<option value={speed}>{speed}×</option>{/each}
+					</select>
+				</label>
+				<label class="auto-queue">
+					<input type="checkbox" checked={showSettings.autoQueueNew} onchange={(event) => updateShowSetting({ autoQueueNew: event.currentTarget.checked })} />
+					<span>{t('quiet.show.autoQueue')}</span>
+				</label>
+			</div>
+		</section>
+
 		<!-- Episode List, grouped by recency -->
 		<section class="episodes-section">
 			<div class="episodes-head">
-				<h3>Episodes ({filteredEpisodes.length}{#if filteredEpisodes.length !== episodes.length} of {episodes.length}{/if})</h3>
+				<h3>{filteredEpisodes.length === episodes.length ? t('podcast.episodesHeading', { count: episodes.length }) : t('podcast.episodesFilteredHeading', { shown: filteredEpisodes.length, total: episodes.length })}</h3>
 				{#if episodes.length > 0}
 					<div class="ep-head-actions">
-						<span class="unplayed-pill">{unplayedCount} unplayed</span>
+						<span class="unplayed-pill">{t('podcast.unplayedCount', { count: unplayedCount })}</span>
 						{#if unplayedCount > 0}
 							<button class="mark-all-btn" onclick={() => markManyPlayed(episodes, true)}>
 								<i class="ph ph-checks" aria-hidden="true"></i> {t('podcast.markAllPlayed')}
@@ -393,7 +457,7 @@
 						onclick={() => (filterUnplayedOnly = !filterUnplayedOnly)}
 					>
 						<i class="ph {filterUnplayedOnly ? 'ph-check-circle-fill' : 'ph-circle'}" aria-hidden="true"></i>
-						Unplayed ({unplayedCount})
+						{t('podcast.unplayedFilter', { count: unplayedCount })}
 					</button>
 				</div>
 			{/if}
@@ -419,11 +483,11 @@
 					<div class="tier-head">
 						<button class="tier-toggle" onclick={() => toggleTier(group.key)} aria-expanded={open}>
 							<i class="ph ph-caret-right chev" class:open aria-hidden="true"></i>
-							<span class="tier-label">{group.label}</span>
+							<span class="tier-label">{t(group.labelKey as MessageKey)}</span>
 							<span class="tier-count">{group.episodes.length}</span>
 						</button>
 						<button class="tier-mark" onclick={() => markManyPlayed(group.episodes, !allPlayed)}>
-							{allPlayed ? 'Mark unplayed' : 'Mark all played'}
+							{allPlayed ? t('podcast.markUnplayed') : t('podcast.markAllPlayed')}
 						</button>
 					</div>
 
@@ -439,7 +503,7 @@
 										<h4><a href={`/episode/${ep.id}`}>{ep.title}</a></h4>
 										<p class="ep-desc">{epDescription(ep)}</p>
 										<span class="ep-meta">
-											{ep.pub_date ? prefs.formatDate(ep.pub_date) : 'No date'}
+											{ep.pub_date ? prefs.formatDate(ep.pub_date) : t('podcast.noDate')}
 											{#if ep.duration_ms}
 												• {formatDuration(ep.duration_ms)}
 											{/if}
@@ -447,7 +511,7 @@
 										</span>
 									</div>
 
-									<button class="btn-mark" class:done={playedIds.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={playedIds.has(ep.id)} aria-label={playedIds.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'} title={playedIds.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'}>
+									<button class="btn-mark" class:done={playedIds.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={playedIds.has(ep.id)} aria-label={playedIds.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')} title={playedIds.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')}>
 										<i class="{playedIds.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
 									</button>
 								<div class="row-menu">
@@ -558,6 +622,63 @@
 		flex-wrap: wrap;
 		gap: 0.75rem;
 	}
+
+	.show-controls {
+		display: grid;
+		grid-template-columns: minmax(180px, .55fr) minmax(420px, 1.45fr);
+		gap: 0;
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		background: var(--bg-surface);
+		overflow: hidden;
+	}
+	.show-history, .show-settings { padding: 1rem 1.25rem; }
+	.show-history {
+		display: flex;
+		flex-direction: column;
+		gap: .35rem;
+		border-right: 1px solid var(--border-subtle);
+	}
+	.control-eyebrow {
+		color: var(--text-muted);
+		font: 700 .68rem/1.3 var(--font-mono);
+		letter-spacing: .1em;
+		text-transform: uppercase;
+	}
+	.show-history strong { font: 800 1.8rem/1 var(--font-ui); letter-spacing: -.04em; }
+	.show-history span { color: var(--text-secondary); font-size: .78rem; }
+	.show-settings {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: .75rem;
+		align-items: end;
+	}
+	.show-settings .control-eyebrow { grid-column: 1 / -1; }
+	.show-settings label {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		align-items: center;
+		gap: .35rem;
+		color: var(--text-secondary);
+		font-size: .78rem;
+	}
+	.show-settings input[type='number'], .show-settings select {
+		width: 62px;
+		height: 32px;
+		padding: 0 .45rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: 6px;
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+	}
+	.show-settings select { width: 88px; }
+	.show-settings small { color: var(--text-muted); }
+	.show-settings .auto-queue {
+		display: flex;
+		align-items: center;
+		align-self: center;
+	}
+	.show-settings .auto-queue input { accent-color: var(--show-accent, var(--accent-green)); }
 
 	.btn-play-latest {
 		background: var(--show-accent, var(--accent-green));
@@ -990,7 +1111,7 @@
 	}
 	.sk-cover, .artwork { width: 150px; height: 150px; border-radius: 6px; box-shadow: none; background: var(--bg-tile); }
 	.meta { gap: 7px; justify-content: center; min-width: 0; }
-	.badge { width: fit-content; padding: 4px 6px; border-radius: 3px; background: var(--accent-fill); color: var(--accent-on); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.badge { width: fit-content; padding: 5px 7px; border-radius: 3px; background: var(--accent-fill); color: var(--accent-on); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.meta h2 { font: 700 clamp(30px,4vw,40px)/.95 var(--font-display); font-stretch: condensed; letter-spacing: -.045em; text-transform: uppercase; }
 	.author { color: var(--ink-3); font: 600 11px/1.3 var(--font-sans); }
 	.desc { max-width: 70ch; color: var(--ink-3); font-size: 12px; line-height: 1.45; }
@@ -1004,17 +1125,22 @@
 	}
 	.btn-play-latest { background: var(--accent-fill); color: var(--accent-on); }
 	.btn-subscribe { border-color: var(--border-ui); color: var(--ink-3); }
+	.show-controls {
+		border-width: 0 0 1px;
+		border-radius: 0;
+		background: var(--bg-panel);
+	}
 	.episodes-section { padding: 18px 22px 30px; }
 	.episodes-head { padding-bottom: 11px; border-bottom: 1px solid var(--border-hair); }
 	.episodes-section h3 { font: 800 17px/1 var(--font-ui); }
-	.unplayed-pill, .mark-all-btn { border-radius: 4px; font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.unplayed-pill, .mark-all-btn { min-height: 32px; border-radius: 4px; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.mark-all-btn { border-color: var(--border-ui); background: transparent; }
 	.episodes-filter-bar { padding: 10px 0; border-bottom: 1px solid var(--border-hair); }
 	.ep-search-input { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-sunken); }
-	.filter-pill { border-color: var(--border-ui); border-radius: 4px; background: transparent; font: 600 8px/1 var(--font-mono); text-transform: uppercase; }
+	.filter-pill { min-height: 32px; border-color: var(--border-ui); border-radius: 4px; background: transparent; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.tier { margin: 0; }
 	.tier-head { min-height: 38px; padding: 0 5px; background: var(--bg-sunken); border-bottom: 1px solid var(--border-hair); }
-	.tier-toggle, .tier-mark { color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.tier-toggle, .tier-mark { min-height: 32px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.episode-list { gap: 0; }
 	.episode-row {
 		min-height: 76px;
@@ -1030,14 +1156,22 @@
 	.btn-play { width: 34px; height: 34px; background: var(--accent-fill); color: var(--accent-on); box-shadow: none; }
 	.ep-info h4 { font: 700 14px/1.3 var(--font-ui); }
 	.ep-desc { color: var(--ink-3); font-size: 10px; }
-	.ep-meta { color: var(--ink-4); font: 500 8px/1.4 var(--font-mono); text-transform: uppercase; }
+	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); text-transform: uppercase; }
 	.btn-mark, .btn-kebab { width: 32px; height: 32px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
+
+	@media (max-width: 900px) {
+		.show-controls { grid-template-columns: 1fr; }
+		.show-history { border-right: 0; border-bottom: 1px solid var(--border-subtle); }
+		.show-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
 
 	@media (max-width: 620px) {
 		.podcast-header { align-items: flex-start; flex-direction: column; padding: 16px; }
 		.sk-cover, .artwork { width: 100%; height: auto; aspect-ratio: 1; }
 		.meta h2 { font-size: 32px; }
+		.show-history, .show-settings { padding: 14px 16px; }
+		.show-settings { grid-template-columns: 1fr; }
 		.episodes-section { padding: 16px; }
 		.episode-row { gap: 9px; }
 		.ep-desc { display: none; }

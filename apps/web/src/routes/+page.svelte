@@ -268,6 +268,7 @@
 	}
 
 	async function toggleFitsSession() {
+		if (listeningSession.minutes === null) return;
 		if (fitsSession) {
 			fitsSession = false;
 			return;
@@ -283,6 +284,11 @@
 
 	function toggleUILanguage() {
 		prefs.setUILanguage(prefs.uiLanguage === 'en' ? 'de' : 'en');
+	}
+
+	function setSessionMinutes(minutes: SessionMinutes | null) {
+		listeningSession.set(minutes);
+		if (minutes === null) fitsSession = false;
 	}
 
 	function plainSummary(value: string | undefined, author: string) {
@@ -362,7 +368,7 @@
 <svelte:window onkeydown={handleDiscoverKeys} />
 
 <div class="discover-page">
-	{#if !spotlight}<h1 class="sr-only">Discover podcasts with KoalaCast</h1>{/if}
+	{#if !spotlight}<h1 class="sr-only">{t('quiet.discover.pageTitle')}</h1>{/if}
 	<header class="discover-topbar">
 		<div class="mobile-title">
 			<strong>{t('quiet.nav.discover')}</strong>
@@ -409,8 +415,9 @@
 		<div class="session-control">
 			<span>{t('quiet.discover.iHave')}</span>
 			<div role="group" aria-label={t('quiet.discover.sessionLength')}>
+				<button aria-pressed={listeningSession.minutes === null} class:active={listeningSession.minutes === null} onclick={() => setSessionMinutes(null)}>{t('quiet.discover.anyTime')}</button>
 				{#each [25, 40, 60] as minutes}
-					<button class:active={listeningSession.minutes === minutes} onclick={() => listeningSession.set(minutes as SessionMinutes)}>{minutes} min</button>
+					<button aria-pressed={listeningSession.minutes === minutes} class:active={listeningSession.minutes === minutes} onclick={() => setSessionMinutes(minutes as SessionMinutes)}>{minutes} min</button>
 				{/each}
 			</div>
 			<p>— {t('quiet.discover.sessionHint')}</p>
@@ -420,7 +427,7 @@
 				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => (selectedMood = mood.id)}>
 					<i class="ph {mood.icon}" aria-hidden="true"></i>
 					<strong>{t(mood.labelKey)}</strong>
-					<span>{t('quiet.discover.matches', { count: filtered.length })}</span>
+					<span>{t('quiet.discover.moodEffect')}</span>
 				</button>
 			{/each}
 		</div>
@@ -430,13 +437,18 @@
 		<section class="reasoned-picks">
 			<header><h2>{t('quiet.discover.becauseMood', { mood: selectedMoodLabel })}</h2><span>{t('quiet.discover.picksIncluded', { count: picks.length })}</span></header>
 			<div>
-				{#each picks as podcast, index}
+				{#each picks as podcast}
 					<button onclick={() => openPodcast(podcast)}>
 						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span>
 							<strong>{podcast.title}</strong>
-							<small>{index === 0 ? t('quiet.discover.reasonCalm') : index === 1 ? t('quiet.discover.reasonChange') : t('quiet.discover.reasonCurious')}</small>
-							<em>{podcast.category || podcast.author} · {t('quiet.discover.selectedFor', { count: listeningSession.minutes })}</em>
+							<small>{t('quiet.discover.moodReason', { mood: selectedMoodLabel })}</small>
+							<em>
+								{podcast.category || podcast.author}
+								{#if fitsSession && listeningSession.minutes !== null && podcast.latestDurationMs && podcast.latestDurationMs <= listeningSession.minutes * 60_000}
+									· {t('quiet.discover.selectedFor', { count: listeningSession.minutes })}
+								{/if}
+							</em>
 						</span>
 					</button>
 				{/each}
@@ -459,23 +471,36 @@
 			</div>
 		</header>
 		<div class="chart-filters">
-			<button
-				class:active={fitsSession}
-				aria-pressed={fitsSession}
-				disabled={isHydratingMetadata}
-				onclick={toggleFitsSession}
-				aria-label={fitsSession ? t('quiet.discover.disableFits', { count: listeningSession.minutes }) : t('quiet.discover.enableFits', { count: listeningSession.minutes })}
-			>
-				{isHydratingMetadata ? t('quiet.discover.loadingDurations') : t('quiet.discover.fitsFilter', { count: listeningSession.minutes })}
-				<i class="ph {fitsSession ? 'ph-x' : 'ph-funnel'}" aria-hidden="true"></i>
-			</button>
-			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label={t('search.genreFilter')}>
+			{#if listeningSession.minutes !== null}
+				<button
+					class:active={fitsSession}
+					aria-pressed={fitsSession}
+					disabled={isHydratingMetadata}
+					onclick={toggleFitsSession}
+					aria-label={fitsSession ? t('quiet.discover.disableFits', { count: listeningSession.minutes }) : t('quiet.discover.enableFits', { count: listeningSession.minutes })}
+				>
+					{isHydratingMetadata ? t('quiet.discover.loadingDurations') : t('quiet.discover.fitsFilter', { count: listeningSession.minutes })}
+					<i class="ph {fitsSession ? 'ph-x' : 'ph-funnel'}" aria-hidden="true"></i>
+				</button>
+			{/if}
+			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label={t('search.genreFilter')} disabled={isLoading}>
 				{#each categories as category}<option value={category}>{genreLabel(category)}</option>{/each}
 			</select>
-			<span>{t('quiet.discover.shown', { shown: chart.length, total: arranged.length })}</span>
+			<span aria-live="polite">{isLoading ? t('common.loading') : t('quiet.discover.shown', { shown: chart.length, total: arranged.length })}</span>
 		</div>
 
-		<div class="chart-list">
+		<div class="chart-list" aria-busy={isLoading}>
+			{#if isLoading}
+				{#each Array(5) as _}
+					<div class="chart-row chart-loading">
+						<Skeleton width="20px" height="10px" />
+						<Skeleton width="48px" height="48px" radius="4px" />
+						<Skeleton width="65%" height="14px" />
+						<Skeleton width="32px" height="10px" />
+						<Skeleton width="60px" height="28px" radius="4px" />
+					</div>
+				{/each}
+			{:else}
 			{#each chart as podcast, index (podcast.feed_url || podcast.id)}
 				<article class="chart-row">
 					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
@@ -485,9 +510,6 @@
 					<button class="chart-title" onclick={() => openPodcast(podcast)}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>
 					</button>
-					<div class="spark" role="img" aria-label={t('quiet.discover.momentum')}>
-						{#each [5, 8, 7, 11, 9, 15, 13, 18, 16, 22] as value}<i style:height={`${value}px`}></i>{/each}
-					</div>
 					<span class="fit">{formatEpisodeMinutes(podcast.latestDurationMs) ?? '—'}</span>
 					<div class="row-actions">
 						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play"></i></button>
@@ -500,6 +522,7 @@
 					<p>{t('quiet.discover.noFitResults')}</p>
 					<button type="button" onclick={() => (fitsSession = false)}>{t('quiet.discover.clearTimeFilter')}</button>
 				</div>
+			{/if}
 			{/if}
 		</div>
 		<footer class="chart-footer">
@@ -544,7 +567,7 @@
 	.spotlight-actions span { margin-left: 4px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
-	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 9px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 10px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.waveform { display: flex; align-items: center; gap: 3px; height: 32px; margin-top: -32px; padding: 0 9px; background: rgba(5,10,7,.76); }
 	.waveform i { flex: 1; max-width: 4px; background: var(--data-bar); }
 
@@ -561,29 +584,29 @@
 	.mood-grid button.active { background: linear-gradient(150deg,#7fd0aa,#3e9c76); color: var(--accent-on); border-color: transparent; }
 	.mood-grid i { grid-row: 1 / 3; font-size: 22px; }
 	.mood-grid strong { font: 700 16px/1.2 var(--font-ui); }
-	.mood-grid span { font: 600 9px/1.2 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+	.mood-grid span { font: 600 10px/1.3 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
 
 	.reasoned-picks, .chart-section { padding: 20px 22px; border-bottom: 1px solid var(--border-hair); }
 	.reasoned-picks > header, .chart-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 	.reasoned-picks h2, .chart-head h2 { font-size: 20px; letter-spacing: -.02em; }
-	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.reasoned-picks > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 	.reasoned-picks button { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
 	.reasoned-picks img { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background: var(--bg-tile); }
 	.reasoned-picks button > span { display: flex; flex-direction: column; min-width: 0; }
 	.reasoned-picks strong { overflow: hidden; font: 700 14px/1.25 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
 	.reasoned-picks small { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ink-3); font-size: 12px; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 8px/1 var(--font-mono); font-style: normal; text-transform: uppercase; }
+	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 10px/1.2 var(--font-mono); font-style: normal; text-transform: uppercase; }
 
 	.chart-head > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 	.sort-tabs { display: flex; gap: 2px; }
-	.sort-tabs button { min-height: 30px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.sort-tabs button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.sort-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
-	.chart-filters button, .chart-filters select { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-filters button, .chart-filters select { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-filters button.active { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--accent-on); }
-	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
-	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 82px 52px 66px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
+	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 52px 66px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
 	.rank, .fit { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 	.chart-art, .chart-title, .row-actions button { border: 0; background: transparent; color: inherit; }
 	.chart-art img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; background: var(--bg-tile); }
@@ -591,13 +614,10 @@
 	.chart-title strong, .chart-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.chart-title strong { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.chart-title span { color: var(--ink-4); font: 500 11px/1.4 var(--font-sans); }
-	.spark { display: flex; align-items: end; gap: 3px; height: 24px; }
-	.spark i { width: 4px; background: var(--data-bar); }
-	.spark i:nth-last-child(-n+3) { background: var(--accent-fill); }
 	.row-actions { display: flex; gap: 4px; justify-content: end; }
 	.row-actions button { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-footer button { padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }
 	.empty-filter { display: grid; justify-items: start; gap: 10px; padding: 22px 0; color: var(--ink-3); font-size: 13px; }
 	.empty-filter button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--ink-2); }
@@ -621,7 +641,7 @@
 		}
 		.mobile-title { display: flex; align-items: center; justify-content: space-between; }
 		.mobile-title strong { font: 800 17px/1 var(--font-ui); }
-		.mobile-title span { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; }
+		.mobile-title span { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; }
 		.discover-topbar { position: relative; }
 		.discover-topbar .language-switch { position: absolute; top: 12px; right: 16px; }
 		.mobile-title { padding-right: 46px; }
@@ -643,7 +663,7 @@
 		.chart-head { align-items: flex-start; flex-direction: column; }
 		.sort-tabs { width: 100%; overflow-x: auto; }
 		.chart-row { grid-template-columns: 24px 42px minmax(0, 1fr) 58px; min-height: 60px; }
-		.spark, .fit { display: none; }
+		.fit { display: none; }
 		.chart-filters span { display: none; }
 		.chart-footer span { display: none; }
 		.chart-footer { justify-content: end; }

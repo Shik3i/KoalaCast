@@ -47,12 +47,12 @@ export function arrangeDiscover(
 	options: {
 		mood: DiscoverMood;
 		sort: DiscoverSort;
-		sessionMinutes: number;
+		sessionMinutes: number | null;
 		fitsSession: boolean;
 	}
 ): DiscoverPodcast[] {
-	const sessionMs = options.sessionMinutes * 60_000;
-	const filtered = options.fitsSession
+	const sessionMs = (options.sessionMinutes ?? 0) * 60_000;
+	const filtered = options.fitsSession && options.sessionMinutes !== null
 		? podcasts.filter(
 				(podcast) =>
 					typeof podcast.latestDurationMs === 'number' &&

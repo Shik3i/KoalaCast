@@ -143,6 +143,7 @@
 	}
 
 	async function queueAllThatFit() {
+		if (listeningSession.minutes === null) return;
 		let elapsed = 0;
 		let count = 0;
 		for (const episode of feed) {
@@ -160,7 +161,7 @@
 			elapsed += adjusted;
 			count += 1;
 		}
-		toast.success(`Queued ${count} episode${count === 1 ? '' : 's'} for your ${listeningSession.minutes} minute session.`);
+		toast.success(t('inbox.queuedForSession', { count, minutes: listeningSession.minutes }));
 	}
 
 	async function markAllPlayed() {
@@ -169,9 +170,9 @@
 	}
 
 	function groupLabel(date: Date) {
-		if (!date.getTime()) return 'Undated';
-		const label = date.toLocaleDateString([], { weekday: 'long', day: '2-digit', month: 'long' });
-		return date.toDateString() === new Date().toDateString() ? `Today · ${label}` : label;
+		if (!date.getTime()) return t('inbox.undated');
+		const label = date.toLocaleDateString(prefs.uiLanguage, { weekday: 'long', day: '2-digit', month: 'long' });
+		return date.toDateString() === new Date().toDateString() ? `${t('inbox.today')} · ${label}` : label;
 	}
 
 	async function togglePlayed(ep: InboxEpisode) {
@@ -197,9 +198,7 @@
 			else next.delete(e.id);
 		}
 		completed = next;
-		toast.success(
-			`Marked ${list.length} episode${list.length === 1 ? '' : 's'} as ${played ? 'played' : 'unplayed'}.`
-		);
+		toast.success(t(played ? 'inbox.markedPlayed' : 'inbox.markedUnplayed', { count: list.length }));
 	}
 
 	function play(ep: InboxEpisode) {
@@ -233,8 +232,10 @@
 		</div>
 		{#if subscriptions.length > 0}
 			<div class="head-actions">
-				<button class="btn-ghost" onclick={queueAllThatFit}><i class="ph ph-list-plus"></i> Queue all that fit</button>
-				<button class="btn-ghost" onclick={markAllPlayed}><i class="ph ph-checks"></i> Mark all played</button>
+				{#if listeningSession.minutes !== null}
+					<button class="btn-ghost" onclick={queueAllThatFit}><i class="ph ph-list-plus"></i> {t('inbox.queueFits')}</button>
+				{/if}
+				<button class="btn-ghost" onclick={markAllPlayed}><i class="ph ph-checks"></i> {t('podcast.markAllPlayed')}</button>
 				<label class="switch">
 					<input type="checkbox" bind:checked={unplayedOnly} />
 					<span>{t('inbox.unplayedOnly')}</span>
@@ -297,7 +298,7 @@
 			{#each groupedFeed as group}
 				<header class="day-header">
 					<strong>{groupLabel(group.date)}</strong>
-					<span>{group.episodes.length} episodes · {formatDuration(group.episodes.reduce((sum, episode) => sum + (episode.duration_ms || 0), 0))}</span>
+					<span>{t('inbox.episodeCount', { count: group.episodes.length })} · {formatDuration(group.episodes.reduce((sum, episode) => sum + (episode.duration_ms || 0), 0))}</span>
 				</header>
 				{#each group.episodes as ep, i (ep.id)}
 					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
@@ -315,7 +316,7 @@
 						</span>
 					</div>
 
-					<button class="ep-mark" class:done={completed.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={completed.has(ep.id)} aria-label={completed.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'} title={completed.has(ep.id) ? 'Mark as unplayed' : 'Mark as played'}>
+					<button class="ep-mark" class:done={completed.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={completed.has(ep.id)} aria-label={completed.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')} title={completed.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')}>
 						<i class="{completed.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
 					</button>
 
@@ -573,10 +574,10 @@
 	.head { align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-hair); }
 	.head h2 { gap: 0; font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
 	.head h2 :global(.ph-fill) { display: none; }
-	.sub { color: var(--ink-4); font: 600 9px/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+	.sub { color: var(--ink-4); font: 600 11px/1.4 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
 	.head-actions { gap: 6px; }
-	.switch { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
-	.btn-ghost { min-height: 32px; padding: 0 10px; border-color: var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.switch { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.btn-ghost { min-height: 34px; padding: 0 10px; border-color: var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.settings-panel { margin: 14px 0; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); box-shadow: none; }
 	.episode-list { gap: 0; }
 	.day-header {
@@ -590,7 +591,7 @@
 		background: var(--bg-sunken);
 		border-bottom: 1px solid var(--border-hair);
 		color: var(--ink-4);
-		font: 600 8px/1 var(--font-mono);
+		font: 600 10px/1 var(--font-mono);
 		letter-spacing: .07em;
 		text-transform: uppercase;
 	}
@@ -612,7 +613,7 @@
 	.ep-play { width: 56px; height: 56px; border-radius: 5px; background: var(--bg-tile); }
 	.ep-play-icon { background: rgba(5,10,7,.62); }
 	.ep-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
-	.ep-meta { color: var(--ink-4); font: 500 9px/1.4 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); letter-spacing: .03em; text-transform: uppercase; }
 	.ep-show { color: var(--ink-3); }
 	.ep-mark, .ep-kebab { width: 32px; height: 32px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); }
 	.empty-state { margin-top: 16px; border-radius: 8px; box-shadow: none; }

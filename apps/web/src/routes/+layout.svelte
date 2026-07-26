@@ -14,6 +14,7 @@
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';
 	import Player from '$lib/components/Player.svelte';
+	import RailResizer from '$lib/components/RailResizer.svelte';
 	import RunningOrder from '$lib/components/RunningOrder.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -68,10 +69,14 @@
 	class="quiet-app"
 	class:has-player={player.isActive}
 	class:left-collapsed={shell.leftCollapsed}
+	class:left-compact={shell.leftCompact}
 	class:right-collapsed={shell.rightCollapsed}
+	class:right-compact={shell.rightCompact}
 	class:without-running-order={!showRunningOrder}
+	style={`--left-rail-width:${shell.leftWidth}px;--right-rail-width:${shell.rightWidth}px`}
 >
 	<Sidebar isAdmin={currentUser?.role === 'admin'} />
+	<RailResizer side="left" controls="navigation-rail" label={t('quiet.shell.resizeNavigation')} />
 	<main class="quiet-main" id="main-content" tabindex="-1">
 		{@render children()}
 		<footer class="mobile-legal" aria-label={t('footer.mobileLinks')}>
@@ -82,6 +87,7 @@
 		</footer>
 	</main>
 	{#if showRunningOrder}
+		<RailResizer side="right" controls="running-order" label={t('quiet.shell.resizeQueue')} />
 		<RunningOrder />
 	{/if}
 

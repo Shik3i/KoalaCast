@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
 
-	// Legal link labels are intentionally left in English — see docs/i18n.md.
+	// The policy body stays in reviewed English; navigation labels follow the UI locale.
 </script>
 
 <footer class="app-footer">
@@ -21,22 +21,22 @@
 
 		<div class="footer-links">
 			<div class="link-column">
-				<h4>Legal &amp; Privacy</h4>
+				<h4>{t('footer.links')}</h4>
 				<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">
-					<i class="ph ph-scales" aria-hidden="true"></i> Legal Notice
+					<i class="ph ph-scales" aria-hidden="true"></i> {t('footer.legalNotice')}
 				</a>
 				<a href="/privacy">
-					<i class="ph ph-shield-check" aria-hidden="true"></i> Privacy Policy
+					<i class="ph ph-shield-check" aria-hidden="true"></i> {t('footer.privacy')}
 				</a>
 			</div>
 
 			<div class="link-column">
 				<h4>{t('footer.openSource')}</h4>
 				<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer">
-					<i class="ph ph-github-logo" aria-hidden="true"></i> GitHub
+					<i class="ph ph-github-logo" aria-hidden="true"></i> {t('footer.github')}
 				</a>
 				<a href="https://github.com/Shik3i/KoalaCast/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
-					<i class="ph ph-file-text" aria-hidden="true"></i> MIT License
+					<i class="ph ph-file-text" aria-hidden="true"></i> {t('footer.license')}
 				</a>
 			</div>
 		</div>

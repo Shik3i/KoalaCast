@@ -278,7 +278,7 @@
 		gap: 9px;
 	}
 	.admin-head h2 :global(.ph-fill) { color: var(--accent-ink); }
-	.admin-sub { color: var(--ink-4); font: 600 9px/1.5 var(--font-mono); letter-spacing: .06em; margin-top: 7px; text-transform: uppercase; }
+	.admin-sub { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .05em; margin-top: 7px; text-transform: uppercase; }
 
 	.card {
 		background: var(--bg-sunken);
@@ -312,7 +312,7 @@
 
 	.metric-box .lbl {
 		color: var(--ink-4);
-		font: 600 8px/1 var(--font-mono);
+		font: 600 10px/1 var(--font-mono);
 		letter-spacing: .08em;
 		text-transform: uppercase;
 	}
@@ -342,7 +342,7 @@
 		text-align: left;
 		border-bottom: 1px solid var(--border-row);
 	}
-	.admin-table th { color: var(--ink-4); font: 600 8px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.admin-table th { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.admin-table td { color: var(--ink-3); font-size: 12px; }
 	.admin-table td strong { color: var(--ink-2); font-family: var(--font-ui); }
 
@@ -351,7 +351,7 @@
 		border-radius: 4px;
 		background: var(--accent-wash);
 		color: var(--accent-ink);
-		font: 600 8px/1 var(--font-mono);
+		font: 600 10px/1 var(--font-mono);
 		text-transform: uppercase;
 	}
 
@@ -361,7 +361,7 @@
 	}
 
 	.btn-sm {
-		font: 600 8px/1 var(--font-mono);
+		font: 600 10px/1 var(--font-mono);
 		padding: 7px 9px;
 		border-radius: 4px;
 		border: 1px solid var(--border-ui);
@@ -392,7 +392,7 @@
 		border: none;
 		padding: 9px 11px;
 		border-radius: 5px;
-		font: 700 9px/1 var(--font-mono);
+		font: 700 10px/1 var(--font-mono);
 		text-transform: uppercase;
 	}
 	.btn-reg.danger { background: var(--color-danger); }

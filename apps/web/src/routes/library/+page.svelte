@@ -25,7 +25,7 @@
 	let activeTab = $state<'subscriptions' | 'episodes' | 'queue' | 'favorites'>('subscriptions');
 	let dragIndex = $state<number | null>(null);
 	let libraryQuery = $state('');
-	let librarySort = $state<'recent' | 'az' | 'played'>('recent');
+	let librarySort = $state<'recent' | 'az'>('recent');
 	let activeCover = $state<string | null>(null);
 	let longPressTimer: number | null = null;
 
@@ -38,6 +38,10 @@
 	});
 
 	onMount(async () => {
+		const requestedView = new URLSearchParams(window.location.search).get('view');
+		if (requestedView === 'subscriptions' || requestedView === 'episodes' || requestedView === 'queue' || requestedView === 'favorites') {
+			activeTab = requestedView;
+		}
 		subscriptions = await getLocalSubscriptions();
 		recentEpisodes = await getRecentPlaybackStates(30);
 		await player.loadQueue();
@@ -60,7 +64,7 @@
 		player.play({
 			episode_id: fav.episode_id,
 			podcast_id: fav.podcast_id || '',
-			title: fav.title || 'Episode',
+			title: fav.title || t('common.episode'),
 			podcast_title: fav.podcast_title || '',
 			artwork_url: fav.artwork_url || '',
 			enclosure_url: fav.enclosure_url,
@@ -143,7 +147,7 @@
 		player.play({
 			episode_id: item.episode_id,
 			podcast_id: item.podcast_id,
-			title: item.title || 'Episode',
+			title: item.title || t('common.episode'),
 			podcast_title: item.podcast_title || '',
 			artwork_url: item.artwork_url || '',
 			enclosure_url: item.enclosure_url,
@@ -187,19 +191,18 @@
 
 <div class="library-page">
 	<div class="lib-head">
-		<div><h2>{t('library.title')}</h2><p class="sub">{subscriptions.length} shows</p></div>
+		<div><h2>{t('library.title')}</h2><p class="sub">{t('library.showCount', { count: subscriptions.length })}</p></div>
 		<label class="library-filter">
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-			<input bind:value={libraryQuery} placeholder="Filter library" />
+			<input bind:value={libraryQuery} placeholder={t('library.filterPlaceholder')} aria-label={t('library.filterPlaceholder')} />
 		</label>
-		<div class="library-sort" role="group" aria-label="Sort library">
-			<button aria-pressed={librarySort === 'recent'} class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>Recent</button>
+		<div class="library-sort" role="group" aria-label={t('library.sortLabel')}>
+			<button aria-pressed={librarySort === 'recent'} class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>{t('library.sortRecent')}</button>
 			<button aria-pressed={librarySort === 'az'} class:active={librarySort === 'az'} onclick={() => (librarySort = 'az')}>A–Z</button>
-			<button aria-pressed={librarySort === 'played'} class:active={librarySort === 'played'} onclick={() => (librarySort = 'played')}>Most played</button>
 		</div>
 	</div>
 
-	<div class="tabs collection-tabs" role="tablist" aria-label="Library sections">
+	<div class="tabs collection-tabs" role="tablist" aria-label={t('library.sections')}>
 		<button role="tab" aria-selected={activeTab === 'subscriptions'} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
 			<i class="ph ph-books" aria-hidden="true"></i> {t('library.subscriptions')} <span class="count">{subscriptions.length}</span>
 		</button>
@@ -224,15 +227,15 @@
 			<div class="podcast-grid">
 				{#each visibleSubscriptions as sub, i (sub.podcast_id)}
 					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 40, 320) }} use:longPress={sub.podcast_id}>
-						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={`Open ${sub.title}`}>
+						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={t('library.openShow', { title: sub.title })}>
 							<img src={optimizeArtwork(sub.artwork_url, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						</a>
 						<div class="details cover-overlay">
 							<h3>{sub.title}</h3>
-							<p>Subscribed · open for episodes</p>
+							<p>{t('library.subscribedHint')}</p>
 							<div class="actions">
 								<a href={`/podcast/${sub.podcast_id}`} class="round-action primary" aria-label={t('common.viewEpisodes')}><i class="ph-fill ph-play"></i></a>
-								<button class="round-action" onclick={() => goto(`/podcast/${sub.podcast_id}`)} aria-label="Open show"><i class="ph ph-list-plus"></i></button>
+								<button class="round-action" onclick={() => goto(`/podcast/${sub.podcast_id}`)} aria-label={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus"></i></button>
 								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')}><i class="ph ph-dots-three"></i></button>
 							</div>
 						</div>
@@ -305,8 +308,8 @@
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
-							<a class="ep-title" href={`/episode/${item.episode_id}`}>{item.title || 'Episode'}</a>
-							<span class="ep-sub">{item.podcast_title || 'Queued'}</span>
+							<a class="ep-title" href={`/episode/${item.episode_id}`}>{item.title || t('common.episode')}</a>
+							<span class="ep-sub">{item.podcast_title || t('library.queued')}</span>
 						</div>
 						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label={t('library.removeFromQueue')}>
 							<i class="ph ph-x" aria-hidden="true"></i>
@@ -331,7 +334,7 @@
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
-							<a class="ep-title" href={`/episode/${fav.episode_id}`}>{fav.title || 'Episode'}</a>
+							<a class="ep-title" href={`/episode/${fav.episode_id}`}>{fav.title || t('common.episode')}</a>
 							<span class="ep-sub">{fav.podcast_title || ''}</span>
 						</div>
 						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label={t('library.removeFromFavorites')}>
@@ -596,7 +599,7 @@
 		margin-bottom: 14px;
 	}
 	.lib-head h2 { font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
-	.lib-head .sub { color: var(--ink-4); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+	.lib-head .sub { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.library-filter {
 		display: flex;
 		align-items: center;
@@ -616,12 +619,12 @@
 		border-radius: 3px;
 		background: transparent;
 		color: var(--ink-4);
-		font: 600 8px/1 var(--font-mono);
+		font: 600 10px/1 var(--font-mono);
 		text-transform: uppercase;
 	}
 	.library-sort button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.collection-tabs { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-hair); }
-	.tabs button { border-radius: 4px; box-shadow: none; font: 600 9px/1 var(--font-mono); text-transform: uppercase; }
+	.tabs button { min-height: 34px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.tabs button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.podcast-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 	.podcast-card.quiet-cover-card {
@@ -654,7 +657,7 @@
 	.quiet-cover-card:focus-within .cover-overlay,
 	.quiet-cover-card.long-pressed .cover-overlay { opacity: 1; pointer-events: auto; }
 	.quiet-cover-card .cover-overlay h3 { color: #eaf6f0; font: 700 14px/1.15 var(--font-ui); }
-	.quiet-cover-card .cover-overlay p { color: #a9c8ba; font: 500 8px/1.35 var(--font-mono); text-transform: uppercase; }
+	.quiet-cover-card .cover-overlay p { color: #a9c8ba; font: 500 10px/1.35 var(--font-mono); text-transform: uppercase; }
 	.quiet-cover-card .actions { display: flex; gap: 5px; margin-top: 6px; }
 	.quiet-cover-card .round-action {
 		display: grid;

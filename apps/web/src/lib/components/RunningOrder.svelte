@@ -4,7 +4,6 @@
 	import { reorderLocalQueue } from '$lib/idb/db';
 	import { t } from '$lib/i18n';
 	import { listeningSession } from '$lib/stores/session.svelte';
-	import { shell } from '$lib/stores/shell.svelte';
 
 	let now = $state(Date.now());
 	let dragIndex = $state<number | null>(null);
@@ -74,6 +73,7 @@
 	}
 
 	async function trim() {
+		if (listeningSession.minutes === null) return;
 		let sum = 0;
 		for (const item of player.queue) {
 			const adjusted = (item.duration_ms || 0) / player.playbackSpeed;
@@ -93,22 +93,12 @@
 	}
 </script>
 
-<aside class="running-order" aria-label={t('quiet.queue.title')}>
+<aside class="running-order" id="running-order" aria-label={t('quiet.queue.title')}>
 	<header>
 		<div>
 			<h2>{t('quiet.queue.title')}</h2>
 			<span>{player.queue.length} · {duration(queueMs / player.playbackSpeed)}</span>
 		</div>
-		<button
-			class="queue-toggle"
-			type="button"
-			onclick={() => shell.toggleRight()}
-			aria-label={shell.rightCollapsed ? t('quiet.shell.expandQueue') : t('quiet.shell.collapseQueue')}
-			aria-expanded={!shell.rightCollapsed}
-			title={shell.rightCollapsed ? t('quiet.shell.expandQueue') : t('quiet.shell.collapseQueue')}
-		>
-			<i class="ph {shell.rightCollapsed ? 'ph-caret-left' : 'ph-caret-right'}" aria-hidden="true"></i>
-		</button>
 	</header>
 
 	{#if player.current}
@@ -148,7 +138,9 @@
 	</ol>
 
 	<div class="queue-actions">
-		<button onclick={trim}>{t('quiet.queue.trim', { count: listeningSession.minutes })}</button>
+		{#if listeningSession.minutes !== null}
+			<button onclick={trim}>{t('quiet.queue.trim', { count: listeningSession.minutes })}</button>
+		{/if}
 		<button onclick={shuffle}>{t('quiet.queue.shuffle')}</button>
 		<button onclick={() => player.clearQueue()}>{t('quiet.queue.clear')}</button>
 	</div>

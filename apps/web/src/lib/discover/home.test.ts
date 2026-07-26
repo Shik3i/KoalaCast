@@ -16,6 +16,7 @@ describe('arrangeDiscover', () => {
 	it('only applies the session filter when explicitly enabled', () => {
 		expect(arrangeDiscover(podcasts, { mood: 'focus', sort: 'rank', sessionMinutes: 40, fitsSession: false })).toHaveLength(3);
 		expect(arrangeDiscover(podcasts, { mood: 'focus', sort: 'rank', sessionMinutes: 40, fitsSession: true }).map((podcast) => podcast.id)).toEqual(['science', 'comedy']);
+		expect(arrangeDiscover(podcasts, { mood: 'focus', sort: 'rank', sessionMinutes: null, fitsSession: true })).toHaveLength(3);
 	});
 
 	it('sorts by real duration and publication time', () => {

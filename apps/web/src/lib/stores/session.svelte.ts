@@ -1,19 +1,24 @@
 type SessionMinutes = 25 | 40 | 60;
 
 class SessionStore {
-	minutes = $state<SessionMinutes>(40);
+	minutes = $state<SessionMinutes | null>(null);
 
 	load() {
 		try {
-			const value = Number(localStorage.getItem('koalacast_session_minutes'));
+			const stored = localStorage.getItem('koalacast_session_minutes');
+			if (!stored || stored === 'any') {
+				this.minutes = null;
+				return;
+			}
+			const value = Number(stored);
 			if (value === 25 || value === 40 || value === 60) this.minutes = value;
 		} catch (_) {}
 	}
 
-	set(minutes: SessionMinutes) {
+	set(minutes: SessionMinutes | null) {
 		this.minutes = minutes;
 		try {
-			localStorage.setItem('koalacast_session_minutes', String(minutes));
+			localStorage.setItem('koalacast_session_minutes', minutes === null ? 'any' : String(minutes));
 		} catch (_) {}
 	}
 }

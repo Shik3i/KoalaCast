@@ -33,8 +33,7 @@
 	let filterLanguages = $state<string[]>([...prefs.languages]);
 	let filterGenre = $state<string>('');
 	let showFilters = $state(false);
-	// The term the visible results came from, which is not always what is in the
-	// search box (the page seeds itself with a default query on mount).
+	// The term the visible results came from.
 	let lastExecutedQuery = $state('');
 
 	const activeFilterCount = $derived(filterLanguages.length + (filterGenre ? 1 : 0));
@@ -47,12 +46,10 @@
 		return a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
 	}
 
-	// Re-runs whatever query the visible results came from. The search box can be
-	// empty while results are on screen (the page seeds itself with a default
-	// query), so changing a filter has to fall back to the last executed term
-	// instead of the box — otherwise the filter appears to do nothing.
+	// Re-runs the visible query after filters change.
 	function rerunSearch() {
-		executeSearch(searchQuery.trim() || lastExecutedQuery);
+		const query = searchQuery.trim() || lastExecutedQuery;
+		if (query) executeSearch(query);
 	}
 
 	function toggleFilterLanguage(code: string) {
@@ -104,7 +101,6 @@
 		try {
 			recentSearches = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
 		} catch (_) {}
-		executeSearch('technology');
 	});
 
 	function rememberSearch(query: string) {
@@ -128,6 +124,14 @@
 		executeSearch(q);
 	}
 
+	function clearSearch() {
+		searchQuery = '';
+		searchResults = [];
+		lastExecutedQuery = '';
+		provider = '';
+		errorMessage = '';
+	}
+
 	$effect(() => {
 		const q = searchQuery;
 		if (searchTimeout) clearTimeout(searchTimeout);
@@ -135,6 +139,10 @@
 			searchTimeout = setTimeout(() => {
 				executeSearch(q);
 			}, 300);
+		} else if (!q.trim() && lastExecutedQuery) {
+			searchResults = [];
+			lastExecutedQuery = '';
+			provider = '';
 		}
 	});
 
@@ -242,7 +250,7 @@
 			});
 			const data = await res.json();
 			if (!res.ok) {
-				errorMessage = data.error || 'Failed to add RSS feed URL.';
+				errorMessage = data.error || t('search.rssError');
 				return;
 			}
 
@@ -280,7 +288,7 @@
 				aria-label={t('search.title')}
 			/>
 			{#if searchQuery}
-				<button type="button" class="clear" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')} transition:fade={{ duration: 120 }}>
+				<button type="button" class="clear" onclick={clearSearch} aria-label={t('common.clearSearch')} transition:fade={{ duration: 120 }}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			{/if}
@@ -445,16 +453,13 @@
 		{:else if visibleResults.length === 0}
 			<div class="empty-state">
 				<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-				<p>
-					No podcasts found{searchQuery.trim() ? ` for “${searchQuery.trim()}”` : ''}. Try a
-					different term, or add a show directly by its RSS URL above.
-				</p>
+				<p>{lastExecutedQuery ? t('search.noResults', { query: lastExecutedQuery }) : t('search.startHint')}</p>
 			</div>
 		{:else}
 			<div class="results-grid">
 				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
-						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={`Open ${pod.title || pod.trackName}`}></button>
+						<button class="card-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title || pod.trackName })}></button>
 						<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt={pod.title || pod.trackName} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<div class="info">
 							<h4>{pod.title || pod.trackName}</h4>
@@ -466,9 +471,9 @@
 								onclick={(e) => handleAddPodcast(e, pod)}
 							>
 								{#if isSubscribed(pod)}
-									<i class="ph ph-check" aria-hidden="true"></i> Subscribed
+									<i class="ph ph-check" aria-hidden="true"></i> {t('common.subscribed')}
 								{:else}
-									<i class="ph ph-plus" aria-hidden="true"></i> Subscribe
+									<i class="ph ph-plus" aria-hidden="true"></i> {t('common.subscribe')}
 								{/if}
 							</button>
 						</div>

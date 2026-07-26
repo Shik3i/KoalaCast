@@ -560,10 +560,10 @@
 					<a class="podcast-title" href={`/podcast/${track.podcast_id}`}>{track.podcast_title}</a>
 					<span class="mobile-player-meta">-{formatTime(remainingMs)} · {player.playbackSpeed}×{#if player.upNext} · next: {player.upNext.title}{/if}</span>
 				</div>
-				<button class="track-icon" class:active={isFav} onclick={toggleFavorite} aria-label={isFav ? 'Remove from favorites' : 'Save episode'}>
+				<button class="track-icon" class:active={isFav} onclick={toggleFavorite} aria-label={isFav ? t('player.removeFavorite') : t('player.saveEpisode')}>
 					<i class="{isFav ? 'ph-fill' : 'ph'} ph-bookmark-simple"></i>
 				</button>
-				<a class="track-icon" href={`/podcast/${track.podcast_id}`} aria-label="Open show">
+				<a class="track-icon" href={`/podcast/${track.podcast_id}`} aria-label={t('player.openShow')}>
 					<i class="ph ph-arrow-square-out"></i>
 				</a>
 				{#if isPlaying}
@@ -584,19 +584,19 @@
 					</div>
 				{/if}
 				<div class="controls">
-					<button class="ctrl transport-edge" onclick={() => seekTo(0)} aria-label="Restart episode">
+					<button class="ctrl transport-edge" onclick={() => seekTo(0)} aria-label={t('player.restartEpisode')}>
 						<i class="ph ph-skip-back" aria-hidden="true"></i>
 					</button>
-					<button class="ctrl jump-control" onclick={() => skip(-15)} aria-label="Skip back 15 seconds">
+					<button class="ctrl jump-control" onclick={() => skip(-15)} aria-label={t('player.skipBack')}>
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>15</small>
 					</button>
-					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
 					<button class="ctrl jump-control" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
 					</button>
-					<button class="ctrl transport-edge" onclick={() => player.playNext()} aria-label="Next episode">
+					<button class="ctrl transport-edge" onclick={() => player.playNext()} aria-label={t('player.nextEpisode')}>
 						<i class="ph ph-skip-forward" aria-hidden="true"></i>
 					</button>
 				</div>
@@ -636,7 +636,7 @@
 					<option value="45">45 min</option>
 					<option value="60">60 min</option>
 				</select>
-				<a class="queue-button" href="/library?view=queue" aria-label="Open queue">
+				<a class="queue-button" href="/library?view=queue" aria-label={t('player.openQueue')}>
 					<i class="ph ph-list-numbers"></i><span>Queue {player.queue.length}</span>
 				</a>
 				<button class="ctrl close-track" onclick={() => player.stop()} aria-label={t('player.closePlayer')}>
@@ -687,7 +687,7 @@
 					<button class="np-ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')}>
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>10</small>
 					</button>
-					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
+					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')}>
 						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
 					</button>
 					<button class="np-ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')}>
@@ -701,7 +701,7 @@
 				</div>
 
 				<div class="np-extras">
-					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}>
+					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 					</button>
 					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')}>
@@ -1508,7 +1508,7 @@
 	.ctrl { width: 28px; height: 28px; color: var(--ink-3); font-size: 16px; opacity: 1; }
 	.ctrl:hover { background: transparent; color: var(--ink); }
 	.jump-control { position: relative; }
-	.jump-control small { position: absolute; font: 700 7px/1 var(--font-mono); }
+	.jump-control small { position: absolute; font: 700 9px/1 var(--font-mono); }
 	.play-btn {
 		width: 40px;
 		height: 40px;
@@ -1526,7 +1526,7 @@
 	}
 	.timeline input[type='range']::-webkit-slider-thumb { width: 12px; height: 12px; background: var(--ink); box-shadow: none; }
 	.timeline input[type='range']::-moz-range-thumb { width: 12px; height: 12px; background: var(--ink); }
-	.time { min-width: 40px; color: var(--ink-3); font: 500 9px/1 var(--font-mono); opacity: 1; }
+	.time { min-width: 40px; color: var(--ink-3); font: 500 10px/1 var(--font-mono); opacity: 1; }
 	.extras { gap: 6px; }
 	.speed-cycle { height: 29px; min-width: 46px; padding: 0 6px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
 	.vol-wrap .ctrl { border: 0; }
@@ -1538,7 +1538,7 @@
 		border-radius: 4px;
 		background: transparent;
 		color: var(--ink-3);
-		font: 600 9px/1 var(--font-mono);
+		font: 600 10px/1 var(--font-mono);
 	}
 	.queue-button {
 		display: inline-flex;
@@ -1549,7 +1549,7 @@
 		border: 1px solid var(--border-ui);
 		border-radius: 4px;
 		color: var(--ink-2);
-		font: 700 9px/1 var(--font-mono);
+		font: 700 10px/1 var(--font-mono);
 		text-transform: uppercase;
 	}
 	.queue-button i { color: var(--accent-ink); font-size: 15px; }
@@ -1578,7 +1578,7 @@
 			max-width: 42vw;
 			overflow: hidden;
 			color: var(--ink-4);
-			font: 500 8px/1.35 var(--font-mono);
+			font: 500 10px/1.35 var(--font-mono);
 			text-overflow: ellipsis;
 			text-transform: uppercase;
 			white-space: nowrap;

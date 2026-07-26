@@ -310,7 +310,7 @@
 				{/if}
 				<div class="badges">
 					<span class="badge">
-						{episode.pub_date ? prefs.formatDate(episode.pub_date) : 'No date'}
+						{episode.pub_date ? prefs.formatDate(episode.pub_date) : t('podcast.noDate')}
 					</span>
 					<span class="badge">{formatDuration(episode.duration_ms)}</span>
 					{#if episode.explicit}
@@ -326,7 +326,7 @@
 					<button class="btn-secondary" onclick={handleAddToQueue}>
 						<i class="ph ph-plus" aria-hidden="true"></i> {t('episode.addToQueue')}
 					</button>
-					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
+					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? 'Favorited' : 'Favorite'}
 					</button>
