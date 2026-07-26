@@ -7,4 +7,14 @@
         <item quantity="one">%1$d Folge</item>
         <item quantity="other">%1$d Folgen</item>
     </plurals>
+
+    <string name="podcast_subscribe">Abonnieren</string>
+    <string name="podcast_subscribed">Abonniert</string>
+    <string name="podcast_played">Gehört</string>
+    <string name="podcast_action_queue">Zur Warteschlange</string>
+    <string name="podcast_action_dequeue">Aus der Warteschlange entfernen</string>
+    <string name="podcast_action_save">Folge merken</string>
+    <string name="podcast_action_unsave">Aus Gemerkt entfernen</string>
+    <string name="podcast_action_played">Als gehört markieren</string>
+    <string name="podcast_action_unplayed">Als ungehört markieren</string>
 </resources>

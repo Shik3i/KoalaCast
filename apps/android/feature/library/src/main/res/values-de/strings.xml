@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_title">Bibliothek</string>
+
+    <string name="library_tab_subscriptions">Sendungen</string>
+    <string name="library_tab_in_progress">Angefangen</string>
+    <string name="library_tab_queue">Warteschlange</string>
+    <string name="library_tab_favorites">Gemerkt</string>
+
+    <string name="library_left">noch %1$s</string>
+
+    <string name="library_queue_clear">Leeren</string>
+    <string name="library_queue_move_up">Nach oben</string>
+    <string name="library_queue_move_down">Nach unten</string>
+    <string name="library_queue_remove">Aus der Warteschlange entfernen</string>
+    <string name="library_favorite_remove">Aus Gemerkt entfernen</string>
+
+    <string name="library_unsubscribe_title">%1$s nicht mehr abonnieren?</string>
+    <string name="library_unsubscribe_body">Die Sendung verlässt deine Bibliothek und ihre Folgen tauchen nicht mehr unter Neu auf. Dein Hörfortschritt bleibt erhalten.</string>
+    <string name="library_unsubscribe_confirm">Abo beenden</string>
+    <string name="library_cancel">Abbrechen</string>
+
+    <string name="library_empty_subscriptions_title">Noch keine Sendungen</string>
+    <string name="library_empty_subscriptions_body">Abonniere eine Sendung, dann landet sie hier. Alles bleibt auf diesem Gerät – ohne Konto.</string>
+    <string name="library_empty_action_discover">Etwas zum Hören finden</string>
+    <string name="library_empty_in_progress_title">Nichts angefangen</string>
+    <string name="library_empty_in_progress_body">Angefangene Folgen erscheinen hier mit der verbleibenden Zeit.</string>
+    <string name="library_empty_queue_title">Die Warteschlange ist leer</string>
+    <string name="library_empty_queue_body">Füge Folgen aus einer Sendung hinzu – sie laufen in der Reihenfolge, die du festlegst.</string>
+    <string name="library_empty_favorites_title">Nichts gemerkt</string>
+    <string name="library_empty_favorites_body">Merke dir eine Folge, um später darauf zurückzukommen.</string>
+</resources>

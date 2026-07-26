@@ -7,15 +7,21 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
+import net.koalastuff.koalacast.core.data.repository.ProgressRepository
+import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
+import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
 
 data class EpisodeUiState(
@@ -25,12 +31,18 @@ data class EpisodeUiState(
     val episode: Episode? = null,
     /** Loaded after the episode, purely for the artwork and show name in the header. */
     val podcast: Podcast? = null,
+    val isFavorite: Boolean = false,
+    val isQueued: Boolean = false,
+    val isPlayed: Boolean = false,
 )
 
 @HiltViewModel
 class EpisodeViewModel @Inject constructor(
     private val podcasts: PodcastRepository,
     private val preferences: PreferencesRepository,
+    private val library: LibraryRepository,
+    private val queue: QueueRepository,
+    private val progress: ProgressRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -41,6 +53,27 @@ class EpisodeViewModel @Inject constructor(
 
     init {
         load()
+        observeLocalState()
+    }
+
+    /**
+     * Saved / queued / played come from Room, so the buttons stay honest after a
+     * change made elsewhere in the app — and with no network at all.
+     */
+    private fun observeLocalState() {
+        viewModelScope.launch {
+            combine(
+                library.isFavorite(episodeId),
+                queue.queuedEpisodeIds,
+                progress.completedEpisodeIds,
+            ) { favorite, queued, completed ->
+                Triple(favorite, episodeId in queued, episodeId in completed)
+            }.collect { (favorite, queued, played) ->
+                _state.update {
+                    it.copy(isFavorite = favorite, isQueued = queued, isPlayed = played)
+                }
+            }
+        }
     }
 
     fun retry() = load()
@@ -70,6 +103,39 @@ class EpisodeViewModel @Inject constructor(
             val podcast = (podcasts.podcast(podcastId) as? DataResult.Success)?.data ?: return@launch
             _state.update { it.copy(podcast = podcast) }
         }
+    }
+
+    fun toggleFavorite() {
+        val track = track() ?: return
+        viewModelScope.launch {
+            if (_state.value.isFavorite) library.removeFavorite(track.episodeId)
+            else library.addFavorite(track)
+        }
+    }
+
+    fun toggleQueue() {
+        val track = track() ?: return
+        viewModelScope.launch {
+            if (_state.value.isQueued) queue.remove(track.episodeId) else queue.addToEnd(track)
+        }
+    }
+
+    fun togglePlayed() {
+        val track = track() ?: return
+        viewModelScope.launch { progress.setPlayed(track, played = !_state.value.isPlayed) }
+    }
+
+    /**
+     * The show may still be loading — its title and artwork are a nicety, not a
+     * precondition, so a save or a queue never has to wait for it.
+     */
+    private fun track(): Track? {
+        val episode = _state.value.episode ?: return null
+        val podcast = _state.value.podcast
+        return episode.toTrack(
+            podcastTitle = podcast?.title.orEmpty(),
+            fallbackArtworkUrl = podcast?.artworkUrl.orEmpty(),
+        )
     }
 
     companion object {

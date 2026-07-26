@@ -35,7 +35,9 @@ import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
+import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
@@ -76,6 +78,10 @@ fun PodcastScreen(
         onBack = onBack,
         onOpenEpisode = onOpenEpisode,
         onRetry = viewModel::retry,
+        onToggleSubscribe = viewModel::toggleSubscribe,
+        onToggleFavorite = viewModel::toggleFavorite,
+        onToggleQueue = viewModel::toggleQueue,
+        onTogglePlayed = viewModel::togglePlayed,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -88,6 +94,10 @@ internal fun PodcastContent(
     onBack: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onRetry: () -> Unit,
+    onToggleSubscribe: () -> Unit,
+    onToggleFavorite: (Episode) -> Unit,
+    onToggleQueue: (Episode) -> Unit,
+    onTogglePlayed: (Episode) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -116,7 +126,12 @@ internal fun PodcastContent(
                     SkeletonRows(count = 5, modifier = Modifier.padding(KoalaSpacing.screenH))
                 }
 
-                else -> PodcastHeader(podcast = state.podcast, onBack = onBack)
+                else -> PodcastHeader(
+                    podcast = state.podcast,
+                    subscribed = state.subscribed,
+                    onBack = onBack,
+                    onToggleSubscribe = onToggleSubscribe,
+                )
             }
         }
 
@@ -152,7 +167,16 @@ internal fun PodcastContent(
             }
 
             items(items = state.episodes, key = { it.id }) { episode ->
-                EpisodeRow(episode = episode, onClick = { onOpenEpisode(episode.id) })
+                EpisodeRow(
+                    episode = episode,
+                    isFavorite = episode.id in state.favoriteIds,
+                    isQueued = episode.id in state.queuedIds,
+                    isPlayed = episode.id in state.completedIds,
+                    onClick = { onOpenEpisode(episode.id) },
+                    onToggleFavorite = { onToggleFavorite(episode) },
+                    onToggleQueue = { onToggleQueue(episode) },
+                    onTogglePlayed = { onTogglePlayed(episode) },
+                )
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
 
@@ -178,7 +202,12 @@ private fun BackRow(onBack: () -> Unit) {
 }
 
 @Composable
-private fun PodcastHeader(podcast: Podcast, onBack: () -> Unit) {
+private fun PodcastHeader(
+    podcast: Podcast,
+    subscribed: Boolean,
+    onBack: () -> Unit,
+    onToggleSubscribe: () -> Unit,
+) {
     val colors = KoalaTheme.colors
     Column(
         modifier = Modifier
@@ -225,62 +254,128 @@ private fun PodcastHeader(podcast: Podcast, onBack: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+
+            // Subscribing is purely local: no account, no request, works offline.
+            if (subscribed) {
+                OutlineButton(
+                    text = stringResource(R.string.podcast_subscribed),
+                    onClick = onToggleSubscribe,
+                    leadingIcon = PhosphorIcons.Check,
+                )
+            } else {
+                AccentButton(
+                    text = stringResource(R.string.podcast_subscribe),
+                    onClick = onToggleSubscribe,
+                    leadingIcon = PhosphorIcons.Plus,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun EpisodeRow(episode: Episode, onClick: () -> Unit) {
+private fun EpisodeRow(
+    episode: Episode,
+    isFavorite: Boolean,
+    isQueued: Boolean,
+    isPlayed: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onToggleQueue: () -> Unit,
+    onTogglePlayed: () -> Unit,
+) {
     val colors = KoalaTheme.colors
     val context = LocalContext.current
     val now = remember { System.currentTimeMillis() }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.gap),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
-        verticalAlignment = Alignment.Top,
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
     ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            verticalAlignment = Alignment.Top,
         ) {
-            MonoText(
-                text = buildString {
-                    append(Format.publishedAt(context, episode.pubDateMs, episode.hasPubDate, now))
-                    if (episode.episodeNumber > 0) {
-                        append(" · ")
-                        append(stringResource(R.string.podcast_episode_number, episode.episodeNumber))
-                    }
-                },
-                color = colors.ink4,
-                style = KoalaTheme.type.monoSmall,
-            )
-            Text(
-                text = episode.title,
-                style = KoalaTheme.type.listTitle,
-                color = colors.ink2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val blurb = Format.plainText(episode.description)
-            if (blurb.isNotBlank()) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+            ) {
+                MonoText(
+                    text = buildString {
+                        append(Format.publishedAt(context, episode.pubDateMs, episode.hasPubDate, now))
+                        if (episode.episodeNumber > 0) {
+                            append(" · ")
+                            append(stringResource(R.string.podcast_episode_number, episode.episodeNumber))
+                        }
+                        if (isPlayed) {
+                            append(" · ")
+                            append(stringResource(R.string.podcast_played))
+                        }
+                    },
+                    color = if (isPlayed) colors.accentInk else colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                )
                 Text(
-                    text = blurb,
-                    style = KoalaTheme.type.bodySmall,
-                    color = colors.ink3,
+                    text = episode.title,
+                    style = KoalaTheme.type.listTitle,
+                    // A finished episode steps back rather than disappearing.
+                    color = if (isPlayed) colors.ink4 else colors.ink2,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                val blurb = Format.plainText(episode.description)
+                if (blurb.isNotBlank()) {
+                    Text(
+                        text = blurb,
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink3,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Box(modifier = Modifier.padding(top = 2.dp)) {
+                MonoText(
+                    text = Format.duration(context, episode.durationMs),
+                    color = colors.ink3,
+                    style = KoalaTheme.type.monoStrong,
+                )
             }
         }
-        Box(modifier = Modifier.padding(top = 2.dp)) {
-            MonoText(
-                text = Format.duration(context, episode.durationMs),
-                color = colors.ink3,
-                style = KoalaTheme.type.monoStrong,
+
+        Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+            IconButtonSquare(
+                icon = if (isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
+                contentDescription = stringResource(
+                    if (isQueued) R.string.podcast_action_dequeue else R.string.podcast_action_queue,
+                ),
+                onClick = onToggleQueue,
+                tint = if (isQueued) colors.accentInk else colors.ink3,
+                boxSize = 30.dp,
+                iconSize = 16.dp,
+            )
+            IconButtonSquare(
+                icon = if (isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
+                contentDescription = stringResource(
+                    if (isFavorite) R.string.podcast_action_unsave else R.string.podcast_action_save,
+                ),
+                onClick = onToggleFavorite,
+                tint = if (isFavorite) colors.accentInk else colors.ink3,
+                boxSize = 30.dp,
+                iconSize = 16.dp,
+            )
+            IconButtonSquare(
+                icon = if (isPlayed) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
+                contentDescription = stringResource(
+                    if (isPlayed) R.string.podcast_action_unplayed else R.string.podcast_action_played,
+                ),
+                onClick = onTogglePlayed,
+                tint = if (isPlayed) colors.accentInk else colors.ink3,
+                boxSize = 30.dp,
+                iconSize = 16.dp,
             )
         }
     }

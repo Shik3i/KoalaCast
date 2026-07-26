@@ -36,6 +36,7 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.feature.discover.DiscoverScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeViewModel
+import net.koalastuff.koalacast.feature.library.LibraryScreen
 import net.koalastuff.koalacast.feature.onboarding.OnboardingScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastViewModel
@@ -96,6 +97,21 @@ fun KoalaCastApp(
                     SearchScreen(
                         onOpenPodcast = { feedUrl, id ->
                             navController.navigate(Routes.podcast(feedUrl, id))
+                        },
+                        contentPadding = statusBarPadding(),
+                    )
+                }
+
+                composable(Routes.LIBRARY) {
+                    LibraryScreen(
+                        onOpenPodcast = { feedUrl, id ->
+                            navController.navigate(Routes.podcast(feedUrl, id))
+                        },
+                        onOpenEpisode = { navController.navigate(Routes.episode(it)) },
+                        onOpenDiscover = {
+                            navController.navigate(Routes.DISCOVER) {
+                                popUpTo(Routes.DISCOVER) { inclusive = true }
+                            }
                         },
                         contentPadding = statusBarPadding(),
                     )

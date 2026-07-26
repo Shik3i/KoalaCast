@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_title">Library</string>
+
+    <string name="library_tab_subscriptions">Shows</string>
+    <string name="library_tab_in_progress">Started</string>
+    <string name="library_tab_queue">Queue</string>
+    <string name="library_tab_favorites">Saved</string>
+
+    <string name="library_left">%1$s left</string>
+
+    <string name="library_queue_clear">Clear</string>
+    <string name="library_queue_move_up">Move up</string>
+    <string name="library_queue_move_down">Move down</string>
+    <string name="library_queue_remove">Remove from queue</string>
+    <string name="library_favorite_remove">Remove from saved</string>
+
+    <string name="library_unsubscribe_title">Unsubscribe from %1$s?</string>
+    <string name="library_unsubscribe_body">The show leaves your library and its episodes stop appearing in New. Your listening progress is kept.</string>
+    <string name="library_unsubscribe_confirm">Unsubscribe</string>
+    <string name="library_cancel">Cancel</string>
+
+    <string name="library_empty_subscriptions_title">No shows yet</string>
+    <string name="library_empty_subscriptions_body">Subscribe to a show and it lands here. Everything stays on this device — no account needed.</string>
+    <string name="library_empty_action_discover">Find something to listen to</string>
+    <string name="library_empty_in_progress_title">Nothing started</string>
+    <string name="library_empty_in_progress_body">Episodes you have begun show up here with the time you have left.</string>
+    <string name="library_empty_queue_title">The queue is empty</string>
+    <string name="library_empty_queue_body">Add episodes from a show and they will play in the order you put them in.</string>
+    <string name="library_empty_favorites_title">Nothing saved</string>
+    <string name="library_empty_favorites_body">Save an episode to come back to it later.</string>
+</resources>

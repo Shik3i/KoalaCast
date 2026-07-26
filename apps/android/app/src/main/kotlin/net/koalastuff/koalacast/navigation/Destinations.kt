@@ -14,6 +14,7 @@ object Routes {
     const val ONBOARDING = "onboarding"
     const val DISCOVER = "discover"
     const val SEARCH = "search"
+    const val LIBRARY = "library"
     const val SETTINGS = "settings"
 
     const val PODCAST = "podcast?podcastId={podcastId}&feedUrl={feedUrl}"
@@ -30,7 +31,7 @@ object Routes {
     fun episode(episodeId: String): String = "episode/${Uri.encode(episodeId)}"
 }
 
-/** The bottom bar. Library and Profile join it when they have data to show. */
+/** The bottom bar. Profile joins it once there are listening stats to show. */
 enum class TopLevelDestination(
     val route: String,
     @StringRes val labelRes: Int,
@@ -39,5 +40,6 @@ enum class TopLevelDestination(
 ) {
     DISCOVER(Routes.DISCOVER, R.string.nav_discover, PhosphorIcons.Compass, PhosphorIcons.CompassFill),
     SEARCH(Routes.SEARCH, R.string.nav_search, PhosphorIcons.MagnifyingGlass, PhosphorIcons.MagnifyingGlassFill),
+    LIBRARY(Routes.LIBRARY, R.string.nav_library, PhosphorIcons.Books, PhosphorIcons.BooksFill),
     SETTINGS(Routes.SETTINGS, R.string.nav_settings, PhosphorIcons.Gear, PhosphorIcons.GearFill),
 }

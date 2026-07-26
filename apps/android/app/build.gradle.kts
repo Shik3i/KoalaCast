@@ -49,6 +49,7 @@ dependencies {
     implementation(project(":feature:search"))
     implementation(project(":feature:podcast"))
     implementation(project(":feature:episode"))
+    implementation(project(":feature:library"))
     implementation(project(":feature:settings"))
 
     implementation(libs.androidx.core.ktx)

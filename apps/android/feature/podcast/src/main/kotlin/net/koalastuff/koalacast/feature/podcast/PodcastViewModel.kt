@@ -7,15 +7,21 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
+import net.koalastuff.koalacast.core.data.repository.ProgressRepository
+import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
+import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
 
 data class PodcastUiState(
@@ -26,12 +32,19 @@ data class PodcastUiState(
     val episodes: List<Episode> = emptyList(),
     val loadingMore: Boolean = false,
     val endReached: Boolean = false,
+    val subscribed: Boolean = false,
+    val favoriteIds: Set<String> = emptySet(),
+    val queuedIds: Set<String> = emptySet(),
+    val completedIds: Set<String> = emptySet(),
 )
 
 @HiltViewModel
 class PodcastViewModel @Inject constructor(
     private val podcasts: PodcastRepository,
     private val preferences: PreferencesRepository,
+    private val library: LibraryRepository,
+    private val queue: QueueRepository,
+    private val progress: ProgressRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -74,11 +87,45 @@ class PodcastViewModel @Inject constructor(
 
                 is DataResult.Success -> {
                     _state.update { it.copy(podcast = resolved.data) }
+                    observeLocalState(resolved.data.id)
                     loadEpisodes(resolved.data.id, offset = 0)
                 }
             }
         }
     }
+
+    /**
+     * Subscription, saved and queued state come from Room, so the buttons keep
+     * telling the truth after a change made on another screen — or offline.
+     */
+    private fun observeLocalState(id: String) {
+        viewModelScope.launch {
+            combine(
+                library.isSubscribed(id),
+                library.favoriteEpisodeIds,
+                queue.queuedEpisodeIds,
+                progress.completedEpisodeIds,
+            ) { subscribed, favorites, queued, completed ->
+                LocalState(subscribed, favorites, queued, completed)
+            }.collect { local ->
+                _state.update {
+                    it.copy(
+                        subscribed = local.subscribed,
+                        favoriteIds = local.favoriteIds,
+                        queuedIds = local.queuedIds,
+                        completedIds = local.completedIds,
+                    )
+                }
+            }
+        }
+    }
+
+    private data class LocalState(
+        val subscribed: Boolean,
+        val favoriteIds: Set<String>,
+        val queuedIds: Set<String>,
+        val completedIds: Set<String>,
+    )
 
     fun loadMore() {
         val current = _state.value
@@ -87,6 +134,55 @@ class PodcastViewModel @Inject constructor(
 
         _state.update { it.copy(loadingMore = true) }
         viewModelScope.launch { loadEpisodes(podcast.id, offset = current.episodes.size) }
+    }
+
+    fun toggleSubscribe() {
+        val podcast = _state.value.podcast ?: return
+        viewModelScope.launch {
+            if (_state.value.subscribed) {
+                library.unsubscribe(podcast.id)
+            } else {
+                library.subscribe(podcast)
+            }
+        }
+    }
+
+    fun toggleFavorite(episode: Episode) {
+        val track = trackFor(episode) ?: return
+        viewModelScope.launch {
+            if (episode.id in _state.value.favoriteIds) {
+                library.removeFavorite(episode.id)
+            } else {
+                library.addFavorite(track)
+            }
+        }
+    }
+
+    fun toggleQueue(episode: Episode) {
+        val track = trackFor(episode) ?: return
+        viewModelScope.launch {
+            if (episode.id in _state.value.queuedIds) {
+                queue.remove(episode.id)
+            } else {
+                queue.addToEnd(track)
+            }
+        }
+    }
+
+    fun togglePlayed(episode: Episode) {
+        val track = trackFor(episode) ?: return
+        viewModelScope.launch {
+            progress.setPlayed(track, played = episode.id !in _state.value.completedIds)
+        }
+    }
+
+    /** Denormalises the show's title and artwork onto the episode, once. */
+    private fun trackFor(episode: Episode): Track? {
+        val podcast = _state.value.podcast ?: return null
+        return episode.toTrack(
+            podcastTitle = podcast.title,
+            fallbackArtworkUrl = podcast.artworkUrl,
+        )
     }
 
     private suspend fun loadEpisodes(id: String, offset: Int) {

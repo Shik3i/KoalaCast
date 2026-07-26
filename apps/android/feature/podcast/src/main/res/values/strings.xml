@@ -7,4 +7,14 @@
         <item quantity="one">%1$d episode</item>
         <item quantity="other">%1$d episodes</item>
     </plurals>
+
+    <string name="podcast_subscribe">Subscribe</string>
+    <string name="podcast_subscribed">Subscribed</string>
+    <string name="podcast_played">Played</string>
+    <string name="podcast_action_queue">Add to queue</string>
+    <string name="podcast_action_dequeue">Remove from queue</string>
+    <string name="podcast_action_save">Save episode</string>
+    <string name="podcast_action_unsave">Remove from saved</string>
+    <string name="podcast_action_played">Mark as played</string>
+    <string name="podcast_action_unplayed">Mark as unplayed</string>
 </resources>

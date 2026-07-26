@@ -23,11 +23,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.ShowNotes
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
@@ -50,6 +52,9 @@ fun EpisodeScreen(
         state = state,
         onBack = onBack,
         onRetry = viewModel::retry,
+        onToggleFavorite = viewModel::toggleFavorite,
+        onToggleQueue = viewModel::toggleQueue,
+        onTogglePlayed = viewModel::togglePlayed,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -60,6 +65,9 @@ internal fun EpisodeContent(
     state: EpisodeUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onToggleQueue: () -> Unit,
+    onTogglePlayed: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -148,9 +156,43 @@ internal fun EpisodeContent(
                         color = colors.inkStrong,
                     )
 
-                    // Playback lands with the Media3 work (P2). Until then the screen
-                    // is honest about what it can do rather than showing a dead
-                    // play button.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (state.isQueued) {
+                            OutlineButton(
+                                text = stringResource(R.string.episode_queued),
+                                onClick = onToggleQueue,
+                                leadingIcon = PhosphorIcons.Check,
+                            )
+                        } else {
+                            AccentButton(
+                                text = stringResource(R.string.episode_queue),
+                                onClick = onToggleQueue,
+                                leadingIcon = PhosphorIcons.ListPlus,
+                            )
+                        }
+                        IconButtonSquare(
+                            icon = if (state.isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
+                            contentDescription = stringResource(
+                                if (state.isFavorite) R.string.episode_unsave else R.string.episode_save,
+                            ),
+                            onClick = onToggleFavorite,
+                            tint = if (state.isFavorite) colors.accentInk else colors.ink3,
+                        )
+                        IconButtonSquare(
+                            icon = if (state.isPlayed) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
+                            contentDescription = stringResource(
+                                if (state.isPlayed) R.string.episode_mark_unplayed else R.string.episode_mark_played,
+                            ),
+                            onClick = onTogglePlayed,
+                            tint = if (state.isPlayed) colors.accentInk else colors.ink3,
+                        )
+                    }
+
+                    // Playback lands with the Media3 work (P2). Saying so beats a
+                    // play button that does nothing.
                     MonoText(
                         text = stringResource(R.string.episode_playback_pending),
                         color = colors.ink4,

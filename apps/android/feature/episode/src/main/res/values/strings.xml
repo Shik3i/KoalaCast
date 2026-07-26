@@ -7,4 +7,11 @@
         <item quantity="one">%1$d transcript published with this episode</item>
         <item quantity="other">%1$d transcripts published with this episode</item>
     </plurals>
+
+    <string name="episode_queue">Add to queue</string>
+    <string name="episode_queued">In your queue</string>
+    <string name="episode_save">Save episode</string>
+    <string name="episode_unsave">Remove from saved</string>
+    <string name="episode_mark_played">Mark as played</string>
+    <string name="episode_mark_unplayed">Mark as unplayed</string>
 </resources>

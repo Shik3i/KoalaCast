@@ -7,4 +7,11 @@
         <item quantity="one">%1$d Transkript zu dieser Folge veröffentlicht</item>
         <item quantity="other">%1$d Transkripte zu dieser Folge veröffentlicht</item>
     </plurals>
+
+    <string name="episode_queue">Zur Warteschlange</string>
+    <string name="episode_queued">In der Warteschlange</string>
+    <string name="episode_save">Folge merken</string>
+    <string name="episode_unsave">Aus Gemerkt entfernen</string>
+    <string name="episode_mark_played">Als gehört markieren</string>
+    <string name="episode_mark_unplayed">Als ungehört markieren</string>
 </resources>

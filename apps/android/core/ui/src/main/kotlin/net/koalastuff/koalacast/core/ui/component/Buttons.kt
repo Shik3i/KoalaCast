@@ -107,6 +107,7 @@ fun IconButtonSquare(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     tint: Color = KoalaTheme.colors.ink2,
+    enabled: Boolean = true,
     bordered: Boolean = true,
     boxSize: Dp = 34.dp,
     iconSize: Dp = 17.dp,
@@ -116,7 +117,7 @@ fun IconButtonSquare(
     Box(
         modifier = modifier
             .size(KoalaSpacing.minTouchTarget)
-            .clickableRow(enabled = true, onClick = onClick, role = Role.Button),
+            .clickableRow(enabled = enabled, onClick = onClick, role = Role.Button),
         contentAlignment = Alignment.Center,
     ) {
         Box(
