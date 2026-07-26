@@ -26,6 +26,12 @@ private fun phosphor(name: String, pathData: String): ImageVector =
     ).build()
 
 object PhosphorIcons {
+    /** phosphor regular/tray */
+    val Tray: ImageVector by lazy { phosphor("Tray", "M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16v96H180.69L157.66,129a8,8,0,0,0-5.66-2.34H104A8,8,0,0,0,98.34,129L75.31,152H40V56ZM40,200V168H78.63a8,8,0,0,0,5.66-2.34l23-23h41.38l23,23a8,8,0,0,0,5.66,2.34H216v32Z") }
+
+    /** phosphor fill/tray-fill */
+    val TrayFill: ImageVector by lazy { phosphor("TrayFill", "M216,32H40A24,24,0,0,0,16,56V200a24,24,0,0,0,24,24H216a24,24,0,0,0,24-24V56A24,24,0,0,0,216,32Zm8,120H180.69l-23-23A8,8,0,0,0,152,126.63H104A8,8,0,0,0,98.34,129l-23,23H32V56a8,8,0,0,1,8-8H216a8,8,0,0,1,8,8Z") }
+
     /** phosphor regular/magnifying-glass */
     val MagnifyingGlass: ImageVector by lazy { phosphor("MagnifyingGlass", "M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z") }
 

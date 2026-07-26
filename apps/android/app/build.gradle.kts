@@ -51,6 +51,7 @@ dependencies {
     implementation(project(":feature:podcast"))
     implementation(project(":feature:episode"))
     implementation(project(":feature:library"))
+    implementation(project(":feature:inbox"))
     implementation(project(":feature:player"))
     implementation(project(":feature:settings"))
 

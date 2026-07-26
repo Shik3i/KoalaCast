@@ -14,6 +14,7 @@ object Routes {
     const val ONBOARDING = "onboarding"
     const val DISCOVER = "discover"
     const val SEARCH = "search"
+    const val INBOX = "inbox"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
 
@@ -39,7 +40,7 @@ enum class TopLevelDestination(
     val selectedIcon: ImageVector,
 ) {
     DISCOVER(Routes.DISCOVER, R.string.nav_discover, PhosphorIcons.Compass, PhosphorIcons.CompassFill),
-    SEARCH(Routes.SEARCH, R.string.nav_search, PhosphorIcons.MagnifyingGlass, PhosphorIcons.MagnifyingGlassFill),
+    INBOX(Routes.INBOX, R.string.nav_inbox, PhosphorIcons.Tray, PhosphorIcons.TrayFill),
     LIBRARY(Routes.LIBRARY, R.string.nav_library, PhosphorIcons.Books, PhosphorIcons.BooksFill),
     SETTINGS(Routes.SETTINGS, R.string.nav_settings, PhosphorIcons.Gear, PhosphorIcons.GearFill),
 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="inbox_title">Neue Folgen</string>
+    <string name="inbox_subtitle">Die neuesten Folgen deiner Abonnements.</string>
+    <string name="inbox_mark_all">Alle als gehört</string>
+    <string name="inbox_settings">Sendungsoptionen</string>
+    <string name="inbox_unplayed_only">Nur ungehörte</string>
+    <string name="inbox_settings_hint">Lege pro Sendung fest, ob alle neuen Folgen oder nur die jeweils neueste erscheint.</string>
+    <string name="inbox_mode_all">Alle</string>
+    <string name="inbox_mode_latest">Neueste</string>
+    <string name="inbox_empty_subscriptions_title">Noch keine Abonnements</string>
+    <string name="inbox_empty_subscriptions_body">Abonniere Sendungen, damit ihre neuesten Folgen hier erscheinen.</string>
+    <string name="inbox_discover">Podcasts finden</string>
+    <string name="inbox_empty_title">Nichts Neues</string>
+    <string name="inbox_empty_caught_up">Du bist auf dem neuesten Stand. Blende gehörte Folgen ein, um den Verlauf zu sehen.</string>
+    <string name="inbox_empty_recent">Deine Abonnements haben keine aktuellen Folgen.</string>
+    <string name="inbox_retry">Erneut versuchen</string>
+    <string name="inbox_undated">Ohne Datum</string>
+    <plurals name="inbox_episode_count">
+        <item quantity="one">%d Folge</item>
+        <item quantity="other">%d Folgen</item>
+    </plurals>
+    <string name="inbox_play">Folge abspielen</string>
+    <string name="inbox_queue">Zur Warteschlange</string>
+    <string name="inbox_mark_played">Als gehört markieren</string>
+    <string name="inbox_mark_unplayed">Als ungehört markieren</string>
+    <string name="inbox_more">Weitere Aktionen</string>
+    <string name="inbox_older_played">Diese und ältere als gehört</string>
+    <string name="inbox_older_unplayed">Diese und ältere als ungehört</string>
+</resources>

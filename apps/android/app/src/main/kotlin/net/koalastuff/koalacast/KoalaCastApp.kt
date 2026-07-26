@@ -41,6 +41,7 @@ import net.koalastuff.koalacast.feature.discover.DiscoverScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeViewModel
 import net.koalastuff.koalacast.feature.library.LibraryScreen
+import net.koalastuff.koalacast.feature.inbox.InboxScreen
 import net.koalastuff.koalacast.feature.onboarding.OnboardingScreen
 import net.koalastuff.koalacast.feature.player.MiniPlayer
 import net.koalastuff.koalacast.feature.player.NowPlayingScreen
@@ -124,6 +125,14 @@ fun KoalaCastApp(
                                 popUpTo(Routes.DISCOVER) { inclusive = true }
                             }
                         },
+                        contentPadding = statusBarPadding(),
+                    )
+                }
+
+                composable(Routes.INBOX) {
+                    InboxScreen(
+                        onOpenEpisode = { navController.navigate(Routes.episode(it)) },
+                        onOpenDiscover = { navController.navigate(Routes.SEARCH) },
                         contentPadding = statusBarPadding(),
                     )
                 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="inbox_title">New episodes</string>
+    <string name="inbox_subtitle">The newest episodes from your subscriptions.</string>
+    <string name="inbox_mark_all">Mark all played</string>
+    <string name="inbox_settings">Show settings</string>
+    <string name="inbox_unplayed_only">Unplayed only</string>
+    <string name="inbox_settings_hint">Choose whether every recent episode or only the newest episode appears for each show.</string>
+    <string name="inbox_mode_all">All</string>
+    <string name="inbox_mode_latest">Latest</string>
+    <string name="inbox_empty_subscriptions_title">No subscriptions yet</string>
+    <string name="inbox_empty_subscriptions_body">Subscribe to shows to collect their newest episodes here.</string>
+    <string name="inbox_discover">Find podcasts</string>
+    <string name="inbox_empty_title">Nothing new</string>
+    <string name="inbox_empty_caught_up">You are caught up. Show played episodes to see the recent feed.</string>
+    <string name="inbox_empty_recent">Your subscriptions have no recent episodes.</string>
+    <string name="inbox_retry">Try again</string>
+    <string name="inbox_undated">Without date</string>
+    <plurals name="inbox_episode_count">
+        <item quantity="one">%d episode</item>
+        <item quantity="other">%d episodes</item>
+    </plurals>
+    <string name="inbox_play">Play episode</string>
+    <string name="inbox_queue">Add to queue</string>
+    <string name="inbox_mark_played">Mark played</string>
+    <string name="inbox_mark_unplayed">Mark unplayed</string>
+    <string name="inbox_more">More actions</string>
+    <string name="inbox_older_played">Mark this and older played</string>
+    <string name="inbox_older_unplayed">Mark this and older unplayed</string>
+</resources>
