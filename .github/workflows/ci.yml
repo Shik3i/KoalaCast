@@ -25,13 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Validate docker compose config
         run: docker compose config -q
 
       - name: Build image (single-arch, load into the runner)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -48,7 +48,7 @@ jobs:
       # runner is amd64; xx-verify inside the build asserts the binary's
       # architecture.
       - name: Cross-compile check (arm64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
