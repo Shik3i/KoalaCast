@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Favorite
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.QueueEntry
+import net.koalastuff.koalacast.core.model.Track
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
@@ -58,6 +59,7 @@ fun LibraryScreen(
         onSelectTab = viewModel::selectTab,
         onOpenPodcast = onOpenPodcast,
         onOpenEpisode = onOpenEpisode,
+        onPlay = viewModel::play,
         onOpenDiscover = onOpenDiscover,
         onUnsubscribe = viewModel::unsubscribe,
         onRemoveFromQueue = viewModel::removeFromQueue,
@@ -82,6 +84,7 @@ internal fun LibraryContent(
     onSelectTab: (LibraryTab) -> Unit,
     onOpenPodcast: (String, String?) -> Unit,
     onOpenEpisode: (String) -> Unit,
+    onPlay: (Track?) -> Unit,
     onOpenDiscover: () -> Unit,
     onUnsubscribe: (String) -> Unit,
     onRemoveFromQueue: (String) -> Unit,
@@ -130,11 +133,13 @@ internal fun LibraryContent(
             LibraryTab.IN_PROGRESS -> InProgressList(
                 items = state.inProgress,
                 onOpenEpisode = onOpenEpisode,
+                onPlay = onPlay,
             )
 
             LibraryTab.QUEUE -> QueueList(
                 items = state.queue,
                 onOpenEpisode = onOpenEpisode,
+                onPlay = onPlay,
                 onRemove = onRemoveFromQueue,
                 onMove = onMoveInQueue,
                 onClear = onClearQueue,
@@ -143,6 +148,7 @@ internal fun LibraryContent(
             LibraryTab.FAVORITES -> FavoritesList(
                 items = state.favorites,
                 onOpenEpisode = onOpenEpisode,
+                onPlay = onPlay,
                 onRemove = onRemoveFavorite,
             )
         }
@@ -161,6 +167,7 @@ private val LibraryTab.labelRes: Int
 private fun InProgressList(
     items: List<PlaybackProgress>,
     onOpenEpisode: (String) -> Unit,
+    onPlay: (Track?) -> Unit,
 ) {
     if (items.isEmpty()) {
         EmptyState(
@@ -184,6 +191,7 @@ private fun InProgressList(
                 ),
                 progressPercent = progress.progressPercent,
                 onClick = { onOpenEpisode(progress.episodeId) },
+                onPlay = { onPlay(progress.track) },
             )
             RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
         }
@@ -194,6 +202,7 @@ private fun InProgressList(
 private fun QueueList(
     items: List<QueueEntry>,
     onOpenEpisode: (String) -> Unit,
+    onPlay: (Track?) -> Unit,
     onRemove: (String) -> Unit,
     onMove: (Int, Int) -> Unit,
     onClear: () -> Unit,
@@ -241,6 +250,7 @@ private fun QueueList(
                 isFirst = index == 0,
                 isLast = index == items.lastIndex,
                 onOpen = { onOpenEpisode(entry.track.episodeId) },
+                onPlay = { onPlay(entry.track) },
                 onRemove = { onRemove(entry.track.episodeId) },
                 onMoveUp = { onMove(index, index - 1) },
                 onMoveDown = { onMove(index, index + 1) },
@@ -262,6 +272,7 @@ private fun QueueRow(
     isFirst: Boolean,
     isLast: Boolean,
     onOpen: () -> Unit,
+    onPlay: () -> Unit,
     onRemove: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -307,6 +318,15 @@ private fun QueueRow(
             )
         }
         IconButtonSquare(
+            icon = PhosphorIcons.PlayFill,
+            contentDescription = stringResource(R.string.library_play),
+            onClick = onPlay,
+            tint = colors.accentInk,
+            bordered = false,
+            boxSize = 26.dp,
+            iconSize = 14.dp,
+        )
+        IconButtonSquare(
             icon = PhosphorIcons.CaretUp,
             contentDescription = stringResource(R.string.library_queue_move_up),
             onClick = onMoveUp,
@@ -342,6 +362,7 @@ private fun QueueRow(
 private fun FavoritesList(
     items: List<Favorite>,
     onOpenEpisode: (String) -> Unit,
+    onPlay: (Track?) -> Unit,
     onRemove: (String) -> Unit,
 ) {
     if (items.isEmpty()) {
@@ -365,6 +386,7 @@ private fun FavoritesList(
                         meta = Format.duration(context, favorite.track?.durationMs ?: 0L),
                         progressPercent = null,
                         onClick = { onOpenEpisode(favorite.episodeId) },
+                        onPlay = { onPlay(favorite.track) },
                     )
                 }
                 IconButtonSquare(
@@ -390,6 +412,7 @@ private fun TrackRow(
     meta: String,
     progressPercent: Int?,
     onClick: () -> Unit,
+    onPlay: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     Row(
@@ -400,12 +423,23 @@ private fun TrackRow(
         horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CoverArt(
-            url = artworkUrl,
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            sizeHint = 56.dp,
-        )
+        Box(contentAlignment = Alignment.Center) {
+            CoverArt(
+                url = artworkUrl,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                sizeHint = 56.dp,
+            )
+            IconButtonSquare(
+                icon = PhosphorIcons.PlayFill,
+                contentDescription = stringResource(R.string.library_play),
+                onClick = onPlay,
+                tint = colors.inkStrong,
+                bordered = false,
+                boxSize = 28.dp,
+                iconSize = 16.dp,
+            )
+        }
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),

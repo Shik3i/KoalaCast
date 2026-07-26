@@ -29,4 +29,5 @@
     <string name="library_empty_queue_body">Füge Folgen aus einer Sendung hinzu – sie laufen in der Reihenfolge, die du festlegst.</string>
     <string name="library_empty_favorites_title">Nichts gemerkt</string>
     <string name="library_empty_favorites_body">Merke dir eine Folge, um später darauf zurückzukommen.</string>
+    <string name="library_play">Abspielen</string>
 </resources>

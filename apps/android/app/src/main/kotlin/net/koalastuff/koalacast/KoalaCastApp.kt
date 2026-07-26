@@ -16,7 +16,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -38,6 +42,8 @@ import net.koalastuff.koalacast.feature.episode.EpisodeScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeViewModel
 import net.koalastuff.koalacast.feature.library.LibraryScreen
 import net.koalastuff.koalacast.feature.onboarding.OnboardingScreen
+import net.koalastuff.koalacast.feature.player.MiniPlayer
+import net.koalastuff.koalacast.feature.player.NowPlayingScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastViewModel
 import net.koalastuff.koalacast.feature.search.SearchScreen
@@ -64,6 +70,11 @@ fun KoalaCastApp(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = TopLevelDestination.entries.any { it.route == currentRoute }
+    // The expanded player is a layer over the graph, not a destination: the back
+    // stack underneath must survive collapsing it.
+    var nowPlayingExpanded by rememberSaveable { mutableStateOf(false) }
+
+    BackHandler(enabled = nowPlayingExpanded) { nowPlayingExpanded = false }
 
     Column(modifier = Modifier.fillMaxSize().background(colors.bgApp)) {
         Box(modifier = Modifier.weight(1f)) {
@@ -155,6 +166,10 @@ fun KoalaCastApp(
             }
         }
 
+        if (currentRoute != Routes.ONBOARDING) {
+            MiniPlayer(onExpand = { nowPlayingExpanded = true })
+        }
+
         if (showBottomBar) {
             KoalaBottomBar(
                 currentRoute = currentRoute,
@@ -167,6 +182,16 @@ fun KoalaCastApp(
                 },
             )
         }
+    }
+
+    if (nowPlayingExpanded) {
+        NowPlayingScreen(
+            onCollapse = { nowPlayingExpanded = false },
+            onOpenEpisode = { episodeId ->
+                nowPlayingExpanded = false
+                navController.navigate(Routes.episode(episodeId))
+            },
+        )
     }
 }
 

@@ -5,3 +5,7 @@ plugins {
 android {
     namespace = "net.koalastuff.koalacast.feature.episode"
 }
+
+dependencies {
+    implementation(project(":core:player"))
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_back_15">Back 15 seconds</string>
+    <string name="player_forward_30">Forward 30 seconds</string>
+    <string name="player_collapse">Collapse the player</string>
+    <string name="player_nothing_playing">Nothing is playing.</string>
+    <string name="player_up_next_count">%1$d up next</string>
+    <string name="player_sleep_timer">Sleep timer</string>
+    <string name="player_sleep_off">Off</string>
+    <string name="player_sleep_minutes">%1$d min</string>
+    <string name="player_sleep_episode_end">End of episode</string>
+</resources>

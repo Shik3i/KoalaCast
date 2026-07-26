@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +50,10 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.PROXY_IMAGES] = enabled }
     }
 
+    suspend fun setPlaybackSpeed(speed: Float) {
+        dataStore.edit { it[Keys.PLAYBACK_SPEED] = speed.coerceIn(0.5f, 3f) }
+    }
+
     private fun Preferences.toUserPreferences() = UserPreferences(
         serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,
         onboardingComplete = this[Keys.ONBOARDING_COMPLETE] ?: false,
@@ -58,6 +63,7 @@ class PreferencesRepository @Inject constructor(
         languages = this[Keys.LANGUAGES] ?: emptySet(),
         category = this[Keys.CATEGORY].orEmpty(),
         proxyImages = this[Keys.PROXY_IMAGES] ?: true,
+        playbackSpeed = this[Keys.PLAYBACK_SPEED] ?: 1f,
     )
 
     private object Keys {
@@ -67,6 +73,7 @@ class PreferencesRepository @Inject constructor(
         val LANGUAGES = stringSetPreferencesKey("languages")
         val CATEGORY = stringPreferencesKey("category")
         val PROXY_IMAGES = booleanPreferencesKey("proxy_images")
+        val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
     }
 }
 

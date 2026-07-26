@@ -17,4 +17,5 @@
     <string name="podcast_action_unsave">Aus Gemerkt entfernen</string>
     <string name="podcast_action_played">Als gehört markieren</string>
     <string name="podcast_action_unplayed">Als ungehört markieren</string>
+    <string name="podcast_action_play">Folge abspielen</string>
 </resources>

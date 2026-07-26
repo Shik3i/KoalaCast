@@ -42,6 +42,7 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:player"))
     implementation(project(":core:ui"))
 
     implementation(project(":feature:onboarding"))
@@ -50,6 +51,7 @@ dependencies {
     implementation(project(":feature:podcast"))
     implementation(project(":feature:episode"))
     implementation(project(":feature:library"))
+    implementation(project(":feature:player"))
     implementation(project(":feature:settings"))
 
     implementation(libs.androidx.core.ktx)

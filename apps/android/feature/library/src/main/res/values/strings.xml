@@ -29,4 +29,5 @@
     <string name="library_empty_queue_body">Add episodes from a show and they will play in the order you put them in.</string>
     <string name="library_empty_favorites_title">Nothing saved</string>
     <string name="library_empty_favorites_body">Save an episode to come back to it later.</string>
+    <string name="library_play">Play</string>
 </resources>

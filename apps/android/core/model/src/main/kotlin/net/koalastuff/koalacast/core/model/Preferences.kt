@@ -20,4 +20,6 @@ data class UserPreferences(
      * straight from the publisher's CDN. Costs a hop, hides the listener's IP.
      */
     val proxyImages: Boolean,
+    /** Default playback speed; a per-show setting overrides it. */
+    val playbackSpeed: Float,
 )

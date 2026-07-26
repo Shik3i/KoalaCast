@@ -51,6 +51,26 @@ object Format {
         }
     }
 
+    /** `1.25×`, with a trailing zero dropped — the design writes it that way. */
+    fun speed(speed: Float): String {
+        val rounded = Math.round(speed * 100) / 100f
+        val text = if (rounded % 1f == 0f) rounded.toInt().toString() else rounded.toString()
+        return "$text×"
+    }
+
+    /** `18:42` / `1:04:12`, for the time codes beside a scrubber. */
+    fun timeCode(positionMs: Long): String {
+        val totalSeconds = positionMs.coerceAtLeast(0) / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            "%d:%02d:%02d".format(hours, minutes, seconds)
+        } else {
+            "%d:%02d".format(minutes, seconds)
+        }
+    }
+
     /** Strips tags from feed-supplied HTML so it can sit on one line in a list row. */
     fun plainText(html: String): String =
         html

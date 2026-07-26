@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "net.koalastuff.koalacast.feature.podcast"
+    namespace = "net.koalastuff.koalacast.feature.player"
 }
 
 dependencies {

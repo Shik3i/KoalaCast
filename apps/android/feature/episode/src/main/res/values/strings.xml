@@ -2,7 +2,6 @@
 <resources>
     <string name="episode_show_notes">Show notes</string>
     <string name="episode_no_notes">This episode has no show notes.</string>
-    <string name="episode_playback_pending">Playback arrives with the audio engine — this build browses only</string>
     <plurals name="episode_transcripts">
         <item quantity="one">%1$d transcript published with this episode</item>
         <item quantity="other">%1$d transcripts published with this episode</item>
@@ -14,4 +13,6 @@
     <string name="episode_unsave">Remove from saved</string>
     <string name="episode_mark_played">Mark as played</string>
     <string name="episode_mark_unplayed">Mark as unplayed</string>
+    <string name="episode_play">Play</string>
+    <string name="episode_play_again">Play again</string>
 </resources>

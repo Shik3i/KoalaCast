@@ -12,10 +12,12 @@ import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
+import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.Favorite
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.QueueEntry
 import net.koalastuff.koalacast.core.model.Subscription
+import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
 
 enum class LibraryTab { SUBSCRIPTIONS, IN_PROGRESS, QUEUE, FAVORITES }
@@ -40,6 +42,7 @@ class LibraryViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val queue: QueueRepository,
     private val progress: ProgressRepository,
+    private val player: PlayerConnection,
 ) : ViewModel() {
 
     private val _tab = MutableStateFlow(LibraryTab.SUBSCRIPTIONS)
@@ -65,6 +68,11 @@ class LibraryViewModel @Inject constructor(
 
     fun selectTab(tab: LibraryTab) {
         _tab.value = tab
+    }
+
+    /** Resumes from the stored position; the connection looks it up. */
+    fun play(track: Track?) {
+        track?.takeIf { it.enclosureUrl.isNotBlank() }?.let(player::play)
     }
 
     fun unsubscribe(podcastId: String) {

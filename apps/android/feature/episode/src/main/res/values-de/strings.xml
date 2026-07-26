@@ -2,7 +2,6 @@
 <resources>
     <string name="episode_show_notes">Shownotes</string>
     <string name="episode_no_notes">Zu dieser Folge gibt es keine Shownotes.</string>
-    <string name="episode_playback_pending">Wiedergabe kommt mit der Audio-Engine – dieser Build kann nur stöbern</string>
     <plurals name="episode_transcripts">
         <item quantity="one">%1$d Transkript zu dieser Folge veröffentlicht</item>
         <item quantity="other">%1$d Transkripte zu dieser Folge veröffentlicht</item>
@@ -14,4 +13,6 @@
     <string name="episode_unsave">Aus Gemerkt entfernen</string>
     <string name="episode_mark_played">Als gehört markieren</string>
     <string name="episode_mark_unplayed">Als ungehört markieren</string>
+    <string name="episode_play">Abspielen</string>
+    <string name="episode_play_again">Erneut abspielen</string>
 </resources>

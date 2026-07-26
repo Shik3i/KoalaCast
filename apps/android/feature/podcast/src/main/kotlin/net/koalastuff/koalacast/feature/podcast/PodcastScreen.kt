@@ -78,6 +78,7 @@ fun PodcastScreen(
         onBack = onBack,
         onOpenEpisode = onOpenEpisode,
         onRetry = viewModel::retry,
+        onPlay = viewModel::play,
         onToggleSubscribe = viewModel::toggleSubscribe,
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
@@ -94,6 +95,7 @@ internal fun PodcastContent(
     onBack: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onRetry: () -> Unit,
+    onPlay: (Episode) -> Unit,
     onToggleSubscribe: () -> Unit,
     onToggleFavorite: (Episode) -> Unit,
     onToggleQueue: (Episode) -> Unit,
@@ -173,6 +175,7 @@ internal fun PodcastContent(
                     isQueued = episode.id in state.queuedIds,
                     isPlayed = episode.id in state.completedIds,
                     onClick = { onOpenEpisode(episode.id) },
+                    onPlay = { onPlay(episode) },
                     onToggleFavorite = { onToggleFavorite(episode) },
                     onToggleQueue = { onToggleQueue(episode) },
                     onTogglePlayed = { onTogglePlayed(episode) },
@@ -280,6 +283,7 @@ private fun EpisodeRow(
     isQueued: Boolean,
     isPlayed: Boolean,
     onClick: () -> Unit,
+    onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
@@ -346,7 +350,18 @@ private fun EpisodeRow(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButtonSquare(
+                icon = PhosphorIcons.PlayFill,
+                contentDescription = stringResource(R.string.podcast_action_play),
+                onClick = onPlay,
+                tint = colors.accentInk,
+                boxSize = 30.dp,
+                iconSize = 16.dp,
+            )
             IconButtonSquare(
                 icon = if (isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
                 contentDescription = stringResource(

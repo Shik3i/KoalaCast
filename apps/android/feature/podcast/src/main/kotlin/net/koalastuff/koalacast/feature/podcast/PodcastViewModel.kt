@@ -17,6 +17,7 @@ import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
+import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
@@ -45,6 +46,7 @@ class PodcastViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val queue: QueueRepository,
     private val progress: ProgressRepository,
+    private val player: PlayerConnection,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -145,6 +147,11 @@ class PodcastViewModel @Inject constructor(
                 library.subscribe(podcast)
             }
         }
+    }
+
+    fun play(episode: Episode) {
+        val track = trackFor(episode) ?: return
+        player.play(track)
     }
 
     fun toggleFavorite(episode: Episode) {

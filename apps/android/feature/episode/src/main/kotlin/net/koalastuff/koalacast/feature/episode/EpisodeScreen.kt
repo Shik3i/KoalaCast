@@ -52,6 +52,7 @@ fun EpisodeScreen(
         state = state,
         onBack = onBack,
         onRetry = viewModel::retry,
+        onPlay = viewModel::play,
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
@@ -65,6 +66,7 @@ internal fun EpisodeContent(
     state: EpisodeUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
@@ -160,19 +162,22 @@ internal fun EpisodeContent(
                         horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (state.isQueued) {
-                            OutlineButton(
-                                text = stringResource(R.string.episode_queued),
-                                onClick = onToggleQueue,
-                                leadingIcon = PhosphorIcons.Check,
-                            )
-                        } else {
-                            AccentButton(
-                                text = stringResource(R.string.episode_queue),
-                                onClick = onToggleQueue,
-                                leadingIcon = PhosphorIcons.ListPlus,
-                            )
-                        }
+                        AccentButton(
+                            text = stringResource(
+                                if (state.isPlayed) R.string.episode_play_again
+                                else R.string.episode_play,
+                            ),
+                            onClick = onPlay,
+                            leadingIcon = PhosphorIcons.PlayFill,
+                        )
+                        IconButtonSquare(
+                            icon = if (state.isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
+                            contentDescription = stringResource(
+                                if (state.isQueued) R.string.episode_queued else R.string.episode_queue,
+                            ),
+                            onClick = onToggleQueue,
+                            tint = if (state.isQueued) colors.accentInk else colors.ink3,
+                        )
                         IconButtonSquare(
                             icon = if (state.isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
                             contentDescription = stringResource(
@@ -191,14 +196,6 @@ internal fun EpisodeContent(
                         )
                     }
 
-                    // Playback lands with the Media3 work (P2). Saying so beats a
-                    // play button that does nothing.
-                    MonoText(
-                        text = stringResource(R.string.episode_playback_pending),
-                        color = colors.ink4,
-                        style = KoalaTheme.type.monoSmall,
-                        maxLines = 2,
-                    )
                 }
 
                 Hairline(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))

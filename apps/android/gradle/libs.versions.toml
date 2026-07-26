@@ -28,6 +28,7 @@ coroutines = "1.10.2"
 
 coil = "3.3.0"
 media3 = "1.8.0"
+# media3-session brings the MediaController the UI talks to.
 
 junit = "4.13.2"
 turbine = "1.2.1"
