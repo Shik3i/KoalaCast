@@ -63,28 +63,38 @@
 
 	onMount(async () => {
 		mounted = true;
+		// Render the stable editorial fallback before the first asynchronous read.
+		// This keeps the hero and mood grid in their final positions from frame one.
+		podcasts = FEATURED_PODCASTS;
+		isLoading = false;
 		listeningSession.load();
 		const subscriptions = await getLocalSubscriptions();
 		subscribedIds = subscriptions.map((sub) => sub.podcast_id);
 		subscribedFeeds = subscriptions.map((sub) => sub.feed_url).filter(Boolean);
-		await loadDiscover();
+		await loadDiscover(true);
 	});
 
-	async function loadDiscover() {
+	async function loadDiscover(background = false) {
 		const id = ++requestId;
-		isLoading = true;
+		if (!background) isLoading = true;
 		const languages = prefs.languages.length ? prefs.languages : detectBrowserLanguages();
 		try {
 			const responses = await Promise.allSettled(
 				languages.map(async (language) => {
+					const controller = new AbortController();
+					const timeout = background ? window.setTimeout(() => controller.abort(), 2500) : 0;
 					const params = new URLSearchParams({
 						limit: String(limit),
 						region: regionForLanguage(language),
 						languages: language
 					});
 					if (selectedCategory !== 'All') params.set('category', selectedCategory);
-					const response = await fetch(`/api/v1/podcasts/discover?${params}`);
-					return response.ok ? response.json() : { results: [] };
+					try {
+						const response = await fetch(`/api/v1/podcasts/discover?${params}`, { signal: controller.signal });
+						return response.ok ? response.json() : { results: [] };
+					} finally {
+						if (timeout) window.clearTimeout(timeout);
+					}
 				})
 			);
 			if (id !== requestId) return;
@@ -245,6 +255,7 @@
 <svelte:window onkeydown={handleDiscoverKeys} />
 
 <div class="discover-page">
+	{#if !spotlight}<h1 class="sr-only">Discover podcasts with KoalaCast</h1>{/if}
 	<header class="discover-topbar">
 		<div class="mobile-title">
 			<strong>Discover</strong>
@@ -252,7 +263,7 @@
 		</div>
 		<label class="global-search">
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-			<input bind:this={searchInput} bind:value={searchQuery} placeholder="Search shows, people, topics — or “calm, under 30 min”" />
+			<input bind:this={searchInput} bind:value={searchQuery} aria-label="Search podcasts" placeholder="Search shows, people, topics — or “calm, under 30 min”" />
 			<kbd>⌘K</kbd>
 		</label>
 		<span class="edition-date">{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()} · {prefs.languages.join(' / ').toUpperCase()}</span>
@@ -278,7 +289,7 @@
 				</div>
 			</div>
 			<div class="spotlight-art">
-				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} loading="eager" fetchpriority="high" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 				<div class="waveform" aria-hidden="true">{#each [8,16,12,24,18,28,13,21,17,26,11,20,15,23,9,18] as height}<i style:height={`${height}px`}></i>{/each}</div>
 				<span>Today’s cover story · open to explore</span>
 			</div>
@@ -298,7 +309,7 @@
 		<div class="mood-grid">
 			{#each moods as mood}
 				<button class:active={selectedMood === mood.label} onclick={() => (selectedMood = mood.label)}>
-					<i class="ph {mood.icon}"></i>
+					<i class="ph {mood.icon}" aria-hidden="true"></i>
 					<strong>{mood.label}</strong>
 					<span>{mood.fit[sessionIndex]} fit {listeningSession.minutes} min</span>
 				</button>
@@ -312,7 +323,7 @@
 			<div>
 				{#each picks as podcast, index}
 					<button onclick={() => openPodcast(podcast)}>
-						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 						<span>
 							<strong>{podcast.title}</strong>
 							<small>{index === 0 ? 'A measured pace for a focused session.' : index === 1 ? 'A useful change of subject without the shouting.' : 'Clear voices and enough detail to stay curious.'}</small>
@@ -327,14 +338,14 @@
 	<section class="chart-section">
 		<header class="chart-head">
 			<div><h2>Top & trending</h2><span>{filtered.length} shows match</span></div>
-			<div class="sort-tabs" role="tablist">
+			<div class="sort-tabs" role="group" aria-label="Sort podcast chart">
 				{#each ['momentum', 'rank', 'length', 'newest'] as option}
-					<button class:active={sort === option} onclick={() => (sort = option as typeof sort)}>{option}</button>
+					<button aria-pressed={sort === option} class:active={sort === option} onclick={() => (sort = option as typeof sort)}>{option}</button>
 				{/each}
 			</div>
 		</header>
 		<div class="chart-filters">
-			<button>Fits {listeningSession.minutes} min <i class="ph ph-x"></i></button>
+			<button>Fits {listeningSession.minutes} min <i class="ph ph-x" aria-hidden="true"></i></button>
 			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label="Category">
 				{#each categories as category}<option value={category}>{genreLabel(category)}</option>{/each}
 			</select>
@@ -346,12 +357,12 @@
 				<article class="chart-row">
 					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
 					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={`Open ${podcast.title}`}>
-						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
 					</button>
 					<button class="chart-title" onclick={() => openPodcast(podcast)}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>
 					</button>
-					<div class="spark" aria-label="Momentum">
+					<div class="spark" role="img" aria-label="Momentum">
 						{#each [5, 8, 7, 11, 9, 15, 13, 18, 16, 22] as value}<i style:height={`${value}px`}></i>{/each}
 					</div>
 					<span class="fit">{listeningSession.minutes}m</span>

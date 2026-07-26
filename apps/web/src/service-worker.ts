@@ -11,7 +11,21 @@ import { build, files, version } from '$service-worker';
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const CACHE = `koalacast-cache-${version}`;
-const PRECACHE = [...build, ...files];
+// Vite emits legacy font fallbacks alongside WOFF2, while `files` contains every
+// generated icon rendition. Precaching all of them downloaded roughly 9 MB on a
+// first visit even though the browser uses only a small subset. Keep the complete
+// executable app shell, modern fonts, and the assets required for offline UI/PWA
+// installation; all other static assets remain available through normal HTTP.
+const PRECACHE_BUILD = build.filter((path) => !/\.(?:woff|ttf|svg)$/.test(path));
+const OFFLINE_FILES = new Set([
+	'/TwemojiCountryFlags.woff2',
+	'/favicon.svg',
+	'/icon-192.png',
+	'/icon-512.png',
+	'/manifest.webmanifest',
+	'/placeholder.svg'
+]);
+const PRECACHE = [...PRECACHE_BUILD, ...files.filter((path) => OFFLINE_FILES.has(path))];
 
 sw.addEventListener('install', (event) => {
 	event.waitUntil(

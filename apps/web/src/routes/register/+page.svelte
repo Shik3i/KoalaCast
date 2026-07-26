@@ -47,11 +47,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{t('register.pageTitle')}</title>
-	<meta name="description" content={t('register.metaDescription')} />
-</svelte:head>
-
 <div class="auth-container">
 	<div class="auth-card">
 		{#if recoveryCodeDisplay}

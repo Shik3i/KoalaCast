@@ -284,7 +284,7 @@
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>
 			{/if}
-			<button type="submit" class="go" disabled={isSearching}>
+			<button type="submit" class="go" disabled={isSearching} aria-label={isSearching ? t('common.loading') : t('search.submit')}>
 				{#if isSearching}<span class="spinner-sm" aria-hidden="true"></span>{:else}{t('search.submit')}{/if}
 			</button>
 		</form>
@@ -550,7 +550,7 @@
 		gap: 0.4rem;
 		padding: 0 1.3rem;
 		background: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 		border: none;
 		border-radius: 12px;
 		font-weight: 700;
@@ -768,7 +768,7 @@
 		width: 100%;
 		padding: 0.5rem 1rem;
 		background: var(--accent-green);
-		color: white;
+		color: var(--accent-button-text);
 		border: none;
 		border-radius: 6px;
 		font-weight: 700;
@@ -832,7 +832,7 @@
 		padding: 0 0.35rem;
 		border-radius: 999px;
 		background: var(--accent-green);
-		color: #ffffff;
+		color: var(--accent-button-text);
 		font-size: 0.72rem;
 		font-weight: 700;
 	}
@@ -901,7 +901,7 @@
 
 	.filter-pill.active {
 		background: var(--accent-green);
-		color: #ffffff;
+		color: var(--accent-button-text);
 		border-color: var(--accent-green);
 	}
 

@@ -102,10 +102,10 @@
 				· {subscriptionCount} subscriptions · {touchedShows} shows touched
 			</p>
 		</div>
-		<div class="range-tabs" role="tablist" aria-label="Statistics range">
-			<button class:active={range === 'year'} onclick={() => (range = 'year')}>This year</button>
-			<button class:active={range === '90days'} onclick={() => (range = '90days')}>90 days</button>
-			<button class:active={range === 'all'} onclick={() => (range = 'all')}>All time</button>
+		<div class="range-tabs" role="group" aria-label="Statistics range">
+			<button aria-pressed={range === 'year'} class:active={range === 'year'} onclick={() => (range = 'year')}>This year</button>
+			<button aria-pressed={range === '90days'} class:active={range === '90days'} onclick={() => (range = '90days')}>90 days</button>
+			<button aria-pressed={range === 'all'} class:active={range === 'all'} onclick={() => (range = 'all')}>All time</button>
 		</div>
 	</header>
 

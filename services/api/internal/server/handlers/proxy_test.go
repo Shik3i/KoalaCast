@@ -164,3 +164,30 @@ func TestProxyHandler_GetImageProxy(t *testing.T) {
 		t.Fatalf("expected cached hit status 200, got %d", rec2.Code)
 	}
 }
+
+func TestProxyHandler_GetImageProxyReturnsFallbackWhenUpstreamFails(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+	}))
+	defer ts.Close()
+
+	proxy := NewProxyHandler()
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/image?url="+ts.URL, nil)
+	rec := httptest.NewRecorder()
+	proxy.GetImageProxy(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected graceful fallback status 200, got %d", rec.Code)
+	}
+	if contentType := rec.Header().Get("Content-Type"); contentType != "image/svg+xml" {
+		t.Errorf("expected fallback Content-Type image/svg+xml, got %q", contentType)
+	}
+	if fallback := rec.Header().Get("X-KoalaCast-Image-Fallback"); fallback != "true" {
+		t.Errorf("expected fallback response marker, got %q", fallback)
+	}
+	if !strings.Contains(rec.Body.String(), "<svg") {
+		t.Error("expected SVG fallback body")
+	}
+}

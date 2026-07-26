@@ -122,6 +122,25 @@ paths:
         '401':
           description: "Invalid credentials"
 
+  /api/v1/auth/status:
+    get:
+      operationId: getApiV1AuthStatus
+      summary: "Optional browser session status"
+      description: "Returns HTTP 200 for both anonymous and authenticated clients so the web app can restore an optional session without producing an expected 401 console error."
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: "Current optional authentication status"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthStatus'
+        '429':
+          description: "Rate limit exceeded"
+
   /api/v1/sync:
     get:
       operationId: getApiV1Sync
@@ -289,6 +308,24 @@ components:
         username:
           type: string
         password:
+          type: string
+
+    AuthStatus:
+      type: object
+      required:
+        - authenticated
+      properties:
+        authenticated:
+          type: boolean
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        client_type:
           type: string
 
     GlobalStatsPreference:

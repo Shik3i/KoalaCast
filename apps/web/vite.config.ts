@@ -1,8 +1,15 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	build: {
+		rolldownOptions: {
+			// A full production build completes in a few seconds; percentage-based
+			// plugin timing notices are therefore noise rather than a slow-build signal.
+			checks: { pluginTimings: false }
+		}
+	},
 	server: {
 		port: 5173,
 		proxy: {

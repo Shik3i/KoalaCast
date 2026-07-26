@@ -406,7 +406,7 @@
 		border-radius: 6px;
 		white-space: nowrap;
 	}
-	.seg button.active { background: var(--accent-green); color: #fff; }
+	.seg button.active { background: var(--accent-green); color: var(--accent-button-text); }
 
 	.episode-list { display: flex; flex-direction: column; gap: 0.75rem; }
 	.ep-row {
@@ -557,7 +557,7 @@
 	.btn {
 		display: inline-block;
 		background: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 		padding: 0.6rem 1.4rem;
 		border-radius: 10px;
 		font-weight: 700;

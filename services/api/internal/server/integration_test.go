@@ -44,6 +44,20 @@ func TestFullE2E_UserRegistrationLoginSyncAndAdminFlow(t *testing.T) {
 	feedWorker := worker.NewFeedWorker(database, cfg, logger)
 	router := NewRouter(cfg, database, feedWorker, logger)
 
+	// Anonymous browser probes are a normal state and must not create a 401 in
+	// the console merely because the listener chose local-first use.
+	reqStatusAnon := httptest.NewRequest(http.MethodGet, "/api/v1/auth/status", nil)
+	recStatusAnon := httptest.NewRecorder()
+	router.ServeHTTP(recStatusAnon, reqStatusAnon)
+	if recStatusAnon.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for anonymous /api/v1/auth/status, got %d", recStatusAnon.Code)
+	}
+	var statusAnon map[string]interface{}
+	_ = json.NewDecoder(recStatusAnon.Body).Decode(&statusAnon)
+	if statusAnon["authenticated"] != false {
+		t.Fatalf("expected anonymous status response, got %v", statusAnon)
+	}
+
 	// ==========================================
 	// 1. User Registration (First User -> Admin)
 	// ==========================================
@@ -110,6 +124,19 @@ func TestFullE2E_UserRegistrationLoginSyncAndAdminFlow(t *testing.T) {
 	_ = json.NewDecoder(recMe.Body).Decode(&meResp)
 	if meResp["username"] != "AdminUser" {
 		t.Errorf("expected username AdminUser, got %v", meResp["username"])
+	}
+
+	reqStatusAuth := httptest.NewRequest(http.MethodGet, "/api/v1/auth/status", nil)
+	reqStatusAuth.AddCookie(sessionCookie)
+	recStatusAuth := httptest.NewRecorder()
+	router.ServeHTTP(recStatusAuth, reqStatusAuth)
+	if recStatusAuth.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for authenticated /api/v1/auth/status, got %d", recStatusAuth.Code)
+	}
+	var statusAuth map[string]interface{}
+	_ = json.NewDecoder(recStatusAuth.Body).Decode(&statusAuth)
+	if statusAuth["authenticated"] != true || statusAuth["username"] != "AdminUser" {
+		t.Fatalf("unexpected authenticated status response: %v", statusAuth)
 	}
 
 	// ==========================================

@@ -27,12 +27,17 @@
 
 	onMount(async () => {
 		try {
-			const res = await fetch('/api/v1/auth/me');
+			const res = await fetch('/api/v1/auth/status');
 			if (!res.ok) {
 				goto('/login');
 				return;
 			}
-			user = await res.json();
+			const status = await res.json();
+			if (!status.authenticated || !status.user_id) {
+				goto('/login');
+				return;
+			}
+			user = status;
 			await loadSessions();
 		} catch (err) {
 			goto('/login');
@@ -80,11 +85,6 @@
 		});
 	}
 </script>
-
-<svelte:head>
-	<title>{t('account.title')} — KoalaCast</title>
-	<meta name="description" content="Manage your KoalaCast user account, active device sessions, and cloud synchronization settings." />
-</svelte:head>
 
 <div class="account-page">
 	<header class="page-header">

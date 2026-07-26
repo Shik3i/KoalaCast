@@ -133,6 +133,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Post("/auth/device/login", authHandler.DeviceLogin)
 			r.Post("/auth/recovery/verify", authHandler.VerifyRecoveryCode)
 		})
+		r.With(customMiddleware.OptionalAuth(database)).Get("/auth/status", authHandler.Status)
 
 		// OPML import works for anonymous local-first users too: it ingests the feeds
 		// server-side and returns the resolved podcasts so the client can store the
@@ -193,6 +194,16 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				switch strings.ToLower(filepath.Ext(r.URL.Path)) {
+				case ".avif", ".png", ".svg", ".webp", ".woff2":
+					// These stable app-shell assets are versioned alongside each
+					// deployment. A week avoids repeat-download warnings without
+					// making a self-hoster's icon update sticky for a year.
+					w.Header().Set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400")
+				case ".txt", ".xml", ".webmanifest":
+					w.Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
+				}
 			}
 
 			path := filepath.Join(webDir, filepath.Clean(r.URL.Path))

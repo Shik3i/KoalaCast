@@ -354,6 +354,27 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Status is the browser's quiet session probe. Unlike /auth/me it is public and
+// always returns 200, so an ordinary anonymous page load does not create a
+// misleading console error. OptionalAuth still validates any supplied cookie or
+// bearer token and attaches the same authenticated user context.
+func (h *AuthHandler) Status(w http.ResponseWriter, r *http.Request) {
+	authUser := customMiddleware.GetAuthUser(r.Context())
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if authUser == nil {
+		_ = json.NewEncoder(w).Encode(map[string]bool{"authenticated": false})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"authenticated": true,
+		"user_id":       authUser.ID,
+		"username":      authUser.Username,
+		"role":          authUser.Role,
+		"client_type":   authUser.ClientType,
+	})
+}
+
 func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	authUser := customMiddleware.GetAuthUser(r.Context())
 	if authUser == nil {

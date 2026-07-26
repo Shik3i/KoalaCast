@@ -22,6 +22,8 @@
 	--ink-4: #8fb4a3;
 	--accent-fill: #7fd0aa;
 	--accent-on: #06100c;
+	--accent-button-text: #06100c;
+	--danger-button-text: #2b0808;
 	--accent-ink: #7fd0aa;
 	--accent-wash: rgba(127, 208, 170, 0.12);
 	--border-ui: #4a6558;
@@ -94,6 +96,7 @@
 	--heat-3: #4d9574;
 	--heat-4: #12523a;
 	--show-accent-contrast: #ffffff;
+	--accent-button-text: #ffffff;
 	color-scheme: light;
 }
 
@@ -123,6 +126,7 @@
 		--heat-3: #4d9574;
 		--heat-4: #12523a;
 		--show-accent-contrast: #ffffff;
+		--accent-button-text: #ffffff;
 		color-scheme: light;
 	}
 }
@@ -160,10 +164,40 @@ img { display: block; max-width: 100%; }
 h1, h2, h3, h4 { font-family: var(--font-ui); color: var(--ink-strong); text-wrap: balance; }
 p { text-wrap: pretty; }
 
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
 :focus-visible {
 	outline: 2px solid var(--focus-ring);
 	outline-offset: 2px;
 	border-radius: 4px;
+}
+
+.skip-link {
+	position: fixed;
+	top: 10px;
+	left: 10px;
+	z-index: 1000;
+	padding: 10px 14px;
+	border: 1px solid var(--accent-fill);
+	border-radius: var(--radius-md);
+	background: var(--bg-panel);
+	color: var(--ink-strong);
+	font-weight: 700;
+	transform: translateY(-160%);
+}
+
+.skip-link:focus {
+	transform: translateY(0);
 }
 
 ::selection { background: var(--accent-fill); color: var(--accent-on); }

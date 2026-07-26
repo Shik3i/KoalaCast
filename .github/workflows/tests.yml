@@ -70,6 +70,10 @@ jobs:
         working-directory: apps/web
         run: npm run check:i18n
 
+      - name: SEO metadata check
+        working-directory: apps/web
+        run: npm run check:seo
+
       - name: Production build
         working-directory: apps/web
         run: npm run build

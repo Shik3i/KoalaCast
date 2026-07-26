@@ -61,11 +61,13 @@ tidy:
 ## docker-build: Build Docker images via Compose
 docker-build:
 	@echo "==> Building Docker images..."
+	@cd apps/web && npm run generate:seo
 	@SESSION_SECRET=$(SESSION_SECRET) docker compose build
 
 ## docker-up: Start Docker containers
 docker-up:
 	@echo "==> Starting Docker environment..."
+	@cd apps/web && npm run generate:seo
 	@SESSION_SECRET=$(SESSION_SECRET) docker compose up -d
 
 ## docker-down: Stop Docker containers

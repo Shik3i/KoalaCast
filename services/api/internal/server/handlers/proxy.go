@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -116,6 +117,17 @@ func NewProxyHandler() *ProxyHandler {
 // "decompression bomb") could decode to gigabytes of RGBA and OOM the process.
 // 40 MP comfortably covers legitimate podcast artwork (typically <=3000x3000).
 const maxDecodedPixels = 40 * 1000 * 1000
+const imageProxyTimeout = 1200 * time.Millisecond
+
+const imageFallbackSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" role="img" aria-label="Podcast artwork unavailable"><rect width="600" height="600" fill="#14211b"/><circle cx="300" cy="300" r="164" fill="#d6f5e5"/><path d="M223 247c-31-54-85-57-96-15-10 39 31 73 88 69m162-54c31-54 85-57 96-15 10 39-31 73-88 69" fill="#8fd3b1"/><circle cx="253" cy="299" r="18" fill="#14211b"/><circle cx="347" cy="299" r="18" fill="#14211b"/><ellipse cx="300" cy="350" rx="50" ry="38" fill="#14211b"/><circle cx="300" cy="338" r="17" fill="#d6f5e5"/></svg>`
+
+func writeImageFallback(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600")
+	w.Header().Set("X-KoalaCast-Image-Fallback", "true")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, imageFallbackSVG)
+}
 
 // GetImageProxy fetches an external image, resizes it, converts/compresses it to optimized JPEG,
 // and caches it entirely in RAM (In-Memory) to guarantee zero disk I/O, privacy, and maximum performance.
@@ -155,7 +167,9 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 			return cachedData, nil
 		}
 
-		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+		ctx, cancel := context.WithTimeout(r.Context(), imageProxyTimeout)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 		if err != nil {
 			return nil, fmt.Errorf("invalid url")
 		}
@@ -219,7 +233,7 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
+		writeImageFallback(w)
 		return
 	}
 

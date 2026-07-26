@@ -43,11 +43,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{t('login.pageTitle')}</title>
-	<meta name="description" content={t('login.metaDescription')} />
-</svelte:head>
-
 <div class="auth-container">
 	<div class="auth-card">
 		<header class="auth-header">

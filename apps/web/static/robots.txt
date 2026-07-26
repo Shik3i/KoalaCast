@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /account
+Disallow: /admin
+Disallow: /inbox
+Disallow: /library
+Disallow: /login
+Disallow: /profile
+Disallow: /register
+Disallow: /search
+Disallow: /settings
+Disallow: /api/
+
+Sitemap: https://cast.koalastuff.net/sitemap.xml

@@ -52,13 +52,15 @@
 		// cookie persists, but this component's auth state does not, so without this
 		// a logged-in user always saw the sign-in form again.
 		try {
-			const res = await fetch('/api/v1/auth/me');
+			const res = await fetch('/api/v1/auth/status');
 			if (res.ok) {
 				const me = await res.json();
-				authUser = { username: me.username, role: me.role };
-				loadActiveSessions();
-				loadGlobalStatsPreference();
-				if (me.user_id) sync.enable(me.user_id);
+				if (me.authenticated && me.user_id) {
+					authUser = { username: me.username, role: me.role };
+					loadActiveSessions();
+					loadGlobalStatsPreference();
+					sync.enable(me.user_id);
+				}
 			}
 		} catch (_) {}
 	});
@@ -642,7 +644,7 @@
 
 	.theme-btn.active {
 		background: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 	}
 	.theme-btn.active:hover { background: var(--accent-green); }
 
@@ -757,7 +759,7 @@
 
 	button, .btn {
 		background: var(--accent-green);
-		color: white;
+		color: var(--accent-button-text);
 		border: none;
 		padding: 0.65rem 1.25rem;
 		border-radius: 8px;
@@ -778,6 +780,7 @@
 
 	.btn-danger {
 		background: var(--color-danger);
+		color: var(--danger-button-text);
 		width: fit-content;
 	}
 

@@ -15,6 +15,7 @@
 	import { page } from '$app/stores';
 	import Player from '$lib/components/Player.svelte';
 	import RunningOrder from '$lib/components/RunningOrder.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import { player } from '$lib/stores/player.svelte';
@@ -37,7 +38,7 @@
 	]);
 
 	onMount(() => {
-		fetch('/api/v1/auth/me')
+		fetch('/api/v1/auth/status')
 			.then((res) => (res.ok ? res.json() : null))
 			.then((me) => {
 				if (me?.user_id) {
@@ -60,9 +61,11 @@
 	}
 </script>
 
+<Seo />
+<a class="skip-link" href="#main-content">{t('common.skipToContent')}</a>
 <div class="quiet-app" class:has-player={player.isActive}>
 	<Sidebar isAdmin={currentUser?.role === 'admin'} />
-	<main class="quiet-main">
+	<main class="quiet-main" id="main-content" tabindex="-1">
 		{@render children()}
 	</main>
 	{#if showRunningOrder}

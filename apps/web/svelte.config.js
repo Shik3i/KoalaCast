@@ -5,7 +5,10 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: {
-		inlineStyleThreshold: 65536,
+		// The shared Quiet Edition stylesheet compresses to roughly 32 KiB.
+		// Inlining it removes a full render-blocking request on cold loads while
+		// staying comfortably below an oversized HTML payload.
+		inlineStyleThreshold: 200000,
 		adapter: adapter({
 			pages: 'build',
 			assets: 'build',

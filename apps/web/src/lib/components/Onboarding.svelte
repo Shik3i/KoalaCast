@@ -27,6 +27,7 @@
 						type="button"
 						class="ob-chip lang-chip"
 						class:on={prefs.languages.includes(lang.code)}
+						aria-pressed={prefs.languages.includes(lang.code)}
 						onclick={() => prefs.toggleLanguage(lang.code)}
 					>
 						<span class="flag-emoji">{lang.flag}</span>
@@ -41,7 +42,7 @@
 			<h3 class="section-title"><i class="ph ph-sparkle" aria-hidden="true"></i> {t('onboarding.topicInterests')}</h3>
 			<div class="ob-grid">
 				{#each GENRES as g (g.name)}
-					<button type="button" class="ob-chip" class:on={prefs.interests.includes(g.name)} onclick={() => prefs.toggleInterest(g.name)}>
+					<button type="button" class="ob-chip" class:on={prefs.interests.includes(g.name)} aria-pressed={prefs.interests.includes(g.name)} onclick={() => prefs.toggleInterest(g.name)}>
 						<i class="ph {g.icon}" aria-hidden="true"></i>
 						{genreLabel(g.name)}
 					</button>
@@ -173,7 +174,7 @@
 	.ob-skip:hover { color: var(--text-primary); }
 	.ob-done {
 		background: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 		border: none;
 		padding: 0.75rem 1.6rem;
 		border-radius: 12px;

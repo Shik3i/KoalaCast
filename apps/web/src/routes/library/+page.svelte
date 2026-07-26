@@ -192,14 +192,14 @@
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 			<input bind:value={libraryQuery} placeholder="Filter library" />
 		</label>
-		<div class="library-sort" role="tablist" aria-label="Sort library">
-			<button class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>Recent</button>
-			<button class:active={librarySort === 'az'} onclick={() => (librarySort = 'az')}>A–Z</button>
-			<button class:active={librarySort === 'played'} onclick={() => (librarySort = 'played')}>Most played</button>
+		<div class="library-sort" role="group" aria-label="Sort library">
+			<button aria-pressed={librarySort === 'recent'} class:active={librarySort === 'recent'} onclick={() => (librarySort = 'recent')}>Recent</button>
+			<button aria-pressed={librarySort === 'az'} class:active={librarySort === 'az'} onclick={() => (librarySort = 'az')}>A–Z</button>
+			<button aria-pressed={librarySort === 'played'} class:active={librarySort === 'played'} onclick={() => (librarySort = 'played')}>Most played</button>
 		</div>
 	</div>
 
-	<div class="tabs collection-tabs" role="tablist">
+	<div class="tabs collection-tabs" role="tablist" aria-label="Library sections">
 		<button role="tab" aria-selected={activeTab === 'subscriptions'} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
 			<i class="ph ph-books" aria-hidden="true"></i> {t('library.subscriptions')} <span class="count">{subscriptions.length}</span>
 		</button>
@@ -391,7 +391,7 @@
 	.tabs button.active {
 		background: var(--accent-green);
 		border-color: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 	}
 	.tabs .count {
 		font-size: 0.72rem;
@@ -405,7 +405,7 @@
 	}
 	.tabs button.active .count {
 		background: rgba(255, 255, 255, 0.25);
-		color: #fff;
+		color: var(--accent-button-text);
 	}
 
 	.empty-state {
@@ -459,7 +459,7 @@
 		display: inline-block;
 		margin-top: 1rem;
 		background: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 		padding: 0.6rem 1.4rem;
 		border-radius: 10px;
 		font-weight: 700;

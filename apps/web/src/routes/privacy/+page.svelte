@@ -7,11 +7,6 @@
 	// See docs/i18n.md ("Legal content is not translated").
 </script>
 
-<svelte:head>
-	<title>Privacy Policy | KoalaCast</title>
-	<meta name="description" content="How KoalaCast processes seven-day webserver access logs, account and session records, local browser storage, server proxying, and direct audio streams." />
-</svelte:head>
-
 <div class="privacy-container">
 	<header class="page-header">
 		<div class="header-icon">

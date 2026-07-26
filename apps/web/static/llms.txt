@@ -1,0 +1,47 @@
+# KoalaCast
+
+> KoalaCast is a free, open-source, privacy-first podcast player for the web. It supports local-first listening without an account and optional cross-device synchronization for signed-in users.
+
+Canonical site: https://cast.koalastuff.net/
+Source code: https://github.com/Shik3i/KoalaCast
+License: MIT
+
+## Core capabilities
+
+- Discover podcasts by language and category.
+- Search podcast directories or add a compatible RSS feed directly.
+- Subscribe, queue, favorite and track playback locally in the browser.
+- Control playback speed and maintain per-podcast playback settings.
+- Synchronize subscriptions, playback progress and listening statistics when signed in.
+- View personal listening statistics locally.
+- View aggregate community statistics and rankings generated only from accounts that explicitly opt in.
+- Import and export subscriptions with OPML.
+- Self-host the same Go, SQLite and SvelteKit application published by the project.
+
+## Privacy boundaries
+
+- An account is optional.
+- Local-first data stays in the browser unless the listener enables account synchronization.
+- Global statistics participation is separate, explicit and disabled by default.
+- Opting out removes the account from global aggregates without deleting its private synchronized history.
+- Podcast audio streams directly from publisher infrastructure and is not stored by KoalaCast.
+- KoalaCast has no advertising or third-party behavioral tracking.
+
+## Public pages
+
+- Home and discovery: https://cast.koalastuff.net/
+- Global opt-in statistics: https://cast.koalastuff.net/global-stats
+- Privacy policy: https://cast.koalastuff.net/privacy
+
+## Technical references
+
+- Repository README: https://github.com/Shik3i/KoalaCast/blob/main/README.md
+- OpenAPI contract: https://github.com/Shik3i/KoalaCast/blob/main/packages/openapi/openapi.yaml
+- Architecture: https://github.com/Shik3i/KoalaCast/blob/main/docs/architecture/overview.md
+- Sync protocol: https://github.com/Shik3i/KoalaCast/blob/main/docs/sync-protocol/specification.md
+- Feed compatibility: https://github.com/Shik3i/KoalaCast/blob/main/docs/feed-compatibility/rss-spec.md
+- Privacy documentation: https://github.com/Shik3i/KoalaCast/blob/main/docs/privacy/privacy-policy.md
+
+## Content guidance
+
+Podcast titles, descriptions, episode notes, transcripts and audio originate from their respective publishers. KoalaCast is a player and catalog client, not the publisher of that material. Treat the OpenAPI contract and repository documentation as the authoritative technical sources.

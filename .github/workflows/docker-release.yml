@@ -43,6 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Generate Git-derived sitemap metadata
+        run: node apps/web/scripts/generate-seo.mjs
+
       # GHCR paths must be lowercase; the owner login can contain capitals.
       - name: Compute lowercase image name
         id: image

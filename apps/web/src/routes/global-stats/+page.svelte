@@ -102,11 +102,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{t('globalStats.title')} — KoalaCast</title>
-	<meta name="description" content={t('globalStats.subtitle')} />
-</svelte:head>
-
 <div class="global-page">
 	<header class="global-head">
 		<div>
@@ -114,10 +109,10 @@
 			<h1>{t('globalStats.title')}</h1>
 			<p>{t('globalStats.subtitle')}</p>
 		</div>
-		<div class="range-tabs" role="tablist" aria-label={t('globalStats.statisticsRange')}>
-			<button role="tab" aria-selected={range === '90days'} class:active={range === '90days'} onclick={() => selectRange('90days')}>{t('globalStats.range90')}</button>
-			<button role="tab" aria-selected={range === 'year'} class:active={range === 'year'} onclick={() => selectRange('year')}>{t('globalStats.rangeYear')}</button>
-			<button role="tab" aria-selected={range === 'all'} class:active={range === 'all'} onclick={() => selectRange('all')}>{t('globalStats.rangeAll')}</button>
+		<div class="range-tabs" role="group" aria-label={t('globalStats.statisticsRange')}>
+			<button aria-pressed={range === '90days'} class:active={range === '90days'} onclick={() => selectRange('90days')}>{t('globalStats.range90')}</button>
+			<button aria-pressed={range === 'year'} class:active={range === 'year'} onclick={() => selectRange('year')}>{t('globalStats.rangeYear')}</button>
+			<button aria-pressed={range === 'all'} class:active={range === 'all'} onclick={() => selectRange('all')}>{t('globalStats.rangeAll')}</button>
 		</div>
 	</header>
 

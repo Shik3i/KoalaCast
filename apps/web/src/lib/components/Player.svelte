@@ -1063,7 +1063,7 @@
 
 	.btn-close {
 		background: var(--accent-green);
-		color: #fff;
+		color: var(--accent-button-text);
 		border: none;
 		padding: 0.55rem 1.1rem;
 		border-radius: 8px;
