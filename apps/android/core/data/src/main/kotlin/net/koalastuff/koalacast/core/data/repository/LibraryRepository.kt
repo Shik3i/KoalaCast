@@ -54,6 +54,24 @@ class LibraryRepository @Inject constructor(
         tombstones.delete(TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, podcast.id))
     }
 
+    suspend fun subscribeImported(
+        podcastId: String,
+        feedUrl: String,
+        title: String,
+        artworkUrl: String,
+    ) {
+        subscriptions.upsert(
+            SubscriptionEntity(
+                podcastId = podcastId,
+                feedUrl = feedUrl,
+                title = title.ifBlank { "Podcast" },
+                artworkUrl = artworkUrl,
+                addedAt = clock.nowMs(),
+            ),
+        )
+        tombstones.delete(TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, podcastId))
+    }
+
     suspend fun unsubscribe(podcastId: String) {
         subscriptions.delete(podcastId)
         tombstones.upsert(

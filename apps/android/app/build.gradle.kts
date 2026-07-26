@@ -53,6 +53,7 @@ dependencies {
     implementation(project(":feature:library"))
     implementation(project(":feature:inbox"))
     implementation(project(":feature:profile"))
+    implementation(project(":feature:account"))
     implementation(project(":feature:player"))
     implementation(project(":feature:settings"))
 

@@ -12,6 +12,7 @@ import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import javax.inject.Inject
+import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 
 @HiltAndroidApp
 class KoalaCastApplication : Application(), SingletonImageLoader.Factory {
@@ -22,6 +23,14 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory {
      */
     @Inject
     lateinit var okHttpClient: OkHttpClient
+
+    @Inject
+    lateinit var syncCoordinator: SyncCoordinator
+
+    override fun onCreate() {
+        super.onCreate()
+        syncCoordinator.start()
+    }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)

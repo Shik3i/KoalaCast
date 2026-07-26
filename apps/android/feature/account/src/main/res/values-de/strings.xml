@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_back">Zurück</string>
+    <string name="account_title">Konto &amp; Sync</string>
+    <string name="account_login">Anmelden</string>
+    <string name="account_register">Registrieren</string>
+    <string name="account_recover">Wiederherstellen</string>
+    <string name="account_username">Benutzername</string>
+    <string name="account_password">Passwort</string>
+    <string name="account_recovery_code">Wiederherstellungscode</string>
+    <string name="account_new_password">Neues Passwort</string>
+    <string name="account_reset_password">Passwort zurücksetzen</string>
+    <string name="account_sign_in">Anmelden</string>
+    <string name="account_create">Konto erstellen</string>
+    <string name="account_save_recovery">Speichere diesen Wiederherstellungscode jetzt. Er wird nicht erneut angezeigt.</string>
+    <string name="account_copy">Code kopieren</string>
+    <string name="account_sign_out">Abmelden</string>
+    <string name="account_sync_off">Sync aus</string>
+    <string name="account_sync_now">Jetzt synchronisieren</string>
+    <string name="account_syncing">Synchronisiere…</string>
+    <string name="account_sync_retry">Sync wiederholen</string>
+    <string name="account_statistics">Community-Statistik</string>
+    <string name="account_global_stats">Anonyme Aggregate beitragen</string>
+    <string name="account_global_stats_body">Freiwillige Teilnahme an globalen Hörstatistiken. Rohsitzungen und Konto-IDs werden nie veröffentlicht.</string>
+    <string name="account_sessions">Aktive Sitzungen und Geräte</string>
+    <string name="account_no_sessions">Aktive Sitzungen konnten nicht geladen werden.</string>
+    <string name="account_current">Aktuell</string>
+    <string name="account_revoke">Widerrufen</string>
+    <string name="account_opml">OPML-Abonnements</string>
+    <string name="account_opml_body">Import funktioniert ohne Konto. Der Export wird aus den lokalen Abos dieses Geräts erzeugt.</string>
+    <string name="account_opml_import">OPML importieren</string>
+    <string name="account_opml_export">OPML exportieren</string>
+    <string name="account_opml_report">%1$d importiert · %2$d übersprungen · %3$d gefunden</string>
+    <string name="account_error_http">Der Server hat die Anfrage abgelehnt (HTTP %d).</string>
+    <string name="account_error_network">Der Server ist nicht erreichbar.</string>
+    <string name="account_error_data">Der Server hat ungültige oder unvollständige Daten geliefert.</string>
+    <string name="account_error_server">Wähle zuerst einen Server in den Einstellungen.</string>
+    <string name="account_notice_created">Konto erstellt, angemeldet und Sync aktiv.</string>
+    <string name="account_notice_signed_in">Angemeldet. Sync ist aktiv.</string>
+    <string name="account_notice_signed_out">Abgemeldet. Lokale Daten bleiben auf diesem Gerät.</string>
+    <string name="account_notice_password">Passwort geändert. Du kannst dich jetzt anmelden.</string>
+    <string name="account_notice_revoked">Sitzung widerrufen.</string>
+    <string name="account_notice_done">Erledigt.</string>
+</resources>

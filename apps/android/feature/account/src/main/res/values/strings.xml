@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_back">Back</string>
+    <string name="account_title">Account &amp; sync</string>
+    <string name="account_login">Login</string>
+    <string name="account_register">Register</string>
+    <string name="account_recover">Recover</string>
+    <string name="account_username">Username</string>
+    <string name="account_password">Password</string>
+    <string name="account_recovery_code">Recovery code</string>
+    <string name="account_new_password">New password</string>
+    <string name="account_reset_password">Reset password</string>
+    <string name="account_sign_in">Sign in</string>
+    <string name="account_create">Create account</string>
+    <string name="account_save_recovery">Save this recovery code now. It cannot be shown again.</string>
+    <string name="account_copy">Copy code</string>
+    <string name="account_sign_out">Sign out</string>
+    <string name="account_sync_off">Sync off</string>
+    <string name="account_sync_now">Sync now</string>
+    <string name="account_syncing">Syncing…</string>
+    <string name="account_sync_retry">Retry sync</string>
+    <string name="account_statistics">Community statistics</string>
+    <string name="account_global_stats">Contribute anonymous aggregates</string>
+    <string name="account_global_stats_body">Opt in to global listening statistics. Raw sessions and account identifiers are never published.</string>
+    <string name="account_sessions">Active sessions and devices</string>
+    <string name="account_no_sessions">No active sessions could be loaded.</string>
+    <string name="account_current">Current</string>
+    <string name="account_revoke">Revoke</string>
+    <string name="account_opml">OPML subscriptions</string>
+    <string name="account_opml_body">Import works without an account. Export is generated from this device’s local subscriptions.</string>
+    <string name="account_opml_import">Import OPML</string>
+    <string name="account_opml_export">Export OPML</string>
+    <string name="account_opml_report">%1$d imported · %2$d skipped · %3$d found</string>
+    <string name="account_error_http">The server rejected the request (HTTP %d).</string>
+    <string name="account_error_network">The server could not be reached.</string>
+    <string name="account_error_data">The server returned invalid or incomplete data.</string>
+    <string name="account_error_server">Choose a server in Settings first.</string>
+    <string name="account_notice_created">Account created, signed in and syncing.</string>
+    <string name="account_notice_signed_in">Signed in. Sync is active.</string>
+    <string name="account_notice_signed_out">Signed out. Local data stays on this device.</string>
+    <string name="account_notice_password">Password changed. You can sign in now.</string>
+    <string name="account_notice_revoked">Session revoked.</string>
+    <string name="account_notice_done">Done.</string>
+</resources>

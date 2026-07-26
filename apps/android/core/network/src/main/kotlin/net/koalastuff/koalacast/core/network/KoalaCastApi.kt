@@ -7,11 +7,27 @@ import net.koalastuff.koalacast.core.network.dto.EpisodesResponse
 import net.koalastuff.koalacast.core.network.dto.HealthResponse
 import net.koalastuff.koalacast.core.network.dto.PodcastDto
 import net.koalastuff.koalacast.core.network.dto.SearchResponse
+import net.koalastuff.koalacast.core.network.dto.AuthMessageResponse
+import net.koalastuff.koalacast.core.network.dto.AuthStatusResponse
+import net.koalastuff.koalacast.core.network.dto.DeviceLoginRequest
+import net.koalastuff.koalacast.core.network.dto.DeviceLoginResponse
+import net.koalastuff.koalacast.core.network.dto.GlobalStatsPreference
+import net.koalastuff.koalacast.core.network.dto.OpmlImportReport
+import net.koalastuff.koalacast.core.network.dto.RecoveryRequest
+import net.koalastuff.koalacast.core.network.dto.RegisterRequest
+import net.koalastuff.koalacast.core.network.dto.RegisterResponse
+import net.koalastuff.koalacast.core.network.dto.SessionsResponse
+import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
+import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
+import net.koalastuff.koalacast.core.network.dto.SyncPushResponse
+import okhttp3.RequestBody
+import retrofit2.http.DELETE
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Url
@@ -67,4 +83,41 @@ interface KoalaCastApi {
 
     @GET("api/v1/episodes/{id}")
     suspend fun episode(@Path("id") id: String): Response<EpisodeDto>
+
+    @POST("api/v1/auth/register")
+    suspend fun register(@Body body: RegisterRequest): Response<RegisterResponse>
+
+    @POST("api/v1/auth/device/login")
+    suspend fun deviceLogin(@Body body: DeviceLoginRequest): Response<DeviceLoginResponse>
+
+    @POST("api/v1/auth/recovery/verify")
+    suspend fun recover(@Body body: RecoveryRequest): Response<AuthMessageResponse>
+
+    @GET("api/v1/auth/status")
+    suspend fun authStatus(): Response<AuthStatusResponse>
+
+    @POST("api/v1/auth/logout")
+    suspend fun logout(): Response<AuthMessageResponse>
+
+    @GET("api/v1/auth/sessions")
+    suspend fun sessions(): Response<SessionsResponse>
+
+    @DELETE("api/v1/auth/sessions/{id}")
+    suspend fun revokeSession(@Path("id") id: String): Response<AuthMessageResponse>
+
+    @GET("api/v1/sync")
+    suspend fun pullSync(@Query("since_cursor") sinceCursor: Long): Response<SyncPullResponse>
+
+    @POST("api/v1/sync")
+    suspend fun pushSync(@Body body: SyncPushRequest): Response<SyncPushResponse>
+
+    @GET("api/v1/stats/preferences")
+    suspend fun statsPreference(): Response<GlobalStatsPreference>
+
+    @PUT("api/v1/stats/preferences")
+    suspend fun updateStatsPreference(@Body body: GlobalStatsPreference): Response<GlobalStatsPreference>
+
+    @Headers("Content-Type: application/xml", "X-KoalaCast-Long-Request: 1")
+    @POST("api/v1/opml/import")
+    suspend fun importOpml(@Body body: RequestBody): Response<OpmlImportReport>
 }

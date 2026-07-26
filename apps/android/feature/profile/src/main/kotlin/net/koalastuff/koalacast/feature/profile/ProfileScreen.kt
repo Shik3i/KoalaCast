@@ -53,6 +53,7 @@ import java.time.format.FormatStyle
 fun ProfileScreen(
     onOpenPodcast: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -70,6 +71,7 @@ fun ProfileScreen(
         onSetRange = viewModel::setRange,
         onOpenPodcast = onOpenPodcast,
         onOpenSettings = onOpenSettings,
+        onOpenAccount = onOpenAccount,
         onExport = { export.launch("koalacast-listening-data.json") },
         modifier = modifier,
         contentPadding = contentPadding,
@@ -82,6 +84,7 @@ internal fun ProfileContent(
     onSetRange: (StatsRange) -> Unit,
     onOpenPodcast: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAccount: () -> Unit,
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -123,7 +126,10 @@ internal fun ProfileContent(
                     style = KoalaTheme.type.monoSmall,
                 )
             }
-            OutlineButton(text = stringResource(R.string.profile_settings), onClick = onOpenSettings)
+            Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
+                OutlineButton(text = stringResource(R.string.profile_account), onClick = onOpenAccount)
+                OutlineButton(text = stringResource(R.string.profile_settings), onClick = onOpenSettings)
+            }
         }
 
         SegmentedControl(

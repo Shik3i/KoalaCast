@@ -17,6 +17,9 @@ interface SubscriptionDao {
     @Query("SELECT * FROM subscriptions ORDER BY addedAt DESC")
     suspend fun getAll(): List<SubscriptionEntity>
 
+    @Query("SELECT * FROM subscriptions WHERE podcastId = :podcastId")
+    suspend fun get(podcastId: String): SubscriptionEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM subscriptions WHERE podcastId = :podcastId)")
     fun observeIsSubscribed(podcastId: String): Flow<Boolean>
 
@@ -126,6 +129,9 @@ interface FavoriteDao {
     @Query("SELECT * FROM favorites")
     suspend fun getAll(): List<FavoriteEntity>
 
+    @Query("SELECT * FROM favorites WHERE episodeId = :episodeId")
+    suspend fun get(episodeId: String): FavoriteEntity?
+
     @Query("SELECT episodeId FROM favorites")
     fun observeEpisodeIds(): Flow<List<String>>
 
@@ -150,6 +156,9 @@ interface ListeningSessionDao {
 
     @Query("SELECT * FROM listening_sessions ORDER BY startedAt ASC")
     suspend fun getAll(): List<ListeningSessionEntity>
+
+    @Query("SELECT * FROM listening_sessions WHERE id = :id")
+    suspend fun get(id: String): ListeningSessionEntity?
 
     @Upsert
     suspend fun upsert(session: ListeningSessionEntity)

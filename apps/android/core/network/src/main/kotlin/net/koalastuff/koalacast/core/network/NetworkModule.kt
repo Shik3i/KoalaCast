@@ -56,8 +56,12 @@ object NetworkModule {
     fun provideApiClient(
         base: OkHttpClient,
         hostSelection: HostSelectionInterceptor,
+        auth: AuthInterceptor,
+        requestTimeout: RequestTimeoutInterceptor,
     ): OkHttpClient = base.newBuilder()
         .addInterceptor(hostSelection)
+        .addInterceptor(auth)
+        .addInterceptor(requestTimeout)
         .build()
 
     @Provides

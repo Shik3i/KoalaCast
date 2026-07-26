@@ -17,6 +17,7 @@ object Routes {
     const val INBOX = "inbox"
     const val LIBRARY = "library"
     const val PROFILE = "profile"
+    const val ACCOUNT = "account"
     const val SETTINGS = "settings"
 
     const val PODCAST = "podcast?podcastId={podcastId}&feedUrl={feedUrl}"

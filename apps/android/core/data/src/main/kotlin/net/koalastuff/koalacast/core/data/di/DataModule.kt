@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import net.koalastuff.koalacast.core.data.server.ServerUrlStore
 import net.koalastuff.koalacast.core.network.BaseUrlProvider
+import net.koalastuff.koalacast.core.network.AuthTokenProvider
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -60,4 +62,8 @@ abstract class DataBindsModule {
     @Binds
     @Singleton
     abstract fun bindBaseUrlProvider(store: ServerUrlStore): BaseUrlProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthTokenProvider(store: SecureAccountStore): AuthTokenProvider
 }

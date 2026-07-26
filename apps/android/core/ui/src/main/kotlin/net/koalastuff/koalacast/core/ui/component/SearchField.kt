@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
@@ -48,6 +49,7 @@ fun KoalaTextField(
     imeAction: ImeAction = ImeAction.Search,
     onImeAction: (() -> Unit)? = null,
     singleLine: Boolean = true,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val colors = KoalaTheme.colors
     val selectionColors = TextSelectionColors(
@@ -91,6 +93,7 @@ fun KoalaTextField(
                     textStyle = KoalaTheme.type.bodySmall.copy(color = colors.ink),
                     cursorBrush = SolidColor(colors.accentFill),
                     singleLine = singleLine,
+                    visualTransformation = visualTransformation,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = keyboardType,
                         imeAction = imeAction,
