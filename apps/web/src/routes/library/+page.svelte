@@ -670,7 +670,7 @@
 		background: rgba(5,10,7,.7);
 		color: #dcebe4;
 	}
-	.quiet-cover-card .round-action.primary { background: #7fd0aa; border-color: #7fd0aa; color: #06100c; }
+	.quiet-cover-card .round-action.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	@media (prefers-reduced-motion: reduce) { .quiet-cover-card .cover-overlay { transition: none; } }
 	.episode-list { gap: 0; border-top: 1px solid var(--border-hair); }
 	.ep-row { border: 0; border-bottom: 1px solid var(--border-row); border-radius: 0; background: transparent; box-shadow: none; }

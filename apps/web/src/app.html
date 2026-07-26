@@ -37,6 +37,19 @@
 					} else if (saved !== 'system') {
 						document.documentElement.setAttribute('data-theme', 'dark');
 					}
+					var palette = localStorage.getItem('koalacast_palette');
+					if (
+						palette === 'eucalyptus' ||
+						palette === 'fjord' ||
+						palette === 'ember' ||
+						palette === 'lavender' ||
+						palette === 'aurora' ||
+						palette === 'sandstone'
+					) {
+						document.documentElement.setAttribute('data-palette', palette);
+					} else {
+						document.documentElement.setAttribute('data-palette', 'eucalyptus');
+					}
 				} catch (e) {}
 			})();
 		</script>

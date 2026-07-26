@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { clearAllLocalData, saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
-	import { getStoredTheme, setTheme, type ThemeMode } from '$lib/theme';
+	import {
+		COLOR_PALETTES,
+		getStoredPalette,
+		getStoredTheme,
+		setPalette,
+		setTheme,
+		type PaletteId,
+		type ThemeMode
+	} from '$lib/theme';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
@@ -40,6 +48,7 @@
 
 	// Theme state
 	let currentTheme = $state<ThemeMode>('system');
+	let currentPalette = $state<PaletteId>('eucalyptus');
 
 	// OPML Import States
 	let isImportingOpml = $state(false);
@@ -48,6 +57,7 @@
 
 	onMount(async () => {
 		currentTheme = getStoredTheme();
+		currentPalette = getStoredPalette();
 		// Restore an existing signed-in session after a reload: the HttpOnly session
 		// cookie persists, but this component's auth state does not, so without this
 		// a logged-in user always saw the sign-in form again.
@@ -78,6 +88,11 @@
 	function handleThemeChange(mode: ThemeMode) {
 		currentTheme = mode;
 		setTheme(mode);
+	}
+
+	function handlePaletteChange(palette: PaletteId) {
+		currentPalette = palette;
+		setPalette(palette);
 	}
 
 	async function handleRegister(e: Event) {
@@ -308,36 +323,83 @@
 
 		<div class="theme-selector">
 			<button
+				type="button"
 				class="theme-btn"
 				class:active={currentTheme === 'system'}
+				aria-pressed={currentTheme === 'system'}
 				onclick={() => handleThemeChange('system')}
 			>
 				<i class="ph ph-desktop" aria-hidden="true"></i> {t('settings.themeSystem')}
 			</button>
 
 			<button
+				type="button"
 				class="theme-btn"
 				class:active={currentTheme === 'dark'}
+				aria-pressed={currentTheme === 'dark'}
 				onclick={() => handleThemeChange('dark')}
 			>
 				<i class="ph ph-moon" aria-hidden="true"></i> {t('settings.themeDark')}
 			</button>
 
 			<button
+				type="button"
 				class="theme-btn"
 				class:active={currentTheme === 'light'}
+				aria-pressed={currentTheme === 'light'}
 				onclick={() => handleThemeChange('light')}
 			>
 				<i class="ph ph-sun" aria-hidden="true"></i> {t('settings.themeLight')}
 			</button>
 		</div>
 
-		<p class="subtitle" style="margin-top: 1rem;">{t('settings.episodeDates')}</p>
+		<div class="palette-heading">
+			<h4>{t('settings.colorPalette')}</h4>
+			<p class="subtitle">{t('settings.colorPaletteHint')}</p>
+		</div>
+		<div class="palette-grid" aria-label={t('settings.colorPalette')}>
+			{#each COLOR_PALETTES as palette (palette.id)}
+				<button
+					type="button"
+					class="palette-card"
+					class:active={currentPalette === palette.id}
+					aria-pressed={currentPalette === palette.id}
+					onclick={() => handlePaletteChange(palette.id)}
+				>
+					<span class="palette-swatches" aria-hidden="true">
+						{#each palette.swatches as swatch}
+							<span style:background={swatch}></span>
+						{/each}
+					</span>
+					<span class="palette-copy">
+						<strong>{t(palette.labelKey)}</strong>
+						<small>{t(palette.descriptionKey)}</small>
+					</span>
+					{#if currentPalette === palette.id}
+						<i class="ph-fill ph-check-circle palette-check" aria-hidden="true"></i>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
+		<p class="subtitle setting-label">{t('settings.episodeDates')}</p>
 		<div class="theme-selector">
-			<button class="theme-btn" class:active={prefs.dateFormat === 'absolute'} onclick={() => prefs.setDateFormat('absolute')}>
+			<button
+				type="button"
+				class="theme-btn"
+				class:active={prefs.dateFormat === 'absolute'}
+				aria-pressed={prefs.dateFormat === 'absolute'}
+				onclick={() => prefs.setDateFormat('absolute')}
+			>
 				<i class="ph ph-calendar-blank" aria-hidden="true"></i> {t('settings.dateAbsolute')}
 			</button>
-			<button class="theme-btn" class:active={prefs.dateFormat === 'relative'} onclick={() => prefs.setDateFormat('relative')}>
+			<button
+				type="button"
+				class="theme-btn"
+				class:active={prefs.dateFormat === 'relative'}
+				aria-pressed={prefs.dateFormat === 'relative'}
+				onclick={() => prefs.setDateFormat('relative')}
+			>
 				<i class="ph ph-clock-countdown" aria-hidden="true"></i> {t('settings.dateRelative')}
 			</button>
 		</div>
@@ -648,6 +710,91 @@
 	}
 	.theme-btn.active:hover { background: var(--accent-green); }
 
+	.palette-heading {
+		margin-top: 1.35rem;
+	}
+
+	.palette-heading h4 {
+		margin-bottom: 0.2rem;
+		font-size: 0.95rem;
+	}
+
+	.palette-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.65rem;
+		margin-top: 0.7rem;
+	}
+
+	.palette-card {
+		position: relative;
+		display: grid;
+		grid-template-columns: 54px minmax(0, 1fr);
+		align-items: center;
+		gap: 0.8rem;
+		min-height: 76px;
+		padding: 0.7rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+		text-align: left;
+		transition: var(--transition-smooth);
+	}
+
+	.palette-card:hover {
+		border-color: var(--border-ui);
+		background: color-mix(in srgb, var(--accent-green) 5%, var(--bg-elevated));
+	}
+
+	.palette-card.active {
+		border-color: var(--accent-green);
+		box-shadow: inset 0 0 0 1px var(--accent-green);
+	}
+
+	.palette-swatches {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		width: 54px;
+		height: 54px;
+		overflow: hidden;
+		border: 1px solid color-mix(in srgb, #fff 18%, transparent);
+		border-radius: 8px;
+	}
+
+	.palette-swatches span {
+		min-width: 0;
+	}
+
+	.palette-copy {
+		display: grid;
+		gap: 0.18rem;
+		min-width: 0;
+		padding-right: 1.1rem;
+	}
+
+	.palette-copy strong {
+		font: 750 0.9rem/1.2 var(--font-ui);
+	}
+
+	.palette-copy small {
+		color: var(--text-muted);
+		font-size: 0.76rem;
+		line-height: 1.3;
+	}
+
+	.palette-check {
+		position: absolute;
+		top: 0.65rem;
+		right: 0.65rem;
+		color: var(--accent-green);
+		font-size: 1rem;
+	}
+
+	.setting-label {
+		margin-top: 1.35rem;
+	}
+
 	.genre-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -693,6 +840,18 @@
 		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 		gap: 0.75rem;
 		margin-top: 0.25rem;
+	}
+
+	@media (max-width: 840px) {
+		.palette-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 560px) {
+		.palette-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.lang-chip {
