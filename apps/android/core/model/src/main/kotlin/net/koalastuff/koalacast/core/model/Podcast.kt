@@ -1,0 +1,37 @@
+package net.koalastuff.koalacast.core.model
+
+/**
+ * A show as the KoalaCast server knows it — i.e. one that has been ingested from its
+ * RSS feed and therefore has a stable, server-side id.
+ */
+data class Podcast(
+    val id: String,
+    val feedUrl: String,
+    val title: String,
+    val description: String,
+    val author: String,
+    val artworkUrl: String,
+    val link: String,
+    val language: String,
+    val explicit: Boolean,
+    val copyright: String,
+    val lastSuccessfulFetchAtMs: Long,
+    val episodeCount: Int,
+)
+
+/**
+ * A show as discovery and search return it: an iTunes/Podcast-Index record that is not
+ * necessarily ingested yet. Its [id] is the *provider's* id, not a KoalaCast podcast id —
+ * resolve it through the feed URL before loading episodes.
+ */
+data class PodcastSummary(
+    val id: String,
+    val title: String,
+    val author: String,
+    val feedUrl: String,
+    val artworkUrl: String,
+    val category: String,
+    val categories: List<String>,
+    val description: String,
+    val language: String,
+)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="podcast_episodes">Folgen</string>
+    <string name="podcast_episode_number">Folge %1$d</string>
+    <string name="podcast_explicit">Explizit</string>
+    <plurals name="podcast_episode_count">
+        <item quantity="one">%1$d Folge</item>
+        <item quantity="other">%1$d Folgen</item>
+    </plurals>
+</resources>

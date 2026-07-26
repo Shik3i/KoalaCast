@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="episode_show_notes">Show notes</string>
+    <string name="episode_no_notes">This episode has no show notes.</string>
+    <string name="episode_playback_pending">Playback arrives with the audio engine — this build browses only</string>
+    <plurals name="episode_transcripts">
+        <item quantity="one">%1$d transcript published with this episode</item>
+        <item quantity="other">%1$d transcripts published with this episode</item>
+    </plurals>
+</resources>

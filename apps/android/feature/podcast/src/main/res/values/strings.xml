@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="podcast_episodes">Episodes</string>
+    <string name="podcast_episode_number">Ep %1$d</string>
+    <string name="podcast_explicit">Explicit</string>
+    <plurals name="podcast_episode_count">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+</resources>

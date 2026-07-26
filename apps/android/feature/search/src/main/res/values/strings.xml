@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_placeholder">Search shows, people, topics</string>
+    <string name="search_rss_hint">Or paste an RSS URL to add a feed directly</string>
+
+    <string name="search_feed_detected">Feed URL</string>
+    <string name="search_feed_add">Add this feed</string>
+    <string name="search_feed_adding">Reading the feed…</string>
+
+    <string name="search_filters_label">Filters</string>
+    <string name="search_clear_filters">Search everything</string>
+    <string name="search_reset_filters">Back to my settings</string>
+    <string name="search_no_filters_note">Searching every language and category.</string>
+
+    <string name="search_idle_title">What are you after?</string>
+    <string name="search_idle_body">Search by show, host or topic — or paste a feed URL to add a podcast the directories do not list.</string>
+    <string name="search_empty_title">Nothing matched</string>
+    <string name="search_empty_body">Try fewer words, or widen the language and category filters.</string>
+</resources>

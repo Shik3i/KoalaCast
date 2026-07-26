@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="format_duration_minutes">%1$d Min.</string>
+    <string name="format_duration_hours_minutes">%1$d Std. %2$d Min.</string>
+    <string name="format_no_date">Kein Datum</string>
+
+    <string name="action_retry">Erneut versuchen</string>
+    <string name="action_back">Zurück</string>
+    <string name="action_clear">Leeren</string>
+
+    <string name="error_offline_title">Server nicht erreichbar</string>
+    <string name="error_offline_body">KoalaCast konnte %1$s nicht erreichen. Prüfe die Verbindung oder wähle in den Einstellungen einen anderen Server.</string>
+    <string name="error_server_title">Der Server hat einen Fehler gemeldet</string>
+    <string name="error_server_body">Status %1$d. Wenn das öfter passiert, ist die Instanz vermutlich offline oder drosselt Anfragen.</string>
+    <string name="error_unreadable_title">Unerwartete Antwort</string>
+    <string name="error_unreadable_body">Die Antwort sah nicht nach KoalaCast aus. Prüfe, ob die URL wirklich auf einen KoalaCast-Server zeigt und nicht auf eine Login-Seite oder einen Proxy.</string>
+    <string name="error_no_server_title">Kein Server ausgewählt</string>
+    <string name="error_no_server_body">Wähle in den Einstellungen einen KoalaCast-Server, um Podcasts zu durchsuchen.</string>
+
+    <string name="genre_all">Alle</string>
+    <string name="genre_arts">Kunst</string>
+    <string name="genre_business">Wirtschaft</string>
+    <string name="genre_comedy">Comedy</string>
+    <string name="genre_education">Bildung</string>
+    <string name="genre_fiction">Fiktion</string>
+    <string name="genre_government">Politik &amp; Staat</string>
+    <string name="genre_health_fitness">Gesundheit &amp; Fitness</string>
+    <string name="genre_history">Geschichte</string>
+    <string name="genre_kids_family">Kinder &amp; Familie</string>
+    <string name="genre_leisure">Freizeit</string>
+    <string name="genre_music">Musik</string>
+    <string name="genre_news">Nachrichten</string>
+    <string name="genre_religion_spirituality">Religion &amp; Spiritualität</string>
+    <string name="genre_science">Wissenschaft</string>
+    <string name="genre_society_culture">Gesellschaft &amp; Kultur</string>
+    <string name="genre_sports">Sport</string>
+    <string name="genre_technology">Technik</string>
+    <string name="genre_tv_film">TV &amp; Film</string>
+    <string name="genre_true_crime">True Crime</string>
+</resources>

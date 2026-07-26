@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Einstellungen</string>
+
+    <string name="settings_server_title">KoalaCast-Server</string>
+    <string name="settings_server_placeholder">cast.example.org</string>
+    <string name="settings_server_note">Ein Serverwechsel ändert, was ein Konto bedeutet: Abos, Warteschlange und Fortschritt liegen pro Server, und eine Anmeldung auf einer Instanz gilt nicht auf einer anderen.</string>
+    <string name="settings_server_cleartext">Diese Adresse nutzt einfaches HTTP. Im eigenen Netz in Ordnung, über das Internet unsicher.</string>
+    <string name="settings_server_save">Server speichern</string>
+    <string name="settings_server_checking">Prüfe …</string>
+    <string name="settings_server_saved">Gespeichert</string>
+    <string name="settings_server_error_unreachable">Adresse nicht erreichbar.</string>
+    <string name="settings_server_error_http">Der Server hat mit Status %1$d geantwortet.</string>
+    <string name="settings_server_error_shape">Die Adresse antwortet, aber nicht wie ein KoalaCast-Server.</string>
+
+    <string name="settings_appearance_title">Darstellung</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Hell</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_theme_note">Dunkel ist die Heimat des Designs – der Mint-Akzent erreicht seinen vollen Kontrast nur auf dunklem Grund.</string>
+
+    <string name="settings_languages_title">Gesprochene Sprachen</string>
+    <string name="settings_languages_note">Filtert Entdecken und Suche nach der Sprache, in der eine Sendung tatsächlich läuft – nicht nach Store-Region. Keine Auswahl heißt: alles.</string>
+
+    <string name="settings_category_title">Standard-Kategorie</string>
+    <string name="settings_category_note">Wird in der Suche vorausgewählt. Dort lässt sie sich jederzeit erweitern.</string>
+
+    <string name="settings_privacy_title">Privatsphäre</string>
+    <string name="settings_proxy_images">Cover über deinen Server laden</string>
+    <string name="settings_proxy_images_note">So sehen Publisher-CDNs und Apple die Adresse dieses Geräts nicht. Ausschalten, um Cover direkt zu laden.</string>
+    <string name="settings_audio_never_proxied">Audio kommt immer direkt vom Publisher – es läuft nie über einen KoalaCast-Server.</string>
+</resources>

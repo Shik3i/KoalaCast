@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_title">Settings</string>
+
+    <string name="settings_server_title">KoalaCast server</string>
+    <string name="settings_server_placeholder">cast.example.org</string>
+    <string name="settings_server_note">Switching servers changes what an account means: subscriptions, queue and progress are stored per server, and a sign-in on one instance does not carry to another.</string>
+    <string name="settings_server_cleartext">This address uses plain HTTP. Fine on your own network, unsafe over the internet.</string>
+    <string name="settings_server_save">Save server</string>
+    <string name="settings_server_checking">Checking…</string>
+    <string name="settings_server_saved">Saved</string>
+    <string name="settings_server_error_unreachable">Could not reach that address.</string>
+    <string name="settings_server_error_http">The server answered with status %1$d.</string>
+    <string name="settings_server_error_shape">That address answered, but not like a KoalaCast server.</string>
+
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_note">Dark is the design\'s home ground — the mint accent only reaches full contrast on a dark surface.</string>
+
+    <string name="settings_languages_title">Spoken languages</string>
+    <string name="settings_languages_note">Filters Discover and Search by the language a show is actually in, not by store region. Pick none to see everything.</string>
+
+    <string name="settings_category_title">Default category</string>
+    <string name="settings_category_note">Pre-selected when you open Search. You can always widen it from there.</string>
+
+    <string name="settings_privacy_title">Privacy</string>
+    <string name="settings_proxy_images">Load cover art through your server</string>
+    <string name="settings_proxy_images_note">Keeps publisher CDNs and Apple from seeing this device\'s address. Turn it off to fetch artwork directly.</string>
+    <string name="settings_audio_never_proxied">Episode audio always streams straight from the publisher — it never passes through a KoalaCast server.</string>
+</resources>

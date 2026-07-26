@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The shared app mark, inset so it stays inside the adaptive icon's 72dp safe zone
+  while the launcher masks and animates the outer 108dp.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_launcher_logo"
+    android:inset="20%" />

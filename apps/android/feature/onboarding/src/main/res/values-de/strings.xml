@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_eyebrow">Einrichtung</string>
+    <string name="onboarding_title">Server wählen</string>
+    <string name="onboarding_dek">KoalaCast spricht mit einem Server – für Suche, Feeds und, falls du willst, Sync. Nimm unseren oder richte die App auf deine eigene Instanz.</string>
+
+    <string name="onboarding_server_label">KoalaCast-Server</string>
+    <string name="onboarding_server_placeholder">cast.example.org</string>
+    <string name="onboarding_use_official">Offizielle Instanz</string>
+    <string name="onboarding_use_emulator">Lokaler Server (Emulator)</string>
+
+    <string name="onboarding_continue">Weiter</string>
+    <string name="onboarding_checking">Prüfe …</string>
+
+    <string name="onboarding_cleartext_warning">Diese Adresse nutzt einfaches HTTP. Der Verkehr dorthin ist unverschlüsselt – im eigenen Netz in Ordnung, über das Internet unsicher.</string>
+    <string name="onboarding_error_unreachable">Adresse nicht erreichbar. Prüfe die Schreibweise und ob der Server läuft und von diesem Gerät aus erreichbar ist.</string>
+    <string name="onboarding_error_http">Der Server hat mit Status %1$d geantwortet statt mit einem Health-Check.</string>
+    <string name="onboarding_error_not_koalacast">Die Adresse antwortet, aber nicht wie ein KoalaCast-Server.</string>
+    <string name="onboarding_error_empty">Gib eine Server-Adresse ein, um fortzufahren.</string>
+
+    <string name="onboarding_privacy_heading">Was hier nicht passiert</string>
+    <string name="onboarding_privacy_body">Es wird kein Konto angelegt und nichts hochgeladen. Abos, Warteschlange und Fortschritt bleiben auf diesem Gerät, solange du dich nicht anmeldest. Audio kommt immer direkt vom Publisher.</string>
+</resources>

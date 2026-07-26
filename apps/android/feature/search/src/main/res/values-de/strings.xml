@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_placeholder">Sendungen, Menschen, Themen suchen</string>
+    <string name="search_rss_hint">Oder eine RSS-URL einfügen, um einen Feed direkt hinzuzufügen</string>
+
+    <string name="search_feed_detected">Feed-URL</string>
+    <string name="search_feed_add">Diesen Feed hinzufügen</string>
+    <string name="search_feed_adding">Feed wird gelesen …</string>
+
+    <string name="search_filters_label">Filter</string>
+    <string name="search_clear_filters">Überall suchen</string>
+    <string name="search_reset_filters">Zurück zu meinen Einstellungen</string>
+    <string name="search_no_filters_note">Es wird in allen Sprachen und Kategorien gesucht.</string>
+
+    <string name="search_idle_title">Wonach suchst du?</string>
+    <string name="search_idle_body">Suche nach Sendung, Host oder Thema – oder füge eine Feed-URL ein, um einen Podcast hinzuzufügen, den die Verzeichnisse nicht führen.</string>
+    <string name="search_empty_title">Nichts gefunden</string>
+    <string name="search_empty_body">Versuche weniger Wörter oder lockere die Sprach- und Kategoriefilter.</string>
+</resources>

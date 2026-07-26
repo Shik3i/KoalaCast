@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="episode_show_notes">Shownotes</string>
+    <string name="episode_no_notes">Zu dieser Folge gibt es keine Shownotes.</string>
+    <string name="episode_playback_pending">Wiedergabe kommt mit der Audio-Engine – dieser Build kann nur stöbern</string>
+    <plurals name="episode_transcripts">
+        <item quantity="one">%1$d Transkript zu dieser Folge veröffentlicht</item>
+        <item quantity="other">%1$d Transkripte zu dieser Folge veröffentlicht</item>
+    </plurals>
+</resources>

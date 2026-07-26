@@ -1,13 +1,59 @@
 # KoalaCast — Native Android Client
 
-> **Status:** 📋 Spec / not started. This document is the single source of truth for
-> the next agent (or contributor) who begins the Android app. Read it fully before
-> writing any code. It defines the product bar, the tech stack, the backend
-> contract, and a phased, checklist-driven roadmap.
+> **Status:** 🏗️ **P0 and P1 shipped** — the app builds, browses and is themed;
+> playback, local storage, downloads and sync are still ahead. This document remains
+> the source of truth for the phases that follow (§10 tracks what is done).
 >
 > Companion docs: [`docs/android-architecture.md`](../../docs/android-architecture.md)
 > (high-level architecture), [`docs/sync-protocol/specification.md`](../../docs/sync-protocol/specification.md)
 > (sync DTOs), [`apps/web/`](../web) (reference implementation — feature parity target).
+
+---
+
+## Building it right now
+
+Requires JDK 17 and an Android SDK with platform 36 / build-tools 36. Point
+`local.properties` (`sdk.dir=…`) or `ANDROID_HOME` at the SDK.
+
+```bash
+cd apps/android && ./gradlew assembleDebug
+```
+
+```bash
+cd apps/android && ./gradlew build
+```
+
+`build` runs the unit tests and Android Lint across every module; both are green.
+
+The debug build installs alongside a release build (`applicationId` suffix `.debug`).
+On first run the app asks which KoalaCast server to talk to and defaults to
+`https://cast.koalastuff.net`; the emulator shortcut fills in `http://10.0.2.2:3000`
+for a server running on the host.
+
+### What P0 + P1 actually contain
+
+| Module | Contents |
+| :-- | :-- |
+| `build-logic/` | Convention plugins (`koalacast.android.library/application/compose/hilt/feature`) so a module's build file is five lines. |
+| `core:model` | Domain types and `DataResult` / `DataError`. Milliseconds everywhere. |
+| `core:network` | Retrofit + kotlinx.serialization against `/api/v1`, and `HostSelectionInterceptor` — there is no compile-time base URL, every request is re-pointed at the chosen server, path prefixes included. |
+| `core:data` | DataStore preferences, `ServerUrl` normalisation/validation, `PodcastRepository`, `ArtworkUrls` (image-proxy routing). |
+| `core:ui` | The **4b "Quiet Edition" design system**: both palettes, the four bundled typefaces, radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
+| `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Settings — each a ViewModel + a stateless screen. |
+| `app` | Hilt entry point, Coil image loader, navigation graph, bottom bar. |
+
+Deliberately **not** faked, because the data to back them does not exist yet:
+
+- The session-length control (`I HAVE 25 / 40 / 60`) and the mood tiles filter an
+  *episode* corpus. Until subscriptions and an inbox exist (P3/P5) they would filter
+  nothing, so they are absent rather than decorative.
+- The chart shows rank, cover, title and author. The momentum sparkline in the mock
+  needs 7-day trend data that neither iTunes charts nor Podcast Index return — a
+  drawn-from-nowhere sparkline would be exactly the kind of "stat the app cannot
+  know" the handoff's copy decisions rule out.
+- Play and queue buttons are missing rather than disabled; the episode screen says
+  so in one line.
+- Library and Profile are not in the bottom bar yet — three tabs, not five.
 
 ---
 
@@ -51,24 +97,24 @@ the project's principles:
 | Images | **Coil** | Cover art + palette extraction for show-accent. |
 | Downloads | **Media3 `DownloadManager`** (or OkHttp + WorkManager) | Offline episodes; see §5. |
 | Testing | JUnit, Turbine (Flow), Compose UI tests, Robolectric, MockWebServer | |
-| Min SDK | **26 (Android 8.0)** target latest | Confirm before building. |
+| Min SDK | **26 (Android 8.0)**, target/compile **36** | Pinned in `gradle/libs.versions.toml`. |
 | Build | Gradle (Kotlin DSL), version catalog (`libs.versions.toml`) | |
 
-Module layout (suggested):
+Module layout (as built; the greyed entries are the shape later phases slot into):
 ```
 apps/android/
-  app/                    # Compose UI, navigation, DI wiring
+  build-logic/convention/ # Gradle convention plugins
+  app/                    # Hilt entry point, navigation, bottom bar
   core/
-    core-model/           # domain models
-    core-data/            # repositories, Room, DataStore
-    core-network/         # Retrofit API, DTOs, auth interceptor
-    core-player/          # Media3 service + controller
-    core-download/        # download manager + WorkManager workers
-    core-ui/              # design system (theme, show-accent, components)
+    model/                # domain models, DataResult
+    data/                 # repositories, DataStore   (+ Room in P3)
+    network/              # Retrofit API, DTOs, host-selection interceptor
+    ui/                   # design system (4b theme, components, icons, fonts)
+    player/               # Media3 service + controller          — P2
+    download/             # download manager + WorkManager        — P4
   feature/
-    feature-discover/  feature-search/  feature-library/
-    feature-podcast/   feature-episode/ feature-player/
-    feature-inbox/     feature-downloads/ feature-settings/  feature-onboarding/
+    onboarding/ discover/ search/ podcast/ episode/ settings/
+    library/ inbox/ downloads/ player/                            — P3–P5
 ```
 
 ---
@@ -151,11 +197,13 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 ## 4. Must-have feature set (MVP → parity → beyond)
 
 ### 4.1 MVP (ship-blocking)
-- [ ] **Onboarding + server selection** (§2.1) — pick/validate server, or "use official".
-- [ ] **Discover** — trending + category chips (`/podcasts/discover`).
-- [ ] **Search** — live debounced (`/podcasts/search`), add-by-RSS-URL (`/podcasts/feed`).
-- [ ] **Podcast screen** — header, description, episode list, subscribe (local).
-- [ ] **Episode screen** — sanitized show notes, play, add-to-queue.
+- [x] **Onboarding + server selection** (§2.1) — pick/validate server, or "use official".
+- [x] **Discover** — cover story, category chips, chart (`/podcasts/discover`).
+- [x] **Search** — live debounced (`/podcasts/search`), language + genre filters,
+      add-by-RSS-URL (`/podcasts/feed`).
+- [x] **Podcast screen** — header, description, paged episode list. *Subscribe waits
+      for Room (P3).*
+- [x] **Episode screen** — sanitized show notes. *Play and add-to-queue wait for P2/P3.*
 - [ ] **Player** — Media3/ExoPlayer: play/pause, skip ±10/+30, scrub, speed presets
       (0.8–3.0), **sleep timer**, media notification, lockscreen, Bluetooth/media buttons.
 - [ ] **Mini-player + full-screen Now Playing** (port web's expanded view + blurred
@@ -163,7 +211,10 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [ ] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favorites.
 - [ ] **Resume playback** from saved position (works offline via denormalized metadata).
 - [ ] **Local-first persistence** (Room) — everything usable with no account.
-- [ ] **Theme** — System / Light / Dark (+ Material You dynamic color).
+- [x] **Theme** — System / Light / Dark, built on the 4b palette. *Material You
+      dynamic color is intentionally not wired: the design's identity is the mint
+      accent on a dark ground, and recolouring it from the wallpaper would undo the
+      contrast work.*
 
 ### 4.2 Feature parity with the web client
 Web has these today; Android should match:
@@ -254,25 +305,42 @@ Keep the two implementations behaviorally consistent.
 
 ---
 
-## 9. Open questions / decisions for the next agent
-1. **Default server URL** — what is the official public instance? Put it in `BuildConfig`.
-2. **"New episodes" data source** — client-side aggregation vs a new server endpoint
-   (e.g. `GET /api/v1/episodes/new?feeds=...` or an authed `/sync`-driven inbox). A server
-   endpoint scales better once a user has many subscriptions; decide before building §8.
-3. **Sync granularity** — confirm exact pull/push DTOs against
-   `docs/sync-protocol/specification.md` and `services/api/internal/server/handlers/sync.go`.
-4. **Downloads engine** — Media3 `DownloadManager` vs custom OkHttp+WorkManager (recommend
-   the former).
-5. **Min SDK / target SDK** and Compose/Media3 versions — pin in the version catalog.
-6. **Show-notes rendering** — HTML sanitization strategy on Android (episode content is
-   attacker-controlled; the web uses DOMPurify — pick an equivalent allowlist approach).
+## 9. Decisions taken (was: open questions)
+1. **Default server URL** — `https://cast.koalastuff.net`, as
+   `KoalaCastDefaults.SERVER_URL` in `core:data`. It is only a *default*: onboarding
+   and Settings both let a listener point the app anywhere, and the URL is validated
+   against `/api/v1/healthz` before it is stored. A plain-HTTP address is allowed
+   (LAN self-hosting) but always warned about.
+2. **"New episodes" data source** — still open. Decide before building §8.
+3. **Sync granularity** — still open; nothing authed is implemented yet.
+4. **Downloads engine** — still open (recommendation stands: Media3 `DownloadManager`).
+5. **Min / target SDK** — **26 / 36**, `compileSdk 36`, pinned in
+   `gradle/libs.versions.toml` together with AGP 8.13.2 and Kotlin 2.2.21. Hilt is
+   held at 2.57.2 because 2.58+ requires AGP 9.
+6. **Show-notes rendering** — `HtmlSanitizer` + Compose's HTML-to-`AnnotatedString`
+   conversion (`core:ui/component/ShowNotes.kt`). Script/style/iframe/object/embed
+   blocks are dropped with their content, inline `on*` handlers are stripped, and only
+   `http`/`https`/`mailto` links are ever followed. No WebView is involved. Covered by
+   `HtmlSanitizerTest`.
+
+### Still worth knowing
+- **Artwork is proxied through the listener's own server by default**
+  (`/api/v1/proxy/image`), so browsing does not leak the device's IP to publisher CDNs
+  or Apple. Switchable in Settings. Audio is never proxied.
+- **Fonts and icons are bundled**, not fetched: Archivo / Bricolage Grotesque / Outfit /
+  IBM Plex Mono (OFL) and the Phosphor glyphs actually used (MIT, as path data in
+  `core:ui/icon/PhosphorIcons.kt`). The app makes no third-party request at launch.
+- **ViewModel-level tests are the next testing gap.** Repository, interceptor, URL and
+  sanitizer logic are covered; the ViewModels are not, because the repositories are
+  concrete classes. Introduce interfaces (or a test module) when P2 starts.
 
 ---
 
-## 10. Phased roadmap (suggested)
-1. **P0 — Skeleton:** Gradle multi-module, Hilt, Compose nav, DataStore, **server
-   selection + onboarding**, Retrofit client + healthz validation, design system + theme.
-2. **P1 — Browse:** Discover, Search, Podcast, Episode screens (read-only, online).
+## 10. Phased roadmap
+1. ✅ **P0 — Skeleton:** Gradle multi-module + convention plugins, Hilt, Compose nav,
+   DataStore, **server selection + onboarding**, Retrofit client with a runtime-
+   switchable base URL and healthz validation, design system + theme.
+2. ✅ **P1 — Browse:** Discover, Search, Podcast, Episode screens (read-only, online).
 3. **P2 — Playback:** Media3 service, mini + full player, sleep timer, speed, media session.
 4. **P3 — Local-first:** Room, subscribe, queue, favorites, continue-listening, offline resume.
 5. **P4 — Downloads:** download engine, downloads screen, auto-download rules.

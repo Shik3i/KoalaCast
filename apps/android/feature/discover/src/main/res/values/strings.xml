@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discover_search_placeholder">Search shows, people, topics</string>
+    <string name="discover_cover_story">Cover story</string>
+    <string name="discover_open_show">Open show</string>
+    <string name="discover_open_episode">Latest episode</string>
+    <string name="discover_chart_title">Top &amp; trending</string>
+    <plurals name="discover_chart_count">
+        <item quantity="one">%1$d show</item>
+        <item quantity="other">%1$d shows</item>
+    </plurals>
+</resources>

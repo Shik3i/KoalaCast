@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive-icon ground. Light, because the app mark is drawn in dark outlines. -->
+    <color name="ic_launcher_background">#F5F8F5</color>
+    <!-- bg-app from the Quiet Edition palette; used for the pre-Compose window. -->
+    <color name="koala_bg_app">#06100C</color>
+</resources>

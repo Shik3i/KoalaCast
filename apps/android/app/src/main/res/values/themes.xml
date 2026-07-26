@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Only the window background before Compose takes over — the real design system
+      lives in KoalaCastTheme. Kept dark so launch does not flash white.
+    -->
+    <style name="Theme.KoalaCast" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/koala_bg_app</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

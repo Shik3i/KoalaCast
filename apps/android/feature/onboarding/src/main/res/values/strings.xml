@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="onboarding_eyebrow">Set up</string>
+    <string name="onboarding_title">Pick your server</string>
+    <string name="onboarding_dek">KoalaCast talks to one server for search, feeds and — if you ever want it — sync. Use ours, or point the app at your own instance.</string>
+
+    <string name="onboarding_server_label">KoalaCast server</string>
+    <string name="onboarding_server_placeholder">cast.example.org</string>
+    <string name="onboarding_use_official">Use the official instance</string>
+    <string name="onboarding_use_emulator">Local server (emulator)</string>
+
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_checking">Checking…</string>
+
+    <string name="onboarding_cleartext_warning">This address uses plain HTTP. Traffic to it is unencrypted, which is fine on your own network and unsafe over the internet.</string>
+    <string name="onboarding_error_unreachable">Could not reach that address. Check the spelling, and that the server is running and reachable from this device.</string>
+    <!-- %1$d is an HTTP status, not a count. -->
+    <string name="onboarding_error_http" tools:ignore="PluralsCandidate">The server answered with status %1$d instead of a health check.</string>
+    <string name="onboarding_error_not_koalacast">That address answered, but not like a KoalaCast server.</string>
+    <string name="onboarding_error_empty">Enter a server address to continue.</string>
+
+    <string name="onboarding_privacy_heading">What this does not do</string>
+    <string name="onboarding_privacy_body">No account is created and nothing is uploaded. Your subscriptions, queue and progress stay on this device unless you sign in later. Episode audio always streams straight from the publisher.</string>
+</resources>

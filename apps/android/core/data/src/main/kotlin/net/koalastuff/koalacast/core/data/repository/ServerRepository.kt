@@ -1,0 +1,54 @@
+package net.koalastuff.koalacast.core.data.repository
+
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
+import net.koalastuff.koalacast.core.data.di.IoDispatcher
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.data.server.ServerUrl
+import net.koalastuff.koalacast.core.model.DataError
+import net.koalastuff.koalacast.core.model.DataResult
+import net.koalastuff.koalacast.core.network.KoalaCastApi
+import net.koalastuff.koalacast.core.network.apiCall
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Choosing where the app talks to. Self-hosting is a first-class path, so a candidate
+ * URL is always probed before it is stored — a typo should fail in onboarding, not
+ * three screens later.
+ */
+@Singleton
+class ServerRepository @Inject constructor(
+    private val api: KoalaCastApi,
+    private val preferences: PreferencesRepository,
+    @IoDispatcher private val dispatcher: CoroutineDispatcher,
+) {
+
+    /** Probes `{url}/api/v1/healthz` without touching the stored configuration. */
+    suspend fun validate(rawUrl: String): DataResult<String> = withContext(dispatcher) {
+        val normalised = ServerUrl.normalise(rawUrl)
+            ?: return@withContext DataResult.Failure(DataError.Malformed("not a URL"))
+
+        apiCall { api.healthzAt("$normalised/api/v1/healthz") }.let { result ->
+            when (result) {
+                is DataResult.Failure -> result
+                is DataResult.Success ->
+                    if (result.data.status == "ok") {
+                        DataResult.Success(normalised)
+                    } else {
+                        DataResult.Failure(DataError.Malformed("unexpected /healthz payload"))
+                    }
+            }
+        }
+    }
+
+    /** Validates, then persists. Returns the normalised URL that was stored. */
+    suspend fun selectServer(rawUrl: String): DataResult<String> =
+        when (val validated = validate(rawUrl)) {
+            is DataResult.Failure -> validated
+            is DataResult.Success -> {
+                preferences.setServerUrl(validated.data)
+                validated
+            }
+        }
+}

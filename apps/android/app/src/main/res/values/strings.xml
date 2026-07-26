@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand name; the same in every language. -->
+    <string name="app_name" translatable="false">KoalaCast</string>
+    <string name="nav_discover">Discover</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_settings">Settings</string>
+</resources>
