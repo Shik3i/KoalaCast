@@ -1,8 +1,8 @@
 # KoalaCast — Native Android Client
 
-> **Status:** 🏗️ **P0 and P1 shipped** — the app builds, browses and is themed;
-> playback, local storage, downloads and sync are still ahead. This document remains
-> the source of truth for the phases that follow (§10 tracks what is done).
+> **Status:** 🏗️ **P0–P3 shipped** — the app builds, browses, plays and keeps a
+> local-first library. Still ahead: the inbox, downloads, and account + sync.
+> This document remains the source of truth for those phases (§10 tracks what is done).
 >
 > Companion docs: [`docs/android-architecture.md`](../../docs/android-architecture.md)
 > (high-level architecture), [`docs/sync-protocol/specification.md`](../../docs/sync-protocol/specification.md)
@@ -30,30 +30,31 @@ On first run the app asks which KoalaCast server to talk to and defaults to
 `https://cast.koalastuff.net`; the emulator shortcut fills in `http://10.0.2.2:3000`
 for a server running on the host.
 
-### What P0 + P1 actually contain
+### What is built
 
 | Module | Contents |
 | :-- | :-- |
 | `build-logic/` | Convention plugins (`koalacast.android.library/application/compose/hilt/feature`) so a module's build file is five lines. |
 | `core:model` | Domain types and `DataResult` / `DataError`. Milliseconds everywhere. |
 | `core:network` | Retrofit + kotlinx.serialization against `/api/v1`, and `HostSelectionInterceptor` — there is no compile-time base URL, every request is re-pointed at the chosen server, path prefixes included. |
-| `core:data` | DataStore preferences, `ServerUrl` normalisation/validation, `PodcastRepository`, `ArtworkUrls` (image-proxy routing). |
+| `core:data` | DataStore preferences, Room (the web's IndexedDB stores mirrored field for field), `ServerUrl` normalisation/validation, the podcast / library / queue / progress repositories, `ArtworkUrls` (image-proxy routing). |
+| `core:player` | `MediaSessionService` + ExoPlayer, the `PlayerConnection` every screen talks to, and the listening-session arithmetic behind the Profile stats. |
 | `core:ui` | The **4b "Quiet Edition" design system**: both palettes, the four bundled typefaces, radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
-| `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Settings — each a ViewModel + a stateless screen. |
+| `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Library, Player, Settings — each a ViewModel + a stateless screen. |
 | `app` | Hilt entry point, Coil image loader, navigation graph, bottom bar. |
 
 Deliberately **not** faked, because the data to back them does not exist yet:
 
 - The session-length control (`I HAVE 25 / 40 / 60`) and the mood tiles filter an
-  *episode* corpus. Until subscriptions and an inbox exist (P3/P5) they would filter
-  nothing, so they are absent rather than decorative.
+  *episode* corpus, which arrives with the inbox (P5). `QueueRepository.trimTo`
+  — the logic behind `TRIM TO 40M` — is already written and tested.
 - The chart shows rank, cover, title and author. The momentum sparkline in the mock
   needs 7-day trend data that neither iTunes charts nor Podcast Index return — a
   drawn-from-nowhere sparkline would be exactly the kind of "stat the app cannot
   know" the handoff's copy decisions rule out.
-- Play and queue buttons are missing rather than disabled; the episode screen says
-  so in one line.
-- Library and Profile are not in the bottom bar yet — three tabs, not five.
+- Silence trimming reports zero saved time in the listening telemetry rather than a
+  guess: the audio processor is not implemented.
+- Profile is not in the bottom bar yet — four tabs, not five.
 
 ---
 
@@ -201,16 +202,17 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Discover** — cover story, category chips, chart (`/podcasts/discover`).
 - [x] **Search** — live debounced (`/podcasts/search`), language + genre filters,
       add-by-RSS-URL (`/podcasts/feed`).
-- [x] **Podcast screen** — header, description, paged episode list. *Subscribe waits
-      for Room (P3).*
-- [x] **Episode screen** — sanitized show notes. *Play and add-to-queue wait for P2/P3.*
-- [ ] **Player** — Media3/ExoPlayer: play/pause, skip ±10/+30, scrub, speed presets
-      (0.8–3.0), **sleep timer**, media notification, lockscreen, Bluetooth/media buttons.
-- [ ] **Mini-player + full-screen Now Playing** (port web's expanded view + blurred
-      cover backdrop + show-accent).
-- [ ] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favorites.
-- [ ] **Resume playback** from saved position (works offline via denormalized metadata).
-- [ ] **Local-first persistence** (Room) — everything usable with no account.
+- [x] **Podcast screen** — header, description, paged episode list, subscribe,
+      per-episode play / queue / save / mark-played.
+- [x] **Episode screen** — sanitized show notes, play, queue, save, mark-played.
+- [x] **Player** — Media3/ExoPlayer: play/pause, skip ±15/+30, scrub, speed cycling,
+      **sleep timer** (incl. end-of-episode), media notification, lock screen,
+      Bluetooth/media buttons. *Fine-grained speed steps and skip-silence are still open.*
+- [x] **Mini-player + full-screen Now Playing.** *The blurred cover backdrop and the
+      per-show accent from cover art are still to port.*
+- [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
+- [x] **Resume playback** from saved position (works offline via denormalised metadata).
+- [x] **Local-first persistence** (Room) — everything usable with no account.
 - [x] **Theme** — System / Light / Dark, built on the 4b palette. *Material You
       dynamic color is intentionally not wired: the design's identity is the mint
       accent on a dark ground, and recolouring it from the wallpaper would undo the
@@ -341,8 +343,8 @@ Keep the two implementations behaviorally consistent.
    DataStore, **server selection + onboarding**, Retrofit client with a runtime-
    switchable base URL and healthz validation, design system + theme.
 2. ✅ **P1 — Browse:** Discover, Search, Podcast, Episode screens (read-only, online).
-3. **P2 — Playback:** Media3 service, mini + full player, sleep timer, speed, media session.
-4. **P3 — Local-first:** Room, subscribe, queue, favorites, continue-listening, offline resume.
+3. ✅ **P2 — Playback:** Media3 `MediaSessionService`, mini + full player, sleep timer, speed, media session, progress persistence, queue auto-advance.
+4. ✅ **P3 — Local-first:** Room, subscribe, queue, favourites, continue-listening, offline resume, tombstones for sync.
 5. **P4 — Downloads:** download engine, downloads screen, auto-download rules.
 6. **P5 — Inbox:** "New episodes" filtered feed (coordinate with web, §8).
 7. **P6 — Account & Sync:** device-token auth, `/sync` pull/push/merge, session mgmt, OPML.
