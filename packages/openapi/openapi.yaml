@@ -147,6 +147,68 @@ paths:
         '410':
           description: "Full resync required"
 
+  /api/v1/stats/global:
+    get:
+      operationId: getGlobalListeningStatistics
+      summary: "Opt-in global listening aggregates"
+      description: "Returns site-wide aggregates and rankings built exclusively from accounts with global statistics participation enabled."
+      parameters:
+        - name: range
+          in: query
+          schema:
+            type: string
+            enum: [90days, year, all]
+            default: year
+      responses:
+        '200':
+          description: "Global statistics"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalStatsResponse'
+        '400':
+          description: "Invalid range"
+
+  /api/v1/stats/preferences:
+    get:
+      operationId: getGlobalStatsPreference
+      summary: "Read the authenticated user's global statistics consent"
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: "Current preference"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalStatsPreference'
+        '401':
+          description: "Unauthorized"
+    put:
+      operationId: updateGlobalStatsPreference
+      summary: "Enable or revoke global statistics participation"
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlobalStatsPreferenceUpdate'
+      responses:
+        '200':
+          description: "Updated preference"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalStatsPreference'
+        '400':
+          description: "Invalid preference"
+        '401':
+          description: "Unauthorized"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -228,3 +290,94 @@ components:
           type: string
         password:
           type: string
+
+    GlobalStatsPreference:
+      type: object
+      required: [global_stats_opt_in, global_stats_opt_in_at]
+      properties:
+        global_stats_opt_in:
+          type: boolean
+        global_stats_opt_in_at:
+          type: integer
+          format: int64
+
+    GlobalStatsPreferenceUpdate:
+      type: object
+      required: [global_stats_opt_in]
+      additionalProperties: false
+      properties:
+        global_stats_opt_in:
+          type: boolean
+
+    GlobalStatsResponse:
+      type: object
+      required:
+        - generated_at
+        - range
+        - timezone
+        - participants
+        - total_wall_ms
+        - podcast_rankings
+        - listener_leaderboard
+      properties:
+        generated_at:
+          type: integer
+          format: int64
+        range:
+          type: string
+          enum: [90days, year, all]
+        timezone:
+          type: string
+          example: UTC
+        participants:
+          type: integer
+        total_wall_ms:
+          type: integer
+          format: int64
+        baseline_audio_ms:
+          type: integer
+          format: int64
+        total_saved_ms:
+          type: integer
+          format: int64
+        speed_saved_ms:
+          type: integer
+          format: int64
+        silence_saved_ms:
+          type: integer
+          format: int64
+        manual_skipped_ms:
+          type: integer
+          format: int64
+        intro_outro_skipped_ms:
+          type: integer
+          format: int64
+        average_speed:
+          type: number
+          format: double
+        active_days:
+          type: integer
+        listening_sessions:
+          type: integer
+        episodes:
+          type: integer
+        podcasts:
+          type: integer
+        weekday_totals:
+          type: array
+          items: { type: integer, format: int64 }
+        hour_totals:
+          type: array
+          items: { type: integer, format: int64 }
+        day_totals:
+          type: array
+          items: { type: object }
+        category_totals:
+          type: array
+          items: { type: object }
+        podcast_rankings:
+          type: array
+          items: { type: object }
+        listener_leaderboard:
+          type: array
+          items: { type: object }

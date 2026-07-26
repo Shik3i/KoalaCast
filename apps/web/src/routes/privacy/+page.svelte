@@ -20,7 +20,7 @@
 		<div>
 			<h1>Privacy Policy</h1>
 			<p class="page-sub">How KoalaCast processes connection data, local browser storage, server proxying, accounts, and audio streams.</p>
-			<p class="updated">Last updated: 25 July 2026</p>
+			<p class="updated">Last updated: 26 July 2026</p>
 		</div>
 	</header>
 

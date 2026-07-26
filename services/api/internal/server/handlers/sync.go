@@ -257,6 +257,16 @@ func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, use
 	if p.ID == "" || p.StartedAt <= 0 || p.EndedAt < p.StartedAt {
 		return
 	}
+	if p.EndedAt-p.StartedAt > maxListeningSessionSpanMS ||
+		p.WallClockMS < 0 || p.WallClockMS > maxListeningSessionSpanMS ||
+		p.AudioListenedMS < 0 || p.AudioListenedMS > maxListeningSessionSpanMS*4 ||
+		p.SpeedSavedMS < 0 || p.SpeedSavedMS > maxListeningSessionSpanMS*4 ||
+		p.SilenceSavedMS < 0 || p.SilenceSavedMS > maxListeningSessionSpanMS*4 ||
+		p.ManualSkippedMS < 0 || p.ManualSkippedMS > maxListeningSessionSpanMS*4 ||
+		p.IntroOutroSkippedMS < 0 || p.IntroOutroSkippedMS > maxListeningSessionSpanMS*4 ||
+		p.SpeedWeightedMS < 0 || p.SpeedWeightedMS > maxListeningSessionSpanMS*4 {
+		return
+	}
 	categories, _ := json.Marshal(p.Categories)
 	_, _ = tx.ExecContext(ctx, `
 		INSERT INTO listening_sessions (

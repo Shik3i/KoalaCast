@@ -50,6 +50,10 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		DB: database,
 	}
 
+	globalStatsHandler := &handlers.GlobalStatsHandler{
+		DB: database,
+	}
+
 	opmlHandler := &handlers.OPMLHandler{
 		DB:           database,
 		MaxResponseB: cfg.FeedMaxResponseBytes,
@@ -103,6 +107,15 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		r.Get("/episodes/{id}", podcastHandler.GetEpisode)
 		r.Get("/episodes/{id}/transcript", podcastHandler.GetEpisodeTranscript)
 
+		// Public aggregates contain only data from accounts that explicitly opted
+		// in. No raw sessions or identifiers are returned. The aggregation scans
+		// eligible sessions, so bound repeated public requests per client.
+		globalStatsLimiter := customMiddleware.NewRateLimiter(120, 1*time.Minute)
+		r.Group(func(r chi.Router) {
+			r.Use(globalStatsLimiter.Limit)
+			r.Get("/stats/global", globalStatsHandler.Global)
+		})
+
 		// AddFeed triggers an unauthenticated server-side fetch + DB writes, so it
 		// is throttled per client IP to bound outbound-fetch and DB-growth abuse.
 		feedLimiter := customMiddleware.NewRateLimiter(20, 1*time.Minute)
@@ -141,6 +154,8 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Post("/auth/logout", authHandler.Logout)
 			r.Get("/auth/sessions", authHandler.ListSessions)
 			r.Delete("/auth/sessions/{id}", authHandler.RevokeSession)
+			r.Get("/stats/preferences", globalStatsHandler.GetPreference)
+			r.Put("/stats/preferences", globalStatsHandler.UpdatePreference)
 
 			// Cross-Device Sync Engine
 			r.Get("/sync", syncHandler.Pull)

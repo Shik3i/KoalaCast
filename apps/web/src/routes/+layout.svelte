@@ -32,7 +32,8 @@
 		{ href: '/', icon: 'ph-newspaper', label: t('quiet.nav.discover') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('nav.new') },
 		{ href: '/library', icon: 'ph-squares-four', label: t('nav.library') },
-		{ href: '/profile', icon: 'ph-user-circle', label: t('quiet.nav.profile') }
+		{ href: '/profile', icon: 'ph-user-circle', label: t('quiet.nav.profile') },
+		{ href: '/global-stats', icon: 'ph-chart-line-up', label: t('globalStats.mobileNav') }
 	]);
 
 	onMount(() => {

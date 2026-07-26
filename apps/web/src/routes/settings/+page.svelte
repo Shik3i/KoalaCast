@@ -34,6 +34,9 @@
 	let recoveryCodeDisplay = $state('');
 	let authError = $state('');
 	let sessions = $state<any[]>([]);
+	let globalStatsOptIn = $state(false);
+	let isLoadingGlobalStatsPreference = $state(false);
+	let isSavingGlobalStatsPreference = $state(false);
 
 	// Theme state
 	let currentTheme = $state<ThemeMode>('system');
@@ -54,6 +57,7 @@
 				const me = await res.json();
 				authUser = { username: me.username, role: me.role };
 				loadActiveSessions();
+				loadGlobalStatsPreference();
 				if (me.user_id) sync.enable(me.user_id);
 			}
 		} catch (_) {}
@@ -122,6 +126,7 @@
 			authUser = data;
 			toast.success(t('toast.welcomeBack', { username: data.username }));
 			loadActiveSessions();
+			loadGlobalStatsPreference();
 			// Kick off cross-device sync now that we're authenticated.
 			if (data.user_id) sync.enable(data.user_id);
 		} catch (err: any) {
@@ -139,6 +144,7 @@
 		}
 		sync.disable();
 		authUser = null;
+		globalStatsOptIn = false;
 		sessions = [];
 		usernameInput = '';
 		passwordInput = '';
@@ -153,6 +159,43 @@
 				sessions = data.sessions || [];
 			}
 		} catch (_) {}
+	}
+
+	async function loadGlobalStatsPreference() {
+		isLoadingGlobalStatsPreference = true;
+		try {
+			const res = await fetch('/api/v1/stats/preferences');
+			if (!res.ok) return;
+			const data = await res.json();
+			globalStatsOptIn = data.global_stats_opt_in === true;
+		} catch (_) {
+			// Keep the safe default (off) when the preference cannot be loaded.
+		} finally {
+			isLoadingGlobalStatsPreference = false;
+		}
+	}
+
+	async function updateGlobalStatsPreference(enabled: boolean) {
+		if (isSavingGlobalStatsPreference) return;
+		const previous = globalStatsOptIn;
+		globalStatsOptIn = enabled;
+		isSavingGlobalStatsPreference = true;
+		try {
+			const res = await fetch('/api/v1/stats/preferences', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ global_stats_opt_in: enabled })
+			});
+			if (!res.ok) throw new Error(`preference update failed: ${res.status}`);
+			const data = await res.json();
+			globalStatsOptIn = data.global_stats_opt_in === true;
+			toast.success(enabled ? t('settings.globalStatsEnabled') : t('settings.globalStatsDisabled'));
+		} catch (_) {
+			globalStatsOptIn = previous;
+			toast.error(t('settings.globalStatsSaveError'));
+		} finally {
+			isSavingGlobalStatsPreference = false;
+		}
 	}
 
 	async function handleResetLocalData() {
@@ -378,6 +421,30 @@
 			<h4>{t('settings.localBrowserMode')}</h4>
 			<p>{t('settings.privacyBody')}</p>
 		</div>
+		{#if authUser}
+			<div class="consent-row">
+				<div>
+					<h4>{t('settings.globalStatsOptIn')}</h4>
+					<p>{t('settings.globalStatsOptInBody', { username: authUser.username })}</p>
+					<a href="/global-stats">{t('settings.viewGlobalStats')} <i class="ph ph-arrow-right" aria-hidden="true"></i></a>
+				</div>
+				<label class="consent-switch">
+					<input
+						type="checkbox"
+						checked={globalStatsOptIn}
+						disabled={isLoadingGlobalStatsPreference || isSavingGlobalStatsPreference}
+						onchange={(event) => updateGlobalStatsPreference(event.currentTarget.checked)}
+					/>
+					<span aria-hidden="true"></span>
+					<strong>{globalStatsOptIn ? t('common.on') : t('common.off')}</strong>
+				</label>
+			</div>
+		{:else}
+			<div class="privacy-box muted">
+				<h4>{t('settings.globalStatsOptIn')}</h4>
+				<p>{t('settings.globalStatsSignIn')}</p>
+			</div>
+		{/if}
 	</section>
 
 	<!-- OPML Import / Export Card -->
@@ -497,6 +564,28 @@
 		font-weight: 700;
 	}
 	.card h3 :global(.ph) { color: var(--accent-green); font-size: 1.2rem; }
+	.consent-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.5rem;
+		padding: 1rem;
+		border: 1px solid var(--border-subtle);
+		background: var(--bg-sunken);
+		border-radius: 9px;
+	}
+	.consent-row h4 { margin-bottom: .35rem; }
+	.consent-row p { max-width: 60ch; color: var(--text-muted); font-size: .9rem; }
+	.consent-row a { display: inline-flex; gap: .3rem; align-items: center; margin-top: .65rem; color: var(--accent-green); font-weight: 700; font-size: .85rem; }
+	.consent-switch { display: flex; align-items: center; gap: .55rem; cursor: pointer; white-space: nowrap; }
+	.consent-switch input { position: absolute; opacity: 0; pointer-events: none; }
+	.consent-switch span { width: 42px; height: 24px; padding: 3px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--border-ui); transition: background .15s; }
+	.consent-switch span::after { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--text-muted); transition: transform .15s, background .15s; }
+	.consent-switch input:checked + span { background: var(--accent-fill); border-color: var(--accent-fill); }
+	.consent-switch input:checked + span::after { transform: translateX(18px); background: var(--accent-on); }
+	.consent-switch input:focus-visible + span { outline: 2px solid var(--accent-green); outline-offset: 2px; }
+	.consent-switch input:disabled + span { opacity: .55; cursor: wait; }
+	.privacy-box.muted { opacity: .78; }
 
 	.subtitle {
 		color: var(--text-secondary);
@@ -802,5 +891,8 @@
 		border: 1px solid var(--border-subtle);
 		padding: 0.5rem;
 		border-radius: 6px;
+	}
+	@media (max-width: 620px) {
+		.consent-row { align-items: flex-start; flex-direction: column; }
 	}
 </style>

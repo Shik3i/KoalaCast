@@ -91,15 +91,25 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		title: '5. Accounts and sessions',
 		icon: 'ph-user-circle',
 		paragraphs: [
-			'Account and session records are personal data when they relate to an identifiable user. For registered accounts, KoalaCast stores a public username, account status, role, account creation/login timestamps, and a bcrypt password hash. It does not require an email address and never stores the password itself. Account data is retained until deletion is requested or required for account administration.',
+			'Account and session records are personal data when they relate to an identifiable user. For registered accounts, KoalaCast stores a public username, account status, role, account creation/login timestamps, and an Argon2id password hash. It does not require an email address and never stores the password itself. Account data is retained until deletion is requested or required for account administration.',
 			'Login uses one essential HttpOnly session cookie (koalacast_session). Only a SHA-256 hash of its random token is stored on the server. Sessions expire after 30 days by default, are invalidated on logout, and are removed after expiry. This cookie is strictly necessary for requested login functionality, so no consent banner is required for it.',
 			'Optional cross-device sync synchronizes user subscriptions, episode queue, playback progress, and listening-session statistics to the server\'s SQLite database.'
 		],
 		legalBasis: 'Art. 6(1)(b) GDPR, providing the requested account and sync service, and Art. 6(1)(f) GDPR, account security.'
 	},
 	{
+		id: 'global-statistics',
+		title: '6. Optional global statistics and rankings',
+		icon: 'ph-chart-line-up',
+		paragraphs: [
+			'Participation is disabled by default and available only to signed-in accounts. If you explicitly enable it in Settings, your synchronized listening sessions are included in site-wide aggregates such as total listening time, weekday and hour distributions, categories, time saved, and podcast rankings. Your chosen KoalaCast username and aggregated listening time, active-day count, and podcast count are shown in the listener leaderboard.',
+			'The public endpoint does not expose individual episodes, session timestamps, device identifiers, account identifiers, or raw listening sessions. Turning participation off removes your account from all global aggregates and rankings immediately. Your private synchronized listening statistics remain available to you and can be included again only after a new opt-in.'
+		],
+		legalBasis: 'Art. 6(1)(a) GDPR, explicit and freely revocable consent.'
+	},
+	{
 		id: 'no-tracking',
-		title: '6. No advertising or client tracking',
+		title: '7. No advertising or client tracking',
 		icon: 'ph-lock-key',
 		highlight: true,
 		paragraphs: [
@@ -108,7 +118,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 	},
 	{
 		id: 'external-links',
-		title: '7. External links',
+		title: '8. External links',
 		icon: 'ph-arrow-square-out',
 		paragraphs: [
 			'GitHub, license, and publisher links are ordinary external links, not embedded trackers. Opening one sends the usual connection data to that provider under its own privacy policy.'
@@ -116,7 +126,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 	},
 	{
 		id: 'your-rights',
-		title: '8. Your rights & Data Control',
+		title: '9. Your rights & Data Control',
 		icon: 'ph-scales',
 		paragraphs: [
 			'Under the GDPR, you have the right to access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20), objection (Art. 21), and lodging a complaint with a supervisory authority.'
@@ -124,7 +134,8 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		items: [
 			{ label: 'OPML Export', text: 'Export or import your subscriptions at any time in Settings.' },
 			{ label: 'Local Data Wipe', text: 'Clear all client-side stored IndexedDB/LocalStorage data in Settings.' },
-			{ label: 'Session Management', text: 'Review and revoke active account sessions at any time in Settings.' }
+			{ label: 'Session Management', text: 'Review and revoke active account sessions at any time in Settings.' },
+			{ label: 'Global statistics consent', text: 'Join or leave public aggregates and the listener leaderboard at any time in Settings. Participation is off by default.' }
 		],
 		legalLinks: [
 			{ href: 'https://koalastuff.net/legal', label: 'Legal Notice (Impressum)', icon: 'ph-scales' },
