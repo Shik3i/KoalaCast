@@ -248,6 +248,13 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
       palettes are contrast-tested pairs, and recolouring them from the wallpaper
       would undo that work.*
 
+## Before tagging a release
+
+Run `make android-release-check` from the repository root. It runs exactly what
+`.github/workflows/android-release.yml` runs — `./gradlew --no-daemon test lint
+assembleRelease` — and `lint` is the part that is easy to skip locally: a build
+and the unit tests can both pass while lint fails the release.
+
 ### 4.2 Feature parity with the web client
 Web has these today; Android should match:
 - [x] Continue Listening rail / In-Progress tab.
