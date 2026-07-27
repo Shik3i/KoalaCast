@@ -904,7 +904,7 @@ p { text-wrap: pretty; }
 	--rail-resizer-width: 10px;
 	display: grid;
 	grid-template-columns: var(--left-rail-width) var(--rail-resizer-width) minmax(0, 1fr);
-	width: min(100%, calc(var(--left-rail-width) + var(--rail-resizer-width) + 1400px));
+	width: min(100%, 2000px);
 	min-height: 100dvh;
 	margin-inline: auto;
 	padding-bottom: 0;
@@ -914,9 +914,8 @@ p { text-wrap: pretty; }
 .quiet-app:has(.running-order) {
 	grid-template-columns:
 		var(--left-rail-width) var(--rail-resizer-width)
-		minmax(0, 1400px)
+		minmax(0, 1fr)
 		var(--rail-resizer-width) var(--right-rail-width);
-	width: min(100%, calc(var(--left-rail-width) + var(--right-rail-width) + (2 * var(--rail-resizer-width)) + 1400px));
 }
 .quiet-app.empty-running-order:not(.right-compact):has(.running-order) {
 	--right-rail-width: 150px !important;
