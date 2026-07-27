@@ -54,6 +54,7 @@ fun ProfileScreen(
     onOpenPodcast: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenDownloads: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -72,6 +73,7 @@ fun ProfileScreen(
         onOpenPodcast = onOpenPodcast,
         onOpenSettings = onOpenSettings,
         onOpenAccount = onOpenAccount,
+        onOpenDownloads = onOpenDownloads,
         onExport = { export.launch("koalacast-listening-data.json") },
         modifier = modifier,
         contentPadding = contentPadding,
@@ -85,6 +87,7 @@ internal fun ProfileContent(
     onOpenPodcast: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenDownloads: () -> Unit,
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -128,6 +131,7 @@ internal fun ProfileContent(
             }
             Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
                 OutlineButton(text = stringResource(R.string.profile_account), onClick = onOpenAccount)
+                OutlineButton(text = stringResource(R.string.profile_downloads), onClick = onOpenDownloads)
                 OutlineButton(text = stringResource(R.string.profile_settings), onClick = onOpenSettings)
             }
         }

@@ -104,4 +104,8 @@ class SettingsViewModel @Inject constructor(
     fun setProxyImages(enabled: Boolean) {
         viewModelScope.launch { preferences.setProxyImages(enabled) }
     }
+
+    fun setDownloadWifiOnly(enabled: Boolean) {
+        viewModelScope.launch { preferences.setDownloadWifiOnly(enabled) }
+    }
 }

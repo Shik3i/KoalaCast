@@ -20,4 +20,7 @@
     <string name="episode_loading_transcript">Transkript wird geladen…</string>
     <string name="episode_transcript_error">Das Transkript konnte nicht geladen werden.</string>
     <string name="episode_empty_transcript">Dieses Transkript ist leer.</string>
+    <string name="episode_download">Zum Offline-Hören laden</string>
+    <string name="episode_pause_download">Download pausieren</string>
+    <string name="episode_remove_download">Offline-Download entfernen</string>
 </resources>

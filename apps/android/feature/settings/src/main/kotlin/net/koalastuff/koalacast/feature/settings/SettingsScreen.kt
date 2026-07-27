@@ -62,6 +62,7 @@ fun SettingsScreen(
         onSelectCategory = viewModel::setCategory,
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenPrivacy = onOpenPrivacy,
+        onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -77,6 +78,7 @@ internal fun SettingsContent(
     onSelectCategory: (String) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
+    onDownloadWifiOnlyChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -215,6 +217,37 @@ internal fun SettingsContent(
                         onClick = { onSelectCategory(genre.wireName) },
                     )
                 }
+            }
+        }
+
+        Hairline()
+
+        Section(title = stringResource(R.string.settings_downloads_title)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onDownloadWifiOnlyChange(prefs?.downloadWifiOnly != true)
+                    },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_download_wifi),
+                        style = KoalaTheme.type.label,
+                        color = colors.ink2,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_download_wifi_note),
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink3,
+                    )
+                }
+                Switch(
+                    checked = prefs?.downloadWifiOnly ?: true,
+                    onCheckedChange = onDownloadWifiOnlyChange,
+                )
             }
         }
 

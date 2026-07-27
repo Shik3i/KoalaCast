@@ -38,6 +38,7 @@ import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.feature.discover.DiscoverScreen
+import net.koalastuff.koalacast.feature.downloads.DownloadsScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeScreen
 import net.koalastuff.koalacast.feature.episode.EpisodeViewModel
 import net.koalastuff.koalacast.feature.library.LibraryScreen
@@ -155,6 +156,13 @@ fun KoalaCastApp(
                     )
                 }
 
+                composable(Routes.DOWNLOADS) {
+                    DownloadsScreen(
+                        onBack = { navController.popBackStack() },
+                        contentPadding = statusBarPadding(),
+                    )
+                }
+
                 composable(Routes.PROFILE) {
                     ProfileScreen(
                         onOpenPodcast = { podcastId ->
@@ -162,6 +170,7 @@ fun KoalaCastApp(
                         },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
+                        onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
                         contentPadding = statusBarPadding(),
                     )
                 }

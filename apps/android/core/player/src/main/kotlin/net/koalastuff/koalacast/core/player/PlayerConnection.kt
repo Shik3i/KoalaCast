@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import net.koalastuff.koalacast.core.data.di.ApplicationScope
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
+import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
@@ -68,6 +69,7 @@ class PlayerConnection @Inject constructor(
     private val queue: QueueRepository,
     private val progress: ProgressRepository,
     private val library: LibraryRepository,
+    private val downloads: DownloadRepository,
     private val preferences: PreferencesRepository,
     private val artworkUrls: ArtworkUrls,
 ) {
@@ -148,9 +150,14 @@ class PlayerConnection @Inject constructor(
             // Artwork goes through the listener's own instance when the proxy is
             // on, so the notification does not leak their IP to a publisher CDN.
             val artwork = artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX)
+            val localMediaUri = downloads.completedPath(track.episodeId)
+                ?.let { android.net.Uri.fromFile(java.io.File(it)).toString() }
 
             withContext(Dispatchers.Main) {
-                controller.setMediaItem(TrackMediaItem.from(track, artwork), startPosition)
+                controller.setMediaItem(
+                    TrackMediaItem.from(track, artwork, localMediaUri),
+                    startPosition,
+                )
                 controller.playbackParameters = PlaybackParameters(speed)
                 controller.prepare()
                 controller.play()

@@ -30,4 +30,7 @@
     <string name="settings_proxy_images_note">So sehen Publisher-CDNs und Apple die Adresse dieses Geräts nicht. Ausschalten, um Cover direkt zu laden.</string>
     <string name="settings_audio_never_proxied">Audio kommt immer direkt vom Publisher – es läuft nie über einen KoalaCast-Server.</string>
     <string name="settings_privacy_policy">Datenschutzerklärung lesen</string>
+    <string name="settings_downloads_title">Downloads</string>
+    <string name="settings_download_wifi">Nur über WLAN laden</string>
+    <string name="settings_download_wifi_note">Ausschalten, um Folgen auch über mobile Daten zu laden.</string>
 </resources>

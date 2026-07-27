@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="downloads_title">Downloads</string>
+    <string name="downloads_empty">Heruntergeladene Folgen und laufende Übertragungen erscheinen hier.</string>
+    <string name="downloads_queued">Wartet auf WLAN</string>
+    <string name="downloads_downloading">Wird geladen</string>
+    <string name="downloads_paused">Pausiert</string>
+    <string name="downloads_done">Offline verfügbar</string>
+    <string name="downloads_failed">Download fehlgeschlagen</string>
+    <string name="downloads_play">Abspielen</string>
+    <string name="downloads_pause">Pausieren</string>
+    <string name="downloads_retry">Fortsetzen</string>
+    <string name="downloads_remove">Löschen</string>
+    <string name="downloads_remove_all">Alle löschen</string>
+    <string name="downloads_storage">%1$s gespeichert</string>
+</resources>

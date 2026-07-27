@@ -64,6 +64,27 @@ data class PodcastSettings(
     val autoQueueNew: Boolean = false,
 )
 
+enum class DownloadState { QUEUED, DOWNLOADING, PAUSED, DONE, FAILED }
+
+data class EpisodeDownload(
+    val episodeId: String,
+    val track: Track,
+    val state: DownloadState,
+    val bytesDownloaded: Long,
+    val totalBytes: Long,
+    val localPath: String?,
+    val error: String?,
+    val createdAtMs: Long,
+    val updatedAtMs: Long,
+) {
+    val progressPercent: Int
+        get() = if (totalBytes > 0) {
+            ((bytesDownloaded * 100) / totalBytes).toInt().coerceIn(0, 100)
+        } else {
+            0
+        }
+}
+
 /** One uninterrupted play segment; the raw material for the Profile screen. */
 data class ListeningSession(
     val id: String,

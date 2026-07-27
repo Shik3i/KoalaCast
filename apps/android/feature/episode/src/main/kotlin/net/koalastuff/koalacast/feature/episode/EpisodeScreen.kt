@@ -56,6 +56,7 @@ fun EpisodeScreen(
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
         onToggleTranscript = viewModel::toggleTranscript,
+        onToggleDownload = viewModel::toggleDownload,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -71,6 +72,7 @@ internal fun EpisodeContent(
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
     onToggleTranscript: () -> Unit,
+    onToggleDownload: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -194,6 +196,24 @@ internal fun EpisodeContent(
                             ),
                             onClick = onTogglePlayed,
                             tint = if (state.isPlayed) colors.accentInk else colors.ink3,
+                        )
+                        IconButtonSquare(
+                            icon = PhosphorIcons.DownloadSimple,
+                            contentDescription = stringResource(
+                                when (state.downloadState) {
+                                    net.koalastuff.koalacast.core.model.DownloadState.DONE ->
+                                        R.string.episode_remove_download
+                                    net.koalastuff.koalacast.core.model.DownloadState.DOWNLOADING,
+                                    net.koalastuff.koalacast.core.model.DownloadState.QUEUED ->
+                                        R.string.episode_pause_download
+                                    else -> R.string.episode_download
+                                },
+                            ),
+                            onClick = onToggleDownload,
+                            tint = if (
+                                state.downloadState ==
+                                net.koalastuff.koalacast.core.model.DownloadState.DONE
+                            ) colors.accentInk else colors.ink3,
                         )
                     }
 

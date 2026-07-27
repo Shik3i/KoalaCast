@@ -55,6 +55,9 @@ dependencies {
     implementation(project(":feature:profile"))
     implementation(project(":feature:account"))
     implementation(project(":feature:globalstats"))
+    implementation(project(":feature:downloads"))
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
     implementation(project(":feature:player"))
     implementation(project(":feature:settings"))
 

@@ -22,4 +22,6 @@ data class UserPreferences(
     val proxyImages: Boolean,
     /** Default playback speed; a per-show setting overrides it. */
     val playbackSpeed: Float,
+    /** Avoid metered mobile data for large episode files by default. */
+    val downloadWifiOnly: Boolean,
 )

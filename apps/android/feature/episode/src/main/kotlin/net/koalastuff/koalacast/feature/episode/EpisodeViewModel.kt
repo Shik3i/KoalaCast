@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
+import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
@@ -21,6 +22,7 @@ import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
@@ -39,6 +41,7 @@ data class EpisodeUiState(
     val transcriptLoading: Boolean = false,
     val transcript: String = "",
     val transcriptError: Boolean = false,
+    val downloadState: DownloadState? = null,
 )
 
 @HiltViewModel
@@ -46,6 +49,7 @@ class EpisodeViewModel @Inject constructor(
     private val podcasts: PodcastRepository,
     private val preferences: PreferencesRepository,
     private val library: LibraryRepository,
+    private val downloads: DownloadRepository,
     private val queue: QueueRepository,
     private val progress: ProgressRepository,
     private val player: PlayerConnection,
@@ -72,15 +76,28 @@ class EpisodeViewModel @Inject constructor(
                 library.isFavorite(episodeId),
                 queue.queuedEpisodeIds,
                 progress.completedEpisodeIds,
-            ) { favorite, queued, completed ->
-                Triple(favorite, episodeId in queued, episodeId in completed)
-            }.collect { (favorite, queued, played) ->
+                downloads.download(episodeId),
+            ) { favorite, queued, completed, download ->
+                LocalState(favorite, episodeId in queued, episodeId in completed, download?.state)
+            }.collect { local ->
                 _state.update {
-                    it.copy(isFavorite = favorite, isQueued = queued, isPlayed = played)
+                    it.copy(
+                        isFavorite = local.favorite,
+                        isQueued = local.queued,
+                        isPlayed = local.played,
+                        downloadState = local.downloadState,
+                    )
                 }
             }
         }
     }
+
+    private data class LocalState(
+        val favorite: Boolean,
+        val queued: Boolean,
+        val played: Boolean,
+        val downloadState: DownloadState?,
+    )
 
     fun retry() = load()
 
@@ -133,6 +150,20 @@ class EpisodeViewModel @Inject constructor(
     fun togglePlayed() {
         val track = track() ?: return
         viewModelScope.launch { progress.setPlayed(track, played = !_state.value.isPlayed) }
+    }
+
+    fun toggleDownload() {
+        val track = track() ?: return
+        viewModelScope.launch {
+            when (_state.value.downloadState) {
+                null, DownloadState.PAUSED, DownloadState.FAILED -> downloads.enqueue(
+                    track,
+                    wifiOnly = preferences.preferences.first().downloadWifiOnly,
+                )
+                DownloadState.QUEUED, DownloadState.DOWNLOADING -> downloads.pause(track.episodeId)
+                DownloadState.DONE -> downloads.remove(track.episodeId)
+            }
+        }
     }
 
     fun toggleTranscript() {

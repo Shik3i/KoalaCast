@@ -198,3 +198,36 @@ interface PodcastSettingsDao {
     @Query("DELETE FROM podcast_settings")
     suspend fun clear()
 }
+
+@Dao
+interface EpisodeDownloadDao {
+    @Query("SELECT * FROM episode_downloads ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<EpisodeDownloadEntity>>
+
+    @Query("SELECT * FROM episode_downloads WHERE episodeId = :episodeId")
+    fun observe(episodeId: String): Flow<EpisodeDownloadEntity?>
+
+    @Query("SELECT * FROM episode_downloads WHERE episodeId = :episodeId")
+    suspend fun get(episodeId: String): EpisodeDownloadEntity?
+
+    @Upsert
+    suspend fun upsert(download: EpisodeDownloadEntity)
+
+    @Query(
+        "UPDATE episode_downloads SET state = :state, bytesDownloaded = :bytes, " +
+            "totalBytes = :total, localPath = :path, error = :error, updatedAt = :updatedAt " +
+            "WHERE episodeId = :episodeId",
+    )
+    suspend fun updateProgress(
+        episodeId: String,
+        state: String,
+        bytes: Long,
+        total: Long,
+        path: String?,
+        error: String?,
+        updatedAt: Long,
+    )
+
+    @Query("DELETE FROM episode_downloads WHERE episodeId = :episodeId")
+    suspend fun delete(episodeId: String)
+}

@@ -1,5 +1,6 @@
 package net.koalastuff.koalacast.feature.settings
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
  * Translating legal clauses without review would create a divergent policy.
  */
 @Composable
+@SuppressLint("HardcodedText")
 fun PrivacyScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,

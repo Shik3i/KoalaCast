@@ -26,6 +26,7 @@ private fun phosphor(name: String, pathData: String): ImageVector =
     ).build()
 
 object PhosphorIcons {
+    val DownloadSimple: ImageVector by lazy { phosphor("DownloadSimple", "M128,176a8,8,0,0,1-5.66-2.34l-40-40a8,8,0,0,1,11.32-11.32L120,148.69V40a8,8,0,0,1,16,0V148.69l26.34-26.35a8,8,0,0,1,11.32,11.32l-40,40A8,8,0,0,1,128,176ZM216,168a8,8,0,0,0-8,8v32H48V176a8,8,0,0,0-16,0v32a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V176A8,8,0,0,0,216,168Z") }
     /** phosphor regular/chart-line-up */
     val ChartLine: ImageVector by lazy { phosphor("ChartLine", "M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1-8-8V40a8,8,0,0,1,16,0V152.69l50.34-50.35a8,8,0,0,1,11.32,0L128,128.69l58.34-58.35a8,8,0,0,1,11.32,0L216,88.69V64a8,8,0,0,1,16,0v44a8,8,0,0,1-8,8H180a8,8,0,0,1,0-16h24.69L192,87.31l-58.34,58.35a8,8,0,0,1-11.32,0L96,119.31l-56,56V200H224A8,8,0,0,1,232,208Z") }
 

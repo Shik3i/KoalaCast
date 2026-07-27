@@ -76,6 +76,7 @@ androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 androidx-room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltNavigationCompose" }
 
 # Network
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }

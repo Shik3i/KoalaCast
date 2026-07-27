@@ -1,6 +1,8 @@
 package net.koalastuff.koalacast
 
 import android.app.Application
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -15,7 +17,7 @@ import javax.inject.Inject
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 
 @HiltAndroidApp
-class KoalaCastApplication : Application(), SingletonImageLoader.Factory {
+class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
     /**
      * The same client the API uses, so artwork requests inherit its timeouts and — for
@@ -26,6 +28,14 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory {
 
     @Inject
     lateinit var syncCoordinator: SyncCoordinator
+
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 
     override fun onCreate() {
         super.onCreate()

@@ -21,6 +21,7 @@ object Routes {
     const val GLOBAL_STATS = "global_stats"
     const val SETTINGS = "settings"
     const val PRIVACY = "privacy"
+    const val DOWNLOADS = "downloads"
 
     const val PODCAST = "podcast?podcastId={podcastId}&feedUrl={feedUrl}"
     const val EPISODE = "episode/{episodeId}"

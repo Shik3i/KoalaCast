@@ -143,3 +143,22 @@ data class PodcastSettingsEntity(
     val speed: Float? = null,
     @ColumnInfo(defaultValue = "0") val autoQueueNew: Boolean = false,
 )
+
+@Entity(tableName = "episode_downloads", indices = [Index("state"), Index("updatedAt")])
+data class EpisodeDownloadEntity(
+    @PrimaryKey val episodeId: String,
+    val podcastId: String,
+    val title: String,
+    val podcastTitle: String,
+    val artworkUrl: String,
+    val enclosureUrl: String,
+    val durationMs: Long,
+    val categories: List<String>,
+    val state: String,
+    val bytesDownloaded: Long = 0,
+    val totalBytes: Long = 0,
+    val localPath: String? = null,
+    val error: String? = null,
+    val createdAt: Long,
+    val updatedAt: Long,
+)

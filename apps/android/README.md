@@ -220,16 +220,16 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 
 ### 4.2 Feature parity with the web client
 Web has these today; Android should match:
-- [ ] Continue Listening rail / In-Progress tab.
-- [ ] Queue (play, remove, reorder — Android should add **drag-to-reorder**, web lacks it).
+- [x] Continue Listening rail / In-Progress tab.
+- [x] Queue (play, remove, accessible up/down reorder; drag remains optional polish).
 - [ ] Dynamic per-show accent color from cover art (Coil palette).
-- [ ] OPML import/export.
-- [ ] Account: register / login / recovery code / session management.
-- [ ] Sleep timer, playback-speed persistence, media session metadata.
+- [x] OPML import/export.
+- [x] Account: register / login / recovery code / session management.
+- [x] Sleep timer, playback-speed persistence, media session metadata.
 
 ### 4.3 New features we want (some are also web TODOs — mark them shared)
-- [ ] **📥 Offline downloads** (see §5) — the headline native feature.
-- [ ] **🆕 "New / Inbox" feed** — a filtered page showing **only the newest unplayed
+- [x] **📥 Offline downloads** (see §5) — resumable, process-safe internal-storage downloads.
+- [x] **🆕 "New / Inbox" feed** — a filtered page showing **only the newest unplayed
       episodes across all subscribed podcasts**, newest first, with filters
       (unplayed / downloaded / podcast / date). **⚠️ Also required in the WEB client —
       see §8.** Needs a subscription-aware episode aggregation (client-side from
@@ -237,11 +237,11 @@ Web has these today; Android should match:
 - [ ] **Auto-download** newest N episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).
 - [ ] **Playback tuning** — variable speed with fine steps, skip-silence / volume boost
       (Media3 audio processors), per-podcast default speed.
-- [ ] **Cross-device sync** with the KoalaCast server (device token).
+- [x] **Cross-device sync** with the KoalaCast server (device token).
 - [ ] **Android Auto** support (MediaLibraryService browse tree).
 - [ ] **Home-screen widget** (now-playing + resume).
 - [ ] **Chapters** support (from ID3/`podcast:chapters` when present).
-- [ ] **Per-episode / global playback stats** (private, on-device).
+- [x] **Per-episode / global playback stats** (private, on-device).
 
 ---
 
@@ -250,16 +250,16 @@ Web has these today; Android should match:
 This is the feature users expect most from a native app and the web can't do well.
 
 Requirements:
-- [ ] Download an episode's enclosure directly from the publisher URL to app storage.
-- [ ] **Download queue** with states: queued / downloading / paused / done / failed,
+- [x] Download an episode's enclosure directly from the publisher URL to app storage.
+- [x] **Download queue** with states: queued / downloading / paused / done / failed,
       progress %, and byte size; drive it with **WorkManager** (survives process death).
-- [ ] Downloaded episodes play from local file (ExoPlayer local `MediaItem`), fully offline.
+- [x] Downloaded episodes play from local file (ExoPlayer local `MediaItem`), fully offline.
 - [ ] **Settings:** Wi-Fi-only, max concurrent downloads, storage location (internal vs
       SD/SAF), auto-delete after played, download budget / auto-cleanup by age or size.
 - [ ] **Auto-download** rules per subscription (newest N, only unplayed).
-- [ ] Downloads screen: list, total storage used, delete individual / all.
-- [ ] Respect battery + Doze; foreground service notification while downloading.
-- [ ] Handle redirects, resumable ranges, and content-length-less streams gracefully.
+- [x] Downloads screen: list, total storage used, delete individual / all.
+- [x] Respect battery + Doze; foreground service notification while downloading.
+- [x] Handle redirects, resumable ranges, and content-length-less streams gracefully.
 
 Recommended: **Media3 `DownloadManager` + `DownloadService`** for robustness (handles
 resume, notifications, requirements/constraints), with a Room mirror for UI state.
@@ -345,9 +345,9 @@ Keep the two implementations behaviorally consistent.
 2. ✅ **P1 — Browse:** Discover, Search, Podcast, Episode screens (read-only, online).
 3. ✅ **P2 — Playback:** Media3 `MediaSessionService`, mini + full player, sleep timer, speed, media session, progress persistence, queue auto-advance.
 4. ✅ **P3 — Local-first:** Room, subscribe, queue, favourites, continue-listening, offline resume, tombstones for sync.
-5. **P4 — Downloads:** download engine, downloads screen, auto-download rules.
-6. **P5 — Inbox:** "New episodes" filtered feed (coordinate with web, §8).
-7. **P6 — Account & Sync:** device-token auth, `/sync` pull/push/merge, session mgmt, OPML.
+5. ✅ **P4 — Downloads:** resumable download engine, downloads screen, offline playback. *Auto-download rules remain P7 work.*
+6. ✅ **P5 — Inbox:** "New episodes" filtered feed.
+7. ✅ **P6 — Account & Sync:** device-token auth, `/sync` pull/push/merge, session mgmt, OPML.
 8. **P7 — Delight & platform:** Android Auto, widget, chapters, transitions, haptics, polish.
 
 ---

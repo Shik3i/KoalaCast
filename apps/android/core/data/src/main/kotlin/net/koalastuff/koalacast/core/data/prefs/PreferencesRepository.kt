@@ -54,6 +54,10 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.PLAYBACK_SPEED] = speed.coerceIn(0.5f, 3f) }
     }
 
+    suspend fun setDownloadWifiOnly(enabled: Boolean) {
+        dataStore.edit { it[Keys.DOWNLOAD_WIFI_ONLY] = enabled }
+    }
+
     private fun Preferences.toUserPreferences() = UserPreferences(
         serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,
         onboardingComplete = this[Keys.ONBOARDING_COMPLETE] ?: false,
@@ -64,6 +68,7 @@ class PreferencesRepository @Inject constructor(
         category = this[Keys.CATEGORY].orEmpty(),
         proxyImages = this[Keys.PROXY_IMAGES] ?: true,
         playbackSpeed = this[Keys.PLAYBACK_SPEED] ?: 1f,
+        downloadWifiOnly = this[Keys.DOWNLOAD_WIFI_ONLY] ?: true,
     )
 
     private object Keys {
@@ -74,6 +79,7 @@ class PreferencesRepository @Inject constructor(
         val CATEGORY = stringPreferencesKey("category")
         val PROXY_IMAGES = booleanPreferencesKey("proxy_images")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
+        val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
     }
 }
 

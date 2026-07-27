@@ -21,14 +21,16 @@ object TrackMediaItem {
     private const val KEY_DURATION_MS = "koalacast.durationMs"
     private const val KEY_ARTWORK_URL = "koalacast.artworkUrl"
     private const val KEY_CATEGORIES = "koalacast.categories"
+    private const val KEY_ENCLOSURE_URL = "koalacast.enclosureUrl"
 
-    fun from(track: Track, artworkUri: String? = null): MediaItem {
+    fun from(track: Track, artworkUri: String? = null, mediaUri: String? = null): MediaItem {
         val extras = Bundle().apply {
             putString(KEY_PODCAST_ID, track.podcastId)
             putString(KEY_PODCAST_TITLE, track.podcastTitle)
             putLong(KEY_DURATION_MS, track.durationMs)
             putString(KEY_ARTWORK_URL, track.artworkUrl)
             putStringArray(KEY_CATEGORIES, track.categories.toTypedArray())
+            putString(KEY_ENCLOSURE_URL, track.enclosureUrl)
         }
 
         val metadata = MediaMetadata.Builder()
@@ -43,7 +45,7 @@ object TrackMediaItem {
 
         return MediaItem.Builder()
             .setMediaId(track.episodeId)
-            .setUri(track.enclosureUrl)
+            .setUri(mediaUri ?: track.enclosureUrl)
             .setMediaMetadata(metadata)
             .build()
     }
@@ -58,7 +60,8 @@ object TrackMediaItem {
             title = metadata.title?.toString().orEmpty(),
             podcastTitle = extras.getString(KEY_PODCAST_TITLE).orEmpty(),
             artworkUrl = extras.getString(KEY_ARTWORK_URL).orEmpty(),
-            enclosureUrl = item.localConfiguration?.uri?.toString().orEmpty(),
+            enclosureUrl = extras.getString(KEY_ENCLOSURE_URL)
+                ?: item.localConfiguration?.uri?.toString().orEmpty(),
             durationMs = extras.getLong(KEY_DURATION_MS),
             categories = extras.getStringArray(KEY_CATEGORIES)?.toList().orEmpty(),
         )

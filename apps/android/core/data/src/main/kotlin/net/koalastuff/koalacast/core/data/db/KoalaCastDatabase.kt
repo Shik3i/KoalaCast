@@ -36,8 +36,9 @@ class Converters {
         ListeningSessionEntity::class,
         TombstoneEntity::class,
         PodcastSettingsEntity::class,
+        EpisodeDownloadEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -49,6 +50,7 @@ abstract class KoalaCastDatabase : RoomDatabase() {
     abstract fun listeningSessionDao(): ListeningSessionDao
     abstract fun tombstoneDao(): TombstoneDao
     abstract fun podcastSettingsDao(): PodcastSettingsDao
+    abstract fun episodeDownloadDao(): EpisodeDownloadDao
 
     companion object {
         const val NAME = "koalacast.db"

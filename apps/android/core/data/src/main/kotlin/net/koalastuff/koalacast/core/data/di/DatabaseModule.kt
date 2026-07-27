@@ -16,6 +16,8 @@ import net.koalastuff.koalacast.core.data.db.PodcastSettingsDao
 import net.koalastuff.koalacast.core.data.db.QueueDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionDao
 import net.koalastuff.koalacast.core.data.db.TombstoneDao
+import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
+import net.koalastuff.koalacast.core.data.db.MIGRATION_1_2
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.data.util.SystemClock
 import javax.inject.Singleton
@@ -31,6 +33,7 @@ object DatabaseModule {
             // No fallbackToDestructiveMigration: this database holds the listener's
             // entire library on a device that may never have synced. Losing it to a
             // schema bump would be losing their data.
+            .addMigrations(MIGRATION_1_2)
             .build()
 
     @Provides fun provideSubscriptionDao(db: KoalaCastDatabase): SubscriptionDao = db.subscriptionDao()
@@ -40,6 +43,7 @@ object DatabaseModule {
     @Provides fun provideListeningSessionDao(db: KoalaCastDatabase): ListeningSessionDao = db.listeningSessionDao()
     @Provides fun provideTombstoneDao(db: KoalaCastDatabase): TombstoneDao = db.tombstoneDao()
     @Provides fun providePodcastSettingsDao(db: KoalaCastDatabase): PodcastSettingsDao = db.podcastSettingsDao()
+    @Provides fun provideEpisodeDownloadDao(db: KoalaCastDatabase): EpisodeDownloadDao = db.episodeDownloadDao()
 }
 
 @Module

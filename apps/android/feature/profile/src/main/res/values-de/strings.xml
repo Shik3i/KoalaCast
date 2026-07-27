@@ -3,6 +3,7 @@
     <string name="profile_title">Hörprofil</string>
     <string name="profile_settings">Einstellungen</string>
     <string name="profile_account">Konto</string>
+    <string name="profile_downloads">Downloads</string>
     <string name="profile_tracking_starts">Aufzeichnung beginnt mit der ersten Wiedergabe</string>
     <string name="profile_summary">%1$s · %2$d Abos · %3$d Sendungen gehört</string>
     <string name="profile_year">Dieses Jahr</string>
