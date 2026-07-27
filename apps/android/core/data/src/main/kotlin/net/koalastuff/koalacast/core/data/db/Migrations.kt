@@ -3,6 +3,16 @@ package net.koalastuff.koalacast.core.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Opt-in per show, so the default has to be off for everyone who already
+        // had settings rows before auto-download existed.
+        db.execSQL(
+            "ALTER TABLE `podcast_settings` ADD COLUMN `autoDownload` INTEGER NOT NULL DEFAULT 0",
+        )
+    }
+}
+
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(

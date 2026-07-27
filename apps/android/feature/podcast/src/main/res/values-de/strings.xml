@@ -26,4 +26,7 @@
     <string name="podcast_auto_queue">Neueste ungehörte Folge automatisch einreihen</string>
     <string name="podcast_mark_all_played">Alle als gehört</string>
     <string name="podcast_mark_all_unplayed">Alle als ungehört</string>
+    <string name="podcast_auto_download">Neue Folgen herunterladen</string>
+    <string name="podcast_auto_download_note">Holt neue Folgen über WLAN, sobald sie erscheinen.</string>
+    <string name="podcast_auto_download_needs_sub">Abonniere die Sendung, um neue Folgen automatisch zu laden.</string>
 </resources>

@@ -17,7 +17,7 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_dark">Dunkel</string>
-    <string name="settings_theme_note">Dunkel ist die Heimat des Designs – der Mint-Akzent erreicht seinen vollen Kontrast nur auf dunklem Grund.</string>
+    <string name="settings_theme_note">Dunkel ist die Heimat des Designs – die Akzentfarbe erreicht ihren vollen Kontrast nur auf dunklem Grund.</string>
 
     <string name="settings_languages_title">Gesprochene Sprachen</string>
     <string name="settings_languages_note">Filtert Entdecken und Suche nach der Sprache, in der eine Sendung tatsächlich läuft – nicht nach Store-Region. Keine Auswahl heißt: alles.</string>
@@ -33,4 +33,34 @@
     <string name="settings_downloads_title">Downloads</string>
     <string name="settings_download_wifi">Nur über WLAN laden</string>
     <string name="settings_download_wifi_note">Ausschalten, um Folgen auch über mobile Daten zu laden.</string>
+    <string name="settings_palette_title">Farbpalette</string>
+    <string name="settings_palette_note">Neun Paletten, dieselben neun wie in der Web-App. Jede gibt es hell und dunkel.</string>
+    <string name="settings_palette_eucalyptus">Eukalyptus</string>
+    <string name="settings_palette_eucalyptus_desc">Das ruhige KoalaCast-Original</string>
+    <string name="settings_palette_fjord">Fjord</string>
+    <string name="settings_palette_fjord_desc">Kühl, blau und klar</string>
+    <string name="settings_palette_ember">Glut</string>
+    <string name="settings_palette_ember_desc">Warmes Kupfer bei Nacht</string>
+    <string name="settings_palette_lavender">Lavendel</string>
+    <string name="settings_palette_lavender_desc">Sanftes Violett mit Fokus</string>
+    <string name="settings_palette_aurora">Nordlicht</string>
+    <string name="settings_palette_aurora_desc">Frisches Türkis mit Kontrast</string>
+    <string name="settings_palette_sandstone">Sandstein</string>
+    <string name="settings_palette_sandstone_desc">Ruhiger Sand und Gold</string>
+    <string name="settings_palette_obsidian">Obsidian</string>
+    <string name="settings_palette_obsidian_desc">Rein monochrom ohne Farbe</string>
+    <string name="settings_palette_paper">Papier</string>
+    <string name="settings_palette_paper_desc">Warme Druckerschwärze und Creme</string>
+    <string name="settings_palette_ultraviolet">Ultraviolett</string>
+    <string name="settings_palette_ultraviolet_desc">Elektrischer Kontrast bei Nacht</string>
+    <string name="settings_auto_download_title">Automatische Downloads</string>
+    <string name="settings_auto_download_note">Pro Sendung auf deren Seite aktivieren. Diese Einstellungen gelten dann für alle.</string>
+    <string name="settings_auto_download_count">Folgen pro Sendung behalten</string>
+    <string name="settings_retention_title">Downloads löschen</string>
+    <string name="settings_retention_keep">Nie</string>
+    <string name="settings_retention_finished">Nach dem Anhören</string>
+    <string name="settings_retention_7">Nach 7 Tagen</string>
+    <string name="settings_retention_14">Nach 14 Tagen</string>
+    <string name="settings_retention_30">Nach 30 Tagen</string>
+    <string name="settings_retention_note">Es werden nur heruntergeladene Dateien entfernt. Abos, Warteschlange und deine Position bleiben unberührt.</string>
 </resources>

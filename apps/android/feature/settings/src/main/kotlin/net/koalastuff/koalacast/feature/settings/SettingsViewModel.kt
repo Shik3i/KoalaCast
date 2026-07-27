@@ -12,7 +12,9 @@ import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.ServerRepository
 import net.koalastuff.koalacast.core.data.server.ServerUrl
 import net.koalastuff.koalacast.core.model.DataError
+import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DataResult
+import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
 import javax.inject.Inject
@@ -85,6 +87,18 @@ class SettingsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun setAutoDownloadCount(count: Int) {
+        viewModelScope.launch { preferences.setAutoDownloadCount(count) }
+    }
+
+    fun setDownloadRetention(retention: DownloadRetention) {
+        viewModelScope.launch { preferences.setDownloadRetention(retention) }
+    }
+
+    fun setPalette(palette: PaletteId) {
+        viewModelScope.launch { preferences.setPalette(palette) }
     }
 
     fun setThemeMode(mode: ThemeMode) {

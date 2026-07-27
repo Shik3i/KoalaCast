@@ -192,6 +192,10 @@ interface PodcastSettingsDao {
     @Query("SELECT * FROM podcast_settings WHERE podcastId = :podcastId")
     fun observe(podcastId: String): Flow<PodcastSettingsEntity?>
 
+    /** The shows the auto-download worker has to consider. */
+    @Query("SELECT * FROM podcast_settings WHERE autoDownload = 1")
+    suspend fun autoDownloadEnabled(): List<PodcastSettingsEntity>
+
     @Upsert
     suspend fun upsert(settings: PodcastSettingsEntity)
 

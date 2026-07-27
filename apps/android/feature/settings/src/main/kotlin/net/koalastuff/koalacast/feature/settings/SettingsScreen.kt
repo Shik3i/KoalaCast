@@ -2,18 +2,23 @@
 
 package net.koalastuff.koalacast.feature.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
@@ -23,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -30,18 +36,23 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DataError
+import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.genre.GENRES
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
+import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
+import net.koalastuff.koalacast.core.ui.theme.koalaColors
 import net.koalastuff.koalacast.core.ui.R as CoreR
 
 @Composable
@@ -58,11 +69,14 @@ fun SettingsScreen(
         onServerDraftChange = viewModel::onServerDraftChange,
         onSaveServer = viewModel::saveServer,
         onThemeModeChange = viewModel::setThemeMode,
+        onPaletteChange = viewModel::setPalette,
         onToggleLanguage = viewModel::toggleLanguage,
         onSelectCategory = viewModel::setCategory,
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
+        onAutoDownloadCountChange = viewModel::setAutoDownloadCount,
+        onRetentionChange = viewModel::setDownloadRetention,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -74,11 +88,14 @@ internal fun SettingsContent(
     onServerDraftChange: (String) -> Unit,
     onSaveServer: () -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onPaletteChange: (PaletteId) -> Unit,
     onToggleLanguage: (String) -> Unit,
     onSelectCategory: (String) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
+    onAutoDownloadCountChange: (Int) -> Unit,
+    onRetentionChange: (DownloadRetention) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -173,6 +190,20 @@ internal fun SettingsContent(
 
         Hairline()
 
+        Section(title = stringResource(R.string.settings_palette_title)) {
+            Text(
+                text = stringResource(R.string.settings_palette_note),
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink3,
+            )
+            PalettePicker(
+                selected = prefs?.palette ?: PaletteId.DEFAULT,
+                onSelect = onPaletteChange,
+            )
+        }
+
+        Hairline()
+
         Section(title = stringResource(R.string.settings_languages_title)) {
             Text(
                 text = stringResource(R.string.settings_languages_note),
@@ -253,6 +284,47 @@ internal fun SettingsContent(
 
         Hairline()
 
+        Section(title = stringResource(R.string.settings_auto_download_title)) {
+            Text(
+                text = stringResource(R.string.settings_auto_download_note),
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink3,
+            )
+            Text(
+                text = stringResource(R.string.settings_auto_download_count),
+                style = KoalaTheme.type.label,
+                color = colors.ink2,
+            )
+            val counts = listOf(1, 3, 5, 10)
+            SegmentedControl(
+                options = counts.map { it.toString() },
+                selectedIndex = counts.indexOf(prefs?.autoDownloadCount ?: 3).coerceAtLeast(0),
+                onSelect = { onAutoDownloadCountChange(counts[it]) },
+            )
+
+            Text(
+                text = stringResource(R.string.settings_retention_title),
+                style = KoalaTheme.type.label,
+                color = colors.ink2,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                DownloadRetention.entries.forEach { rule ->
+                    KoalaChip(
+                        label = stringResource(rule.labelRes()),
+                        selected = (prefs?.downloadRetention ?: DownloadRetention.DEFAULT) == rule,
+                        onClick = { onRetentionChange(rule) },
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.settings_retention_note),
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink4,
+            )
+        }
+
+        Hairline()
+
         Section(title = stringResource(R.string.settings_privacy_title)) {
             Row(
                 modifier = Modifier
@@ -297,6 +369,111 @@ internal fun SettingsContent(
             )
         }
     }
+}
+
+/**
+ * The same nine palettes the web client offers, in the same order. Each row shows
+ * the palette in *its own* colours rather than the current theme's, so the choice
+ * is made by looking rather than by reading the name.
+ */
+@Composable
+private fun PalettePicker(
+    selected: PaletteId,
+    onSelect: (PaletteId) -> Unit,
+) {
+    val current = KoalaTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+        PaletteId.entries.forEach { palette ->
+            val preview = koalaColors(palette, dark = current.isDark)
+            val isSelected = palette == selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(KoalaShapes.card)
+                    .background(preview.bgPanel)
+                    .border(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        // The row's own accent, not the current theme's: only a
+                        // palette's own accent is guaranteed to contrast against
+                        // the panel colour it is being drawn on.
+                        color = if (isSelected) preview.accentInk else preview.borderHair,
+                        shape = KoalaShapes.card,
+                    )
+                    .clickable { onSelect(palette) }
+                    .padding(KoalaSpacing.gap),
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    listOf(preview.bgApp, preview.bgSunken, preview.accentFill, preview.ink)
+                        .forEach { swatch ->
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(swatch)
+                                    .border(1.dp, preview.borderHair, RoundedCornerShape(3.dp)),
+                            )
+                        }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(palette.labelRes()),
+                        style = KoalaTheme.type.listTitle,
+                        color = preview.inkStrong,
+                    )
+                    Text(
+                        text = stringResource(palette.descriptionRes()),
+                        style = KoalaTheme.type.bodySmall,
+                        color = preview.ink3,
+                    )
+                }
+                if (isSelected) {
+                    PhosphorIcon(
+                        icon = PhosphorIcons.CheckCircleFill,
+                        contentDescription = null,
+                        tint = preview.accentInk,
+                        size = 18.dp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@StringRes
+private fun DownloadRetention.labelRes(): Int = when (this) {
+    DownloadRetention.KEEP -> R.string.settings_retention_keep
+    DownloadRetention.WHEN_FINISHED -> R.string.settings_retention_finished
+    DownloadRetention.AFTER_7_DAYS -> R.string.settings_retention_7
+    DownloadRetention.AFTER_14_DAYS -> R.string.settings_retention_14
+    DownloadRetention.AFTER_30_DAYS -> R.string.settings_retention_30
+}
+
+@StringRes
+private fun PaletteId.labelRes(): Int = when (this) {
+    PaletteId.EUCALYPTUS -> R.string.settings_palette_eucalyptus
+    PaletteId.FJORD -> R.string.settings_palette_fjord
+    PaletteId.EMBER -> R.string.settings_palette_ember
+    PaletteId.LAVENDER -> R.string.settings_palette_lavender
+    PaletteId.AURORA -> R.string.settings_palette_aurora
+    PaletteId.SANDSTONE -> R.string.settings_palette_sandstone
+    PaletteId.OBSIDIAN -> R.string.settings_palette_obsidian
+    PaletteId.PAPER -> R.string.settings_palette_paper
+    PaletteId.ULTRAVIOLET -> R.string.settings_palette_ultraviolet
+}
+
+@StringRes
+private fun PaletteId.descriptionRes(): Int = when (this) {
+    PaletteId.EUCALYPTUS -> R.string.settings_palette_eucalyptus_desc
+    PaletteId.FJORD -> R.string.settings_palette_fjord_desc
+    PaletteId.EMBER -> R.string.settings_palette_ember_desc
+    PaletteId.LAVENDER -> R.string.settings_palette_lavender_desc
+    PaletteId.AURORA -> R.string.settings_palette_aurora_desc
+    PaletteId.SANDSTONE -> R.string.settings_palette_sandstone_desc
+    PaletteId.OBSIDIAN -> R.string.settings_palette_obsidian_desc
+    PaletteId.PAPER -> R.string.settings_palette_paper_desc
+    PaletteId.ULTRAVIOLET -> R.string.settings_palette_ultraviolet_desc
 }
 
 @Composable

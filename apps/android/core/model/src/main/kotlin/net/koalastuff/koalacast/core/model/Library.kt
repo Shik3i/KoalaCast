@@ -62,7 +62,43 @@ data class PodcastSettings(
     /** null means "use the global default speed". */
     val speed: Float? = null,
     val autoQueueNew: Boolean = false,
+    /**
+     * Opt in, per show: fetch the newest episodes as they appear. Off by default
+     * because downloading on someone's behalf spends their storage and, on a
+     * metered connection, their money.
+     */
+    val autoDownload: Boolean = false,
 )
+
+/**
+ * When an automatically downloaded episode may be deleted again. Applies only to
+ * downloads; a subscription or playback position is never touched by this.
+ */
+enum class DownloadRetention(val id: String) {
+    /** Never delete automatically — the listener cleans up by hand. */
+    KEEP("keep"),
+    WHEN_FINISHED("finished"),
+    AFTER_7_DAYS("7d"),
+    AFTER_14_DAYS("14d"),
+    AFTER_30_DAYS("30d"),
+    ;
+
+    /** Null when the rule is not time-based. */
+    val maxAgeMs: Long?
+        get() = when (this) {
+            KEEP, WHEN_FINISHED -> null
+            AFTER_7_DAYS -> 7L * 24 * 60 * 60 * 1000
+            AFTER_14_DAYS -> 14L * 24 * 60 * 60 * 1000
+            AFTER_30_DAYS -> 30L * 24 * 60 * 60 * 1000
+        }
+
+    companion object {
+        val DEFAULT = KEEP
+
+        fun fromId(value: String?): DownloadRetention =
+            entries.firstOrNull { it.id == value } ?: DEFAULT
+    }
+}
 
 enum class DownloadState { QUEUED, DOWNLOADING, PAUSED, DONE, FAILED }
 

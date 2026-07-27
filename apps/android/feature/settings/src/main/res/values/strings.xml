@@ -17,7 +17,7 @@
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
-    <string name="settings_theme_note">Dark is the design\'s home ground — the mint accent only reaches full contrast on a dark surface.</string>
+    <string name="settings_theme_note">Dark is the design\'s home ground — an accent colour only reaches full contrast on a dark surface.</string>
 
     <string name="settings_languages_title">Spoken languages</string>
     <string name="settings_languages_note">Filters Discover and Search by the language a show is actually in, not by store region. Pick none to see everything.</string>
@@ -33,4 +33,34 @@
     <string name="settings_downloads_title">Downloads</string>
     <string name="settings_download_wifi">Download on Wi-Fi only</string>
     <string name="settings_download_wifi_note">Disable to allow episode downloads over metered mobile data.</string>
+    <string name="settings_palette_title">Color palette</string>
+    <string name="settings_palette_note">Nine palettes, the same nine the web app has. Each one has a light and a dark version.</string>
+    <string name="settings_palette_eucalyptus">Eucalyptus</string>
+    <string name="settings_palette_eucalyptus_desc">The calm KoalaCast original</string>
+    <string name="settings_palette_fjord">Fjord</string>
+    <string name="settings_palette_fjord_desc">Cool blue and clear</string>
+    <string name="settings_palette_ember">Ember</string>
+    <string name="settings_palette_ember_desc">Warm copper after dark</string>
+    <string name="settings_palette_lavender">Lavender</string>
+    <string name="settings_palette_lavender_desc">Soft violet and focused</string>
+    <string name="settings_palette_aurora">Aurora</string>
+    <string name="settings_palette_aurora_desc">Fresh teal with contrast</string>
+    <string name="settings_palette_sandstone">Sandstone</string>
+    <string name="settings_palette_sandstone_desc">Quiet sand and gold</string>
+    <string name="settings_palette_obsidian">Obsidian</string>
+    <string name="settings_palette_obsidian_desc">Pure monochrome without color</string>
+    <string name="settings_palette_paper">Paper</string>
+    <string name="settings_palette_paper_desc">Warm editorial ink and cream</string>
+    <string name="settings_palette_ultraviolet">Ultraviolet</string>
+    <string name="settings_palette_ultraviolet_desc">Electric contrast after dark</string>
+    <string name="settings_auto_download_title">Automatic downloads</string>
+    <string name="settings_auto_download_note">Turn this on per show, on its own page. These settings then apply to all of them.</string>
+    <string name="settings_auto_download_count">Episodes to keep per show</string>
+    <string name="settings_retention_title">Delete downloads</string>
+    <string name="settings_retention_keep">Never</string>
+    <string name="settings_retention_finished">When finished</string>
+    <string name="settings_retention_7">After 7 days</string>
+    <string name="settings_retention_14">After 14 days</string>
+    <string name="settings_retention_30">After 30 days</string>
+    <string name="settings_retention_note">Only downloaded files are removed. Subscriptions, the queue and your position are never touched.</string>
 </resources>

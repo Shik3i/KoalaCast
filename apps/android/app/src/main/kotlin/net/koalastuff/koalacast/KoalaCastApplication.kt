@@ -14,6 +14,7 @@ import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import javax.inject.Inject
+import net.koalastuff.koalacast.core.data.repository.AutoDownloadWorker
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 
 @HiltAndroidApp
@@ -40,6 +41,9 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     override fun onCreate() {
         super.onCreate()
         syncCoordinator.start()
+        // Idempotent (KEEP policy), so registering on every start costs nothing
+        // and survives a reboot or an app update clearing the schedule.
+        AutoDownloadWorker.schedule(this)
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
