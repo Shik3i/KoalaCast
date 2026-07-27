@@ -10,6 +10,7 @@
     <string name="player_sleep_timer">Sleep-Timer</string>
     <string name="player_sleep_off">Aus</string>
     <string name="player_sleep_minutes">%1$d Min.</string>
+    <string name="player_sleep_chapter_end">Ende des Kapitels</string>
     <string name="player_sleep_episode_end">Ende der Folge</string>
     <string name="player_previous_chapter">Vorheriges Kapitel</string>
     <string name="player_next_chapter">Nächstes Kapitel</string>

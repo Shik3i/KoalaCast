@@ -46,6 +46,7 @@ data class PlaybackUiState(
     /** The preset the listener picked, so the control can show which one is on. */
     val sleepMinutes: Int? = null,
     val sleepAtEpisodeEnd: Boolean = false,
+    val sleepAtChapterEnd: Boolean = false,
     val upNextCount: Int = 0,
 ) {
     val isActive: Boolean get() = track != null
@@ -205,29 +206,35 @@ class PlayerConnection @Inject constructor(
      * @param minutes null clears the timer; [atEpisodeEnd] stops when the current
      *   episode finishes instead of at a wall-clock instant.
      */
-    fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false) {
+    fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
         sleepJob?.cancel()
+        if (atChapterEnd) {
+            _state.update {
+                it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtEpisodeEnd = false, sleepAtChapterEnd = true)
+            }
+            return
+        }
         if (atEpisodeEnd) {
             _state.update {
-                it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtEpisodeEnd = true)
+                it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtEpisodeEnd = true, sleepAtChapterEnd = false)
             }
             return
         }
         if (minutes == null) {
             _state.update {
-                it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtEpisodeEnd = false)
+                it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtEpisodeEnd = false, sleepAtChapterEnd = false)
             }
             return
         }
 
         val endsAt = System.currentTimeMillis() + minutes * 60_000L
         _state.update {
-            it.copy(sleepAtMs = endsAt, sleepMinutes = minutes, sleepAtEpisodeEnd = false)
+            it.copy(sleepAtMs = endsAt, sleepMinutes = minutes, sleepAtEpisodeEnd = false, sleepAtChapterEnd = false)
         }
         sleepJob = scope.launch {
             delay(minutes * 60_000L)
             onController { it.pause() }
-            _state.update { it.copy(sleepAtMs = null, sleepMinutes = null) }
+            _state.update { it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtChapterEnd = false) }
         }
     }
 
@@ -252,8 +259,8 @@ class PlayerConnection @Inject constructor(
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED && _state.value.sleepAtEpisodeEnd) {
-                setSleepTimer(minutes = null, atEpisodeEnd = false)
+            if (playbackState == Player.STATE_ENDED && (_state.value.sleepAtEpisodeEnd || _state.value.sleepAtChapterEnd)) {
+                setSleepTimer(minutes = null, atEpisodeEnd = false, atChapterEnd = false)
                 onController { it.pause() }
             }
             syncFromController()

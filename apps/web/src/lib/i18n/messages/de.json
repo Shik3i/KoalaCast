@@ -473,6 +473,8 @@
 		"loadError": "Audio konnte nicht geladen werden — möglicherweise blockiert ein Tracking-/Werbeblocker die Datei.",
 		"sleepOff": "Aus",
 		"sleepTimerOff": "Sleep-Timer aus",
+		"sleepChapterEnd": "Ende des Kapitels",
+		"sleepEpisodeEnd": "Ende der Folge",
 		"boost": "Verstärken",
 		"trimSilence": "Stille kürzen",
 		"playing": "Läuft",

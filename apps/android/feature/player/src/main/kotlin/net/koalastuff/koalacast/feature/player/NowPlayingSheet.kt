@@ -85,7 +85,7 @@ internal fun NowPlayingContent(
     onSeekForward: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onCycleSpeed: () -> Unit,
-    onSetSleepTimer: (Int?, Boolean) -> Unit,
+    onSetSleepTimer: (Int?, Boolean, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KoalaTheme.colors
@@ -335,11 +335,12 @@ private fun ChapterRow(
 @Composable
 private fun SleepTimerRow(
     state: PlaybackUiState,
-    onSetSleepTimer: (Int?, Boolean) -> Unit,
+    onSetSleepTimer: (Int?, Boolean, Boolean) -> Unit,
 ) {
     val options = listOf<Int?>(null, 5, 15, 30)
     val selectedIndex = when {
-        state.sleepAtEpisodeEnd -> 4
+        state.sleepAtChapterEnd -> 4
+        state.sleepAtEpisodeEnd -> 5
         else -> options.indexOf(state.sleepMinutes).takeIf { it >= 0 } ?: 0
     }
 
@@ -366,14 +367,15 @@ private fun SleepTimerRow(
                 stringResource(R.string.player_sleep_minutes, 5),
                 stringResource(R.string.player_sleep_minutes, 15),
                 stringResource(R.string.player_sleep_minutes, 30),
+                stringResource(R.string.player_sleep_chapter_end),
                 stringResource(R.string.player_sleep_episode_end),
             ),
             selectedIndex = selectedIndex,
             onSelect = { index ->
-                if (index == 4) {
-                    onSetSleepTimer(null, true)
-                } else {
-                    onSetSleepTimer(options[index], false)
+                when (index) {
+                    4 -> onSetSleepTimer(null, false, true)
+                    5 -> onSetSleepTimer(null, true, false)
+                    else -> onSetSleepTimer(options[index], false, false)
                 }
             },
             modifier = Modifier.fillMaxWidth(),

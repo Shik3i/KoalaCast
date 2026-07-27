@@ -473,6 +473,8 @@
 		"loadError": "Audio couldn't be loaded — a tracking/ad blocker may be blocking the file.",
 		"sleepOff": "Off",
 		"sleepTimerOff": "Sleep off",
+		"sleepChapterEnd": "End of chapter",
+		"sleepEpisodeEnd": "End of episode",
 		"boost": "Boost",
 		"trimSilence": "Trim Silence",
 		"playing": "Playing",

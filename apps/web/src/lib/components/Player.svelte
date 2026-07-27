@@ -99,6 +99,18 @@
 		return -1;
 	});
 
+	let previousChapterIndex = $state(-1);
+	$effect(() => {
+		const currentIdx = activeChapterIndex;
+		if (player.sleepAtChapterEnd && previousChapterIndex >= 0 && currentIdx > previousChapterIndex) {
+			if (audioEl) audioEl.pause();
+			isPlaying = false;
+			player.sleepAtChapterEnd = false;
+			toast.info(t('player.sleepTimer'));
+		}
+		previousChapterIndex = currentIdx;
+	});
+
 	function toggleVolumeBoost() {
 		volumeBoost = !volumeBoost;
 		if (audioEl) audioEngine.init(audioEl);
@@ -629,8 +641,9 @@
 					{/if}
 				</div>
 				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
-					<option value="">◐ {t('player.sleepOff')}</option>
-					<option value="episode">{t('player.endOfEpisode')}</option>
+					<option value="" selected={!player.sleepTimerEndsAt && !player.sleepAtEpisodeEnd && !player.sleepAtChapterEnd}>◐ {t('player.sleepOff')}</option>
+					<option value="chapter" selected={player.sleepAtChapterEnd}>⏳ {t('player.sleepChapterEnd')}</option>
+					<option value="episode" selected={player.sleepAtEpisodeEnd}>⌛ {t('player.sleepEpisodeEnd')}</option>
 					<option value="15">15 min</option>
 					<option value="30">30 min</option>
 					<option value="45">45 min</option>

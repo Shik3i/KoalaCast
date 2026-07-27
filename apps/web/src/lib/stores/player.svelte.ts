@@ -49,6 +49,7 @@ class PlayerStore {
 	defaultPlaybackSpeed = $state(1);
 	sleepTimerEndsAt = $state<number | null>(null);
 	sleepAtEpisodeEnd = $state(false);
+	sleepAtChapterEnd = $state(false);
 	positionMs = $state(0);
 	durationMs = $state(0);
 
@@ -91,7 +92,8 @@ class PlayerStore {
 
 	setSleepTimer(value: string) {
 		this.sleepAtEpisodeEnd = value === 'episode';
-		if (value === '' || value === 'episode') this.sleepTimerEndsAt = null;
+		this.sleepAtChapterEnd = value === 'chapter';
+		if (value === '' || value === 'episode' || value === 'chapter') this.sleepTimerEndsAt = null;
 		else this.sleepTimerEndsAt = Date.now() + Number(value) * 60_000;
 	}
 
