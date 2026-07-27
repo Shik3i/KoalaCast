@@ -19,9 +19,32 @@ const MOOD_CATEGORIES: Record<DiscoverMood, string[]> = {
 	focus: ['business', 'education', 'technology', 'science', 'news']
 };
 
+const CATEGORY_ALIASES: Record<string, string> = {
+	kunst: 'arts',
+	wirtschaft: 'business',
+	bildung: 'education',
+	'gesundheit & fitness': 'health & fitness',
+	'gesundheit und fitness': 'health & fitness',
+	geschichte: 'history',
+	'kinder & familie': 'kids & family',
+	'kinder und familie': 'kids & family',
+	freizeit: 'leisure',
+	musik: 'music',
+	nachrichten: 'news',
+	politik: 'news',
+	'religion & spiritualität': 'religion & spirituality',
+	'religion und spiritualität': 'religion & spirituality',
+	wissenschaft: 'science',
+	'gesellschaft & kultur': 'society & culture',
+	'gesellschaft und kultur': 'society & culture',
+	sport: 'sports',
+	technologie: 'technology'
+};
+
 function categories(podcast: DiscoverPodcast): string[] {
 	return [...(podcast.categories ?? []), podcast.category ?? '']
 		.map((category) => category.trim().toLowerCase())
+		.map((category) => CATEGORY_ALIASES[category] ?? category)
 		.filter(Boolean);
 }
 
@@ -32,14 +55,7 @@ function moodScore(podcast: DiscoverPodcast, mood: DiscoverMood): number {
 		(score, category, index) => score + (values.includes(category) ? priorities.length - index : 0),
 		0
 	);
-	const text = `${podcast.title} ${podcast.author}`.toLowerCase();
-	const textTerms: Record<DiscoverMood, string[]> = {
-		calm: ['calm', 'sleep', 'mindful', 'wellness', 'meditation'],
-		curious: ['science', 'history', 'learn', 'idea', 'technology'],
-		company: ['comedy', 'chat', 'talk', 'friends', 'daily'],
-		focus: ['business', 'work', 'code', 'news', 'productivity']
-	};
-	return categoryScore * 10 + textTerms[mood].filter((term) => text.includes(term)).length;
+	return categoryScore;
 }
 
 export function arrangeDiscover(
@@ -55,15 +71,28 @@ export function arrangeDiscover(
 	const filtered = options.fitsSession && options.sessionMinutes !== null
 		? podcasts.filter(
 				(podcast) =>
-					typeof podcast.latestDurationMs === 'number' &&
-					podcast.latestDurationMs > 0 &&
+					typeof podcast.latestDurationMs !== 'number' ||
+					podcast.latestDurationMs <= 0 ||
 					podcast.latestDurationMs <= sessionMs
 			)
 		: [...podcasts];
 
 	return filtered
-		.map((podcast, index) => ({ podcast, index, mood: moodScore(podcast, options.mood) }))
+		.map((podcast, index) => ({
+			podcast,
+			index,
+			mood: moodScore(podcast, options.mood),
+			verifiedFit:
+				options.fitsSession &&
+				options.sessionMinutes !== null &&
+				typeof podcast.latestDurationMs === 'number' &&
+				podcast.latestDurationMs > 0 &&
+				podcast.latestDurationMs <= sessionMs
+					? 1
+					: 0
+		}))
 		.sort((a, b) => {
+			if (a.verifiedFit !== b.verifiedFit) return b.verifiedFit - a.verifiedFit;
 			if (options.sort === 'length') {
 				const aDuration = a.podcast.latestDurationMs ?? Number.POSITIVE_INFINITY;
 				const bDuration = b.podcast.latestDurationMs ?? Number.POSITIVE_INFINITY;

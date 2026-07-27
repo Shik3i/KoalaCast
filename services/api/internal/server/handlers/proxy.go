@@ -126,7 +126,9 @@ var imageFallbackWebP []byte
 func writeImageFallback(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "image/webp")
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageFallbackWebP)))
-	w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600")
+	// This is a transient upstream failure, not the requested artwork. Browsers
+	// and the service worker must retry rather than pinning the placeholder.
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-KoalaCast-Image-Fallback", "true")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(imageFallbackWebP)

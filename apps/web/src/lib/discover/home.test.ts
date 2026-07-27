@@ -19,6 +19,44 @@ describe('arrangeDiscover', () => {
 		expect(arrangeDiscover(podcasts, { mood: 'focus', sort: 'rank', sessionMinutes: null, fitsSession: true })).toHaveLength(3);
 	});
 
+	it('keeps unknown durations visible while metadata loads and ranks verified fits first', () => {
+		const withUnknown = [
+			{ id: 'unknown', title: 'Unknown', author: 'A', categories: ['Science'], sourceRank: 0 },
+			...podcasts
+		];
+		expect(
+			arrangeDiscover(withUnknown, {
+				mood: 'focus',
+				sort: 'rank',
+				sessionMinutes: 40,
+				fitsSession: true
+			}).map((podcast) => podcast.id)
+		).toEqual(['science', 'comedy', 'unknown']);
+	});
+
+	it('matches localized category metadata without pretending to analyse audio', () => {
+		const localized = [
+			{ id: 'politik', title: 'Lage', author: 'A', categories: ['Politik'], sourceRank: 0 },
+			{ id: 'sport', title: 'Arena', author: 'B', categories: ['Sport'], sourceRank: 1 }
+		];
+		expect(
+			arrangeDiscover(localized, {
+				mood: 'company',
+				sort: 'momentum',
+				sessionMinutes: null,
+				fitsSession: false
+			})[0].id
+		).toBe('sport');
+		expect(
+			arrangeDiscover(localized, {
+				mood: 'curious',
+				sort: 'momentum',
+				sessionMinutes: null,
+				fitsSession: false
+			})[0].id
+		).toBe('politik');
+	});
+
 	it('sorts by real duration and publication time', () => {
 		expect(arrangeDiscover(podcasts, { mood: 'calm', sort: 'length', sessionMinutes: 60, fitsSession: false }).map((podcast) => podcast.id)).toEqual(['science', 'comedy', 'news']);
 		expect(arrangeDiscover(podcasts, { mood: 'calm', sort: 'newest', sessionMinutes: 60, fitsSession: false }).map((podcast) => podcast.id)).toEqual(['science', 'comedy', 'news']);

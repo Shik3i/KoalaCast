@@ -8,7 +8,7 @@
 	import Onboarding from '$lib/components/Onboarding.svelte';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import { GENRES, genreLabel } from '$lib/genres';
-	import { optimizeArtwork } from '$lib/artwork';
+	import { optimizeArtwork, preloadArtwork } from '$lib/artwork';
 	import { detectBrowserLanguages, regionForLanguage } from '$lib/data/languages';
 	import { t } from '$lib/i18n';
 	import { listeningSession, type SessionMinutes } from '$lib/stores/session.svelte';
@@ -204,12 +204,17 @@
 	}
 
 	async function openPodcast(podcast: PodcastItem) {
+		void preloadArtwork(podcast.artwork_url, 300);
 		const id = await resolvePodcastId(podcast);
 		if (!id) {
 			toast.error(t('discover.openError'));
 			return;
 		}
 		goto(`/podcast/${id}?feed_url=${encodeURIComponent(podcast.feed_url || '')}`);
+	}
+
+	function warmPodcastArtwork(podcast: PodcastItem) {
+		void preloadArtwork(podcast.artwork_url, 300);
 	}
 
 	function openGlobalSearch() {
@@ -339,12 +344,7 @@
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
 			event.preventDefault();
 			searchInput?.focus();
-			return;
 		}
-		if (['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName) || !spotlight) return;
-		if (event.key.toLowerCase() === 'p') playLatest(spotlight);
-		else if (event.key.toLowerCase() === 'q') queueLatest(spotlight);
-		else if (event.key.toLowerCase() === 's') saveLatest(spotlight);
 	}
 
 	async function subscribe(event: MouseEvent, podcast: PodcastItem) {
@@ -414,7 +414,7 @@
 					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> {t('quiet.discover.save')}</button>
 				</div>
 			</div>
-			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
+			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} onpointerenter={() => warmPodcastArtwork(spotlight)} onfocus={() => warmPodcastArtwork(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
 				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} width="208" height="208" loading="eager" fetchpriority="high" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 				<div class="waveform" aria-hidden="true">{#each [8,16,12,24,18,28,13,21,17,26,11,20,15,23,9,18] as height}<i style:height={`${height}px`}></i>{/each}</div>
 				<span>{t('quiet.discover.coverCaption')}</span>
@@ -442,13 +442,14 @@
 		</div>
 		<div class="mood-grid">
 			{#each moods as mood}
-				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => selectMood(mood.id)}>
+				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => selectMood(mood.id)} title={t('quiet.discover.moodBasis')}>
 					<i class="ph {mood.icon}" aria-hidden="true"></i>
 					<strong>{t(mood.labelKey)}</strong>
 					<span>{t(mood.effectKey)}</span>
 				</button>
 			{/each}
 		</div>
+		<p class="mood-basis"><i class="ph ph-info" aria-hidden="true"></i>{t('quiet.discover.moodBasis')}</p>
 	</section>
 
 	{#if picks.length}
@@ -456,7 +457,7 @@
 			<header><h2>{t('quiet.discover.becauseMood', { mood: selectedMoodLabel })}</h2><span>{t('quiet.discover.picksIncluded', { count: picks.length })}</span></header>
 			<div>
 				{#each picks as podcast}
-					<button onclick={() => openPodcast(podcast)} title={podcast.title}>
+					<button onclick={() => openPodcast(podcast)} onpointerenter={() => warmPodcastArtwork(podcast)} onfocus={() => warmPodcastArtwork(podcast)} title={podcast.title}>
 						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						<span>
 							<strong>{podcast.title}</strong>
@@ -510,10 +511,10 @@
 			{#each chart as podcast, index (podcast.feed_url || podcast.id)}
 				<article class="chart-row">
 					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
-					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={t('discover.openPodcast', { title: podcast.title })} title={t('discover.openPodcast', { title: podcast.title })}>
+					<button class="chart-art" onclick={() => openPodcast(podcast)} onpointerenter={() => warmPodcastArtwork(podcast)} onfocus={() => warmPodcastArtwork(podcast)} aria-label={t('discover.openPodcast', { title: podcast.title })} title={t('discover.openPodcast', { title: podcast.title })}>
 						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 					</button>
-					<button class="chart-title" onclick={() => openPodcast(podcast)} title={podcast.title}>
+					<button class="chart-title" onclick={() => openPodcast(podcast)} onpointerenter={() => warmPodcastArtwork(podcast)} onfocus={() => warmPodcastArtwork(podcast)} title={podcast.title}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>
 					</button>
 					<span class="fit" title={podcast.latestDurationMs === undefined ? t('quiet.discover.durationUnknown') : undefined}>{isHydratingMetadata && podcast.latestDurationMs === undefined ? t('common.loading') : formatEpisodeMinutes(podcast.latestDurationMs) ?? t('quiet.discover.durationUnknownShort')}</span>
@@ -531,10 +532,11 @@
 			{/if}
 			{/if}
 		</div>
-		<footer class="chart-footer">
-			<span>{t('quiet.discover.keyboardHint')}</span>
-			{#if hasMoreResults}<button onclick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? t('common.loading') : t('quiet.discover.loadMore')}</button>{/if}
-		</footer>
+		{#if hasMoreResults}
+			<footer class="chart-footer">
+				<button onclick={loadMore} disabled={isLoadingMore}>{isLoadingMore ? t('common.loading') : t('quiet.discover.loadMore')}</button>
+			</footer>
+		{/if}
 	</section>
 </div>
 
@@ -595,6 +597,8 @@
 	.mood-grid i { grid-row: 1 / 3; font-size: 22px; }
 	.mood-grid strong { font: 700 16px/1.2 var(--font-ui); }
 	.mood-grid span { font: 600 10px/1.3 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+	.mood-basis { display: flex; align-items: center; gap: 7px; margin-top: 10px; color: var(--ink-4); font-size: 12px; }
+	.mood-basis i { color: var(--accent-ink); font-size: 15px; }
 
 	.reasoned-picks, .chart-section { padding: 20px 22px; border-bottom: 1px solid var(--border-hair); }
 	.reasoned-picks > header, .chart-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
@@ -627,7 +631,7 @@
 	.row-actions button { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.row-actions button i { display: block; font-size: 14px; line-height: 1; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.chart-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.chart-footer button { padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }
 	.empty-filter { display: grid; justify-items: start; gap: 10px; padding: 22px 0; color: var(--ink-3); font-size: 13px; }
 	.empty-filter button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--ink-2); }
@@ -677,7 +681,6 @@
 		.chart-row { grid-template-columns: 24px 42px minmax(0, 1fr) 58px; min-height: 60px; }
 		.fit { display: none; }
 		.chart-filters span { display: none; }
-		.chart-footer span { display: none; }
 		.chart-footer { justify-content: end; }
 	}
 </style>

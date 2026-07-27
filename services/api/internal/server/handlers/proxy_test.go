@@ -187,6 +187,9 @@ func TestProxyHandler_GetImageProxyReturnsFallbackWhenUpstreamFails(t *testing.T
 	if fallback := rec.Header().Get("X-KoalaCast-Image-Fallback"); fallback != "true" {
 		t.Errorf("expected fallback response marker, got %q", fallback)
 	}
+	if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Errorf("expected transient fallback to be non-cacheable, got %q", cacheControl)
+	}
 	if rec.Body.Len() < 1000 {
 		t.Errorf("expected embedded WebP fallback body, got %d bytes", rec.Body.Len())
 	}

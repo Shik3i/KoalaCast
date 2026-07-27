@@ -3,8 +3,8 @@
 
 // App-shell service worker: precaches the built assets so the UI loads offline,
 // and serves navigations network-first (fresh when online, cached shell when not).
-// API calls and cross-origin audio are always passed straight through to the
-// network — we never cache podcast audio or authenticated API responses here.
+// Dynamic/authenticated API calls and cross-origin audio are passed straight
+// through. Public artwork responses are the sole API exception.
 
 import { build, files, version } from '$service-worker';
 
@@ -67,6 +67,24 @@ sw.addEventListener('fetch', (event) => {
 
 	// Only handle same-origin traffic; leave audio CDNs and third parties alone.
 	if (url.origin !== sw.location.origin) return;
+
+	// Artwork is public and keyed by the complete source URL + requested width.
+	// Keep successful real covers across SPA navigations. Never store the proxy's
+	// temporary fallback response; a later request must be able to retry upstream.
+	if (url.pathname === '/api/v1/proxy/image') {
+		event.respondWith(
+			caches.open(CACHE).then(async (cache) => {
+				const cached = await cache.match(request);
+				if (cached) return cached;
+				const response = await fetch(request);
+				if (response.ok && response.headers.get('X-KoalaCast-Image-Fallback') !== 'true') {
+					await cache.put(request, response.clone());
+				}
+				return response;
+			})
+		);
+		return;
+	}
 
 	// Never cache the API — it's dynamic and often auth-scoped.
 	if (url.pathname.startsWith('/api/')) return;
