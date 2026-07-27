@@ -346,7 +346,7 @@ private fun ChapterRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MonoText(
-            text = Format.timecode(chapter.startMs),
+            text = Format.timeCode(chapter.startMs),
             color = colors.accentInk,
             style = KoalaTheme.type.monoStrong,
         )

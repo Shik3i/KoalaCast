@@ -82,8 +82,8 @@ Deliberately **not** faked:
 - Silence trimming is implemented (ExoPlayer's own flag, opt-in in Settings) and
   its saved time is measured rather than estimated: the playhead outrunning
   wall-clock time, minus everything that was skipped rather than heard.
-- Chapters are carried end to end and listed on the episode screen. The *player*
-  does not use them yet — no markers on the progress bar, no skip-to-chapter.
+- Chapters are carried end to end: listed on the episode screen, marked on the
+  player's scrubber, with previous/next chapter steps.
 
 ---
 

@@ -1,5 +1,6 @@
 package net.koalastuff.koalacast.feature.player
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -29,8 +31,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.player.PlaybackUiState
 import net.koalastuff.koalacast.core.ui.component.CoverArt
+import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
@@ -53,9 +57,11 @@ fun NowPlayingScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val chapters by viewModel.chapters.collectAsStateWithLifecycle()
 
     NowPlayingContent(
         state = state,
+        chapters = chapters,
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
         onTogglePlayPause = viewModel::togglePlayPause,
@@ -71,6 +77,7 @@ fun NowPlayingScreen(
 @Composable
 internal fun NowPlayingContent(
     state: PlaybackUiState,
+    chapters: List<Chapter> = emptyList(),
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -146,6 +153,7 @@ internal fun NowPlayingContent(
         Scrubber(
             positionMs = state.positionMs,
             durationMs = state.durationMs,
+            chapters = chapters,
             onSeekTo = onSeekTo,
         )
 
@@ -193,6 +201,14 @@ internal fun NowPlayingContent(
             )
         }
 
+        if (chapters.isNotEmpty()) {
+            ChapterRow(
+                chapters = chapters,
+                positionMs = state.positionMs,
+                onSeekTo = onSeekTo,
+            )
+        }
+
         SleepTimerRow(state = state, onSetSleepTimer = onSetSleepTimer)
     }
 }
@@ -201,6 +217,7 @@ internal fun NowPlayingContent(
 private fun Scrubber(
     positionMs: Long,
     durationMs: Long,
+    chapters: List<Chapter>,
     onSeekTo: (Long) -> Unit,
 ) {
     val colors = KoalaTheme.colors
@@ -210,8 +227,13 @@ private fun Scrubber(
     val fraction = dragValue
         ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 
+    val markers = remember(chapters, durationMs) {
+        ChapterState.markerFractions(chapters, durationMs)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
-        Slider(
+        Box {
+            Slider(
             value = fraction,
             onValueChange = { dragValue = it },
             onValueChangeFinished = {
@@ -224,6 +246,27 @@ private fun Scrubber(
                 inactiveTrackColor = colors.track,
             ),
         )
+            // Drawn over the slider rather than inside it: Material's Slider has
+            // no hook for tick marks at arbitrary positions, only evenly spaced
+            // steps, which is not what chapter starts are.
+            if (markers.isNotEmpty()) {
+                Canvas(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(horizontal = SLIDER_THUMB_INSET),
+                ) {
+                    val y = size.height / 2f
+                    markers.forEach { fraction ->
+                        drawLine(
+                            color = colors.bgTransport,
+                            start = Offset(size.width * fraction, y - MARKER_HALF_HEIGHT_PX),
+                            end = Offset(size.width * fraction, y + MARKER_HALF_HEIGHT_PX),
+                            strokeWidth = MARKER_WIDTH_PX,
+                        )
+                    }
+                }
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,6 +282,53 @@ private fun Scrubber(
                 style = KoalaTheme.type.monoStrong,
             )
         }
+    }
+}
+
+/**
+ * Which chapter is running, with a step either way. Absent entirely when the
+ * episode has no chapters, rather than showing a disabled control.
+ */
+@Composable
+private fun ChapterRow(
+    chapters: List<Chapter>,
+    positionMs: Long,
+    onSeekTo: (Long) -> Unit,
+) {
+    val colors = KoalaTheme.colors
+    val current = ChapterState.current(chapters, positionMs)
+    val previous = ChapterState.previousStartMs(chapters, positionMs)
+    val next = ChapterState.nextStartMs(chapters, positionMs)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButtonSquare(
+            icon = PhosphorIcons.Rewind,
+            contentDescription = stringResource(R.string.player_previous_chapter),
+            onClick = { previous?.let(onSeekTo) },
+            enabled = previous != null,
+            boxSize = 30.dp,
+            iconSize = 15.dp,
+        )
+        Text(
+            text = current?.title ?: stringResource(R.string.player_before_first_chapter),
+            style = KoalaTheme.type.bodySmall,
+            color = if (current != null) colors.ink2 else colors.ink4,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        IconButtonSquare(
+            icon = PhosphorIcons.FastForward,
+            contentDescription = stringResource(R.string.player_next_chapter),
+            onClick = { next?.let(onSeekTo) },
+            enabled = next != null,
+            boxSize = 30.dp,
+            iconSize = 15.dp,
+        )
     }
 }
 
@@ -290,3 +380,8 @@ private fun SleepTimerRow(
         )
     }
 }
+
+/** Material's Slider insets its track by half a thumb; the markers must match. */
+private val SLIDER_THUMB_INSET = 10.dp
+private const val MARKER_WIDTH_PX = 2f
+private const val MARKER_HALF_HEIGHT_PX = 5f
