@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
+import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.ui.component.LocalArtworkUrls
 import net.koalastuff.koalacast.core.ui.theme.KoalaCastTheme
@@ -55,7 +56,10 @@ class MainActivity : ComponentActivity() {
 
             // Dark until the stored choice is known: the design ships dark, so
             // waiting on DataStore must not flash a light frame.
-            KoalaCastTheme(themeMode = prefs?.themeMode ?: ThemeMode.DARK) {
+            KoalaCastTheme(
+                themeMode = prefs?.themeMode ?: ThemeMode.DARK,
+                palette = prefs?.palette ?: PaletteId.DEFAULT,
+            ) {
                 CompositionLocalProvider(LocalArtworkUrls provides artworkUrls) {
                     KoalaCastApp(
                         onboardingComplete = prefs?.onboardingComplete,

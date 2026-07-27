@@ -5,10 +5,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
 import javax.inject.Inject
@@ -38,6 +41,10 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
+    suspend fun setPalette(palette: PaletteId) {
+        dataStore.edit { it[Keys.PALETTE] = palette.id }
+    }
+
     suspend fun setLanguages(languages: Set<String>) {
         dataStore.edit { it[Keys.LANGUAGES] = languages }
     }
@@ -58,28 +65,42 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.DOWNLOAD_WIFI_ONLY] = enabled }
     }
 
+    suspend fun setAutoDownloadCount(count: Int) {
+        dataStore.edit { it[Keys.AUTO_DOWNLOAD_COUNT] = count.coerceIn(1, 20) }
+    }
+
+    suspend fun setDownloadRetention(retention: DownloadRetention) {
+        dataStore.edit { it[Keys.DOWNLOAD_RETENTION] = retention.id }
+    }
+
     private fun Preferences.toUserPreferences() = UserPreferences(
         serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,
         onboardingComplete = this[Keys.ONBOARDING_COMPLETE] ?: false,
         themeMode = this[Keys.THEME_MODE]
             ?.let { name -> runCatching { ThemeMode.valueOf(name) }.getOrNull() }
             ?: ThemeMode.SYSTEM,
+        palette = PaletteId.fromId(this[Keys.PALETTE]),
         languages = this[Keys.LANGUAGES] ?: emptySet(),
         category = this[Keys.CATEGORY].orEmpty(),
         proxyImages = this[Keys.PROXY_IMAGES] ?: true,
         playbackSpeed = this[Keys.PLAYBACK_SPEED] ?: 1f,
         downloadWifiOnly = this[Keys.DOWNLOAD_WIFI_ONLY] ?: true,
+        autoDownloadCount = this[Keys.AUTO_DOWNLOAD_COUNT] ?: 3,
+        downloadRetention = DownloadRetention.fromId(this[Keys.DOWNLOAD_RETENTION]),
     )
 
     private object Keys {
         val SERVER_URL = stringPreferencesKey("server_url")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val PALETTE = stringPreferencesKey("palette")
         val LANGUAGES = stringSetPreferencesKey("languages")
         val CATEGORY = stringPreferencesKey("category")
         val PROXY_IMAGES = booleanPreferencesKey("proxy_images")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
         val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
+        val AUTO_DOWNLOAD_COUNT = intPreferencesKey("auto_download_count")
+        val DOWNLOAD_RETENTION = stringPreferencesKey("download_retention")
     }
 }
 

@@ -1,7 +1,7 @@
 # KoalaCast Developer Makefile
 .DEFAULT_GOAL := help
 .PHONY: all build build-api build-web dev-api dev-web test test-api check \
-        fmt vet tidy docker-build docker-up docker-down clean help
+        fmt vet tidy android-palettes docker-build docker-up docker-down clean help
 
 # Dev-only session secret. Override for local testing: make dev-api SESSION_SECRET=...
 # Never used for real deployments — production supplies its own via the environment.
@@ -57,6 +57,11 @@ vet:
 ## tidy: Sync Go module dependencies
 tidy:
 	@cd services/api && go mod tidy
+
+## android-palettes: Regenerate the Android colour palettes from the web stylesheet
+android-palettes:
+	@echo "==> Generating Android palettes from apps/web/src/lib/styles/app.css..."
+	@python apps/android/tools/generate-palettes.py
 
 ## docker-build: Build Docker images via Compose
 docker-build:

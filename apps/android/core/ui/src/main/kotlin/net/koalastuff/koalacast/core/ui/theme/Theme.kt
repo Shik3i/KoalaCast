@@ -10,10 +10,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 
 private val LocalKoalaColors: ProvidableCompositionLocal<KoalaColors> =
-    staticCompositionLocalOf { KoalaDarkColors }
+    staticCompositionLocalOf { koalaColors(PaletteId.DEFAULT, dark = true) }
 
 private val LocalKoalaTypography: ProvidableCompositionLocal<KoalaTypography> =
     staticCompositionLocalOf { KoalaTypography() }
@@ -29,6 +30,7 @@ private val LocalKoalaTypography: ProvidableCompositionLocal<KoalaTypography> =
 @Composable
 fun KoalaCastTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
+    palette: PaletteId = PaletteId.DEFAULT,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -36,7 +38,7 @@ fun KoalaCastTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val colors = if (dark) KoalaDarkColors else KoalaLightColors
+    val colors = koalaColors(palette, dark)
     val typography = KoalaTypography()
 
     val materialScheme = if (dark) {

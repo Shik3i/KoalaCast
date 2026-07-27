@@ -11,6 +11,8 @@ data class UserPreferences(
     val serverUrl: String,
     val onboardingComplete: Boolean,
     val themeMode: ThemeMode,
+    /** Which of the nine colour palettes paints the app. */
+    val palette: PaletteId,
     /** BCP-47-ish language codes ("en", "de") used to filter Discover and Search. */
     val languages: Set<String>,
     /** iTunes genre used as the default Search filter; blank means "everything". */
@@ -24,4 +26,8 @@ data class UserPreferences(
     val playbackSpeed: Float,
     /** Avoid metered mobile data for large episode files by default. */
     val downloadWifiOnly: Boolean,
+    /** How many of the newest episodes auto-download keeps per opted-in show. */
+    val autoDownloadCount: Int,
+    /** When automatically downloaded episodes may be removed again. */
+    val downloadRetention: DownloadRetention,
 )
