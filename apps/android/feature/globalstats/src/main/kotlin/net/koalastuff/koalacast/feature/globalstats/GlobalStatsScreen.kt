@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.GlobalStats
 import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.Hairline
+import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
@@ -46,6 +47,8 @@ fun GlobalStatsScreen(
     onOpenPodcast: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    onOpenSettings: () -> Unit = {},
+    scopeSelector: @Composable () -> Unit = {},
     viewModel: GlobalStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -54,6 +57,8 @@ fun GlobalStatsScreen(
         onSetRange = viewModel::setRange,
         onRetry = viewModel::retry,
         onOpenPodcast = onOpenPodcast,
+        onOpenSettings = onOpenSettings,
+        scopeSelector = scopeSelector,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -67,6 +72,8 @@ internal fun GlobalStatsContent(
     onOpenPodcast: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    onOpenSettings: () -> Unit = {},
+    scopeSelector: @Composable () -> Unit = {},
 ) {
     val colors = KoalaTheme.colors
     Column(
@@ -78,21 +85,38 @@ internal fun GlobalStatsContent(
             .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.sectionV),
         verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSection),
     ) {
-        MonoText(
-            text = "KOALACAST COMMUNITY",
-            color = colors.accentInk,
-            style = KoalaTheme.type.monoStrong,
-        )
-        Text(
-            text = stringResource(R.string.global_title),
-            style = KoalaTheme.type.screenTitle,
-            color = colors.inkStrong,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                MonoText(
+                    text = "KOALACAST COMMUNITY",
+                    color = colors.accentInk,
+                    style = KoalaTheme.type.monoStrong,
+                )
+                Text(
+                    text = stringResource(R.string.global_title),
+                    style = KoalaTheme.type.screenTitle,
+                    color = colors.inkStrong,
+                )
+            }
+            // Settings stays one tap away from either scope, so switching to
+            // Community is never a detour on the way to the gear.
+            IconButtonSquare(
+                icon = PhosphorIcons.Gear,
+                contentDescription = stringResource(R.string.global_settings),
+                onClick = onOpenSettings,
+            )
+        }
         Text(
             text = stringResource(R.string.global_subtitle),
             style = KoalaTheme.type.bodySmall,
             color = colors.ink3,
         )
+
+        scopeSelector()
+
         SegmentedControl(
             options = listOf(
                 stringResource(R.string.global_90),

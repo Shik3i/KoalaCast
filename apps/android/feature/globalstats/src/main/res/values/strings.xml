@@ -25,4 +25,5 @@
     <string name="global_top_podcasts">Podcast ranking</string>
     <string name="global_listeners">Listener leaderboard</string>
     <string name="global_privacy">Only opted-in accounts contribute. No raw listening session or account identifier is published by this endpoint.</string>
+    <string name="global_settings">Settings</string>
 </resources>

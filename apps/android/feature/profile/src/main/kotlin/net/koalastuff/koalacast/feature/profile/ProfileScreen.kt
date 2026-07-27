@@ -34,9 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.ui.component.Hairline
+import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
+import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
@@ -57,6 +59,8 @@ fun ProfileScreen(
     onOpenDownloads: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    /** Renders the You/Community switch. The host owns that state. */
+    scopeSelector: @Composable () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -75,6 +79,7 @@ fun ProfileScreen(
         onOpenAccount = onOpenAccount,
         onOpenDownloads = onOpenDownloads,
         onExport = { export.launch("koalacast-listening-data.json") },
+        scopeSelector = scopeSelector,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -91,6 +96,7 @@ internal fun ProfileContent(
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    scopeSelector: @Composable () -> Unit = {},
 ) {
     val colors = KoalaTheme.colors
     val context = LocalContext.current
@@ -129,12 +135,27 @@ internal fun ProfileContent(
                     style = KoalaTheme.type.monoSmall,
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
-                OutlineButton(text = stringResource(R.string.profile_account), onClick = onOpenAccount)
-                OutlineButton(text = stringResource(R.string.profile_downloads), onClick = onOpenDownloads)
-                OutlineButton(text = stringResource(R.string.profile_settings), onClick = onOpenSettings)
-            }
+            IconButtonSquare(
+                icon = PhosphorIcons.Gear,
+                contentDescription = stringResource(R.string.profile_settings),
+                onClick = onOpenSettings,
+            )
         }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+            OutlineButton(
+                text = stringResource(R.string.profile_account),
+                onClick = onOpenAccount,
+                modifier = Modifier.weight(1f),
+            )
+            OutlineButton(
+                text = stringResource(R.string.profile_downloads),
+                onClick = onOpenDownloads,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        scopeSelector()
 
         SegmentedControl(
             options = listOf(

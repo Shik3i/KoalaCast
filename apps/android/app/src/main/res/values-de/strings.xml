@@ -6,5 +6,6 @@
     <string name="nav_library">Bibliothek</string>
     <string name="nav_inbox">Neu</string>
     <string name="nav_profile">Profil</string>
-    <string name="nav_global_stats">Community</string>
+    <string name="profile_scope_me">Ich</string>
+    <string name="profile_scope_community">Community</string>
 </resources>

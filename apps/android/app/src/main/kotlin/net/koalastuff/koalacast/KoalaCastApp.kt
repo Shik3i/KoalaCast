@@ -34,6 +34,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
@@ -55,6 +56,7 @@ import net.koalastuff.koalacast.feature.search.SearchScreen
 import net.koalastuff.koalacast.feature.settings.SettingsScreen
 import net.koalastuff.koalacast.feature.settings.PrivacyScreen
 import net.koalastuff.koalacast.navigation.Routes
+import net.koalastuff.koalacast.navigation.StatsScope
 import net.koalastuff.koalacast.navigation.TopLevelDestination
 
 /**
@@ -164,29 +166,46 @@ fun KoalaCastApp(
                 }
 
                 composable(Routes.PROFILE) {
-                    ProfileScreen(
-                        onOpenPodcast = { podcastId ->
-                            navController.navigate(Routes.podcast("", podcastId))
-                        },
-                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                        onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
-                        onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
-                        contentPadding = statusBarPadding(),
-                    )
+                    // Personal and community figures are the same dashboard over a
+                    // different population, so they share a destination and differ
+                    // by scope rather than costing a fifth tab.
+                    var scope by rememberSaveable { mutableStateOf(StatsScope.YOU) }
+                    val selector: @Composable () -> Unit = {
+                        SegmentedControl(
+                            options = listOf(
+                                stringResource(R.string.profile_scope_me),
+                                stringResource(R.string.profile_scope_community),
+                            ),
+                            selectedIndex = StatsScope.entries.indexOf(scope),
+                            onSelect = { scope = StatsScope.entries[it] },
+                        )
+                    }
+                    val openPodcast: (String) -> Unit = { podcastId ->
+                        navController.navigate(Routes.podcast("", podcastId))
+                    }
+                    val openSettings = { navController.navigate(Routes.SETTINGS) }
+
+                    when (scope) {
+                        StatsScope.YOU -> ProfileScreen(
+                            onOpenPodcast = openPodcast,
+                            onOpenSettings = openSettings,
+                            onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
+                            onOpenDownloads = { navController.navigate(Routes.DOWNLOADS) },
+                            contentPadding = statusBarPadding(),
+                            scopeSelector = selector,
+                        )
+                        StatsScope.COMMUNITY -> GlobalStatsScreen(
+                            onOpenPodcast = openPodcast,
+                            onOpenSettings = openSettings,
+                            contentPadding = statusBarPadding(),
+                            scopeSelector = selector,
+                        )
+                    }
                 }
 
                 composable(Routes.ACCOUNT) {
                     AccountScreen(
                         onBack = { navController.popBackStack() },
-                        contentPadding = statusBarPadding(),
-                    )
-                }
-
-                composable(Routes.GLOBAL_STATS) {
-                    GlobalStatsScreen(
-                        onOpenPodcast = { podcastId ->
-                            navController.navigate(Routes.podcast("", podcastId))
-                        },
                         contentPadding = statusBarPadding(),
                     )
                 }

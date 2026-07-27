@@ -18,7 +18,6 @@ object Routes {
     const val LIBRARY = "library"
     const val PROFILE = "profile"
     const val ACCOUNT = "account"
-    const val GLOBAL_STATS = "global_stats"
     const val SETTINGS = "settings"
     const val PRIVACY = "privacy"
     const val DOWNLOADS = "downloads"
@@ -37,7 +36,12 @@ object Routes {
     fun episode(episodeId: String): String = "episode/${Uri.encode(episodeId)}"
 }
 
-/** The bottom bar. Profile joins it once there are listening stats to show. */
+/**
+ * The bottom bar. Four and no more: at the narrowest supported width a fifth
+ * label has nowhere to go and starts truncating. Community listening figures
+ * are therefore a scope *within* Profile rather than a destination beside it —
+ * the two screens render the same dashboard, only aggregated differently.
+ */
 enum class TopLevelDestination(
     val route: String,
     @StringRes val labelRes: Int,
@@ -48,5 +52,4 @@ enum class TopLevelDestination(
     INBOX(Routes.INBOX, R.string.nav_inbox, PhosphorIcons.Tray, PhosphorIcons.TrayFill),
     LIBRARY(Routes.LIBRARY, R.string.nav_library, PhosphorIcons.Books, PhosphorIcons.BooksFill),
     PROFILE(Routes.PROFILE, R.string.nav_profile, PhosphorIcons.UserCircle, PhosphorIcons.UserCircleFill),
-    GLOBAL_STATS(Routes.GLOBAL_STATS, R.string.nav_global_stats, PhosphorIcons.ChartLine, PhosphorIcons.ChartLineFill),
 }

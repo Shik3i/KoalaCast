@@ -25,4 +25,5 @@
     <string name="global_top_podcasts">Podcast-Rangliste</string>
     <string name="global_listeners">Hörer-Rangliste</string>
     <string name="global_privacy">Nur Konten mit ausdrücklicher Zustimmung fließen ein. Der Endpunkt veröffentlicht keine rohen Hörsitzungen oder Konto-Kennungen.</string>
+    <string name="global_settings">Einstellungen</string>
 </resources>
