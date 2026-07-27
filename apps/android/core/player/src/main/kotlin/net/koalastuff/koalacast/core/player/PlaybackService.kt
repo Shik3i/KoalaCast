@@ -4,6 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.media.audiofx.LoudnessEnhancer
 import androidx.media3.common.AudioAttributes
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -15,6 +17,7 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.collect.ImmutableList
@@ -50,6 +53,10 @@ import javax.inject.Inject
  * The service — not the UI — persists progress and advances the queue, because
  * both must keep happening after the last Activity is gone.
  */
+// The browse-tree half of Media3's session API is still @UnstableApi. Opt in
+// here rather than annotating the class with @UnstableApi itself: that would
+// propagate the requirement to every caller, starting with PlayerConnection.
+@OptIn(markerClass = [UnstableApi::class])
 @AndroidEntryPoint
 class PlaybackService : MediaLibraryService() {
 
@@ -179,7 +186,7 @@ class PlaybackService : MediaLibraryService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             if (customCommand.customAction != ACTION_CYCLE_SPEED) {
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             val player = session.player
             val next = SPEED_STEPS[(SPEED_STEPS.indexOfFirst {
@@ -236,7 +243,7 @@ class PlaybackService : MediaLibraryService() {
                 val track = progress.progressSnapshot(mediaId)?.track
                 future.set(
                     if (track == null) {
-                        LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                        LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                     } else {
                         LibraryResult.ofItem(playableItem(track), null)
                     },
