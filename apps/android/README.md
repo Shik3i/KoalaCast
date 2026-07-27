@@ -65,9 +65,9 @@ for a server running on the host.
 | `core:network` | Retrofit + kotlinx.serialization against `/api/v1`, and `HostSelectionInterceptor` — there is no compile-time base URL, every request is re-pointed at the chosen server, path prefixes included. |
 | `core:data` | DataStore preferences, Room (the web's IndexedDB stores mirrored field for field), `ServerUrl` normalisation/validation, the podcast / library / queue / progress repositories, `ArtworkUrls` (image-proxy routing). |
 | `core:player` | `MediaSessionService` + ExoPlayer, the `PlayerConnection` every screen talks to, and the listening-session arithmetic behind the Profile stats. |
-| `core:ui` | The **4b "Quiet Edition" design system**: both palettes, the four bundled typefaces, radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
+| `core:ui` | The **4b "Quiet Edition" design system**: all nine palettes in light and dark (generated from the web client's stylesheet — see `apps/android/tools/generate-palettes.py`), the four bundled typefaces, radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
 | `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Library, Inbox, Downloads, Player, Profile, Account, Global Stats and Settings. |
-| `app` | Hilt entry point, Coil image loader, navigation graph, bottom bar. |
+| `app` | Hilt entry point, Coil image loader, navigation graph, bottom bar. The bar holds four destinations — Discover, New, Library, Profile — because a fifth label truncates at the narrowest supported width. Community figures are a scope inside Profile, not a tab. |
 
 Deliberately **not** faked:
 
@@ -241,14 +241,17 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
 - [x] **Resume playback** from saved position (works offline via denormalised metadata).
 - [x] **Local-first persistence** (Room) — everything usable with no account.
-- [x] **Theme** — System / Light / Dark, built on the 4b palette. *Material You
-      dynamic color is intentionally not wired: the design's identity is the mint
-      accent on a dark ground, and recolouring it from the wallpaper would undo the
-      contrast work.*
+- [x] **Theme** — System / Light / Dark across all nine palettes, matching the web
+      client one for one. The colour values are generated from
+      `apps/web/src/lib/styles/app.css` (`make android-palettes`) so the two clients
+      cannot drift apart. *Material You dynamic color is intentionally not wired: the
+      palettes are contrast-tested pairs, and recolouring them from the wallpaper
+      would undo that work.*
 
 ### 4.2 Feature parity with the web client
 Web has these today; Android should match:
 - [x] Continue Listening rail / In-Progress tab.
+- [x] Nine colour palettes in light and dark, with Fjord as the shared default.
 - [x] Queue (play, remove, accessible up/down reorder; drag remains optional polish).
 - [ ] Dynamic per-show accent color from cover art (Coil palette).
 - [x] OPML import/export.
