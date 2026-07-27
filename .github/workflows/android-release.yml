@@ -56,23 +56,28 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # Optional release signing: decode a base64 keystore from secrets when present.
-      # Configure signingConfigs in the Gradle module to read these env vars. Guard
-      # inside the script (a step's own env isn't visible to its `if`), so this is a
-      # no-op — building unsigned — when the secret is absent.
-      - name: Decode signing keystore (optional)
+      # A GitHub Release must never contain an unsigned or debug-signed package.
+      - name: Configure release signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > apps/android/release.keystore
-            echo "ANDROID_KEYSTORE_FILE=$GITHUB_WORKSPACE/apps/android/release.keystore" >> "$GITHUB_ENV"
-            echo "Signing keystore configured."
-          else
-            echo "No ANDROID_KEYSTORE_BASE64 secret set — building unsigned."
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required Android signing secret is missing: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
           fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > apps/android/release.keystore
+          echo "ANDROID_KEYSTORE_FILE=$GITHUB_WORKSPACE/apps/android/release.keystore" >> "$GITHUB_ENV"
 
-      - name: Build
+      - name: Test, lint and build
         working-directory: apps/android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -80,7 +85,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon "${{ github.event.inputs.gradle_task || 'assembleRelease' }}"
+          ./gradlew --no-daemon test lint "${{ github.event.inputs.gradle_task || 'assembleRelease' }}"
 
       - name: Collect artifacts
         id: artifacts
@@ -95,10 +100,38 @@ jobs:
           (cd dist && zip -r "../$zip_name" .)
           echo "zip=$zip_name" >> "$GITHUB_OUTPUT"
 
+      - name: Verify package signatures
+        run: |
+          apksigner_bin="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [ -z "$apksigner_bin" ]; then
+            echo "::error::apksigner was not found below $ANDROID_HOME/build-tools."
+            exit 1
+          fi
+          for apk in dist/*.apk; do
+            [ -e "$apk" ] || continue
+            "$apksigner_bin" verify --verbose --print-certs "$apk"
+          done
+          for bundle in dist/*.aab; do
+            [ -e "$bundle" ] || continue
+            jarsigner -verify -strict "$bundle"
+          done
+
       - name: Attest build provenance
         uses: actions/attest@v4
         with:
-          subject-path: 'dist/*'
+          subject-path: |
+            dist/*
+            ${{ steps.artifacts.outputs.zip }}
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: koalacast-android-${{ github.ref_name }}
+          path: |
+            dist/*
+            ${{ steps.artifacts.outputs.zip }}
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')

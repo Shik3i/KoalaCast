@@ -1,8 +1,9 @@
 # KoalaCast — Native Android Client
 
-> **Status:** 🏗️ **P0–P3 shipped** — the app builds, browses, plays and keeps a
-> local-first library. Still ahead: the inbox, downloads, and account + sync.
-> This document remains the source of truth for those phases (§10 tracks what is done).
+> **Status:** 🏗️ **P0–P6 shipped** — browsing, playback, local-first library,
+> downloads, inbox, profile statistics, account, sync and OPML are implemented.
+> P7 platform/delight work and the API blockers in
+> [`api_todo.md`](../../api_todo.md) remain (§10 tracks the exact boundary).
 >
 > Companion docs: [`docs/android-architecture.md`](../../docs/android-architecture.md)
 > (high-level architecture), [`docs/sync-protocol/specification.md`](../../docs/sync-protocol/specification.md)
@@ -40,10 +41,10 @@ for a server running on the host.
 | `core:data` | DataStore preferences, Room (the web's IndexedDB stores mirrored field for field), `ServerUrl` normalisation/validation, the podcast / library / queue / progress repositories, `ArtworkUrls` (image-proxy routing). |
 | `core:player` | `MediaSessionService` + ExoPlayer, the `PlayerConnection` every screen talks to, and the listening-session arithmetic behind the Profile stats. |
 | `core:ui` | The **4b "Quiet Edition" design system**: both palettes, the four bundled typefaces, radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
-| `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Library, Player, Settings — each a ViewModel + a stateless screen. |
+| `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Library, Inbox, Downloads, Player, Profile, Account, Global Stats and Settings. |
 | `app` | Hilt entry point, Coil image loader, navigation graph, bottom bar. |
 
-Deliberately **not** faked, because the data to back them does not exist yet:
+Deliberately **not** faked:
 
 - The session-length control (`I HAVE 25 / 40 / 60`) and the mood tiles filter an
   *episode* corpus, which arrives with the inbox (P5). `QueueRepository.trimTo`
@@ -54,7 +55,8 @@ Deliberately **not** faked, because the data to back them does not exist yet:
   know" the handoff's copy decisions rule out.
 - Silence trimming reports zero saved time in the listening telemetry rather than a
   guess: the audio processor is not implemented.
-- Profile is not in the bottom bar yet — four tabs, not five.
+- Chapter UI waits for the episode-bound backend contract in
+  [`api_todo.md`](../../api_todo.md); the RSS parser currently discards the source URL.
 
 ---
 
@@ -112,7 +114,7 @@ apps/android/
     network/              # Retrofit API, DTOs, host-selection interceptor
     ui/                   # design system (4b theme, components, icons, fonts)
     player/               # Media3 service + controller          — P2
-    download/             # download manager + WorkManager        — P4
+    data/                 # Room, repositories, sync + WorkManager downloads
   feature/
     onboarding/ discover/ search/ podcast/ episode/ settings/
     library/ inbox/ downloads/ player/                            — P3–P5
@@ -313,9 +315,13 @@ Keep the two implementations behaviorally consistent.
    and Settings both let a listener point the app anywhere, and the URL is validated
    against `/api/v1/healthz` before it is stored. A plain-HTTP address is allowed
    (LAN self-hosting) but always warned about.
-2. **"New episodes" data source** — still open. Decide before building §8.
-3. **Sync granularity** — still open; nothing authed is implemented yet.
-4. **Downloads engine** — still open (recommendation stands: Media3 `DownloadManager`).
+2. **"New episodes" data source** — client-side fan-out is implemented; a batch
+   endpoint remains in `api_todo.md`.
+3. **Sync granularity** — subscriptions, favorites, queue, playback and listening
+   sessions are implemented; lossless pagination/snapshot and show-settings sync
+   remain backend work in `api_todo.md`.
+4. **Downloads engine** — implemented with OkHttp + WorkManager, resumable range
+   requests and app-private storage.
 5. **Min / target SDK** — **26 / 36**, `compileSdk 36`, pinned in
    `gradle/libs.versions.toml` together with AGP 8.13.2 and Kotlin 2.2.21. Hilt is
    held at 2.57.2 because 2.58+ requires AGP 9.
@@ -348,7 +354,9 @@ Keep the two implementations behaviorally consistent.
 5. ✅ **P4 — Downloads:** resumable download engine, downloads screen, offline playback. *Auto-download rules remain P7 work.*
 6. ✅ **P5 — Inbox:** "New episodes" filtered feed.
 7. ✅ **P6 — Account & Sync:** device-token auth, `/sync` pull/push/merge, session mgmt, OPML.
-8. **P7 — Delight & platform:** Android Auto, widget, chapters, transitions, haptics, polish.
+8. **P7 — Delight & platform:** Android Auto browse tree, widget, chapters,
+   dynamic cover palette, transitions, haptics, auto-download rules and storage
+   management remain.
 
 ---
 
@@ -356,5 +364,7 @@ Keep the two implementations behaviorally consistent.
 - Works **offline** where applicable and **without an account**.
 - Loading / empty / error states designed (skeletons, not spinners).
 - Accessible (TalkBack + 48dp + reduce-motion) and themed (light + dark).
-- Covered by tests (unit for logic, Compose UI for screens, MockWebServer for network).
+- Covered by tests. Current gap: repository/logic unit tests exist, but Compose
+  UI tests, ViewModel tests, MockWebServer integration tests and emulator tests
+  are not yet present.
 - No new tracking, no third-party audio proxy, minimal permissions.

@@ -19,6 +19,7 @@ class ListeningSessionRecorder {
     private var startedAtMs: Long = 0
     private var speed: Float = 1f
     private var manualSkippedMs: Long = 0
+    private var introOutroSkippedMs: Long = 0
 
     val isRecording: Boolean get() = track != null
 
@@ -28,6 +29,7 @@ class ListeningSessionRecorder {
         this.startedAtMs = nowMs
         this.speed = speed
         this.manualSkippedMs = 0
+        this.introOutroSkippedMs = 0
     }
 
     /**
@@ -46,6 +48,10 @@ class ListeningSessionRecorder {
     /** A ±15/30 s tap: time skipped, not time listened. */
     fun onManualSkip(deltaMs: Long) {
         if (deltaMs > 0) manualSkippedMs += deltaMs
+    }
+
+    fun onIntroOutroSkip(deltaMs: Long) {
+        if (deltaMs > 0) introOutroSkippedMs += deltaMs
     }
 
     /** Closes the segment. Returns null when there was nothing worth recording. */
@@ -75,7 +81,7 @@ class ListeningSessionRecorder {
             // would be inventing one.
             silenceSavedMs = 0,
             manualSkippedMs = manualSkippedMs,
-            introOutroSkippedMs = 0,
+            introOutroSkippedMs = introOutroSkippedMs,
             speedWeightedMs = audioListenedMs,
         )
     }

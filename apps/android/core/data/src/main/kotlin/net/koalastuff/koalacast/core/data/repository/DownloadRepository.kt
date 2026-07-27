@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -22,7 +23,7 @@ import net.koalastuff.koalacast.core.model.Track
 
 @Singleton
 class DownloadRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val dao: EpisodeDownloadDao,
     private val clock: Clock,
 ) {
@@ -116,12 +117,17 @@ class DownloadRepository @Inject constructor(
     )
 
     companion object {
-        internal fun workName(episodeId: String) = "episode-download-$episodeId"
+        internal fun storageKey(episodeId: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(episodeId.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+
+        internal fun workName(episodeId: String) = "episode-download-${storageKey(episodeId)}"
         internal fun downloadDirectory(context: Context) =
             File(context.filesDir, "episodes").apply { mkdirs() }
         internal fun partialFile(context: Context, episodeId: String) =
-            File(downloadDirectory(context), "$episodeId.part")
+            File(downloadDirectory(context), "${storageKey(episodeId)}.part")
         internal fun completedFile(context: Context, episodeId: String) =
-            File(downloadDirectory(context), "$episodeId.audio")
+            File(downloadDirectory(context), "${storageKey(episodeId)}.audio")
     }
 }

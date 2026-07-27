@@ -4,21 +4,29 @@ import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.data.repository.DownloadRepository
+import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
+import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import net.koalastuff.koalacast.core.data.util.Clock
-import kotlinx.coroutines.Dispatchers
+import net.koalastuff.koalacast.core.model.Track
+import kotlin.math.abs
 import javax.inject.Inject
 
 /**
@@ -35,6 +43,10 @@ class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var progress: ProgressRepository
     @Inject lateinit var queue: QueueRepository
+    @Inject lateinit var library: LibraryRepository
+    @Inject lateinit var downloads: DownloadRepository
+    @Inject lateinit var preferences: PreferencesRepository
+    @Inject lateinit var artworkUrls: ArtworkUrls
     @Inject lateinit var clock: Clock
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -42,6 +54,8 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var positionTicker: Job? = null
+    private var outroHandledEpisodeId: String? = null
+    private var automaticSeekTargetMs: Long? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -110,6 +124,12 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+            recorder.onSpeedChanged(playbackParameters.speed, clock.nowMs())?.let { session ->
+                scope.launch { progress.recordListeningSession(session) }
+            }
+        }
+
         /**
          * A seek is not listening. Forward jumps are attributed to "manual
          * fast-forward" on the Profile screen; the segment itself keeps running,
@@ -121,23 +141,64 @@ class PlaybackService : MediaSessionService() {
             reason: Int,
         ) {
             if (reason != Player.DISCONTINUITY_REASON_SEEK) return
+            val automaticTarget = automaticSeekTargetMs
+            automaticSeekTargetMs = null
+            if (
+                automaticTarget != null &&
+                abs(newPosition.positionMs - automaticTarget) <= AUTOMATIC_SEEK_TOLERANCE_MS
+            ) {
+                return
+            }
             recorder.onManualSkip(newPosition.positionMs - oldPosition.positionMs)
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            // Close the previous segment before the new track's clock starts.
-            persistNow(finalise = true)
+            // The player's current item is already the new one here. Persisting
+            // through persistNow() would write the old segment against the new
+            // episode, so close only the recorder and start the new segment.
+            recorder.stop(clock.nowMs())?.let { session ->
+                scope.launch { progress.recordListeningSession(session) }
+            }
+            outroHandledEpisodeId = null
+            automaticSeekTargetMs = null
+            if (player.isPlaying) {
+                TrackMediaItem.toTrack(mediaItem)?.let { track ->
+                    recorder.start(track, clock.nowMs(), player.playbackParameters.speed)
+                }
+            }
         }
     }
 
     private fun startPositionTicker() {
         positionTicker?.cancel()
         positionTicker = scope.launch {
+            var secondsSinceSave = 0
             while (true) {
-                delay(POSITION_SAVE_INTERVAL_MS)
-                persistNow(finalise = false)
+                delay(OUTRO_CHECK_INTERVAL_MS)
+                maybeSkipOutro()
+                secondsSinceSave++
+                if (secondsSinceSave >= POSITION_SAVE_INTERVAL_SECONDS) {
+                    persistNow(finalise = false)
+                    secondsSinceSave = 0
+                }
             }
         }
+    }
+
+    private suspend fun maybeSkipOutro() {
+        val player = mediaSession?.player ?: return
+        val track = TrackMediaItem.toTrack(player.currentMediaItem) ?: return
+        if (outroHandledEpisodeId == track.episodeId) return
+        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: return
+        val skipMs = library.podcastSettingsSnapshot(track.podcastId).skipOutroSeconds * 1_000L
+        if (skipMs <= 0) return
+        val remaining = (duration - player.currentPosition).coerceAtLeast(0)
+        if (remaining == 0L || remaining > skipMs) return
+
+        outroHandledEpisodeId = track.episodeId
+        recorder.onIntroOutroSkip(remaining)
+        automaticSeekTargetMs = duration
+        player.seekTo(duration)
     }
 
     /**
@@ -179,15 +240,43 @@ class PlaybackService : MediaSessionService() {
                 return@launch
             }
             queue.remove(next.track.episodeId)
-            player.setMediaItem(TrackMediaItem.from(next.track))
-            player.prepare()
-            player.play()
+            startQueuedTrack(player, next.track)
         }
+    }
+
+    /**
+     * Queue auto-advance has no Activity/PlayerConnection in the foreground, so
+     * the service must apply the same resume, show speed, intro, artwork privacy
+     * and offline-file rules itself.
+     */
+    private suspend fun startQueuedTrack(player: ExoPlayer, track: Track) {
+        val settings = library.podcastSettingsSnapshot(track.podcastId)
+        val savedPosition = progress.progressSnapshot(track.episodeId)
+            ?.takeIf { !it.completed }
+            ?.positionMs
+            ?: 0L
+        val startPosition = savedPosition.takeIf { it > 0 }
+            ?: settings.skipIntroSeconds * 1_000L
+        val speed = settings.speed ?: preferences.preferences.first().playbackSpeed
+        val artwork = artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX)
+        val localMediaUri = downloads.completedPath(track.episodeId)
+            ?.let { android.net.Uri.fromFile(java.io.File(it)).toString() }
+
+        player.setMediaItem(
+            TrackMediaItem.from(track, artwork, localMediaUri),
+            startPosition,
+        )
+        player.playbackParameters = PlaybackParameters(speed)
+        player.prepare()
+        player.play()
     }
 
     private companion object {
         const val SEEK_BACK_MS = 15_000L
         const val SEEK_FORWARD_MS = 30_000L
-        const val POSITION_SAVE_INTERVAL_MS = 5_000L
+        const val OUTRO_CHECK_INTERVAL_MS = 1_000L
+        const val POSITION_SAVE_INTERVAL_SECONDS = 5
+        const val AUTOMATIC_SEEK_TOLERANCE_MS = 1_000L
+        const val ARTWORK_PX = 512
     }
 }

@@ -192,6 +192,14 @@ class PodcastViewModel @Inject constructor(
         saveSettings(_state.value.settings.copy(speed = speed))
     }
 
+    fun setSkipIntro(seconds: Int) {
+        saveSettings(_state.value.settings.copy(skipIntroSeconds = seconds.coerceIn(0, 600)))
+    }
+
+    fun setSkipOutro(seconds: Int) {
+        saveSettings(_state.value.settings.copy(skipOutroSeconds = seconds.coerceIn(0, 600)))
+    }
+
     fun toggleAutoQueue() {
         val current = _state.value.settings
         saveSettings(current.copy(autoQueueNew = !current.autoQueueNew))

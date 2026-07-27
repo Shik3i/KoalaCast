@@ -4,6 +4,17 @@ plugins {
     id("koalacast.android.hilt")
 }
 
+val releaseKeystoreFile = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
+val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(
+    releaseKeystoreFile,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "net.koalastuff.koalacast"
 
@@ -11,6 +22,17 @@ android {
         applicationId = "net.koalastuff.koalacast"
         versionCode = 1
         versionName = "0.1.0-alpha01"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("production") {
+                storeFile = file(requireNotNull(releaseKeystoreFile))
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -25,9 +47,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Debug signing so a local `assembleRelease` is verifiable; real
-            // releases are signed in CI with the upload key.
-            signingConfig = signingConfigs.getByName("debug")
+            // A local release remains installable with the debug key. CI requires
+            // all four release-signing variables and therefore selects production.
+            signingConfig = signingConfigs.findByName("production")
+                ?: signingConfigs.getByName("debug")
         }
     }
 

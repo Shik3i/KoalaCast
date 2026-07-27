@@ -20,6 +20,9 @@
     <string name="podcast_action_play">Play episode</string>
     <string name="podcast_show_speed">Speed for this show</string>
     <string name="podcast_speed_default">Default</string>
+    <string name="podcast_skip_intro">Skip intro</string>
+    <string name="podcast_skip_outro">Skip outro</string>
+    <string name="podcast_skip_seconds">0 seconds</string>
     <string name="podcast_auto_queue">Automatically queue the newest unplayed episode</string>
     <string name="podcast_mark_all_played">Mark all played</string>
     <string name="podcast_mark_all_unplayed">Mark all unplayed</string>

@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
@@ -11,6 +12,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import java.io.IOException
 import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -43,7 +45,13 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                 .apply { if (existing > 0) header("Range", "bytes=$existing-") }
                 .build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) error("HTTP ${response.code}")
+                if (!response.isSuccessful) {
+                    val message = "HTTP ${response.code}"
+                    if (response.code == 408 || response.code == 429 || response.code >= 500) {
+                        throw IOException(message)
+                    }
+                    throw PermanentDownloadException(message)
+                }
                 val append = existing > 0 && response.code == 206
                 val start = if (append) existing else 0L
                 val total = response.body.contentLength()
@@ -52,11 +60,11 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                     ?: row.totalBytes
                 if (!append && partial.exists()) partial.delete()
 
+                var downloaded = start
                 RandomAccessFile(partial, "rw").use { output ->
                     output.seek(start)
                     response.body.byteStream().use { input ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var downloaded = start
                         var lastUpdate = 0L
                         while (true) {
                             if (isStopped) return@withContext Result.retry()
@@ -72,6 +80,9 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                         }
                     }
                 }
+                if (total > 0 && downloaded != total) {
+                    throw IOException("Incomplete response: received $downloaded of $total bytes")
+                }
                 if (completed.exists()) completed.delete()
                 check(partial.renameTo(completed)) { "Could not finalize download" }
                 update(
@@ -85,14 +96,15 @@ class EpisodeDownloadWorker @AssistedInject constructor(
             }
         } catch (error: Exception) {
             if (error is CancellationException) throw error
+            val retry = error !is PermanentDownloadException && runAttemptCount < MAX_RETRY_ATTEMPTS
             update(
                 episodeId,
-                DownloadState.FAILED,
+                if (retry) DownloadState.QUEUED else DownloadState.FAILED,
                 partial.length(),
                 row.totalBytes,
                 error = error.message ?: error::class.java.simpleName,
             )
-            Result.retry()
+            if (retry) Result.retry() else Result.failure()
         }
     }
 
@@ -122,11 +134,16 @@ class EpisodeDownloadWorker @AssistedInject constructor(
             .setProgress(100, progress, progress == 0)
             .setOngoing(true)
             .build()
-        return ForegroundInfo(
-            NOTIFICATION_ID_BASE + id.hashCode().ushr(1) % 10_000,
-            notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-        )
+        val notificationId = NOTIFICATION_ID_BASE + id.hashCode().ushr(1) % 10_000
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(
+                notificationId,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            )
+        } else {
+            ForegroundInfo(notificationId, notification)
+        }
     }
 
     private fun percent(bytes: Long, total: Long) =
@@ -137,5 +154,8 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         private const val CHANNEL_ID = "episode_downloads"
         private const val NOTIFICATION_ID_BASE = 20_000
         private const val UPDATE_BYTES = 256L * 1024L
+        private const val MAX_RETRY_ATTEMPTS = 4
     }
 }
+
+private class PermanentDownloadException(message: String) : Exception(message)

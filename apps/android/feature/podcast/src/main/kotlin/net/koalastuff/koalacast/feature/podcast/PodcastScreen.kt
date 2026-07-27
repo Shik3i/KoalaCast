@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,6 +45,7 @@ import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
+import net.koalastuff.koalacast.core.ui.component.KoalaTextField
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
@@ -88,6 +91,8 @@ fun PodcastScreen(
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
         onSetSpeed = viewModel::setSpeed,
+        onSetSkipIntro = viewModel::setSkipIntro,
+        onSetSkipOutro = viewModel::setSkipOutro,
         onToggleAutoQueue = viewModel::toggleAutoQueue,
         onMarkAllPlayed = { viewModel.markAllPlayed(true) },
         onMarkAllUnplayed = { viewModel.markAllPlayed(false) },
@@ -109,6 +114,8 @@ internal fun PodcastContent(
     onToggleQueue: (Episode) -> Unit,
     onTogglePlayed: (Episode) -> Unit,
     onSetSpeed: (Float?) -> Unit,
+    onSetSkipIntro: (Int) -> Unit,
+    onSetSkipOutro: (Int) -> Unit,
     onToggleAutoQueue: () -> Unit,
     onMarkAllPlayed: () -> Unit,
     onMarkAllUnplayed: () -> Unit,
@@ -147,6 +154,8 @@ internal fun PodcastContent(
                     onBack = onBack,
                     onToggleSubscribe = onToggleSubscribe,
                     onSetSpeed = onSetSpeed,
+                    onSetSkipIntro = onSetSkipIntro,
+                    onSetSkipOutro = onSetSkipOutro,
                     onToggleAutoQueue = onToggleAutoQueue,
                 )
             }
@@ -243,6 +252,8 @@ private fun PodcastHeader(
     onBack: () -> Unit,
     onToggleSubscribe: () -> Unit,
     onSetSpeed: (Float?) -> Unit,
+    onSetSkipIntro: (Int) -> Unit,
+    onSetSkipOutro: (Int) -> Unit,
     onToggleAutoQueue: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
@@ -324,6 +335,23 @@ private fun PodcastHeader(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            ) {
+                SkipField(
+                    label = stringResource(R.string.podcast_skip_intro),
+                    seconds = settings.skipIntroSeconds,
+                    onChange = onSetSkipIntro,
+                    modifier = Modifier.weight(1f),
+                )
+                SkipField(
+                    label = stringResource(R.string.podcast_skip_outro),
+                    seconds = settings.skipOutroSeconds,
+                    onChange = onSetSkipOutro,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -338,6 +366,36 @@ private fun PodcastHeader(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SkipField(
+    label: String,
+    seconds: Int,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+    ) {
+        MonoText(
+            text = label,
+            color = KoalaTheme.colors.ink4,
+            style = KoalaTheme.type.monoSmall,
+        )
+        KoalaTextField(
+            value = seconds.takeIf { it > 0 }?.toString().orEmpty(),
+            onValueChange = { value ->
+                val digits = value.filter(Char::isDigit).take(3)
+                onChange(digits.toIntOrNull()?.coerceAtMost(600) ?: 0)
+            },
+            placeholder = stringResource(R.string.podcast_skip_seconds),
+            leadingIcon = null,
+            keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Done,
+        )
     }
 }
 

@@ -27,11 +27,20 @@ class SecureAccountStore @Inject constructor(
     @ApplicationContext context: Context,
 ) : AuthTokenProvider {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    private val _account = MutableStateFlow(readAccount())
+    private val initialToken = decryptToken()
+    private val _account = MutableStateFlow(initialToken?.let { readAccount() })
     val account: StateFlow<Account?> = _account
 
     @Volatile
-    private var cachedToken: String? = decryptToken()
+    private var cachedToken: String? = initialToken
+
+    init {
+        // A restored/corrupted ciphertext without its non-exportable Keystore key
+        // must not leave the UI in a ghost signed-in state.
+        if (initialToken == null && prefs.contains(KEY_TOKEN)) {
+            clearStoredAccount()
+        }
+    }
 
     override fun token(): String? = cachedToken
 
@@ -58,6 +67,10 @@ class SecureAccountStore @Inject constructor(
     fun clear() {
         cachedToken = null
         _account.value = null
+        clearStoredAccount()
+    }
+
+    private fun clearStoredAccount() {
         prefs.edit()
             .remove(KEY_USER_ID)
             .remove(KEY_USERNAME)

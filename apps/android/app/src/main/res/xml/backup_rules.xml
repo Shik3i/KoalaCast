@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Preferences (including the chosen server) are backed up; nothing else exists yet.
-  When device tokens land they must be excluded here — a credential does not belong
-  in a cloud backup.
--->
+<!-- The non-exportable Keystore key cannot travel with secure_account.xml. Back up
+     only non-secret DataStore preferences; library transfer is explicit sync/OPML. -->
 <full-backup-content>
-    <include domain="sharedpref" path="." />
+    <include domain="file" path="datastore/koalacast_preferences.preferences_pb" />
 </full-backup-content>

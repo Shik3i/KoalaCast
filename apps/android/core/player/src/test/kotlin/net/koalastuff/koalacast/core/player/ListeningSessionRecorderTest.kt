@@ -78,6 +78,17 @@ class ListeningSessionRecorderTest {
     }
 
     @Test
+    fun `an automatic intro or outro jump is reported separately`() {
+        recorder.start(track, nowMs = 0, speed = 1f)
+        recorder.onIntroOutroSkip(45_000)
+        recorder.onIntroOutroSkip(-1)
+
+        val session = recorder.stop(nowMs = 60_000)!!
+        assertEquals(45_000L, session.introOutroSkippedMs)
+        assertEquals(0L, session.manualSkippedMs)
+    }
+
+    @Test
     fun `a segment with no elapsed time is not recorded`() {
         recorder.start(track, nowMs = 1_000, speed = 1f)
         assertNull(recorder.stop(nowMs = 1_000))
@@ -117,6 +128,5 @@ class ListeningSessionRecorderTest {
 
         // Reporting a number here would be inventing one.
         assertEquals(0L, session.silenceSavedMs)
-        assertEquals(0L, session.introOutroSkippedMs)
     }
 }
