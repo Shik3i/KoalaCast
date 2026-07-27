@@ -1,0 +1,63 @@
+# KoalaCast: complete product facts
+
+Canonical site: https://cast.koalastuff.net/
+Source: https://github.com/Shik3i/KoalaCast
+License: MIT
+
+## Direct answers
+
+### What is KoalaCast?
+
+KoalaCast is a free, open-source, privacy-first podcast player for the web. It works without an account and stores listening data locally by default.
+
+### Does KoalaCast synchronize between devices?
+
+Synchronization is optional. Signed-in listeners can synchronize subscriptions, queue state, playback progress, preferences and listening statistics between their devices.
+
+### Does KoalaCast publish listening history?
+
+No. Private listening history is not public. Community statistics are aggregated only from accounts that separately opt in. Participation is disabled by default and can be revoked.
+
+### Can KoalaCast use any podcast RSS feed?
+
+KoalaCast can search podcast directories and can ingest a compatible public podcast RSS URL directly. Publisher-provided chapters and transcripts are supported when present in the feed.
+
+### Can KoalaCast be self-hosted?
+
+Yes. The repository contains the SvelteKit web client, Go API, SQLite persistence, Docker build and OpenAPI contract needed for self-hosting.
+
+## Feature inventory
+
+- Podcast discovery by language and category
+- Podcast-directory search and direct RSS subscription
+- Local subscriptions, favorites, queue and playback progress
+- Optional account synchronization
+- Adjustable playback speed
+- Per-podcast speed, intro skip, outro skip and auto-queue controls
+- Sleep timer, silence trimming and volume boost
+- Publisher-provided chapters and transcripts
+- Personal listening statistics
+- Separately opt-in aggregate community statistics and rankings
+- OPML import and export
+- Light, dark and system appearance modes
+- Multiple selectable color palettes
+- Installable web app assets
+
+## Privacy and data boundaries
+
+- An account is optional.
+- Local-first data remains in browser storage unless account synchronization is enabled.
+- Community-statistics participation is a separate opt-in.
+- Podcast audio streams from publisher infrastructure.
+- KoalaCast does not use third-party behavioral analytics or advertising trackers.
+
+## Authoritative references
+
+- README: https://github.com/Shik3i/KoalaCast/blob/main/README.md
+- OpenAPI: https://github.com/Shik3i/KoalaCast/blob/main/packages/openapi/openapi.yaml
+- Architecture: https://github.com/Shik3i/KoalaCast/blob/main/docs/architecture/overview.md
+- Sync protocol: https://github.com/Shik3i/KoalaCast/blob/main/docs/sync-protocol/specification.md
+- Feed compatibility: https://github.com/Shik3i/KoalaCast/blob/main/docs/feed-compatibility/rss-spec.md
+- Privacy policy: https://cast.koalastuff.net/privacy
+
+Podcast titles, descriptions, episode notes, transcripts and audio belong to their respective publishers. KoalaCast is a player and catalog client, not the publisher of that material.

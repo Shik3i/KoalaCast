@@ -64,6 +64,56 @@ func TestPodcastHandler_SearchUnconfigured(t *testing.T) {
 	}
 }
 
+func TestPodcastHandler_SearchFallsBackWhenPodcastIndexRejectsCredentials(t *testing.T) {
+	indexServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"status":"false","description":"unauthorized"}`, http.StatusUnauthorized)
+	}))
+	defer indexServer.Close()
+
+	idxClient := podcastindex.NewClient("expired-key", "expired-secret")
+	idxClient.SetBaseURL(indexServer.URL)
+	idxClient.SetHTTPClient(rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true}))
+
+	itunesClient := &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host != "itunes.apple.com" || req.URL.Query().Get("term") != "fallback" {
+				t.Fatalf("unexpected iTunes request: %s", req.URL.String())
+			}
+			body := `{"resultCount":1,"results":[{"trackId":42,"trackName":"Fallback Cast","artistName":"Koala","feedUrl":"https://example.com/feed.xml"}]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	handler := &PodcastHandler{
+		PodcastIndex: idxClient,
+		ITunes:       itunes.NewITunesClientWithHTTPClient(itunesClient),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/podcasts/search?q=fallback&region=de", nil)
+	rec := httptest.NewRecorder()
+	handler.Search(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected fallback status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Provider string                 `json:"provider"`
+		Results  []itunes.PodcastResult `json:"results"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode fallback response: %v", err)
+	}
+	if resp.Provider != "itunes" {
+		t.Fatalf("expected iTunes fallback provider, got %q", resp.Provider)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Title != "Fallback Cast" {
+		t.Fatalf("unexpected fallback results: %#v", resp.Results)
+	}
+}
+
 func TestPodcastHandler_AddFeed_SSRFValidation(t *testing.T) {
 	tempDir, err := ioutil.TempDir("", "koala_pod_test_*")
 	if err != nil {

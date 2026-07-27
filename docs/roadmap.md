@@ -70,11 +70,13 @@ the filemask above already excludes it. Keep it that way.
 
 ---
 
-## Native Android client
+## Native Android P7
 
-**Status:** planned. Architecture already drafted in
-[android-architecture.md](android-architecture.md) — Kotlin, Jetpack Compose,
-Media3.
+**Status:** P0–P6 shipped. The remaining platform and delight work is tracked in
+[`apps/android/README.md`](../apps/android/README.md): Android Auto, a
+home-screen widget, chapter UI, dynamic artwork palettes, advanced download
+policies, and broader UI/integration test coverage. Architecture:
+[android-architecture.md](android-architecture.md).
 
 ---
 

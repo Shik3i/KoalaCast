@@ -12,8 +12,9 @@ testdata/
 
 ## Usage
 
-These fixtures back the RSS/Atom parser tests in
-[`services/api/internal/rss`](../services/api/internal/rss) and the feed-handling
+These fixtures back the
+[`services/api/internal/rss/parser_test.go`](../services/api/internal/rss/parser_test.go)
+parser tests and the feed-handling
 handler/integration tests. They let the parser be tested deterministically
 without any network access.
 

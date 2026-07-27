@@ -5,6 +5,7 @@
 Canonical site: https://cast.koalastuff.net/
 Source code: https://github.com/Shik3i/KoalaCast
 License: MIT
+Complete product facts: https://cast.koalastuff.net/llms-full.txt
 
 ## Core capabilities
 

@@ -196,7 +196,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {
 				switch strings.ToLower(filepath.Ext(r.URL.Path)) {
-				case ".avif", ".png", ".svg", ".webp", ".woff2":
+				case ".avif", ".jpg", ".jpeg", ".png", ".svg", ".webp", ".woff2":
 					// These stable app-shell assets are versioned alongside each
 					// deployment. A week avoids repeat-download warnings without
 					// making a self-hoster's icon update sticky for a year.

@@ -13,7 +13,7 @@ Specifications and design docs for KoalaCast. Start with the root
 | [sync-protocol/specification.md](sync-protocol/specification.md) | Cross-device synchronization engine protocol |
 | [feed-compatibility/rss-spec.md](feed-compatibility/rss-spec.md) | RSS/Atom parsing rules and feed aliasing |
 | [privacy/privacy-policy.md](privacy/privacy-policy.md) | Privacy principles and data retention |
-| [android-architecture.md](android-architecture.md) | Planned native Android client architecture |
+| [android-architecture.md](android-architecture.md) | Native Android client architecture and shipped boundaries |
 
 ## Directory Map
 

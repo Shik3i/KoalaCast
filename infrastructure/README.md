@@ -14,7 +14,7 @@ Orchestrated by the repo-root [`docker-compose.yml`](../docker-compose.yml).
 
 ## Container Image
 
-The Dockerfile is multi-stage and produces a clean, non-root 26MB runtime Alpine image.
+The Dockerfile is multi-stage and produces a compact, non-root Alpine runtime image.
 
 | Image | Base (runtime) | Exposes | Notes |
 | :--- | :--- | :--- | :--- |

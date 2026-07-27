@@ -918,8 +918,11 @@ p { text-wrap: pretty; }
 		var(--rail-resizer-width) var(--right-rail-width);
 	width: min(100%, calc(var(--left-rail-width) + var(--right-rail-width) + (2 * var(--rail-resizer-width)) + 1400px));
 }
-.quiet-app.empty-running-order:has(.running-order) {
+.quiet-app.empty-running-order:not(.right-compact):has(.running-order) {
 	--right-rail-width: 150px !important;
+}
+.quiet-app.right-collapsed:has(.running-order) {
+	--right-rail-width: 48px !important;
 }
 .quiet-app.empty-running-order .running-order header { padding-inline: 12px; }
 .quiet-app.empty-running-order .running-order .queue-empty { padding-inline: 12px !important; }

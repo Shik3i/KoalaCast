@@ -10,7 +10,7 @@
 
 **A completely free, open-source, privacy-first podcast player for the web.**
 
-Calm, distraction-free listening — with optional, end-to-end cross-device sync.
+Calm, distraction-free listening — with optional account-backed cross-device sync.
 
 [![CI](https://github.com/Shik3i/KoalaCast/actions/workflows/ci.yml/badge.svg)](https://github.com/Shik3i/KoalaCast/actions/workflows/ci.yml)
 [![Docker Release](https://github.com/Shik3i/KoalaCast/actions/workflows/docker-release.yml/badge.svg)](https://github.com/Shik3i/KoalaCast/actions/workflows/docker-release.yml)
@@ -43,7 +43,7 @@ Calm, distraction-free listening — with optional, end-to-end cross-device sync
 
 1. **100% free and open source** — MIT licensed, no ads, no tracking, no premium tier.
 2. **Local-first** — use the entire app with no account; data lives in your browser's IndexedDB.
-3. **Optional cross-device sync** — an account only syncs subscriptions, queue, favorites, and playback progress.
+3. **Optional cross-device sync** — an account syncs subscriptions, favorites, playback progress, and listening statistics.
 4. **Direct publisher audio** — audio streams straight from the publisher CDN; KoalaCast never proxies or stores it.
 5. **RSS as the source of truth** — standard RSS 2.0/Atom plus Podcasting 2.0 tags are preserved.
 6. **Self-hosting parity** — a self-hosted instance has exactly the same capabilities as any official one.
@@ -56,13 +56,15 @@ Calm, distraction-free listening — with optional, end-to-end cross-device sync
 | :--- | :--- |
 | **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, add any feed by direct RSS URL |
 | **Languages** | Spoken-language filtering (not just storefront region) for Discover and Search, language + genre search filters, fully translated English/German interface (add a language with one JSON file) |
-| **Playback** | Web Audio player, Media Session API, playback-speed control, ms-accurate position tracking, keyboard shortcuts |
+| **Playback** | Web Audio player, Media Session API, playback-speed control, per-podcast controls, listening-time tracking, keyboard shortcuts |
 | **Library** | Subscriptions, queue, favorites, OPML import/export |
 | **Accounts (optional)** | Argon2id hashing, Base32 recovery codes, HttpOnly session cookies, Bearer device tokens |
-| **Sync** | Monotonic cursor pull/push, idempotent writes, conflict resolution, full-resync trigger |
+| **Sync** | Subscriptions, favorites, playback state, and listening sessions via monotonic cursor pull/push and idempotent writes |
+| **Statistics** | Private personal listening analytics plus separately opt-in global aggregates and listener leaderboard |
+| **Customization** | Light/dark/system modes, nine palettes with Fjord as default, resizable side rails, per-show playback preferences |
 | **Admin** | Registration toggle, user suspension, feed-health inspection, manual refresh, system metrics |
 | **Backend** | Go + chi, SQLite (WAL), SSRF-safe HTTP transport, background feed worker with ETag/304 + backoff |
-| **Ops** | Ultra-lightweight multi-stage Docker image (26MB single Go binary), zero reverse-proxy sidecars, GitHub Actions CI, signed SLSA provenance + SBOM releases |
+| **Ops** | Multi-stage single-binary Docker image, zero reverse-proxy sidecars, GitHub Actions CI, signed SLSA provenance + SBOM releases |
 
 See the full, always-current breakdown in [docs/current-status.md](docs/current-status.md).
 
@@ -121,7 +123,7 @@ Deep dives live in [docs/](docs/):
 - [Privacy policy & data retention](docs/privacy/privacy-policy.md)
 - [Internationalization & language filtering](docs/i18n.md)
 - [Roadmap](docs/roadmap.md)
-- [Future Android architecture](docs/android-architecture.md)
+- [Android architecture](docs/android-architecture.md)
 
 ---
 
@@ -149,7 +151,7 @@ Every top-level directory has its own `README.md` describing its contents and co
 ### Requirements
 
 - **Go** 1.25+
-- **Node.js** 20+
+- **Node.js** 24+
 - **Docker** 24+ with Compose (optional, for the container workflow)
 
 ### Common tasks (`make help`)
@@ -159,7 +161,7 @@ Every top-level directory has its own `README.md` describing its contents and co
 | `make build` | Build the Go API binary and the SvelteKit static SPA bundle |
 | `make dev-api` | Run the Go API on `:3000` |
 | `make dev-web` | Run the SvelteKit dev server on `:5173` (proxies `/api` → `:3000`) |
-| `make test` | Go tests with `-race` + `svelte-check` |
+| `make test` | Go tests with `-race`, web unit tests, types, docs, translations, and SEO checks |
 | `make fmt` / `make vet` | Format Go sources / run `go vet` |
 | `make docker-build` / `make docker-up` / `make docker-down` | Container workflow |
 | `make clean` | Remove build artifacts and local databases |
@@ -204,8 +206,8 @@ Full precedence rules: [docs/architecture/overview.md](docs/architecture/overvie
 # Backend — unit + integration with the race detector
 cd services/api && go test -race ./...
 
-# Frontend — unit tests, type checking, translation integrity
-cd apps/web && npm test && npm run check && npm run check:i18n
+# Frontend — unit tests, types, docs, translations, SEO, production build
+cd apps/web && npm test && npm run check && npm run check:docs && npm run check:i18n && npm run check:seo && npm run build
 ```
 
 CI runs the same checks plus `go vet`, `gofmt`, OpenAPI linting, and Docker builds on every push and PR — see [.github/workflows/ci.yml](.github/workflows/ci.yml).

@@ -3,6 +3,7 @@
 	import { clearAllLocalData, saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
 	import {
 		COLOR_PALETTES,
+		DEFAULT_PALETTE,
 		getStoredPalette,
 		getStoredTheme,
 		setPalette,
@@ -49,7 +50,7 @@
 
 	// Theme state
 	let currentTheme = $state<ThemeMode>('system');
-	let currentPalette = $state<PaletteId>('eucalyptus');
+	let currentPalette = $state<PaletteId>(DEFAULT_PALETTE);
 
 	// OPML Import States
 	let isImportingOpml = $state(false);
@@ -615,6 +616,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.5rem;
+		padding: clamp(20px, 2.5vw, 34px);
 	}
 	.settings-status { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; color: var(--text-muted); font-size: .8rem; }
 	.settings-status strong { color: var(--text-primary); }
@@ -1074,6 +1076,7 @@
 		border-radius: 6px;
 	}
 	@media (max-width: 620px) {
+		.settings-page { padding: 16px 14px 96px; }
 		.consent-row { align-items: flex-start; flex-direction: column; }
 		.theme-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
 		.theme-btn { justify-content: center; min-width: 0; padding-inline: .45rem; }

@@ -39,10 +39,10 @@ test-web:
 	@echo "==> Running web unit tests (i18n catalogues & runtime)..."
 	@cd apps/web && npm test
 
-## check: Run svelte-check type verification
+## check: Run web types, docs, translation, release-policy and SEO verification
 check:
-	@echo "==> Running svelte-check type verification..."
-	@cd apps/web && npm run check
+	@echo "==> Running web verification..."
+	@cd apps/web && npm run check && npm run check:docs && npm run check:i18n && npm run check:release-policy && npm run check:seo
 
 ## fmt: Format Go sources
 fmt:

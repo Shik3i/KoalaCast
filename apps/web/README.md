@@ -20,10 +20,10 @@ apps/web/
 │   │   ├── components/          Player, Footer, …
 │   │   ├── data/                Static fallback data (featured podcasts)
 │   │   ├── idb/                 IndexedDB engine (local subscriptions/queue/progress)
-│   │   ├── styles/              Global CSS + Forest Green design tokens
-│   │   └── theme.ts             Light/dark theme handling
-│   └── routes/                  Pages: /, /search, /library, /podcast/[id], /episode/[id], /settings, /admin
-├── static/                      app icons, cover placeholder and empty-state artwork
+│   │   ├── styles/              Global layout + palette-aware design tokens
+│   │   └── theme.ts             System/light/dark mode and nine color palettes
+│   └── routes/                  Discovery, Search, Inbox, Library, Player, Stats, Account, Settings, Admin
+├── static/                      app icons, empty states, SEO files and social artwork
 ├── svelte.config.js             adapter-static config with fallback: 'index.html'
 └── vite.config.ts               Dev server + /api → :3000 proxy
 ```
@@ -49,6 +49,10 @@ backend alongside it (`make dev-api`).
 | `npm run build` | Production static SPA build (`build/`) |
 | `npm run preview` | Preview the static SPA production build |
 | `npm run check` | `svelte-check` type verification (must be 0 errors) |
+| `npm run check:docs` | Validate tracked Markdown links and current-state assertions |
+| `npm run check:i18n` | Validate translation catalogues |
+| `npm run check:seo` | Validate sitemap, robots, llms and social metadata |
+| `npm test` | Run Vitest unit tests |
 
 ---
 
@@ -65,5 +69,5 @@ In production, the Go server delivers the static SPA with `index.html` fallback 
 - **Svelte 5 runes** (`$state`, `$derived`, `$effect`) — no legacy stores for local component state.
 - **Local-first:** account-free usage stores everything in IndexedDB (`src/lib/idb`).
 - **Images:** artwork `<img>` tags use `/api/v1/proxy/image` for privacy-safe Catmull-Rom downscaling and RAM LRU caching, falling back to `/cover-placeholder.webp` via `onerror`.
-- **Zero CDNs:** All icons (@phosphor-icons/web) and fonts (Outfit) are bundled locally.
+- **Zero asset CDNs:** Icons and fonts are bundled locally.
 - Keep `npm run check` at **0 errors** before opening a PR.

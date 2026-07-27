@@ -1,34 +1,45 @@
 # KoalaCast Current Implementation Status
 
-**Last Updated:** July 25, 2026  
-**License:** MIT License (`Copyright (c) 2026 Timo Schmidt (Shik3i)`)
+**Last updated:** July 27, 2026
+**License:** MIT
 
----
+This document records shipped behavior. Proposed work belongs in
+[roadmap.md](roadmap.md) or [`api_todo.md`](../api_todo.md).
 
-## 1. Feature Matrix Overview
+## Web and API
 
-| Component / Feature | Implementation Status | Description |
+| Area | Status | Current behavior |
 | :--- | :--- | :--- |
-| **Monorepo Layout & MIT License** | ✅ **Implemented** | Complete monorepo layout, MIT License, READMEs across all packages, `.env.example`, `.gitignore`. |
-| **Go REST API Server** | ✅ **Implemented** | Chi router, JSON logging (`slog`), request context tracing (`X-Request-ID`), `/healthz` and `/readyz` probes. |
-| **SQLite DB & Migrations** | ✅ **Implemented** | SQLite WAL mode, foreign keys (`PRAGMA foreign_keys=ON;`), busy timeout (`5000ms`), strict `CHECK` constraints, normalized usernames, stable episode identity keys. |
-| **SSRF Network Protection** | ✅ **Implemented** | Custom `http.Transport` with DNS resolution in `DialContext`, blocking loopback, private IPv4/IPv6, link-local, cloud metadata (`169.254.169.254`), CGNAT, IPv4-mapped IPv6, and redirect loops. |
-| **RSS & Atom Feed Parser** | ✅ **Implemented** | Parser supporting RSS 2.0 & Atom 1.0, Podcasting 2.0 tags (`chapters`, `transcript` arrays), `content:encoded`, iTunes durations, zero-time fallback for missing dates, deterministic stable episode identity resolution. |
-| **Background Feed Update Worker**| ✅ **Implemented** | Worker pool checking subscribed feeds, ETag / Last-Modified 304 handling, exponential backoff, error tracking (`consecutive_error_count`), and episode persistence. |
-| **Podcast Search & Direct RSS Feed**| ✅ **Implemented** | `/api/v1/podcasts/search` with Podcast Index integration / graceful fallback, `/api/v1/podcasts/feed` direct RSS URL addition, podcast details, and episode pagination. |
-| **Single Go Binary & Static Server** | ✅ **Implemented** | Go REST API serving static SvelteKit SPA assets (`@sveltejs/adapter-static`) directly on port 3000 with zero external reverse proxies or sidecars. |
-| **RAM LRU Image Proxy & Cache** | ✅ **Implemented** | In-memory 100MB RAM LRU cache (`container/list`) with Catmull-Rom downscaling and `singleflight` thundering herd protection. |
-| **Docker Deployment Setup** | ✅ **Implemented** | Ultra-lightweight multi-stage Dockerfile (26MB Alpine single Go binary), named volume `koala_data`, and single-command `docker-compose.yml` supporting external proxy networks (`caddy_net`). |
-| **SvelteKit Web Player & UI** | ✅ **Implemented** | SvelteKit + Svelte 5 web app with Forest Green design system, sticky scroll-shrink header, extracted keyboard shortcuts modal (`ShortcutsModal.svelte`), Media Session API integration, position tracking, speed controls, discovery, library, and settings. |
-| **Dedicated Auth & Account Routes** | ✅ **Implemented** | Dedicated `/login`, `/register`, and `/account` routes with active session management and device revocation. |
-| **Data-Driven Privacy Policy** | ✅ **Implemented** | Dedicated `/privacy` route backed by structured data module (`src/lib/data/privacy.ts`) documenting Hetzner EU hosting, 7-day logs, IP subnet truncation, and local IndexedDB storage. |
-| **IndexedDB Local Storage Engine** | ✅ **Implemented** | Account-free Local Mode storing subscriptions, queue, playback progress, and favorites strictly inside browser IndexedDB. |
-| **Accounts, Security & Auth** | ✅ **Implemented** | User registration, Argon2id password hashing (`m=64MB, t=3, p=2`), thread-safe HMAC-SHA256 Pepper secret support with legacy fallback & auto-upgrade of seeded admin hashes, Base32 recovery code generation (`AAAA-BBBB-...`), HttpOnly session cookies, Bearer device tokens, session revocation. |
-| **Cross-Device Sync Protocol** | ✅ **Implemented** | Monotonic user cursor allocation (`user_sync_cursors`), incremental `/api/v1/sync` pull, idempotent push, 410 Gone full-resync trigger, playback state conflict resolution rules. |
-| **OPML Import / Export** | ✅ **Implemented** | OPML import with SSRF validation, duplicate feed handling, partial success reporting, and standard OPML export. |
-| **Admin Interface** | ✅ **Implemented** | Admin dashboard (`/admin`), registration toggle (honoring `KC_REGISTRATION_ENABLED` env override), user suspension, session revocation, feed health inspection, manual feed refresh, and system metrics. |
-| **GitHub Actions CI & Release** | ✅ **Implemented** | `.github/workflows/ci.yml` running Go tests with `-race`, `go vet`, frontend `npm ci`, `npm run check`, `npm run build`, OpenAPI linting, and Docker release builds on tags (`v*`). |
-| **Spoken-Language Filtering** | ✅ **Implemented** | Discover and Search filtered by the feed's actual language rather than the iTunes storefront region. Language resolved from the RSS `<language>` tag or Podcast Index where available, else a stopword heuristic (`internal/lang`); undetectable feeds are kept rather than hidden. Chart requests over-fetch so a filtered page still fills. |
-| **Search Filters** | ✅ **Implemented** | Language and genre filter chips on `/search`, pre-selected from the listener's settings with "clear filters" to search everything, and a reset back to settings defaults. |
-| **UI Internationalization** | ✅ **Implemented** | Dependency-free i18n: JSON catalogues per language (contributor- and Weblate-friendly), CLDR plurals via `Intl.PluralRules`, lazy-loaded locale chunks awaited before first paint, `MessageKey` types derived from the source catalogue, and an in-app interface-language picker. English + German at 369 keys / 100% parity across every route and component. CI enforces placeholder and plural integrity (`npm run check:i18n`); `find-untranslated.mjs` audits for hardcoded strings. Legal text is deliberately English-only. See `docs/i18n.md`. |
-| **Native Android Client** | 🏗️ **In Progress (P0–P3)** | Kotlin + Jetpack Compose multi-module app in `apps/android`. Shipped: first-run **server selection** with `/healthz` validation and a runtime-switchable base URL; the "Quiet Edition" design system (bundled OFL fonts + MIT Phosphor glyphs, English/German strings); Discover / Search / Podcast / Episode / Settings; **Room local-first storage** mirroring the web's IndexedDB stores field for field, including deletion tombstones for sync; subscriptions, queue (reorderable), saved episodes and continue-listening in a Library tab; and **Media3 playback** in a `MediaSessionService` — mini + full player, sleep timer, speed, progress persistence, queue auto-advance, and on-device listening telemetry. Cover art is routed through the listener's own instance by default; audio is never proxied. Next: the New/Inbox feed (P5), downloads (P4), account + sync (P6). See `apps/android/README.md`. |
+| **Web application** | Implemented | SvelteKit 5 static SPA, served by the Go application. Responsive three-column layout with resizable/collapsible side rails and mobile navigation. |
+| **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language/genre filters, clear/reset behavior, and subscription-aware Inbox. |
+| **Playback** | Implemented | HTML audio + Media Session, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, and progress ring controls. |
+| **Local-first storage** | Implemented | Subscriptions, queue, favorites, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. |
+| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, and listening sessions. Queue and per-podcast settings remain local until their server materialization is implemented; see [`api_todo.md`](../api_todo.md). |
+| **Statistics** | Implemented | Personal listening duration, sessions, podcasts, speed and time-saved metrics. Signed-in users can separately opt into global aggregates, podcast rankings, and the listener leaderboard; participation defaults to off. |
+| **Themes and accessibility** | Implemented | System/light/dark modes, nine palettes (Fjord default; Eucalyptus retained), scalable/resizable layout, reduced motion, focus treatment, tooltips, accessible names, and English/German UI. |
+| **SEO and sharing** | Implemented | Canonical/robots metadata, sitemap with Git-derived `lastmod`, WebSite/SoftwareApplication JSON-LD, `llms.txt`, `llms-full.txt`, and 1200×630 Open Graph/Twitter artwork. |
+| **Admin** | Implemented | Registration policy, users, suspension, session revocation, feed health/manual refresh, and system metrics. |
+| **Feeds and metadata** | Implemented | RSS 2.0/Atom, Podcasting 2.0 chapters/transcripts, stable episode identity, ETag/304 refresh, backoff, SSRF protection, response limits, and privacy-preserving metadata/image proxying. |
+| **API and persistence** | Implemented | Go/chi API, SQLite WAL, embedded migrations, health/readiness endpoints, request IDs, rate limiting, and static SPA serving from one process. |
+
+## Android
+
+The native Kotlin/Compose/Media3 application has P0–P6 shipped: onboarding and
+server selection, discovery/search, playback, Room local-first library,
+resumable downloads, Inbox, profile statistics, accounts, device-token sync,
+OPML, and global statistics. Remaining P7 platform work includes Android Auto,
+widgets, chapters, dynamic artwork palettes, advanced download policies, and
+additional UI/integration test coverage. The detailed live checklist is
+[`apps/android/README.md`](../apps/android/README.md).
+
+## Delivery and quality gates
+
+- CI runs Go formatting, vet and race tests; Svelte checks and unit tests;
+  translation, documentation and SEO audits; OpenAPI linting; Docker build and
+  runtime smoke tests; and an arm64 cross-compile check.
+- `v*` tags publish multi-architecture GHCR images with provenance and SBOM
+  attestations. They do not create GitHub Releases.
+- `android-v*` tags build signed Android packages, verify signatures, attest
+  artifacts, and are the only tags that create a GitHub Release.
+- GitHub-hosted action majors were reviewed against their official current
+  documentation on July 27, 2026.

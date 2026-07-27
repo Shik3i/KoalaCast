@@ -1,14 +1,16 @@
-# Future Native Android Architecture Specification
+# Native Android Architecture
 
-While the initial MVP focuses on the SvelteKit web application and Go REST API, KoalaCast is designed from inception to support a full-featured native Android client.
+KoalaCast ships a native Kotlin/Compose Android client in `apps/android`.
+P0–P6 are implemented; the detailed feature checklist and remaining P7 work
+live in [`apps/android/README.md`](../apps/android/README.md).
 
 ## Architectural Principles
 
 1. **Language & UI**: Kotlin + Jetpack Compose.
-2. **Audio Playback Engine**: AndroidX Media3 (`ExoPlayer` + `MediaLibraryService`).
+2. **Audio Playback Engine**: AndroidX Media3 (`ExoPlayer` + `MediaSessionService`).
 3. **Local Database**: Room persistence library storing subscriptions, episode metadata, queue, and playback state in millisecond precision (`int64` / `Long`).
-4. **Background Operations**: `WorkManager` for periodic feed syncing, queue management, and offline download management.
-5. **Network & Sync**: Ktor or Retrofit client communicating directly with the `/api/v1/sync` endpoint using revocable device tokens (`device_credentials` table).
+4. **Background Operations**: `WorkManager` for resumable offline downloads and constraints.
+5. **Network & Sync**: Retrofit/OkHttp client communicating with `/api/v1/*` using revocable device tokens (`device_credentials` table).
 6. **Direct Publisher Audio Streaming**: Streams episode audio directly from original publisher enclosure URLs to ExoPlayer without passing audio binary through KoalaCast servers.
 
 ## Authentication & Token Flow for Android

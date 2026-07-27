@@ -20,7 +20,7 @@ By participating, you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development Setup
 
-Requirements: **Go 1.25+**, **Node.js 20+**, and optionally **Docker 24+**.
+Requirements: **Go 1.25+**, **Node.js 24+**, and optionally **Docker 24+**.
 
 ```bash
 git clone https://github.com/Shik3i/KoalaCast.git
@@ -64,11 +64,15 @@ go test -race ./...
 cd apps/web
 npm test              # unit tests (i18n catalogues & runtime)
 npm run check         # svelte-check type verification
+npm run check:docs    # Markdown links and current-state assertions
 npm run check:i18n    # translation catalogues must be structurally valid
+npm run check:release-policy # GitHub Releases stay Android-only
+npm run check:seo     # sitemap, robots, llms and social metadata
 npm run build         # production build must succeed
 ```
 
-Shortcut: `make test` runs Go race tests + `svelte-check` from the repo root.
+Shortcut: `make test` runs Go race tests, web unit tests, types, documentation,
+translation, and SEO checks from the repo root.
 
 ---
 
@@ -105,6 +109,14 @@ Two rules worth knowing before you start:
 - Svelte 5 runes (`$state`, `$derived`, `$effect`). Keep components small and typed.
 - No new runtime dependencies without discussion.
 - `npm run check` must report **0 errors**.
+
+### Releases
+
+- `v*` tags publish Docker images to GHCR. They must never create a GitHub
+  Release; keep those tags for image provenance and rollback.
+- `android-v*` tags are the only tags allowed to create a GitHub Release, and
+  every such release must contain an APK or AAB.
+- Run `npm run check:release-policy` after changing any workflow.
 
 ---
 

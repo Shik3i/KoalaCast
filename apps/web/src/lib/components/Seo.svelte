@@ -114,30 +114,29 @@
 		return 'private';
 	});
 	const copy = $derived((currentLocale() === 'de' ? german : english)[routeKey] ?? english.private);
-	const canonical = $derived(`${$page.url.origin}${$page.url.pathname === '/' ? '/' : $page.url.pathname.replace(/\/+$/, '')}`);
-	const image = $derived(`${$page.url.origin}/icon-1024.png`);
+	const canonical = $derived(`https://cast.koalastuff.net${$page.url.pathname === '/' ? '/' : $page.url.pathname.replace(/\/+$/, '')}`);
 
 	$effect(() => {
 		const description = copy.description;
-		if (browser) document.querySelector('meta[name="description"]')?.setAttribute('content', description);
+		if (!browser) return;
+		const germanLocale = currentLocale() === 'de';
+		const imageAlt = germanLocale
+			? 'KoalaCast — ein ruhiger, privater Podcast-Player'
+			: 'KoalaCast — a calm, private podcast player';
+		const setContent = (selector: string, value: string) =>
+			document.querySelector(selector)?.setAttribute('content', value);
+
+		document.title = copy.title;
+		document.querySelector('#koalacast-canonical')?.setAttribute('href', canonical);
+		setContent('#koalacast-description', description);
+		setContent('#koalacast-robots', copy.index ? 'index, follow, max-image-preview:large' : 'noindex, nofollow');
+		setContent('#koalacast-og-title', copy.title);
+		setContent('#koalacast-og-description', description);
+		setContent('#koalacast-og-url', canonical);
+		setContent('#koalacast-og-locale', germanLocale ? 'de_DE' : 'en_US');
+		setContent('#koalacast-og-image-alt', imageAlt);
+		setContent('#koalacast-twitter-title', copy.title);
+		setContent('#koalacast-twitter-description', description);
+		setContent('#koalacast-twitter-image-alt', imageAlt);
 	});
 </script>
-
-<svelte:head>
-	<title>{copy.title}</title>
-	<meta name="robots" content={copy.index ? 'index, follow, max-image-preview:large' : 'noindex, nofollow'} />
-	<link rel="canonical" href={canonical} />
-	<meta property="og:site_name" content="KoalaCast" />
-	<meta property="og:type" content="website" />
-	<meta property="og:title" content={copy.title} />
-	<meta property="og:description" content={copy.description} />
-	<meta property="og:url" content={canonical} />
-	<meta property="og:image" content={image} />
-	<meta property="og:image:width" content="1024" />
-	<meta property="og:image:height" content="1024" />
-	<meta property="og:image:alt" content="KoalaCast koala logo" />
-	<meta name="twitter:card" content="summary" />
-	<meta name="twitter:title" content={copy.title} />
-	<meta name="twitter:description" content={copy.description} />
-	<meta name="twitter:image" content={image} />
-</svelte:head>

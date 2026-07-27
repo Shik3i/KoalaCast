@@ -12,6 +12,8 @@ export type PaletteId =
 	| 'paper'
 	| 'ultraviolet';
 
+export const DEFAULT_PALETTE: PaletteId = 'fjord';
+
 export interface ColorPalette {
 	id: PaletteId;
 	labelKey: MessageKey;
@@ -101,9 +103,9 @@ export function setTheme(mode: ThemeMode) {
 }
 
 export function getStoredPalette(): PaletteId {
-	if (typeof window === 'undefined') return 'eucalyptus';
+	if (typeof window === 'undefined') return DEFAULT_PALETTE;
 	const saved = localStorage.getItem('koalacast_palette');
-	return isPaletteId(saved) ? saved : 'eucalyptus';
+	return isPaletteId(saved) ? saved : DEFAULT_PALETTE;
 }
 
 export function setPalette(palette: PaletteId) {

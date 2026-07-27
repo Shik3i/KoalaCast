@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLOR_PALETTES, isPaletteId } from './theme';
+import { COLOR_PALETTES, DEFAULT_PALETTE, getStoredPalette, isPaletteId } from './theme';
 
 describe('color palettes', () => {
 	it('exposes nine unique selectable palettes including eucalyptus and monochrome obsidian', () => {
@@ -19,5 +19,11 @@ describe('color palettes', () => {
 		expect(isPaletteId('fjord')).toBe(true);
 		expect(isPaletteId('unknown')).toBe(false);
 		expect(isPaletteId(null)).toBe(false);
+	});
+
+	it('uses fjord as the default while keeping eucalyptus selectable', () => {
+		expect(DEFAULT_PALETTE).toBe('fjord');
+		expect(getStoredPalette()).toBe('fjord');
+		expect(COLOR_PALETTES.some((palette) => palette.id === 'eucalyptus')).toBe(true);
 	});
 });

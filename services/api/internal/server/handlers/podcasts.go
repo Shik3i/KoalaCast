@@ -129,8 +129,15 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-	} else {
-		// iTunes Search API fallback (access to millions of podcasts with HD artwork)
+	}
+
+	// Podcast Index credentials can be syntactically present but expired or
+	// rejected upstream. Search must remain available in that state: fall back
+	// to Apple's public podcast catalogue just as we do when no credentials are
+	// configured, instead of turning a provider-specific 401 into an app-wide
+	// connection error.
+	if provider == "itunes" || err != nil {
+		provider = "itunes"
 		if h.ITunes == nil {
 			h.ITunes = itunes.NewITunesClient()
 		}

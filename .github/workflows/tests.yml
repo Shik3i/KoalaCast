@@ -2,6 +2,7 @@ name: Tests
 
 # Reusable test suite. Called by CI (on every push/PR) and gated in front of the
 # Docker release so nothing ships without a green build.
+# Action majors reviewed against official upstream documentation: 2026-07-27.
 on:
   workflow_call:
 
@@ -69,6 +70,14 @@ jobs:
       - name: Translation check
         working-directory: apps/web
         run: npm run check:i18n
+
+      - name: Documentation links and current-state assertions
+        working-directory: apps/web
+        run: npm run check:docs
+
+      - name: Release policy
+        working-directory: apps/web
+        run: npm run check:release-policy
 
       - name: SEO metadata check
         working-directory: apps/web

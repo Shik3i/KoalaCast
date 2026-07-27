@@ -412,7 +412,6 @@
 					<button class="primary" onclick={() => playLatest(spotlight)}><i class="ph-fill ph-play"></i> {t('quiet.discover.playNow')}</button>
 					<button onclick={() => queueLatest(spotlight)}><i class="ph ph-list-plus"></i> {t('quiet.discover.queueNext')}</button>
 					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> {t('quiet.discover.save')}</button>
-					<span>P / Q / S</span>
 				</div>
 			</div>
 			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
@@ -576,7 +575,6 @@
 	.spotlight-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }
 	.spotlight-actions button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.spotlight-actions span { margin-left: 4px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
 	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
 	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 10px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
@@ -669,7 +667,6 @@
 		.spotlight p { display: none; }
 		.spotlight-actions { width: 100%; }
 		.spotlight-actions .primary { flex: 1; justify-content: center; }
-		.spotlight-actions > span { display: none; }
 		.spotlight-art { width: min(72vw, 300px); align-self: center; }
 		.spotlight-actions button, .session-control button, .sort-tabs button, .chart-filters select, .row-actions button { min-height: 44px; }
 		.reasoned-picks, .chart-section { padding: 16px; }

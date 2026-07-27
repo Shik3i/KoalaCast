@@ -24,7 +24,8 @@ cd apps/android && ./gradlew assembleDebug
 cd apps/android && ./gradlew build
 ```
 
-`build` runs the unit tests and Android Lint across every module; both are green.
+`build` runs the unit tests and Android Lint across every module and is the same
+gate used by Android CI.
 
 ### Release signing and recovery
 
@@ -70,9 +71,10 @@ for a server running on the host.
 
 Deliberately **not** faked:
 
-- The session-length control (`I HAVE 25 / 40 / 60`) and the mood tiles filter an
-  *episode* corpus, which arrives with the inbox (P5). `QueueRepository.trimTo`
-  — the logic behind `TRIM TO 40M` — is already written and tested.
+- The session-length recommendation control (`I HAVE 25 / 40 / 60`) and mood
+  tiles are not yet wired to the shipped Inbox episode corpus.
+  `QueueRepository.trimTo` — the logic behind `TRIM TO 40M` — is already
+  written and tested.
 - The chart shows rank, cover, title and author. The momentum sparkline in the mock
   needs 7-day trend data that neither iTunes charts nor Podcast Index return — a
   drawn-from-nowhere sparkline would be exactly the kind of "stat the app cannot
@@ -99,7 +101,7 @@ the project's principles:
 - **Self-hostable.** Anyone can point the app at their own KoalaCast server.
 
 ### USP (what makes us different)
-1. **True local-first + optional E2E-friendly sync** — most FOSS players are either
+1. **True local-first + optional account-backed sync** — most FOSS players are either
    local-only or account-required. We are both.
 2. **Self-host server picker built into onboarding** — first-class, not an afterthought.
 3. **Dynamic per-show theming** — UI recolors from cover art (already in web; port it).
@@ -116,18 +118,18 @@ the project's principles:
 | UI | **Jetpack Compose** + Material 3 | Dynamic color (Material You) + our own show-accent theming. |
 | Architecture | **MVVM / MVI**, unidirectional data flow | `ViewModel` + immutable UI state + `StateFlow`. |
 | DI | **Hilt** | |
-| Audio | **AndroidX Media3** (`ExoPlayer` + `MediaLibraryService`/`MediaSessionService`) | Background playback, notification, lockscreen, Android Auto, Bluetooth/media buttons. |
+| Audio | **AndroidX Media3** (`ExoPlayer` + `MediaSessionService`) | Background playback, notification, lockscreen, Bluetooth and media buttons. Android Auto remains P7. |
 | Local DB | **Room** | Millisecond precision (`Long`). Mirrors web IndexedDB stores. |
-| Preferences | **DataStore (Proto or Prefs)** | Server URL, theme, playback speed, download-on-wifi-only, etc. |
-| Networking | **Retrofit + OkHttp** (or Ktor client) + **kotlinx.serialization** | Talks to `/api/v1/*`. |
-| Background work | **WorkManager** | Periodic feed refresh, sync, download queue, auto-download. |
+| Preferences | **DataStore** | Server URL, theme, playback speed, and client preferences. |
+| Networking | **Retrofit + OkHttp** + **kotlinx.serialization** | Talks to `/api/v1/*`. |
+| Background work | **WorkManager** | Resumable download queue and constrained background work. |
 | Images | **Coil** | Cover art + palette extraction for show-accent. |
-| Downloads | **Media3 `DownloadManager`** (or OkHttp + WorkManager) | Offline episodes; see §5. |
+| Downloads | **OkHttp + WorkManager** | Resumable offline episodes in app-private storage; see §5. |
 | Testing | JUnit, Turbine (Flow), Compose UI tests, Robolectric, MockWebServer | |
 | Min SDK | **26 (Android 8.0)**, target/compile **36** | Pinned in `gradle/libs.versions.toml`. |
 | Build | Gradle (Kotlin DSL), version catalog (`libs.versions.toml`) | |
 
-Module layout (as built; the greyed entries are the shape later phases slot into):
+Module layout as built:
 ```
 apps/android/
   build-logic/convention/ # Gradle convention plugins
@@ -177,7 +179,7 @@ Self-hosters run their own server. The app must let the user choose the server:
 | POST | `/auth/logout` | Bearer | Revokes the calling device's own token (native) / clears the web session. |
 | GET | `/auth/sessions` | Bearer | Lists web sessions **and** device credentials; each item has a `kind` (`"session"` \| `"device"`) and `is_current`. |
 | DELETE | `/auth/sessions/{id}` | Bearer | Revokes either a web session or a device token by id (user-scoped). |
-| GET | `/sync` | Bearer | **Pull** changes (subscriptions, queue, favorites, progress). |
+| GET | `/sync` | Bearer | **Pull** changes (subscriptions, favorites, playback state, listening sessions). |
 | POST | `/sync` | Bearer | **Push** local changes. |
 | POST | `/sync/merge` | Bearer | Merge local (pre-account) data on first sign-in. |
 | POST/GET | `/opml/import`, `/opml/export` | Bearer | OPML. |
@@ -253,13 +255,13 @@ Web has these today; Android should match:
 - [x] Account: register / login / recovery code / session management.
 - [x] Sleep timer, playback-speed persistence, media session metadata.
 
-### 4.3 New features we want (some are also web TODOs — mark them shared)
+### 4.3 Native features and remaining platform work
 - [x] **📥 Offline downloads** (see §5) — resumable, process-safe internal-storage downloads.
 - [x] **🆕 "New / Inbox" feed** — a filtered page showing **only the newest unplayed
       episodes across all subscribed podcasts**, newest first, with filters
-      (unplayed / downloaded / podcast / date). **⚠️ Also required in the WEB client —
-      see §8.** Needs a subscription-aware episode aggregation (client-side from
-      `/podcasts/{id}/episodes`, or a future server endpoint — see §9).
+      (unplayed / downloaded / podcast / date). It currently aggregates
+      `/podcasts/{id}/episodes` client-side; a batch server endpoint remains in
+      `api_todo.md`.
 - [ ] **Auto-download** newest N episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).
 - [ ] **Playback tuning** — variable speed with fine steps, skip-silence / volume boost
       (Media3 audio processors), per-podcast default speed.
@@ -287,8 +289,8 @@ Requirements:
 - [x] Respect battery + Doze; foreground service notification while downloading.
 - [x] Handle redirects, resumable ranges, and content-length-less streams gracefully.
 
-Recommended: **Media3 `DownloadManager` + `DownloadService`** for robustness (handles
-resume, notifications, requirements/constraints), with a Room mirror for UI state.
+Implemented with **OkHttp + WorkManager**, resumable range requests,
+app-private storage, and a Room mirror for UI state.
 
 ---
 
@@ -303,7 +305,7 @@ resume, notifications, requirements/constraints), with a Room mirror for UI stat
   no jank on scroll (Compose stability, `key`ed lists).
 - **Battery:** ExoPlayer + WorkManager constraints; no wakelocks beyond playback/downloads.
 - **Resilience:** works fully offline; graceful empty/error/loading states (skeletons).
-- **i18n-ready:** all strings in resources (English first; German likely next).
+- **Internationalization:** all strings are resources; English and German ship.
 
 ---
 
@@ -321,15 +323,13 @@ resume, notifications, requirements/constraints), with a Room mirror for UI stat
 
 ---
 
-## 8. ⚠️ Shared backlog — also needed in the WEB client
-Called out by the product owner: **a "newest episodes" filter page**.
-- **Web (`apps/web`):** add a page/tab that aggregates the **latest unplayed episodes
-  from all subscribed podcasts**, newest first, with filters. Today the web library has
-  Subscriptions / In-Progress / Queue / Favorites but **no cross-subscription "new
-  episodes" inbox**. Implement client-side by fetching `/podcasts/{id}/episodes` for each
-  local subscription and merging by `pub_date`, or add a server endpoint (§9).
-- **Android:** same feature as the **Inbox / New** screen (§4.3).
-Keep the two implementations behaviorally consistent.
+## 8. Shared web/Android Inbox
+
+Both clients ship a cross-subscription **Inbox / New** view. They aggregate
+episodes client-side by fetching each subscribed podcast and merging by
+publication date. The remaining shared backend improvement is the batched Inbox
+endpoint specified in [`api_todo.md`](../../api_todo.md), which will remove the
+per-subscription request fan-out.
 
 ---
 
@@ -341,9 +341,10 @@ Keep the two implementations behaviorally consistent.
    (LAN self-hosting) but always warned about.
 2. **"New episodes" data source** — client-side fan-out is implemented; a batch
    endpoint remains in `api_todo.md`.
-3. **Sync granularity** — subscriptions, favorites, queue, playback and listening
-   sessions are implemented; lossless pagination/snapshot and show-settings sync
-   remain backend work in `api_todo.md`.
+3. **Sync granularity** — subscriptions, favorites, playback state and listening
+   sessions are materialized by the server. Queue and show-settings
+   materialization plus lossless pagination/snapshot remain backend work in
+   `api_todo.md`.
 4. **Downloads engine** — implemented with OkHttp + WorkManager, resumable range
    requests and app-private storage.
 5. **Min / target SDK** — **26 / 36**, `compileSdk 36`, pinned in

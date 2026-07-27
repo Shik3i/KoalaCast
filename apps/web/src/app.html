@@ -1,31 +1,92 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-palette="fjord">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta id="koalacast-description" name="description" content="KoalaCast - Free, open-source, privacy-first podcast player with cross-device sync." />
 		<meta name="application-name" content="KoalaCast" />
 		<meta name="author" content="KoalaCast contributors" />
+		<meta name="generator" content="SvelteKit" />
 		<meta name="format-detection" content="telephone=no" />
+		<meta id="koalacast-robots" name="robots" content="index, follow, max-image-preview:large" />
 		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#06100c" media="(prefers-color-scheme: dark)" />
+		<meta name="theme-color" content="#07101a" media="(prefers-color-scheme: dark)" />
+		<link id="koalacast-canonical" rel="canonical" href="https://cast.koalastuff.net/" />
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="any" />
 		<link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icon-32.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icon-192.png" />
+		<meta property="og:site_name" content="KoalaCast" />
+		<meta property="og:type" content="website" />
+		<meta id="koalacast-og-title" property="og:title" content="KoalaCast — Free, private podcast player" />
+		<meta id="koalacast-og-description" property="og:description" content="Discover, follow and listen to podcasts in a calm, open-source player with local-first storage and optional cross-device sync." />
+		<meta id="koalacast-og-url" property="og:url" content="https://cast.koalastuff.net/" />
+		<meta id="koalacast-og-locale" property="og:locale" content="en_US" />
+		<meta property="og:locale:alternate" content="de_DE" />
+		<meta property="og:image" content="https://cast.koalastuff.net/og/koalacast-social.jpg" />
+		<meta property="og:image:secure_url" content="https://cast.koalastuff.net/og/koalacast-social.jpg" />
+		<meta property="og:image:type" content="image/jpeg" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta id="koalacast-og-image-alt" property="og:image:alt" content="KoalaCast — a calm, private podcast player" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta id="koalacast-twitter-title" name="twitter:title" content="KoalaCast — Free, private podcast player" />
+		<meta id="koalacast-twitter-description" name="twitter:description" content="Discover, follow and listen to podcasts in a calm, open-source player with local-first storage and optional cross-device sync." />
+		<meta name="twitter:image" content="https://cast.koalastuff.net/og/koalacast-social.jpg" />
+		<meta id="koalacast-twitter-image-alt" name="twitter:image:alt" content="KoalaCast — a calm, private podcast player" />
 		<title>KoalaCast</title>
 		<script type="application/ld+json">
 			{
 				"@context": "https://schema.org",
-				"@type": "WebApplication",
-				"name": "KoalaCast",
-				"url": "https://cast.koalastuff.net/",
-				"applicationCategory": "MultimediaApplication",
-				"operatingSystem": "Web",
-				"isAccessibleForFree": true,
-				"softwareHelp": "https://github.com/Shik3i/KoalaCast",
-				"license": "https://opensource.org/license/mit",
-				"description": "Free, open-source, privacy-first podcast player with local-first storage and optional cross-device sync."
+				"@graph": [
+					{
+						"@type": "WebSite",
+						"@id": "https://cast.koalastuff.net/#website",
+						"url": "https://cast.koalastuff.net/",
+						"name": "KoalaCast",
+						"description": "A free, open-source, privacy-first podcast player.",
+						"inLanguage": ["en", "de"],
+						"publisher": { "@id": "https://cast.koalastuff.net/#organization" }
+					},
+					{
+						"@type": "SoftwareApplication",
+						"@id": "https://cast.koalastuff.net/#application",
+						"name": "KoalaCast",
+						"url": "https://cast.koalastuff.net/",
+						"applicationCategory": "MultimediaApplication",
+						"applicationSubCategory": "Podcast player",
+						"operatingSystem": "Web",
+						"isAccessibleForFree": true,
+						"offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+						"softwareHelp": "https://github.com/Shik3i/KoalaCast",
+						"downloadUrl": "https://github.com/Shik3i/KoalaCast",
+						"license": "https://opensource.org/license/mit",
+						"description": "Free, open-source, privacy-first podcast player with local-first storage and optional cross-device synchronization.",
+						"featureList": [
+							"Podcast discovery and RSS subscriptions",
+							"Local-first playback without an account",
+							"Optional cross-device synchronization",
+							"Playback speed and per-podcast controls",
+							"Chapters and publisher-provided transcripts",
+							"Listening statistics with separate opt-in community aggregates",
+							"OPML import and export"
+						],
+						"publisher": { "@id": "https://cast.koalastuff.net/#organization" }
+					},
+					{
+						"@type": "Organization",
+						"@id": "https://cast.koalastuff.net/#organization",
+						"name": "KoalaStuff",
+						"url": "https://koalastuff.net/",
+						"logo": {
+							"@type": "ImageObject",
+							"url": "https://cast.koalastuff.net/icon-1024.png",
+							"width": 1024,
+							"height": 1024
+						},
+						"sameAs": ["https://github.com/Shik3i/KoalaCast"]
+					}
+				]
 			}
 		</script>
 
@@ -52,7 +113,7 @@
 					) {
 						document.documentElement.setAttribute('data-palette', palette);
 					} else {
-						document.documentElement.setAttribute('data-palette', 'eucalyptus');
+						document.documentElement.setAttribute('data-palette', 'fjord');
 					}
 				} catch (e) {}
 			})();
