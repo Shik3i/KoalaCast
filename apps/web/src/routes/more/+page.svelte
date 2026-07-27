@@ -2,7 +2,6 @@
 	import { t } from '$lib/i18n';
 	const links = [
 		{ href: '/profile', icon: 'ph-chart-bar', label: 'quiet.nav.profile' as const },
-		{ href: '/global-stats', icon: 'ph-globe-hemisphere-west', label: 'globalStats.nav' as const },
 		{ href: '/settings', icon: 'ph-gear', label: 'quiet.nav.settings' as const },
 		{ href: '/account', icon: 'ph-user-circle', label: 'nav.account' as const },
 		{ href: '/privacy', icon: 'ph-shield-check', label: 'footer.privacy' as const }

@@ -640,10 +640,14 @@
 			"discover": "Discover",
 			"new": "New",
 			"library": "Library",
-			"profile": "Listening",
+			"profile": "Statistics",
 			"settings": "Settings",
 			"subscriptions": "Subscribed",
 			"noSubscriptions": "Your subscriptions appear here."
+		},
+		"statsTab": {
+			"myStats": "Personal Stats",
+			"globalStats": "Global Stats"
 		},
 		"profile": {
 			"sections": "Profile sections",

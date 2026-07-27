@@ -20,8 +20,7 @@
 		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('quiet.nav.new'), count: recentCount },
 		{ href: '/library', icon: 'ph-squares-four', label: t('quiet.nav.library') },
-		{ href: '/profile', icon: 'ph-user-circle', label: t('quiet.nav.profile') },
-		{ href: '/global-stats', icon: 'ph-chart-line-up', label: t('globalStats.nav') },
+		{ href: '/profile', icon: 'ph-chart-bar', label: t('quiet.nav.profile') },
 		{ href: '/settings', icon: 'ph-gear', label: t('quiet.nav.settings') },
 		...(isAdmin ? [{ href: '/admin', icon: 'ph-shield-star', label: t('nav.admin') }] : [])
 	]);
@@ -41,6 +40,7 @@
 	});
 
 	function active(href: string) {
+		if (href === '/profile') return path.startsWith('/profile') || path.startsWith('/global-stats');
 		return href === '/' ? path === '/' : path === href || path.startsWith(`${href}/`);
 	}
 </script>

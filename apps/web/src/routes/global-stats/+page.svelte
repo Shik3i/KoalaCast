@@ -118,6 +118,11 @@
 </script>
 
 <div class="global-page">
+	<nav class="stats-subnav" aria-label={t('quiet.profile.sections')}>
+		<a href="/profile">{t('quiet.statsTab.myStats')}</a>
+		<a href="/global-stats" class="active" aria-current="page">{t('quiet.statsTab.globalStats')}</a>
+	</nav>
+
 	<header class="global-head">
 		<div>
 			<p class="eyebrow">KoalaCast Community</p>
@@ -311,6 +316,10 @@
 		.kpi-grid article:nth-child(-n+2) { border-bottom: 1px solid var(--border-hair); }
 		.two-col { grid-template-columns: 1fr; }
 	}
+	.stats-subnav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-row); padding-bottom: 12px; }
+	.stats-subnav a { padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 13px; color: var(--ink-3); background: var(--bg-rail); text-decoration: none; transition: all 0.15s ease; }
+	.stats-subnav a:hover { color: var(--ink-1); }
+	.stats-subnav a.active { background: var(--accent-fill); color: var(--accent-on); }
 	@media (max-width: 520px) {
 		.global-page { padding: 16px 12px 100px; }
 		.global-head h1 { font-size: 38px; }

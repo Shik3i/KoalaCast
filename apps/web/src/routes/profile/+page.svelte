@@ -97,6 +97,11 @@
 </script>
 
 <div class="profile-page">
+	<nav class="stats-subnav" aria-label={t('quiet.profile.sections')}>
+		<a href="/profile" class="active" aria-current="page">{t('quiet.statsTab.myStats')}</a>
+		<a href="/global-stats">{t('quiet.statsTab.globalStats')}</a>
+	</nav>
+
 	<header class="profile-head" id="stats">
 		<span class="profile-avatar"><i class="ph ph-user" aria-hidden="true"></i></span>
 		<div>
@@ -282,5 +287,9 @@
 	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 36px; padding: 9px 11px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
 	@media (max-width: 1050px) { .profile-analysis { grid-template-columns: 1fr; }.breakdowns { grid-template-columns: repeat(3,1fr); }.ranking-list a { grid-template-columns: 22px 36px minmax(0,1fr) 80px 46px; } }
 	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px 1fr; }.profile-avatar { width: 54px; height: 54px; }.range-tabs { grid-column: 1 / -1; overflow-x: auto; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
+	.stats-subnav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-row); padding-bottom: 12px; }
+	.stats-subnav a { padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 13px; color: var(--ink-3); background: var(--bg-rail); text-decoration: none; transition: all 0.15s ease; }
+	.stats-subnav a:hover { color: var(--ink-1); }
+	.stats-subnav a.active { background: var(--accent-fill); color: var(--accent-on); }
 	@media (max-width: 520px) { .profile-page { padding: 16px; }.heatmap { grid-auto-columns: 9px; overflow-x: auto; }.ranking-list a { grid-template-columns: 22px 34px minmax(0,1fr) 56px; }.ranking-list em { display: none; }.privacy-card { align-items: flex-start; flex-direction: column; } }
 </style>

@@ -640,10 +640,14 @@
 			"discover": "Entdecken",
 			"new": "Neu",
 			"library": "Mediathek",
-			"profile": "Hören",
+			"profile": "Statistik",
 			"settings": "Einstellungen",
 			"subscriptions": "Abonniert",
 			"noSubscriptions": "Deine Abos erscheinen hier."
+		},
+		"statsTab": {
+			"myStats": "Eigene Statistik",
+			"globalStats": "Globale Statistik"
 		},
 		"profile": {
 			"sections": "Profilbereiche",
