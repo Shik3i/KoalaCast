@@ -67,5 +67,7 @@ describe('formatEpisodeMinutes', () => {
 	it('never invents a duration when metadata is missing', () => {
 		expect(formatEpisodeMinutes()).toBeNull();
 		expect(formatEpisodeMinutes(25 * 60_000)).toBe('25m');
+		expect(formatEpisodeMinutes(1500)).toBe('25m');
+		expect(formatEpisodeMinutes(75 * 60_000)).toBe('1h 15m');
 	});
 });

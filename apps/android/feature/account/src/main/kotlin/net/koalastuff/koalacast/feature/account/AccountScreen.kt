@@ -68,6 +68,7 @@ fun AccountScreen(
         uri?.let {
             runCatching { readLimitedText(context, it) }
                 .onSuccess(viewModel::importOpml)
+                .onFailure(viewModel::importFailed)
         }
     }
     val exportLauncher = rememberLauncherForActivityResult(
@@ -98,7 +99,11 @@ fun AccountScreen(
         onSync = viewModel::syncNow,
         onRevoke = viewModel::revokeSession,
         onGlobalStats = viewModel::setGlobalStats,
-        onImport = { importLauncher.launch(arrayOf("text/xml", "application/xml", "*/*")) },
+        onImport = {
+            importLauncher.launch(
+                arrayOf("text/xml", "application/xml", "text/x-opml", "application/opml+xml", "text/plain", "*/*"),
+            )
+        },
         onExport = viewModel::prepareOpmlExport,
         modifier = modifier,
         contentPadding = contentPadding,

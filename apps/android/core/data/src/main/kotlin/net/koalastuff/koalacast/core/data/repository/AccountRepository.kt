@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
+import net.koalastuff.koalacast.core.data.util.OpmlParser
 import net.koalastuff.koalacast.core.model.Account
 import net.koalastuff.koalacast.core.model.AccountSession
 import net.koalastuff.koalacast.core.model.DataError
@@ -148,7 +149,6 @@ class AccountRepository @Inject constructor(
     suspend fun importOpml(xml: String): DataResult<OpmlReport> = withContext(dispatcher) {
         val body = xml.toRequestBody("application/xml".toMediaType())
         when (val result = apiCall { api.importOpml(body) }) {
-            is DataResult.Failure -> result
             is DataResult.Success -> {
                 result.data.podcasts.forEach {
                     if (it.id.isNotBlank()) {
@@ -163,6 +163,24 @@ class AccountRepository @Inject constructor(
                         failures = result.data.failures.map { "${it.url}: ${it.reason}" },
                     ),
                 )
+            }
+            is DataResult.Failure -> {
+                val localFeeds = OpmlParser.parse(xml)
+                if (localFeeds.isNotEmpty()) {
+                    localFeeds.forEach { feed ->
+                        library.subscribeImported(feed.feedUrl, feed.feedUrl, feed.title, artworkUrl = "")
+                    }
+                    DataResult.Success(
+                        OpmlReport(
+                            totalFound = localFeeds.size,
+                            imported = localFeeds.size,
+                            skipped = 0,
+                            failures = emptyList(),
+                        ),
+                    )
+                } else {
+                    result
+                }
             }
         }
     }

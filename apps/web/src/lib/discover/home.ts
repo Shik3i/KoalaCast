@@ -111,5 +111,11 @@ export function arrangeDiscover(
 
 export function formatEpisodeMinutes(durationMs?: number): string | null {
 	if (!durationMs || durationMs <= 0) return null;
-	return `${Math.max(1, Math.round(durationMs / 60_000))}m`;
+	const ms = durationMs < 100_000 ? durationMs * 1000 : durationMs;
+	const totalMinutes = Math.round(ms / 60_000);
+	if (totalMinutes <= 0) return null;
+	if (totalMinutes < 60) return `${totalMinutes}m`;
+	const hours = Math.floor(totalMinutes / 60);
+	const minutes = totalMinutes % 60;
+	return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }

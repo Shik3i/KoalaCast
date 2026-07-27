@@ -145,6 +145,10 @@ class AccountViewModel @Inject constructor(
         }
     }
 
+    fun importFailed(throwable: Throwable) {
+        fail(DataError.Malformed(throwable.message ?: "Failed to read OPML file"))
+    }
+
     fun prepareOpmlExport() = launchAction {
         when (val result = accounts.exportOpml()) {
             is DataResult.Failure -> fail(result.error)

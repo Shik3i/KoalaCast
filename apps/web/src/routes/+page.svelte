@@ -153,6 +153,7 @@
 			if (id === requestId) {
 				isLoading = false;
 				isLoadingMore = false;
+				void hydrateVisibleMetadata();
 			}
 		}
 	}
@@ -170,13 +171,12 @@
 		if (isLoadingMore) return;
 		visibleChartCount += 12;
 		if (visibleChartCount <= Math.max(0, arranged.length - 4) || reachedEnd) {
-			if (fitsSession || sort === 'length' || sort === 'newest') await hydrateVisibleMetadata();
+			await hydrateVisibleMetadata();
 			return;
 		}
 		isLoadingMore = true;
 		limit += PAGE_SIZE;
 		await loadDiscover();
-		if (fitsSession || sort === 'length' || sort === 'newest') await hydrateVisibleMetadata();
 	}
 
 	function isSubscribed(podcast: PodcastItem) {
@@ -184,6 +184,9 @@
 	}
 
 	async function resolvePodcastId(podcast: PodcastItem): Promise<string | null> {
+		if (podcast.id && !podcast.id.startsWith('http') && podcast.id.length > 2) {
+			return podcast.id;
+		}
 		if (podcast.feed_url) {
 			try {
 				const response = await fetch('/api/v1/podcasts/feed', {
@@ -195,12 +198,11 @@
 					const resolved = await response.json();
 					if (resolved.id) return resolved.id as string;
 				}
-				return null;
 			} catch {
-				return null;
+				// fallback below
 			}
 		}
-		return podcast.id;
+		return podcast.id || null;
 	}
 
 	async function openPodcast(podcast: PodcastItem) {
