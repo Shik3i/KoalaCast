@@ -75,6 +75,8 @@ fun SettingsScreen(
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
+        onSkipSilenceChange = viewModel::setSkipSilence,
+        onVolumeBoostChange = viewModel::setVolumeBoost,
         onAutoDownloadCountChange = viewModel::setAutoDownloadCount,
         onRetentionChange = viewModel::setDownloadRetention,
         modifier = modifier,
@@ -94,6 +96,8 @@ internal fun SettingsContent(
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
+    onSkipSilenceChange: (Boolean) -> Unit,
+    onVolumeBoostChange: (Boolean) -> Unit,
     onAutoDownloadCountChange: (Int) -> Unit,
     onRetentionChange: (DownloadRetention) -> Unit,
     modifier: Modifier = Modifier,
@@ -249,6 +253,23 @@ internal fun SettingsContent(
                     )
                 }
             }
+        }
+
+        Hairline()
+
+        Section(title = stringResource(R.string.settings_audio_title)) {
+            SwitchRow(
+                title = stringResource(R.string.settings_skip_silence),
+                note = stringResource(R.string.settings_skip_silence_note),
+                checked = prefs?.skipSilence ?: false,
+                onCheckedChange = onSkipSilenceChange,
+            )
+            SwitchRow(
+                title = stringResource(R.string.settings_volume_boost),
+                note = stringResource(R.string.settings_volume_boost_note),
+                checked = prefs?.volumeBoost ?: false,
+                onCheckedChange = onVolumeBoostChange,
+            )
         }
 
         Hairline()
@@ -474,6 +495,27 @@ private fun PaletteId.descriptionRes(): Int = when (this) {
     PaletteId.OBSIDIAN -> R.string.settings_palette_obsidian_desc
     PaletteId.PAPER -> R.string.settings_palette_paper_desc
     PaletteId.ULTRAVIOLET -> R.string.settings_palette_ultraviolet_desc
+}
+
+@Composable
+private fun SwitchRow(
+    title: String,
+    note: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val colors = KoalaTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = KoalaTheme.type.label, color = colors.ink2)
+            Text(text = note, style = KoalaTheme.type.bodySmall, color = colors.ink3)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
 
 @Composable

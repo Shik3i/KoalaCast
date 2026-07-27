@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shelf titles in the Android Auto / Wear OS browse tree. -->
+    <string name="browse_continue">Continue listening</string>
+    <string name="browse_downloads">Downloaded</string>
+</resources>

@@ -65,6 +65,14 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.DOWNLOAD_WIFI_ONLY] = enabled }
     }
 
+    suspend fun setSkipSilence(enabled: Boolean) {
+        dataStore.edit { it[Keys.SKIP_SILENCE] = enabled }
+    }
+
+    suspend fun setVolumeBoost(enabled: Boolean) {
+        dataStore.edit { it[Keys.VOLUME_BOOST] = enabled }
+    }
+
     suspend fun setAutoDownloadCount(count: Int) {
         dataStore.edit { it[Keys.AUTO_DOWNLOAD_COUNT] = count.coerceIn(1, 20) }
     }
@@ -85,6 +93,8 @@ class PreferencesRepository @Inject constructor(
         proxyImages = this[Keys.PROXY_IMAGES] ?: true,
         playbackSpeed = this[Keys.PLAYBACK_SPEED] ?: 1f,
         downloadWifiOnly = this[Keys.DOWNLOAD_WIFI_ONLY] ?: true,
+        skipSilence = this[Keys.SKIP_SILENCE] ?: false,
+        volumeBoost = this[Keys.VOLUME_BOOST] ?: false,
         autoDownloadCount = this[Keys.AUTO_DOWNLOAD_COUNT] ?: 3,
         downloadRetention = DownloadRetention.fromId(this[Keys.DOWNLOAD_RETENTION]),
     )
@@ -99,6 +109,8 @@ class PreferencesRepository @Inject constructor(
         val PROXY_IMAGES = booleanPreferencesKey("proxy_images")
         val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
         val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
+        val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
+        val VOLUME_BOOST = booleanPreferencesKey("volume_boost")
         val AUTO_DOWNLOAD_COUNT = intPreferencesKey("auto_download_count")
         val DOWNLOAD_RETENTION = stringPreferencesKey("download_retention")
     }

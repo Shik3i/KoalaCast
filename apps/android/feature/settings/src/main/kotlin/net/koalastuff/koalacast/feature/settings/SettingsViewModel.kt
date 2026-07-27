@@ -89,6 +89,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setSkipSilence(enabled: Boolean) {
+        viewModelScope.launch { preferences.setSkipSilence(enabled) }
+    }
+
+    fun setVolumeBoost(enabled: Boolean) {
+        viewModelScope.launch { preferences.setVolumeBoost(enabled) }
+    }
+
     fun setAutoDownloadCount(count: Int) {
         viewModelScope.launch { preferences.setAutoDownloadCount(count) }
     }

@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.core.data.repository
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import net.koalastuff.koalacast.core.data.db.ListeningSessionDao
 import net.koalastuff.koalacast.core.data.db.PlaybackStateDao
@@ -45,6 +46,18 @@ class ProgressRepository @Inject constructor(
         playbackStates.get(episodeId)?.toModel()
 
     suspend fun completedIdsSnapshot(): Set<String> = playbackStates.completedIds().toSet()
+
+    /**
+     * The most recently played unfinished episode, for the system's media
+     * resumption slot after a reboot. Null when there is nothing worth offering —
+     * a denormalised track is required, because at that point the app has not run
+     * and cannot fetch one.
+     */
+    suspend fun mostRecentResumable(): Pair<Track, Long>? =
+        playbackStates.observeInProgress(limit = 1).first()
+            .firstOrNull()
+            ?.toModel()
+            ?.let { state -> state.track?.let { it to state.positionMs } }
 
     /**
      * Records a position. An episode within [COMPLETION_THRESHOLD_PERCENT] of the

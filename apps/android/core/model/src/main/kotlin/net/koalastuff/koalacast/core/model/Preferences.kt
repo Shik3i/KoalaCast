@@ -26,6 +26,13 @@ data class UserPreferences(
     val playbackSpeed: Float,
     /** Avoid metered mobile data for large episode files by default. */
     val downloadWifiOnly: Boolean,
+    /**
+     * Drop the gaps between words. Speech-only content, so this is safe here in a
+     * way it would not be for music.
+     */
+    val skipSilence: Boolean,
+    /** Lift quiet recordings toward a consistent level. */
+    val volumeBoost: Boolean,
     /** How many of the newest episodes auto-download keeps per opted-in show. */
     val autoDownloadCount: Int,
     /** When automatically downloaded episodes may be removed again. */

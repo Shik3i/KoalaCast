@@ -1,14 +1,21 @@
 package net.koalastuff.koalacast.core.player
 
-import android.content.Intent
+import android.content.Intent
+import android.media.audiofx.LoudnessEnhancer
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.MediaMetadata
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import com.google.common.util.concurrent.Futures
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +32,7 @@ import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import net.koalastuff.koalacast.core.data.util.Clock
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.Track
 import kotlin.math.abs
 import javax.inject.Inject
@@ -39,7 +47,7 @@ import javax.inject.Inject
  * both must keep happening after the last Activity is gone.
  */
 @AndroidEntryPoint
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
 
     @Inject lateinit var progress: ProgressRepository
     @Inject lateinit var queue: QueueRepository
@@ -52,10 +60,13 @@ class PlaybackService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val recorder = ListeningSessionRecorder()
 
-    private var mediaSession: MediaSession? = null
+    private var mediaSession: MediaLibrarySession? = null
     private var positionTicker: Job? = null
     private var outroHandledEpisodeId: String? = null
-    private var automaticSeekTargetMs: Long? = null
+    private var automaticSeekTargetMs: Long? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
+    private var boostWanted: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -73,13 +84,209 @@ class PlaybackService : MediaSessionService() {
                 /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
+            .setSkipSilenceEnabled(false)
             .build()
 
         player.addListener(PlayerListener(player))
-        mediaSession = MediaSession.Builder(this, player).build()
+        mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
+            .build()
+
+        // Audio processing is a stored preference, so apply it as soon as it is
+        // readable and whenever it changes rather than only at track start.
+        scope.launch {
+            preferences.preferences.collect { prefs ->
+                player.skipSilenceEnabled = prefs.skipSilence
+                boostWanted = prefs.volumeBoost
+                applyVolumeBoost(player, boostWanted)
+            }
+        }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    /**
+     * Quiet recordings are common in independent podcasting. `player.volume` cannot
+     * do this — it is capped at unity and only ever attenuates — so the lift comes
+     * from [LoudnessEnhancer], which applies gain on the audio session itself.
+     *
+     * Best effort: the effect is unavailable on some devices and on some routes
+     * (certain Bluetooth stacks), where construction throws. Failing quietly is
+     * right here — the episode should still play, just without the lift.
+     */
+    private fun applyVolumeBoost(player: ExoPlayer, enabled: Boolean) {
+        val sessionId = player.audioSessionId
+        if (sessionId == C.AUDIO_SESSION_ID_UNSET) return
+
+        if (!enabled) {
+            releaseLoudnessEnhancer()
+            return
+        }
+        if (loudnessEnhancer?.id != null && boostedSessionId == sessionId) return
+
+        releaseLoudnessEnhancer()
+        loudnessEnhancer = runCatching {
+            LoudnessEnhancer(sessionId).apply {
+                setTargetGain(BOOST_GAIN_MILLIBEL)
+                this.enabled = true
+            }
+        }.getOrNull()
+        boostedSessionId = sessionId
+    }
+
+    private fun releaseLoudnessEnhancer() {
+        runCatching { loudnessEnhancer?.release() }
+        loudnessEnhancer = null
+        boostedSessionId = C.AUDIO_SESSION_ID_UNSET
+    }
+
+    /**
+     * What makes the system offer KoalaCast in the media area after a reboot,
+     * before the app has been opened: Android asks the session what was playing,
+     * and a session that cannot answer simply does not appear.
+     */
+    /**
+     * The browse tree Android Auto, Wear OS and the Assistant read. Two shelves —
+     * what is half-finished and what is downloaded — because those are the only
+     * two things worth a glance while driving; deep browsing belongs on the phone.
+     */
+    private inner class LibraryCallback : MediaLibrarySession.Callback {
+
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(browsableFolder(ROOT_ID, "KoalaCast"), params))
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            val future = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
+            scope.launch {
+                val items: List<MediaItem> = when (parentId) {
+                    ROOT_ID -> listOf(
+                        browsableFolder(CONTINUE_ID, getString(R.string.browse_continue)),
+                        browsableFolder(DOWNLOADS_ID, getString(R.string.browse_downloads)),
+                    )
+                    CONTINUE_ID -> progress.inProgress.first()
+                        .mapNotNull { it.track }
+                        .map { playableItem(it) }
+                    DOWNLOADS_ID -> downloads.downloads.first()
+                        .filter { it.state == DownloadState.DONE }
+                        .map { playableItem(it.track) }
+                    else -> emptyList()
+                }
+                future.set(LibraryResult.ofItemList(ImmutableList.copyOf(items), params))
+            }
+            return future
+        }
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String,
+        ): ListenableFuture<LibraryResult<MediaItem>> {
+            val future = SettableFuture.create<LibraryResult<MediaItem>>()
+            scope.launch {
+                val track = progress.progressSnapshot(mediaId)?.track
+                future.set(
+                    if (track == null) {
+                        LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
+                    } else {
+                        LibraryResult.ofItem(playableItem(track), null)
+                    },
+                )
+            }
+            return future
+        }
+
+        /**
+         * A car head unit hands back only a media id, so the track has to be
+         * rebuilt from what is stored on device rather than fetched.
+         */
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            scope.launch {
+                val resolved = mediaItems.mapNotNull { item ->
+                    progress.progressSnapshot(item.mediaId)?.track?.let { track ->
+                        TrackMediaItem.from(track, artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX))
+                    }
+                }
+                if (resolved.isEmpty()) {
+                    future.setException(UnsupportedOperationException("unknown media id"))
+                } else {
+                    future.set(
+                        MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs),
+                    )
+                }
+            }
+            return future
+        }
+
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
+            ResumptionCallback().onPlaybackResumption(mediaSession, controller)
+    }
+
+    private fun browsableFolder(id: String, title: String): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(id)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setIsBrowsable(true)
+                    .setIsPlayable(false)
+                    .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
+                    .build(),
+            )
+            .build()
+
+    private fun playableItem(track: Track): MediaItem =
+        TrackMediaItem.from(track, artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX))
+
+    private inner class ResumptionCallback : MediaSession.Callback {
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            scope.launch {
+                val resumable = progress.mostRecentResumable()
+                if (resumable == null) {
+                    future.setException(UnsupportedOperationException("nothing to resume"))
+                } else {
+                    val (track, positionMs) = resumable
+                    future.set(
+                        MediaSession.MediaItemsWithStartPosition(
+                            listOf(
+                                TrackMediaItem.from(
+                                    track,
+                                    artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX),
+                                ),
+                            ),
+                            /* startIndex = */ 0,
+                            positionMs,
+                        ),
+                    )
+                }
+            }
+            return future
+        }
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
+        mediaSession
 
     /**
      * Swiping the app away while paused should not leave a dead notification, but
@@ -93,6 +300,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        releaseLoudnessEnhancer()
         persistNow(finalise = true)
         positionTicker?.cancel()
         mediaSession?.run {
@@ -108,6 +316,9 @@ class PlaybackService : MediaSessionService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
+                // The session id is unset until the audio track is created, so the
+                // preference collector above may have run too early to attach.
+                applyVolumeBoost(player, boostWanted)
                 TrackMediaItem.toTrack(player.currentMediaItem)?.let { track ->
                     recorder.start(track, clock.nowMs(), player.playbackParameters.speed)
                 }
@@ -278,5 +489,11 @@ class PlaybackService : MediaSessionService() {
         const val POSITION_SAVE_INTERVAL_SECONDS = 5
         const val AUTOMATIC_SEEK_TOLERANCE_MS = 1_000L
         const val ARTWORK_PX = 512
+        const val ROOT_ID = "root"
+        const val CONTINUE_ID = "continue"
+        const val DOWNLOADS_ID = "downloads"
+        /** Below unity headroom, so a loud episode cannot be pushed into clipping. */
+        /** +10 dB, the usual lift for speech that was mastered too quietly. */
+        const val BOOST_GAIN_MILLIBEL = 1_000
     }
 }

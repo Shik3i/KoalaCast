@@ -63,4 +63,9 @@
     <string name="settings_retention_14">After 14 days</string>
     <string name="settings_retention_30">After 30 days</string>
     <string name="settings_retention_note">Only downloaded files are removed. Subscriptions, the queue and your position are never touched.</string>
+    <string name="settings_audio_title">Audio</string>
+    <string name="settings_skip_silence">Skip silence</string>
+    <string name="settings_skip_silence_note">Shortens the gaps between words. Safe for speech, and it shortens most episodes noticeably.</string>
+    <string name="settings_volume_boost">Boost quiet episodes</string>
+    <string name="settings_volume_boost_note">Lifts quietly mastered recordings by about 10 dB. Unavailable on some devices and audio routes.</string>
 </resources>

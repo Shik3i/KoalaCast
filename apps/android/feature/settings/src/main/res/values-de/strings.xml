@@ -63,4 +63,9 @@
     <string name="settings_retention_14">Nach 14 Tagen</string>
     <string name="settings_retention_30">Nach 30 Tagen</string>
     <string name="settings_retention_note">Es werden nur heruntergeladene Dateien entfernt. Abos, Warteschlange und deine Position bleiben unberührt.</string>
+    <string name="settings_audio_title">Audio</string>
+    <string name="settings_skip_silence">Stille überspringen</string>
+    <string name="settings_skip_silence_note">Verkürzt die Pausen zwischen Wörtern. Bei Sprache unproblematisch und spart merklich Zeit.</string>
+    <string name="settings_volume_boost">Leise Folgen anheben</string>
+    <string name="settings_volume_boost_note">Hebt leise abgemischte Aufnahmen um etwa 10 dB. Auf manchen Geräten und Ausgabewegen nicht verfügbar.</string>
 </resources>

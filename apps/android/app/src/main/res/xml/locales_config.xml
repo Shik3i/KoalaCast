@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Declaring the shipped translations gives the listener a per-app language entry
+  in system settings (Android 13+), so KoalaCast can be German on an English
+  phone without changing the whole device. Keep in sync with the values-* dirs.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+</locale-config>
