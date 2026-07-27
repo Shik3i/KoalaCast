@@ -22,6 +22,7 @@ import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
+import net.koalastuff.koalacast.core.model.PodcastSettings
 import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
 
@@ -37,6 +38,7 @@ data class PodcastUiState(
     val favoriteIds: Set<String> = emptySet(),
     val queuedIds: Set<String> = emptySet(),
     val completedIds: Set<String> = emptySet(),
+    val settings: PodcastSettings = PodcastSettings(podcastId = ""),
 )
 
 @HiltViewModel
@@ -107,8 +109,9 @@ class PodcastViewModel @Inject constructor(
                 library.favoriteEpisodeIds,
                 queue.queuedEpisodeIds,
                 progress.completedEpisodeIds,
-            ) { subscribed, favorites, queued, completed ->
-                LocalState(subscribed, favorites, queued, completed)
+                library.podcastSettings(id),
+            ) { subscribed, favorites, queued, completed, settings ->
+                LocalState(subscribed, favorites, queued, completed, settings)
             }.collect { local ->
                 _state.update {
                     it.copy(
@@ -116,6 +119,7 @@ class PodcastViewModel @Inject constructor(
                         favoriteIds = local.favoriteIds,
                         queuedIds = local.queuedIds,
                         completedIds = local.completedIds,
+                        settings = local.settings,
                     )
                 }
             }
@@ -127,6 +131,7 @@ class PodcastViewModel @Inject constructor(
         val favoriteIds: Set<String>,
         val queuedIds: Set<String>,
         val completedIds: Set<String>,
+        val settings: PodcastSettings,
     )
 
     fun loadMore() {
@@ -183,6 +188,26 @@ class PodcastViewModel @Inject constructor(
         }
     }
 
+    fun setSpeed(speed: Float?) {
+        saveSettings(_state.value.settings.copy(speed = speed))
+    }
+
+    fun toggleAutoQueue() {
+        val current = _state.value.settings
+        saveSettings(current.copy(autoQueueNew = !current.autoQueueNew))
+    }
+
+    fun markAllPlayed(played: Boolean) {
+        val tracks = _state.value.episodes.mapNotNull(::trackFor)
+        viewModelScope.launch {
+            tracks.forEach { progress.setPlayed(it, played) }
+        }
+    }
+
+    private fun saveSettings(settings: PodcastSettings) {
+        viewModelScope.launch { library.savePodcastSettings(settings) }
+    }
+
     /** Denormalises the show's title and artwork onto the episode, once. */
     private fun trackFor(episode: Episode): Track? {
         val podcast = _state.value.podcast ?: return null
@@ -194,13 +219,20 @@ class PodcastViewModel @Inject constructor(
 
     private suspend fun loadEpisodes(id: String, offset: Int) {
         when (val result = podcasts.episodes(id, limit = PAGE_SIZE, offset = offset)) {
-            is DataResult.Success -> _state.update { current ->
-                current.copy(
+            is DataResult.Success -> {
+                _state.update { current ->
+                    current.copy(
                     loading = false,
                     loadingMore = false,
                     episodes = if (offset == 0) result.data else current.episodes + result.data,
                     endReached = result.data.size < PAGE_SIZE,
                 )
+                }
+                if (offset == 0 && library.podcastSettingsSnapshot(id).autoQueueNew) {
+                    result.data.firstOrNull { it.id !in _state.value.completedIds }
+                        ?.let(::trackFor)
+                        ?.let { queue.addToEnd(it) }
+                }
             }
 
             is DataResult.Failure -> _state.update { current ->

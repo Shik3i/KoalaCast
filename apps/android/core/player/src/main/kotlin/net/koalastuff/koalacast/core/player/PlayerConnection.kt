@@ -137,14 +137,20 @@ class PlayerConnection @Inject constructor(
             } else {
                 0L
             }
-            val speed = resolveSpeed(track.podcastId)
+            val showSettings = library.podcastSettingsSnapshot(track.podcastId)
+            val speed = showSettings.speed ?: preferences.preferences.first().playbackSpeed
+            val startPosition = if (savedPosition == 0L) {
+                showSettings.skipIntroSeconds * 1_000L
+            } else {
+                savedPosition
+            }
 
             // Artwork goes through the listener's own instance when the proxy is
             // on, so the notification does not leak their IP to a publisher CDN.
             val artwork = artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX)
 
             withContext(Dispatchers.Main) {
-                controller.setMediaItem(TrackMediaItem.from(track, artwork), savedPosition)
+                controller.setMediaItem(TrackMediaItem.from(track, artwork), startPosition)
                 controller.playbackParameters = PlaybackParameters(speed)
                 controller.prepare()
                 controller.play()
@@ -228,11 +234,6 @@ class PlayerConnection @Inject constructor(
             val controller = controller()
             withContext(Dispatchers.Main) { block(controller) }
         }
-    }
-
-    private suspend fun resolveSpeed(podcastId: String): Float {
-        val perShow = library.podcastSettingsSnapshot(podcastId).speed
-        return perShow ?: preferences.preferences.first().playbackSpeed
     }
 
     private inner class ControllerListener : Player.Listener {

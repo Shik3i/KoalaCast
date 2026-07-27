@@ -46,6 +46,7 @@ import net.koalastuff.koalacast.core.ui.R as CoreR
 
 @Composable
 fun SettingsScreen(
+    onOpenPrivacy: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -60,6 +61,7 @@ fun SettingsScreen(
         onToggleLanguage = viewModel::toggleLanguage,
         onSelectCategory = viewModel::setCategory,
         onProxyImagesChange = viewModel::setProxyImages,
+        onOpenPrivacy = onOpenPrivacy,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -74,6 +76,7 @@ internal fun SettingsContent(
     onToggleLanguage: (String) -> Unit,
     onSelectCategory: (String) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
+    onOpenPrivacy: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -253,6 +256,11 @@ internal fun SettingsContent(
                 text = stringResource(R.string.settings_audio_never_proxied),
                 style = KoalaTheme.type.bodySmall,
                 color = colors.ink4,
+            )
+            AccentButton(
+                text = stringResource(R.string.settings_privacy_policy),
+                onClick = onOpenPrivacy,
+                leadingIcon = PhosphorIcons.ShieldCheck,
             )
         }
     }

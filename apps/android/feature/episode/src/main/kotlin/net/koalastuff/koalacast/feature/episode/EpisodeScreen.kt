@@ -18,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -56,6 +55,7 @@ fun EpisodeScreen(
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
+        onToggleTranscript = viewModel::toggleTranscript,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -70,6 +70,7 @@ internal fun EpisodeContent(
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
+    onToggleTranscript: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -224,15 +225,35 @@ internal fun EpisodeContent(
                     }
 
                     if (episode.transcripts.isNotEmpty()) {
-                        MonoText(
-                            text = pluralStringResource(
-                                R.plurals.episode_transcripts,
-                                episode.transcripts.size,
-                                episode.transcripts.size,
+                        OutlineButton(
+                            text = stringResource(
+                                if (state.transcriptExpanded) R.string.episode_hide_transcript
+                                else R.string.episode_show_transcript,
                             ),
-                            color = colors.ink4,
-                            style = KoalaTheme.type.monoSmall,
+                            onClick = onToggleTranscript,
+                            leadingIcon = PhosphorIcons.Waveform,
                         )
+                        if (state.transcriptExpanded) {
+                            when {
+                                state.transcriptLoading -> Text(
+                                    text = stringResource(R.string.episode_loading_transcript),
+                                    style = KoalaTheme.type.bodySmall,
+                                    color = colors.ink4,
+                                )
+                                state.transcriptError -> Text(
+                                    text = stringResource(R.string.episode_transcript_error),
+                                    style = KoalaTheme.type.bodySmall,
+                                    color = colors.ink2,
+                                )
+                                else -> Text(
+                                    text = state.transcript.ifBlank {
+                                        stringResource(R.string.episode_empty_transcript)
+                                    },
+                                    style = KoalaTheme.type.bodySmall,
+                                    color = colors.ink2,
+                                )
+                            }
+                        }
                     }
                 }
             }

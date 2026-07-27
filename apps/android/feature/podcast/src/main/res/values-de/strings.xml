@@ -18,4 +18,9 @@
     <string name="podcast_action_played">Als gehört markieren</string>
     <string name="podcast_action_unplayed">Als ungehört markieren</string>
     <string name="podcast_action_play">Folge abspielen</string>
+    <string name="podcast_show_speed">Geschwindigkeit für diese Sendung</string>
+    <string name="podcast_speed_default">Standard</string>
+    <string name="podcast_auto_queue">Neueste ungehörte Folge automatisch einreihen</string>
+    <string name="podcast_mark_all_played">Alle als gehört</string>
+    <string name="podcast_mark_all_unplayed">Alle als ungehört</string>
 </resources>

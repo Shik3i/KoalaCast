@@ -35,6 +35,10 @@ data class EpisodeUiState(
     val isFavorite: Boolean = false,
     val isQueued: Boolean = false,
     val isPlayed: Boolean = false,
+    val transcriptExpanded: Boolean = false,
+    val transcriptLoading: Boolean = false,
+    val transcript: String = "",
+    val transcriptError: Boolean = false,
 )
 
 @HiltViewModel
@@ -129,6 +133,34 @@ class EpisodeViewModel @Inject constructor(
     fun togglePlayed() {
         val track = track() ?: return
         viewModelScope.launch { progress.setPlayed(track, played = !_state.value.isPlayed) }
+    }
+
+    fun toggleTranscript() {
+        val expanded = !_state.value.transcriptExpanded
+        _state.update { it.copy(transcriptExpanded = expanded) }
+        if (expanded && _state.value.transcript.isBlank() && !_state.value.transcriptLoading) {
+            loadTranscript()
+        }
+    }
+
+    private fun loadTranscript() {
+        viewModelScope.launch {
+            _state.update { it.copy(transcriptLoading = true, transcriptError = false) }
+            when (val result = podcasts.transcript(episodeId)) {
+                is DataResult.Success -> _state.update {
+                    it.copy(
+                        transcriptLoading = false,
+                        transcript = TranscriptFormatter.format(
+                            type = result.data.first,
+                            content = result.data.second,
+                        ),
+                    )
+                }
+                is DataResult.Failure -> _state.update {
+                    it.copy(transcriptLoading = false, transcriptError = true)
+                }
+            }
+        }
     }
 
     /**

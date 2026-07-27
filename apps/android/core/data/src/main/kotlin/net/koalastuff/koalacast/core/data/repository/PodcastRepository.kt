@@ -79,6 +79,11 @@ class PodcastRepository @Inject constructor(
         apiCall { api.episode(id) }.map { it.toModel() }
     }
 
+    suspend fun transcript(id: String, index: Int = 0): DataResult<Pair<String, String>> =
+        withContext(dispatcher) {
+            apiCall { api.transcript(id, index) }.map { it.type to it.content }
+        }
+
     companion object {
         const val PAGE_SIZE = 50
     }

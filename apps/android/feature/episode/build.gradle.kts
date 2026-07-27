@@ -8,4 +8,5 @@ android {
 
 dependencies {
     implementation(project(":core:player"))
+    implementation(libs.kotlinx.serialization.json)
 }

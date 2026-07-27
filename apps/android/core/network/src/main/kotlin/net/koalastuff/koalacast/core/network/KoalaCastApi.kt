@@ -20,6 +20,8 @@ import net.koalastuff.koalacast.core.network.dto.SessionsResponse
 import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
 import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
 import net.koalastuff.koalacast.core.network.dto.SyncPushResponse
+import net.koalastuff.koalacast.core.network.dto.GlobalStatsDto
+import net.koalastuff.koalacast.core.network.dto.TranscriptContentDto
 import okhttp3.RequestBody
 import retrofit2.http.DELETE
 import retrofit2.Response
@@ -84,6 +86,12 @@ interface KoalaCastApi {
     @GET("api/v1/episodes/{id}")
     suspend fun episode(@Path("id") id: String): Response<EpisodeDto>
 
+    @GET("api/v1/episodes/{id}/transcript")
+    suspend fun transcript(
+        @Path("id") id: String,
+        @Query("i") index: Int = 0,
+    ): Response<TranscriptContentDto>
+
     @POST("api/v1/auth/register")
     suspend fun register(@Body body: RegisterRequest): Response<RegisterResponse>
 
@@ -120,4 +128,7 @@ interface KoalaCastApi {
     @Headers("Content-Type: application/xml", "X-KoalaCast-Long-Request: 1")
     @POST("api/v1/opml/import")
     suspend fun importOpml(@Body body: RequestBody): Response<OpmlImportReport>
+
+    @GET("api/v1/stats/global")
+    suspend fun globalStats(@Query("range") range: String): Response<GlobalStatsDto>
 }

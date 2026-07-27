@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_title">Community listening</string>
+    <string name="global_subtitle">Anonymous aggregates from listeners who explicitly opted in.</string>
+    <string name="global_90">90 days</string>
+    <string name="global_year">This year</string>
+    <string name="global_all">All time</string>
+    <string name="global_error_title">Statistics unavailable</string>
+    <string name="global_error_body">The community aggregate could not be loaded.</string>
+    <string name="global_retry">Try again</string>
+    <string name="global_listening">Total listening</string>
+    <string name="global_participants">Participants</string>
+    <string name="global_podcasts">Podcasts</string>
+    <string name="global_speed">Average speed</string>
+    <string name="global_summary">%1$d sessions · %2$d episodes · %3$d active days</string>
+    <string name="global_activity">26-week activity</string>
+    <string name="global_weekday">By weekday</string>
+    <string name="global_hour">By hour (UTC)</string>
+    <string name="global_categories">Categories</string>
+    <string name="global_saved">Time saved</string>
+    <string name="global_saved_speed">Speed</string>
+    <string name="global_saved_silence">Silence</string>
+    <string name="global_saved_manual">Manual</string>
+    <string name="global_saved_intro">Intro/outro</string>
+    <string name="global_top_podcasts">Podcast ranking</string>
+    <string name="global_listeners">Listener leaderboard</string>
+    <string name="global_privacy">Only opted-in accounts contribute. No raw listening session or account identifier is published by this endpoint.</string>
+</resources>

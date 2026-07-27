@@ -47,10 +47,12 @@ import net.koalastuff.koalacast.feature.player.MiniPlayer
 import net.koalastuff.koalacast.feature.player.NowPlayingScreen
 import net.koalastuff.koalacast.feature.profile.ProfileScreen
 import net.koalastuff.koalacast.feature.account.AccountScreen
+import net.koalastuff.koalacast.feature.globalstats.GlobalStatsScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastScreen
 import net.koalastuff.koalacast.feature.podcast.PodcastViewModel
 import net.koalastuff.koalacast.feature.search.SearchScreen
 import net.koalastuff.koalacast.feature.settings.SettingsScreen
+import net.koalastuff.koalacast.feature.settings.PrivacyScreen
 import net.koalastuff.koalacast.navigation.Routes
 import net.koalastuff.koalacast.navigation.TopLevelDestination
 
@@ -140,7 +142,17 @@ fun KoalaCastApp(
                 }
 
                 composable(Routes.SETTINGS) {
-                    SettingsScreen(contentPadding = statusBarPadding())
+                    SettingsScreen(
+                        onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
+                        contentPadding = statusBarPadding(),
+                    )
+                }
+
+                composable(Routes.PRIVACY) {
+                    PrivacyScreen(
+                        onBack = { navController.popBackStack() },
+                        contentPadding = statusBarPadding(),
+                    )
                 }
 
                 composable(Routes.PROFILE) {
@@ -157,6 +169,15 @@ fun KoalaCastApp(
                 composable(Routes.ACCOUNT) {
                     AccountScreen(
                         onBack = { navController.popBackStack() },
+                        contentPadding = statusBarPadding(),
+                    )
+                }
+
+                composable(Routes.GLOBAL_STATS) {
+                    GlobalStatsScreen(
+                        onOpenPodcast = { podcastId ->
+                            navController.navigate(Routes.podcast("", podcastId))
+                        },
                         contentPadding = statusBarPadding(),
                     )
                 }

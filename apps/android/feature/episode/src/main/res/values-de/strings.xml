@@ -15,4 +15,9 @@
     <string name="episode_mark_unplayed">Als ungehört markieren</string>
     <string name="episode_play">Abspielen</string>
     <string name="episode_play_again">Erneut abspielen</string>
+    <string name="episode_show_transcript">Transkript anzeigen</string>
+    <string name="episode_hide_transcript">Transkript ausblenden</string>
+    <string name="episode_loading_transcript">Transkript wird geladen…</string>
+    <string name="episode_transcript_error">Das Transkript konnte nicht geladen werden.</string>
+    <string name="episode_empty_transcript">Dieses Transkript ist leer.</string>
 </resources>

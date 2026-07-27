@@ -19,7 +19,6 @@ import net.koalastuff.koalacast.core.network.dto.RecoveryRequest
 import net.koalastuff.koalacast.core.network.dto.RegisterRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 

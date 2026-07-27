@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -39,6 +42,7 @@ import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
@@ -83,6 +87,10 @@ fun PodcastScreen(
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
+        onSetSpeed = viewModel::setSpeed,
+        onToggleAutoQueue = viewModel::toggleAutoQueue,
+        onMarkAllPlayed = { viewModel.markAllPlayed(true) },
+        onMarkAllUnplayed = { viewModel.markAllPlayed(false) },
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -100,6 +108,10 @@ internal fun PodcastContent(
     onToggleFavorite: (Episode) -> Unit,
     onToggleQueue: (Episode) -> Unit,
     onTogglePlayed: (Episode) -> Unit,
+    onSetSpeed: (Float?) -> Unit,
+    onToggleAutoQueue: () -> Unit,
+    onMarkAllPlayed: () -> Unit,
+    onMarkAllUnplayed: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -131,40 +143,58 @@ internal fun PodcastContent(
                 else -> PodcastHeader(
                     podcast = state.podcast,
                     subscribed = state.subscribed,
+                    settings = state.settings,
                     onBack = onBack,
                     onToggleSubscribe = onToggleSubscribe,
+                    onSetSpeed = onSetSpeed,
+                    onToggleAutoQueue = onToggleAutoQueue,
                 )
             }
         }
 
         if (state.podcast != null) {
             item(key = "episodes-header") {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
                             horizontal = KoalaSpacing.screenH,
                             vertical = KoalaSpacing.gap,
                         ),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
+                    verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
                 ) {
-                    Text(
-                        text = stringResource(R.string.podcast_episodes),
-                        style = KoalaTheme.type.sectionTitle,
-                        color = colors.inkStrong,
-                    )
-                    val episodeCount =
-                        state.podcast.episodeCount.takeIf { it > 0 } ?: state.episodes.size
-                    MonoText(
-                        text = pluralStringResource(
-                            R.plurals.podcast_episode_count,
-                            episodeCount,
-                            episodeCount,
-                        ),
-                        color = colors.ink4,
-                        style = KoalaTheme.type.monoSmall,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.podcast_episodes),
+                            style = KoalaTheme.type.sectionTitle,
+                            color = colors.inkStrong,
+                        )
+                        val episodeCount =
+                            state.podcast.episodeCount.takeIf { it > 0 } ?: state.episodes.size
+                        MonoText(
+                            text = pluralStringResource(
+                                R.plurals.podcast_episode_count,
+                                episodeCount,
+                                episodeCount,
+                            ),
+                            color = colors.ink4,
+                            style = KoalaTheme.type.monoSmall,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                        OutlineButton(
+                            text = stringResource(R.string.podcast_mark_all_played),
+                            onClick = onMarkAllPlayed,
+                        )
+                        OutlineButton(
+                            text = stringResource(R.string.podcast_mark_all_unplayed),
+                            onClick = onMarkAllUnplayed,
+                        )
+                    }
                 }
             }
 
@@ -204,12 +234,16 @@ private fun BackRow(onBack: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PodcastHeader(
     podcast: Podcast,
     subscribed: Boolean,
+    settings: net.koalastuff.koalacast.core.model.PodcastSettings,
     onBack: () -> Unit,
     onToggleSubscribe: () -> Unit,
+    onSetSpeed: (Float?) -> Unit,
+    onToggleAutoQueue: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     Column(
@@ -270,6 +304,37 @@ private fun PodcastHeader(
                     text = stringResource(R.string.podcast_subscribe),
                     onClick = onToggleSubscribe,
                     leadingIcon = PhosphorIcons.Plus,
+                )
+            }
+
+            MonoText(
+                text = stringResource(R.string.podcast_show_speed),
+                color = colors.ink4,
+                style = KoalaTheme.type.monoSmall,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                listOf(null, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                    KoalaChip(
+                        label = speed?.let { "${it}×" }
+                            ?: stringResource(R.string.podcast_speed_default),
+                        selected = settings.speed == speed,
+                        onClick = { onSetSpeed(speed) },
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.podcast_auto_queue),
+                    style = KoalaTheme.type.bodySmall,
+                    color = colors.ink2,
+                )
+                Switch(
+                    checked = settings.autoQueueNew,
+                    onCheckedChange = { onToggleAutoQueue() },
                 )
             }
         }

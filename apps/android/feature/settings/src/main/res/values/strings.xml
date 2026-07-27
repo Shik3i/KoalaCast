@@ -29,4 +29,5 @@
     <string name="settings_proxy_images">Load cover art through your server</string>
     <string name="settings_proxy_images_note">Keeps publisher CDNs and Apple from seeing this device\'s address. Turn it off to fetch artwork directly.</string>
     <string name="settings_audio_never_proxied">Episode audio always streams straight from the publisher — it never passes through a KoalaCast server.</string>
+    <string name="settings_privacy_policy">Read privacy policy</string>
 </resources>

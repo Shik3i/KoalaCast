@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="global_title">Community-Hörstatistik</string>
+    <string name="global_subtitle">Anonyme Aggregate von Hörerinnen und Hörern, die ausdrücklich zugestimmt haben.</string>
+    <string name="global_90">90 Tage</string>
+    <string name="global_year">Dieses Jahr</string>
+    <string name="global_all">Gesamt</string>
+    <string name="global_error_title">Statistik nicht verfügbar</string>
+    <string name="global_error_body">Das Community-Aggregat konnte nicht geladen werden.</string>
+    <string name="global_retry">Erneut versuchen</string>
+    <string name="global_listening">Gesamte Hörzeit</string>
+    <string name="global_participants">Teilnehmende</string>
+    <string name="global_podcasts">Podcasts</string>
+    <string name="global_speed">Ø Geschwindigkeit</string>
+    <string name="global_summary">%1$d Sitzungen · %2$d Folgen · %3$d aktive Tage</string>
+    <string name="global_activity">Aktivität über 26 Wochen</string>
+    <string name="global_weekday">Nach Wochentag</string>
+    <string name="global_hour">Nach Uhrzeit (UTC)</string>
+    <string name="global_categories">Kategorien</string>
+    <string name="global_saved">Gesparte Zeit</string>
+    <string name="global_saved_speed">Tempo</string>
+    <string name="global_saved_silence">Stille</string>
+    <string name="global_saved_manual">Manuell</string>
+    <string name="global_saved_intro">Intro/Outro</string>
+    <string name="global_top_podcasts">Podcast-Rangliste</string>
+    <string name="global_listeners">Hörer-Rangliste</string>
+    <string name="global_privacy">Nur Konten mit ausdrücklicher Zustimmung fließen ein. Der Endpunkt veröffentlicht keine rohen Hörsitzungen oder Konto-Kennungen.</string>
+</resources>

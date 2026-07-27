@@ -18,7 +18,9 @@ object Routes {
     const val LIBRARY = "library"
     const val PROFILE = "profile"
     const val ACCOUNT = "account"
+    const val GLOBAL_STATS = "global_stats"
     const val SETTINGS = "settings"
+    const val PRIVACY = "privacy"
 
     const val PODCAST = "podcast?podcastId={podcastId}&feedUrl={feedUrl}"
     const val EPISODE = "episode/{episodeId}"
@@ -45,4 +47,5 @@ enum class TopLevelDestination(
     INBOX(Routes.INBOX, R.string.nav_inbox, PhosphorIcons.Tray, PhosphorIcons.TrayFill),
     LIBRARY(Routes.LIBRARY, R.string.nav_library, PhosphorIcons.Books, PhosphorIcons.BooksFill),
     PROFILE(Routes.PROFILE, R.string.nav_profile, PhosphorIcons.UserCircle, PhosphorIcons.UserCircleFill),
+    GLOBAL_STATS(Routes.GLOBAL_STATS, R.string.nav_global_stats, PhosphorIcons.ChartLine, PhosphorIcons.ChartLineFill),
 }

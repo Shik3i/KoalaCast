@@ -15,4 +15,9 @@
     <string name="episode_mark_unplayed">Mark as unplayed</string>
     <string name="episode_play">Play</string>
     <string name="episode_play_again">Play again</string>
+    <string name="episode_show_transcript">Show transcript</string>
+    <string name="episode_hide_transcript">Hide transcript</string>
+    <string name="episode_loading_transcript">Loading transcript…</string>
+    <string name="episode_transcript_error">The transcript could not be loaded.</string>
+    <string name="episode_empty_transcript">This transcript is empty.</string>
 </resources>
