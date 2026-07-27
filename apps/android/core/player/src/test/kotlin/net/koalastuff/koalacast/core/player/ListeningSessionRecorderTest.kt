@@ -122,11 +122,55 @@ class ListeningSessionRecorderTest {
     }
 
     @Test
-    fun `silence trimming reports zero, because it is not implemented`() {
+    fun `without a reported position, silence saving stays zero rather than guessed`() {
         recorder.start(track, nowMs = 0, speed = 2f)
         val session = recorder.stop(nowMs = 600_000)!!
 
-        // Reporting a number here would be inventing one.
+        assertEquals(0L, session.silenceSavedMs)
+    }
+
+    @Test
+    fun `a playhead that outran the clock is silence the trimmer removed`() {
+        // Ten minutes at 1x, but the playhead covered twelve: the two minutes
+        // the listener never spent are trimmed silence.
+        recorder.start(track, nowMs = 0, speed = 1f, positionMs = 0)
+        val session = recorder.stop(nowMs = 600_000, positionMs = 720_000)!!
+
+        assertEquals(120_000L, session.silenceSavedMs)
+        assertEquals(0L, session.speedSavedMs)
+        // Audio consumed is what the clock bought plus what the trimmer skipped.
+        assertEquals(720_000L, session.audioListenedMs)
+    }
+
+    @Test
+    fun `speed and silence saving are reported separately, not conflated`() {
+        // Ten minutes at 1.5x should consume fifteen; the playhead covered
+        // seventeen, so two of those minutes came from trimming, not speed.
+        recorder.start(track, nowMs = 0, speed = 1.5f, positionMs = 0)
+        val session = recorder.stop(nowMs = 600_000, positionMs = 1_020_000)!!
+
+        assertEquals(300_000L, session.speedSavedMs)
+        assertEquals(120_000L, session.silenceSavedMs)
+    }
+
+    @Test
+    fun `a skip is not mistaken for trimmed silence`() {
+        // The playhead jumped 30s forward; that is skipped, not silence, so
+        // nothing should be attributed to the trimmer.
+        recorder.start(track, nowMs = 0, speed = 1f, positionMs = 0)
+        recorder.onManualSkip(30_000)
+        val session = recorder.stop(nowMs = 600_000, positionMs = 630_000)!!
+
+        assertEquals(0L, session.silenceSavedMs)
+        assertEquals(30_000L, session.manualSkippedMs)
+    }
+
+    @Test
+    fun `a playhead behind the clock reports nothing rather than a negative`() {
+        // Buffering or a backward seek: never report less than zero.
+        recorder.start(track, nowMs = 0, speed = 1f, positionMs = 500_000)
+        val session = recorder.stop(nowMs = 600_000, positionMs = 400_000)!!
+
         assertEquals(0L, session.silenceSavedMs)
     }
 }

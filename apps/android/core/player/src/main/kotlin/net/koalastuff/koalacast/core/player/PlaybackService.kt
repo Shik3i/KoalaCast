@@ -379,7 +379,12 @@ class PlaybackService : MediaLibraryService() {
                 // preference collector above may have run too early to attach.
                 applyVolumeBoost(player, boostWanted)
                 TrackMediaItem.toTrack(player.currentMediaItem)?.let { track ->
-                    recorder.start(track, clock.nowMs(), player.playbackParameters.speed)
+                    recorder.start(
+                        track,
+                        clock.nowMs(),
+                        player.playbackParameters.speed,
+                        player.currentPosition,
+                    )
                 }
                 startPositionTicker()
             } else {
@@ -395,7 +400,11 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
-            recorder.onSpeedChanged(playbackParameters.speed, clock.nowMs())?.let { session ->
+            recorder.onSpeedChanged(
+                playbackParameters.speed,
+                clock.nowMs(),
+                player.currentPosition,
+            )?.let { session ->
                 scope.launch { progress.recordListeningSession(session) }
             }
         }
@@ -426,6 +435,8 @@ class PlaybackService : MediaLibraryService() {
             // The player's current item is already the new one here. Persisting
             // through persistNow() would write the old segment against the new
             // episode, so close only the recorder and start the new segment.
+            // The playhead already belongs to the new item, so the closing
+            // segment gets no position: it would measure the wrong episode.
             recorder.stop(clock.nowMs())?.let { session ->
                 scope.launch { progress.recordListeningSession(session) }
             }
@@ -433,7 +444,12 @@ class PlaybackService : MediaLibraryService() {
             automaticSeekTargetMs = null
             if (player.isPlaying) {
                 TrackMediaItem.toTrack(mediaItem)?.let { track ->
-                    recorder.start(track, clock.nowMs(), player.playbackParameters.speed)
+                    recorder.start(
+                        track,
+                        clock.nowMs(),
+                        player.playbackParameters.speed,
+                        player.currentPosition,
+                    )
                 }
             }
         }
@@ -480,7 +496,7 @@ class PlaybackService : MediaLibraryService() {
         val track = TrackMediaItem.toTrack(player.currentMediaItem) ?: return
         val positionMs = player.currentPosition
         val durationMs = player.duration.takeIf { it != C.TIME_UNSET } ?: track.durationMs
-        val session = if (finalise) recorder.stop(clock.nowMs()) else null
+        val session = if (finalise) recorder.stop(clock.nowMs(), positionMs) else null
 
         scope.launch {
             progress.savePosition(track, positionMs, durationMs)
@@ -494,7 +510,7 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun onEpisodeFinished(player: ExoPlayer) {
         val finished = TrackMediaItem.toTrack(player.currentMediaItem)
-        val session = recorder.stop(clock.nowMs())
+        val session = recorder.stop(clock.nowMs(), player.currentPosition)
 
         scope.launch {
             finished?.let {

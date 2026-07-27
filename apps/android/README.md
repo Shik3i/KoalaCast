@@ -79,9 +79,9 @@ Deliberately **not** faked:
   needs 7-day trend data that neither iTunes charts nor Podcast Index return — a
   drawn-from-nowhere sparkline would be exactly the kind of "stat the app cannot
   know" the handoff's copy decisions rule out.
-- Silence trimming is implemented (ExoPlayer's own flag, opt-in in Settings), but
-  the listening telemetry still reports zero saved time: nothing computes
-  `silenceSavedMs` yet, so the statistic would be a guess.
+- Silence trimming is implemented (ExoPlayer's own flag, opt-in in Settings) and
+  its saved time is measured rather than estimated: the playhead outrunning
+  wall-clock time, minus everything that was skipped rather than heard.
 - Chapters are carried end to end and listed on the episode screen. The *player*
   does not use them yet — no markers on the progress bar, no skip-to-chapter.
 
