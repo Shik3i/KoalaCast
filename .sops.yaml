@@ -1,0 +1,5 @@
+creation_rules:
+  - path_regex: ^android-signing\.env\.enc$
+    age:
+      - age1apf9rrl8xxpxeyt4h33pdet0q4m7cuaf60eqwyggunngnh308acs66syu5
+      - age1mcem4mcpnkt8sshsq98rr35dydqrefh972mckrg8pqvsg5w7j4cskpezyr

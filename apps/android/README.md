@@ -26,6 +26,30 @@ cd apps/android && ./gradlew build
 
 `build` runs the unit tests and Android Lint across every module; both are green.
 
+### Release signing and recovery
+
+The permanent Android release key has two protected copies:
+
+- GitHub Actions secrets build tagged releases.
+- [`android-signing.env.enc`](../../android-signing.env.enc) is the SOPS/age
+  disaster-recovery copy. Both registered development machines can decrypt it
+  with their existing private age identities.
+
+Private age identities, decrypted environment files and raw
+`*.keystore`/`*.jks` files never belong in Git. Validate the tracked backup with:
+
+```bash
+sops filestatus --input-type dotenv android-signing.env.enc
+sops decrypt --input-type dotenv --output-type dotenv android-signing.env.enc >/dev/null
+```
+
+When adding or replacing a public age recipient, update
+[`.sops.yaml`](../../.sops.yaml) and rewrap without exposing plaintext:
+
+```bash
+sops updatekeys --input-type dotenv -y android-signing.env.enc
+```
+
 The debug build installs alongside a release build (`applicationId` suffix `.debug`).
 On first run the app asks which KoalaCast server to talk to and defaults to
 `https://cast.koalastuff.net`; the emulator shortcut fills in `http://10.0.2.2:3000`
