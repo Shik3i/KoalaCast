@@ -40,6 +40,7 @@ import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
+import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
@@ -94,6 +95,7 @@ fun PodcastScreen(
         onSetSkipIntro = viewModel::setSkipIntro,
         onSetSkipOutro = viewModel::setSkipOutro,
         onToggleAutoQueue = viewModel::toggleAutoQueue,
+        onToggleAutoDownload = viewModel::toggleAutoDownload,
         onMarkAllPlayed = { viewModel.markAllPlayed(true) },
         onMarkAllUnplayed = { viewModel.markAllPlayed(false) },
         modifier = modifier,
@@ -117,6 +119,7 @@ internal fun PodcastContent(
     onSetSkipIntro: (Int) -> Unit,
     onSetSkipOutro: (Int) -> Unit,
     onToggleAutoQueue: () -> Unit,
+    onToggleAutoDownload: () -> Unit,
     onMarkAllPlayed: () -> Unit,
     onMarkAllUnplayed: () -> Unit,
     modifier: Modifier = Modifier,
@@ -157,6 +160,7 @@ internal fun PodcastContent(
                     onSetSkipIntro = onSetSkipIntro,
                     onSetSkipOutro = onSetSkipOutro,
                     onToggleAutoQueue = onToggleAutoQueue,
+                    onToggleAutoDownload = onToggleAutoDownload,
                 )
             }
         }
@@ -213,6 +217,14 @@ internal fun PodcastContent(
                     isFavorite = episode.id in state.favoriteIds,
                     isQueued = episode.id in state.queuedIds,
                     isPlayed = episode.id in state.completedIds,
+                    // A finished episode reads as a full ring even if its stored
+                    // position was never written all the way to the end.
+                    progressPercent = if (episode.id in state.completedIds) {
+                        100
+                    } else {
+                        state.progressByEpisode[episode.id] ?: 0
+                    },
+                    isCurrent = episode.id == state.currentEpisodeId,
                     onClick = { onOpenEpisode(episode.id) },
                     onPlay = { onPlay(episode) },
                     onToggleFavorite = { onToggleFavorite(episode) },
@@ -255,6 +267,7 @@ private fun PodcastHeader(
     onSetSkipIntro: (Int) -> Unit,
     onSetSkipOutro: (Int) -> Unit,
     onToggleAutoQueue: () -> Unit,
+    onToggleAutoDownload: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     Column(
@@ -359,10 +372,44 @@ private fun PodcastHeader(
                     text = stringResource(R.string.podcast_auto_queue),
                     style = KoalaTheme.type.bodySmall,
                     color = colors.ink2,
+                    // Without the weight this label pushes the switch off the right
+                    // edge at 320dp — SpaceBetween cannot shrink an unweighted child.
+                    modifier = Modifier.weight(1f),
                 )
                 Switch(
                     checked = settings.autoQueueNew,
                     onCheckedChange = { onToggleAutoQueue() },
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.podcast_auto_download),
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink2,
+                    )
+                    Text(
+                        text = stringResource(
+                            // Auto-download walks the subscription list, so without a
+                            // subscription the switch would sit on and do nothing.
+                            if (subscribed) {
+                                R.string.podcast_auto_download_note
+                            } else {
+                                R.string.podcast_auto_download_needs_sub
+                            },
+                        ),
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink4,
+                    )
+                }
+                Switch(
+                    checked = settings.autoDownload && subscribed,
+                    enabled = subscribed,
+                    onCheckedChange = { onToggleAutoDownload() },
                 )
             }
         }
@@ -405,6 +452,8 @@ private fun EpisodeRow(
     isFavorite: Boolean,
     isQueued: Boolean,
     isPlayed: Boolean,
+    progressPercent: Int,
+    isCurrent: Boolean,
     onClick: () -> Unit,
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -477,13 +526,12 @@ private fun EpisodeRow(
             horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButtonSquare(
-                icon = PhosphorIcons.PlayFill,
+            EpisodeProgressButton(
+                progressPercent = progressPercent,
+                current = isCurrent,
                 contentDescription = stringResource(R.string.podcast_action_play),
                 onClick = onPlay,
-                tint = colors.accentInk,
-                boxSize = 30.dp,
-                iconSize = 16.dp,
+                size = 38.dp,
             )
             IconButtonSquare(
                 icon = if (isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,

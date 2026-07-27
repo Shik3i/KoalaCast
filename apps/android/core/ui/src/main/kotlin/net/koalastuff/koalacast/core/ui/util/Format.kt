@@ -80,6 +80,18 @@ object Format {
             .replace(WHITESPACE, " ")
             .trim()
 
+    /**
+     * A position inside an episode: `12:34`, or `1:02:03` once it passes an hour.
+     * Unlike [duration] this never says "min" — it is a clock reading, not a length.
+     */
+    fun timecode(positionMs: Long): String {
+        val total = (positionMs / 1000).coerceAtLeast(0)
+        val h = total / 3600
+        val m = (total % 3600) / 60
+        val s = total % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+    }
+
     private val SCRIPT_OR_STYLE = Regex("(?is)<(script|style)[^>]*>.*?</\\1>")
     private val TAG = Regex("(?s)<[^>]*>")
     private val ENTITY_NBSP = Regex("&nbsp;|&#160;")

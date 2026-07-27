@@ -34,7 +34,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.ui.component.CoverArt
-import net.koalastuff.koalacast.core.ui.component.EmptyState
+import net.koalastuff.koalacast.core.ui.component.EmptyState
+import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
@@ -208,6 +209,8 @@ internal fun InboxContent(
                         InboxEpisodeRow(
                             item = item,
                             played = item.episode.id in state.completedIds,
+                            progressPercent = state.progressByEpisode[item.episode.id] ?: 0,
+                            isCurrent = item.episode.id == state.currentEpisodeId,
                             onOpen = { onOpenEpisode(item.episode.id) },
                             onPlay = { onPlay(item) },
                             onQueue = { onQueue(item) },
@@ -312,6 +315,8 @@ private fun DayHeader(date: String, episodes: List<InboxEpisode>) {
 private fun InboxEpisodeRow(
     item: InboxEpisode,
     played: Boolean,
+    progressPercent: Int,
+    isCurrent: Boolean,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
     onQueue: () -> Unit,
@@ -354,13 +359,12 @@ private fun InboxEpisodeRow(
                 maxLines = 1,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
-                IconButtonSquare(
-                    icon = PhosphorIcons.PlayFill,
+                EpisodeProgressButton(
+                    progressPercent = if (played) 100 else progressPercent,
+                    current = isCurrent,
                     contentDescription = stringResource(R.string.inbox_play),
                     onClick = onPlay,
-                    tint = colors.accentInk,
-                    boxSize = 30.dp,
-                    iconSize = 16.dp,
+                    size = 34.dp,
                 )
                 IconButtonSquare(
                     icon = PhosphorIcons.ListPlus,
