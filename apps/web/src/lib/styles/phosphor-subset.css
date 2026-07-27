@@ -126,6 +126,7 @@
 .ph.ph-x::before{content:"\e4f6"}
 .ph-fill.ph-bookmark-simple::before{content:"\e0ea"}
 .ph-fill.ph-broadcast::before{content:"\e0f2"}
+.ph-fill.ph-chart-bar::before{content:"\e150"}
 .ph-fill.ph-chart-line-up::before{content:"\e156"}
 .ph-fill.ph-check-circle::before{content:"\e184"}
 .ph-fill.ph-dots-three-circle::before{content:"\e200"}
