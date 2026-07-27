@@ -29,4 +29,5 @@
     <string name="podcast_auto_download">Neue Folgen herunterladen</string>
     <string name="podcast_auto_download_note">Holt neue Folgen über WLAN, sobald sie erscheinen.</string>
     <string name="podcast_auto_download_needs_sub">Abonniere die Sendung, um neue Folgen automatisch zu laden.</string>
+    <string name="podcast_retry_pagination">Weitere Folgen laden fehlgeschlagen — Tippe zum Wiederholen</string>
 </resources>

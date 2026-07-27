@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.feature.episode
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.background
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,12 +20,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.stringResource
+
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import net.koalastuff.koalacast.core.model.Chapter
+import net.koalastuff.koalacast.core.model.Chapter
+
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
@@ -58,8 +61,10 @@ fun EpisodeScreen(
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
-        onToggleTranscript = viewModel::toggleTranscript,
-        onToggleChapters = viewModel::toggleChapters,
+        onToggleTranscript = viewModel::toggleTranscript,
+
+        onToggleChapters = viewModel::toggleChapters,
+
         onSeekToChapter = viewModel::seekToChapter,
         onToggleDownload = viewModel::toggleDownload,
         modifier = modifier,
@@ -76,8 +81,10 @@ internal fun EpisodeContent(
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
-    onToggleTranscript: () -> Unit,
-    onToggleChapters: () -> Unit,
+    onToggleTranscript: () -> Unit,
+
+    onToggleChapters: () -> Unit,
+
     onSeekToChapter: (Chapter) -> Unit,
     onToggleDownload: () -> Unit,
     modifier: Modifier = Modifier,
@@ -134,7 +141,7 @@ internal fun EpisodeContent(
                     ) {
                         CoverArt(
                             url = episode.artworkUrl.ifBlank { state.podcast?.artworkUrl },
-                            contentDescription = null,
+                            contentDescription = episode.title,
                             modifier = Modifier.size(88.dp),
                             sizeHint = 88.dp,
                         )

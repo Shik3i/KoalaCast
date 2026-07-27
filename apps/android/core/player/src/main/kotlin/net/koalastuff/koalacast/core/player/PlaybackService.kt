@@ -79,6 +79,8 @@ class PlaybackService : MediaLibraryService() {
     private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var boostWanted: Boolean = false
 
+    private var playerListener: PlayerListener? = null
+
     override fun onCreate() {
         super.onCreate()
 
@@ -98,7 +100,9 @@ class PlaybackService : MediaLibraryService() {
             .setSkipSilenceEnabled(false)
             .build()
 
-        player.addListener(PlayerListener(player))
+        val listener = PlayerListener(player)
+        playerListener = listener
+        player.addListener(listener)
         mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .build()
 
@@ -363,9 +367,11 @@ class PlaybackService : MediaLibraryService() {
         persistNow(finalise = true)
         positionTicker?.cancel()
         mediaSession?.run {
+            playerListener?.let { player.removeListener(it) }
             player.release()
             release()
         }
+        playerListener = null
         mediaSession = null
         scope.cancel()
         super.onDestroy()

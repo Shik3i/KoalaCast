@@ -251,7 +251,7 @@ private fun InboxSettings(
             ) {
                 CoverArt(
                     url = subscription.artworkUrl,
-                    contentDescription = null,
+                    contentDescription = subscription.title,
                     modifier = Modifier.size(40.dp),
                     sizeHint = 40.dp,
                 )
@@ -337,7 +337,7 @@ private fun InboxEpisodeRow(
     ) {
         CoverArt(
             url = item.track.artworkUrl,
-            contentDescription = null,
+            contentDescription = item.track.podcastTitle,
             modifier = Modifier.size(56.dp),
             sizeHint = 56.dp,
         )

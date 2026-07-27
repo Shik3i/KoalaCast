@@ -39,7 +39,13 @@ data class SubscriptionEntity(
  * listening" and resume playback with no network round-trip — which is what
  * makes resume work offline.
  */
-@Entity(tableName = "playback_states", indices = [Index("lastPlayedAt")])
+@Entity(
+    tableName = "playback_states",
+    indices = [
+        Index("lastPlayedAt"),
+        Index(value = ["completed", "lastPlayedAt"]),
+    ],
+)
 data class PlaybackStateEntity(
     @PrimaryKey val episodeId: String,
     val podcastId: String,

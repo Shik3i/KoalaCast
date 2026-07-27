@@ -239,6 +239,25 @@ internal fun PodcastContent(
                     SkeletonRows(count = 2, modifier = Modifier.padding(KoalaSpacing.screenH))
                 }
             }
+
+            if (state.paginationError) {
+                item(key = "pagination_error") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onRetry)
+                            .padding(KoalaSpacing.screenH),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MonoText(
+                            text = stringResource(R.string.podcast_retry_pagination),
+                            color = KoalaTheme.colors.accentInk,
+                            style = KoalaTheme.type.monoSmall,
+                        )
+                    }
+                }
+            }
         }
     }
 }

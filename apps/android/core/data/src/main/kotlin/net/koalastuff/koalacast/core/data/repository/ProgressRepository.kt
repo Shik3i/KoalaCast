@@ -13,6 +13,7 @@ import net.koalastuff.koalacast.core.model.ListeningSession
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 /**
@@ -27,6 +28,7 @@ import javax.inject.Singleton
 class ProgressRepository @Inject constructor(
     private val playbackStates: PlaybackStateDao,
     private val listeningSessions: ListeningSessionDao,
+    private val downloads: Provider<DownloadRepository>,
     private val clock: Clock,
 ) {
 
@@ -72,12 +74,13 @@ class ProgressRepository @Inject constructor(
             0
         }
 
+        val isCompleted = percent >= COMPLETION_THRESHOLD_PERCENT
         playbackStates.upsert(
             PlaybackStateEntity(
                 episodeId = track.episodeId,
                 podcastId = track.podcastId,
                 positionMs = positionMs.coerceAtLeast(0),
-                completed = percent >= COMPLETION_THRESHOLD_PERCENT,
+                completed = isCompleted,
                 progressPercent = percent,
                 lastPlayedAt = clock.nowMs(),
                 title = track.title,
@@ -88,6 +91,10 @@ class ProgressRepository @Inject constructor(
                 categories = track.categories,
             ),
         )
+
+        if (isCompleted) {
+            runCatching { downloads.get().remove(track.episodeId) }
+        }
     }
 
     /**

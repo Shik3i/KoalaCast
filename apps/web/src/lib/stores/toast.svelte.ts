@@ -20,6 +20,9 @@ class ToastStore {
 		return id;
 	}
 
+	info(message: string) {
+		return this.show(message, 'info');
+	}
 	success(message: string) {
 		return this.show(message, 'success');
 	}

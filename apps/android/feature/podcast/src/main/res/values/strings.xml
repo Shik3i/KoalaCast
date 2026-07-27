@@ -29,4 +29,5 @@
     <string name="podcast_auto_download">Download new episodes</string>
     <string name="podcast_auto_download_note">Fetches the newest episodes over Wi-Fi as they appear.</string>
     <string name="podcast_auto_download_needs_sub">Follow this show to download its new episodes automatically.</string>
+    <string name="podcast_retry_pagination">Failed to load more episodes — Tap to retry</string>
 </resources>

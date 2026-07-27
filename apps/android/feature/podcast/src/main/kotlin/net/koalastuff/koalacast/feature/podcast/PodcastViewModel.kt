@@ -34,6 +34,7 @@ data class PodcastUiState(
     val episodes: List<Episode> = emptyList(),
     val loadingMore: Boolean = false,
     val endReached: Boolean = false,
+    val paginationError: Boolean = false,
     val subscribed: Boolean = false,
     val favoriteIds: Set<String> = emptySet(),
     val queuedIds: Set<String> = emptySet(),
@@ -289,10 +290,16 @@ class PodcastViewModel @Inject constructor(
                 if (offset == 0) {
                     current.copy(loading = false, loadingMore = false, error = result.error)
                 } else {
-                    current.copy(loadingMore = false, endReached = true)
+                    current.copy(loadingMore = false, paginationError = true)
                 }
             }
         }
+    }
+
+    fun retryPagination() {
+        if (_state.value.loadingMore) return
+        _state.update { it.copy(paginationError = false) }
+        loadMore()
     }
 
     companion object {
