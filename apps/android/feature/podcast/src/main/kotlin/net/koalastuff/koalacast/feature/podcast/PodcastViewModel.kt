@@ -39,6 +39,10 @@ data class PodcastUiState(
     val queuedIds: Set<String> = emptySet(),
     val completedIds: Set<String> = emptySet(),
     val settings: PodcastSettings = PodcastSettings(podcastId = ""),
+    /** episodeId -> 0..100, for the ring on each row's play button. */
+    val progressByEpisode: Map<String, Int> = emptyMap(),
+    /** The episode the player currently holds, if any. */
+    val currentEpisodeId: String? = null,
 )
 
 @HiltViewModel
@@ -77,10 +81,18 @@ class PodcastViewModel @Inject constructor(
             // Discovery and search hand back provider records, so a show reached from
             // a chart row has only its feed URL. Posting that URL resolves it (and
             // ingests it the first time anybody opens it).
-            val resolved = if (podcastId.isNotBlank()) {
-                podcasts.podcast(podcastId)
-            } else {
-                podcasts.resolveFeed(feedUrl)
+            //
+            // The feed URL wins when we have one: it identifies a show outright,
+            // whereas an id is only meaningful next to the provider that issued it —
+            // and iTunes and Podcast Index both issue bare numbers. iTunes Top Charts
+            // ships no feed URL at all, so the id is the only handle there and
+            // GET /podcasts/{id} resolves it through the iTunes Lookup API.
+            val resolved = when {
+                feedUrl.isNotBlank() -> podcasts.resolveFeed(feedUrl)
+                podcastId.isNotBlank() -> podcasts.podcast(podcastId)
+                // Neither handle: a caller navigated with two blanks. Say so instead
+                // of posting an empty feed_url and rendering the server's 400.
+                else -> DataResult.Failure(DataError.Malformed("no podcast id or feed url"))
             }
 
             when (resolved) {
@@ -92,6 +104,7 @@ class PodcastViewModel @Inject constructor(
                 is DataResult.Success -> {
                     _state.update { it.copy(podcast = resolved.data) }
                     observeLocalState(resolved.data.id)
+                    observeProgress()
                     loadEpisodes(resolved.data.id, offset = 0)
                 }
             }
@@ -122,6 +135,29 @@ class PodcastViewModel @Inject constructor(
                         settings = local.settings,
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * Progress rings come from two places: stored positions for everything, and the
+     * live player for the episode currently running, so its ring advances while it
+     * plays instead of freezing at the last checkpoint.
+     */
+    private fun observeProgress() {
+        viewModelScope.launch {
+            combine(progress.allProgress, player.state) { stored, playback ->
+                val map = stored.associate { it.episodeId to it.progressPercent }.toMutableMap()
+                val track = playback.track
+                if (track != null && playback.durationMs > 0) {
+                    map[track.episodeId] =
+                        ((playback.positionMs * 100) / playback.durationMs)
+                            .toInt()
+                            .coerceIn(0, 100)
+                }
+                map to track?.episodeId
+            }.collect { (map, currentId) ->
+                _state.update { it.copy(progressByEpisode = map, currentEpisodeId = currentId) }
             }
         }
     }
@@ -203,6 +239,11 @@ class PodcastViewModel @Inject constructor(
     fun toggleAutoQueue() {
         val current = _state.value.settings
         saveSettings(current.copy(autoQueueNew = !current.autoQueueNew))
+    }
+
+    fun toggleAutoDownload() {
+        val current = _state.value.settings
+        saveSettings(current.copy(autoDownload = !current.autoDownload))
     }
 
     fun markAllPlayed(played: Boolean) {

@@ -45,8 +45,11 @@ fun EpisodeDto.toModel() = Episode(
     title = title,
     description = description,
     contentEncoded = contentEncoded,
-    pubDateMs = pubDate,
+    // The API reports pub_date in whole Unix *seconds* (the web client documents it
+    // as such and multiplies too). Without this, every episode dates to Jan 1970.
+    pubDateMs = if (hasPubDate) pubDate * 1000L else 0L,
     hasPubDate = hasPubDate,
+    chaptersUrl = chaptersUrl,
     durationMs = durationMs,
     enclosureUrl = enclosureUrl,
     enclosureType = enclosureType,

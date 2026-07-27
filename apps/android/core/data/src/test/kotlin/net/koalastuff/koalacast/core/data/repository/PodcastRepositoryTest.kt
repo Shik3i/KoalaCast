@@ -81,7 +81,7 @@ class PodcastRepositoryTest {
                 """
                 {"count":1,"limit":50,"offset":0,"episodes":[
                   {"id":"e1","podcast_id":"p1","title":"Quiet rooms, loud data",
-                   "pub_date":1753401600000,"has_pub_date":true,"duration_ms":2947000,
+                   "pub_date":1753401600,"has_pub_date":true,"duration_ms":2947000,
                    "enclosure_url":"https://cdn.example/ep.mp3","episode_number":214,
                    "transcripts":[{"url":"https://example.org/t.vtt","type":"text/vtt"}]}
                 ]}

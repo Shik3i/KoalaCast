@@ -193,7 +193,7 @@ internal fun SearchContent(
                 items = state.results,
                 key = { it.feedUrl.ifBlank { it.id } },
             ) { show ->
-                ResultRow(show = show, onClick = { onOpenPodcast(show.feedUrl, null) })
+                ResultRow(show = show, onClick = { onOpenPodcast(show.feedUrl, show.id) })
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
         }

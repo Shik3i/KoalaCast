@@ -168,7 +168,9 @@ internal fun DiscoverContent(
                 ChartRow(
                     rank = index + 1,
                     show = show,
-                    onClick = { onOpenPodcast(show.feedUrl, null) },
+                    // iTunes Top Charts entries carry no feed URL, so the provider id
+                    // has to travel too — the server resolves it via iTunes Lookup.
+                    onClick = { onOpenPodcast(show.feedUrl, show.id) },
                 )
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }

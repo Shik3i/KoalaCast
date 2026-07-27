@@ -31,6 +31,8 @@ data class InboxUiState(
     val unplayedOnly: Boolean = true,
     val showSettings: Boolean = false,
     val failedFeeds: Int = 0,
+    val progressByEpisode: Map<String, Int> = emptyMap(),
+    val currentEpisodeId: String? = null,
 ) {
     val feed: List<InboxEpisode>
         get() = buildInboxFeed(rawEpisodes, completedIds, unplayedOnly)
@@ -50,6 +52,25 @@ class InboxViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Same two sources as the podcast screen: stored positions, overlaid
+            // with the live player so the running episode's ring keeps moving.
+            combine(progress.allProgress, player.state) { stored, playback ->
+                val map = stored.associate { it.episodeId to it.progressPercent }.toMutableMap()
+                val track = playback.track
+                if (track != null && playback.durationMs > 0) {
+                    map[track.episodeId] = ((playback.positionMs * 100) / playback.durationMs)
+                        .toInt().coerceIn(0, 100)
+                }
+                map to track?.episodeId
+            }.collect { (map, currentId) ->
+                _state.update { it.copy(progressByEpisode = map, currentEpisodeId = currentId) }
+            }
+        }
+        viewModelScope.launch {
+            // `seeded` matters for the empty library: the first emission is an empty
+            // list, which compares equal to the initial state, so a pure change check
+            // would never call refresh() and the screen would skeleton forever.
+            var seeded = false
             combine(
                 library.allSubscriptions,
                 progress.completedEpisodeIds,
@@ -58,7 +79,10 @@ class InboxViewModel @Inject constructor(
                     val idsChanged =
                         subscriptions.map { it.podcastId } != _state.value.subscriptions.map { it.podcastId }
                     _state.update { it.copy(subscriptions = subscriptions, completedIds = completed) }
-                    if (idsChanged) refresh()
+                    if (idsChanged || !seeded) {
+                        seeded = true
+                        refresh()
+                    }
                 }
         }
     }
