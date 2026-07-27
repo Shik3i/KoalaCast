@@ -19,6 +19,7 @@ dependencies {
     api(project(":core:model"))
     api(project(":core:network"))
 
+    implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

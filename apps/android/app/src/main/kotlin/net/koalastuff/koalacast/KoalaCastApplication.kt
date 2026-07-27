@@ -12,8 +12,12 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import javax.inject.Inject
+import net.koalastuff.koalacast.core.data.repository.AppShortcuts
 import net.koalastuff.koalacast.core.data.repository.AutoDownloadWorker
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 
@@ -31,6 +35,9 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     lateinit var syncCoordinator: SyncCoordinator
 
     @Inject
+    lateinit var appShortcuts: AppShortcuts
+
+    @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
     override val workManagerConfiguration: Configuration
@@ -44,6 +51,9 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
         // Idempotent (KEEP policy), so registering on every start costs nothing
         // and survives a reboot or an app update clearing the schedule.
         AutoDownloadWorker.schedule(this)
+        // Launcher-side cache; refreshing at start is soon enough for something
+        // the listener reaches before the app is open.
+        CoroutineScope(Dispatchers.IO).launch { appShortcuts.refresh() }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

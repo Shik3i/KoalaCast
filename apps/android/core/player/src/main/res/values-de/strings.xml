@@ -2,4 +2,5 @@
 <resources>
     <string name="browse_continue">Weiterhören</string>
     <string name="browse_downloads">Heruntergeladen</string>
+    <string name="player_speed_label">%1$.2f×</string>
 </resources>

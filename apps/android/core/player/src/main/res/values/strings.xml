@@ -3,4 +3,5 @@
     <!-- Shelf titles in the Android Auto / Wear OS browse tree. -->
     <string name="browse_continue">Continue listening</string>
     <string name="browse_downloads">Downloaded</string>
+    <string name="player_speed_label">%1$.2f×</string>
 </resources>

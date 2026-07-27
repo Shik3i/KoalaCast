@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.core.player
 
-import android.content.Intent
+import android.content.Intent
+import android.os.Bundle
 import android.media.audiofx.LoudnessEnhancer
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -9,9 +10,12 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.MediaMetadata
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
@@ -149,6 +153,44 @@ class PlaybackService : MediaLibraryService() {
      */
     private inner class LibraryCallback : MediaLibrarySession.Callback {
 
+        /**
+         * Advertise the speed command, otherwise a controller may not send it —
+         * Media3 rejects commands a session never declared.
+         */
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val default = super.onConnect(session, controller)
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(
+                    default.availableSessionCommands.buildUpon()
+                        .add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+                        .build(),
+                )
+                .setCustomLayout(ImmutableList.of(speedButton()))
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction != ACTION_CYCLE_SPEED) {
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+            }
+            val player = session.player
+            val next = SPEED_STEPS[(SPEED_STEPS.indexOfFirst {
+                abs(it - player.playbackParameters.speed) < 0.01f
+            } + 1).mod(SPEED_STEPS.size)]
+            player.playbackParameters = PlaybackParameters(next)
+            // The label carries the current value, so the button has to be re-sent.
+            session.setCustomLayout(controller, ImmutableList.of(speedButton()))
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
@@ -237,6 +279,16 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
             ResumptionCallback().onPlaybackResumption(mediaSession, controller)
+    }
+
+    /** Labelled with the speed it will show, so the notification reads as a value. */
+    private fun speedButton(): CommandButton {
+        val current = mediaSession?.player?.playbackParameters?.speed ?: 1f
+        return CommandButton.Builder()
+            .setDisplayName(getString(R.string.player_speed_label, current))
+            .setIconResId(R.drawable.ic_playback_speed)
+            .setSessionCommand(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+            .build()
     }
 
     private fun browsableFolder(id: String, title: String): MediaItem =
@@ -492,6 +544,8 @@ class PlaybackService : MediaLibraryService() {
         const val ROOT_ID = "root"
         const val CONTINUE_ID = "continue"
         const val DOWNLOADS_ID = "downloads"
+        const val ACTION_CYCLE_SPEED = "net.koalastuff.koalacast.CYCLE_SPEED"
+        val SPEED_STEPS = floatArrayOf(1f, 1.25f, 1.5f, 1.75f, 2f, 0.75f).toList()
         /** Below unity headroom, so a loud episode cannot be pushed into clipping. */
         /** +10 dB, the usual lift for speech that was mastered too quietly. */
         const val BOOST_GAIN_MILLIBEL = 1_000
