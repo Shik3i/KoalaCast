@@ -905,7 +905,7 @@
 	}
 
 	.lang-chip .flag-emoji {
-		font-family: 'Twemoji Country Flags', var(--font-sans);
+		font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
 		font-size: 1.25rem;
 		line-height: 1;
 	}

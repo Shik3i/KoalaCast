@@ -5,10 +5,10 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: {
-		// The shared Quiet Edition stylesheet compresses to roughly 32 KiB.
-		// Inlining it removes a full render-blocking request on cold loads while
-		// staying comfortably below an oversized HTML payload.
-		inlineStyleThreshold: 200000,
+		// The icon subset keeps the complete shell CSS below 70 KiB. Inlining that
+		// critical shell removes the only render-blocking request while the
+		// compressed document remains small.
+		inlineStyleThreshold: 80000,
 		adapter: adapter({
 			pages: 'build',
 			assets: 'build',

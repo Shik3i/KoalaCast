@@ -551,7 +551,7 @@
 						src={optimizeArtwork(track.artwork_url, 120)}
 						alt={track.title}
 						class="artwork"
-						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')}
 					/>
 					<span class="art-expand"><i class="ph ph-arrows-out-simple" aria-hidden="true"></i></span>
 				</button>
@@ -660,7 +660,7 @@
 						src={optimizeArtwork(track.artwork_url, 400)}
 						alt={track.title}
 						class="np-art"
-						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')}
 					/>
 				</div>
 

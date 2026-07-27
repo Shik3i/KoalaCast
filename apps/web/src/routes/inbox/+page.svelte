@@ -255,7 +255,7 @@
 			<div class="settings-list">
 				{#each subscriptions as sub (sub.podcast_id)}
 					<div class="settings-row">
-						<img src={optimizeArtwork(sub.artwork_url, 80)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(sub.artwork_url, 80)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						<span class="s-title">{sub.title}</span>
 						<div class="seg">
 							<button class:active={(modes[sub.podcast_id] ?? 'all') === 'all'} onclick={() => setMode(sub.podcast_id, 'all')}>{t('inbox.modeAll')}</button>
@@ -303,7 +303,7 @@
 				{#each group.episodes as ep, i (ep.id)}
 					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
 					<button class="ep-play" onclick={() => play(ep)} aria-label={t('inbox.playEpisode')} title={t('inbox.playEpisode')}>
-						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 					</button>
 					<div class="ep-body">

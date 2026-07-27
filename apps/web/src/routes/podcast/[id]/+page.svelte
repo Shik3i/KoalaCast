@@ -344,7 +344,7 @@
 				loading="eager"
 				fetchpriority="high"
 				decoding="async"
-				onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')}
+				onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')}
 			/>
 			<div class="meta">
 				<span class="badge">{t('podcast.episodeCount', { count: episodes.length })}</span>

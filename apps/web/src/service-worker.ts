@@ -18,12 +18,16 @@ const CACHE = `koalacast-cache-${version}`;
 // installation; all other static assets remain available through normal HTTP.
 const PRECACHE_BUILD = build.filter((path) => !/\.(?:woff|ttf|svg)$/.test(path));
 const OFFLINE_FILES = new Set([
-	'/TwemojiCountryFlags.woff2',
-	'/favicon.svg',
+	'/favicon.ico',
+	'/icon-32.png',
 	'/icon-192.png',
+	'/icon-192.webp',
 	'/icon-512.png',
 	'/manifest.webmanifest',
-	'/placeholder.svg'
+	'/cover-placeholder.webp',
+	'/illustrations/empty-library.webp',
+	'/illustrations/empty-search.webp',
+	'/illustrations/empty-queue.webp'
 ]);
 const PRECACHE = [...PRECACHE_BUILD, ...files.filter((path) => OFFLINE_FILES.has(path))];
 

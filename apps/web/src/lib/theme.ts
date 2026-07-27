@@ -1,7 +1,16 @@
 import type { MessageKey } from '$lib/i18n';
 
 export type ThemeMode = 'system' | 'dark' | 'light';
-export type PaletteId = 'eucalyptus' | 'fjord' | 'ember' | 'lavender' | 'aurora' | 'sandstone';
+export type PaletteId =
+	| 'eucalyptus'
+	| 'fjord'
+	| 'ember'
+	| 'lavender'
+	| 'aurora'
+	| 'sandstone'
+	| 'obsidian'
+	| 'paper'
+	| 'ultraviolet';
 
 export interface ColorPalette {
 	id: PaletteId;
@@ -46,6 +55,24 @@ export const COLOR_PALETTES: readonly ColorPalette[] = [
 		labelKey: 'settings.paletteSandstone',
 		descriptionKey: 'settings.paletteSandstoneDescription',
 		swatches: ['#130f0a', '#17130e', '#d7b46a', '#f8f0df']
+	},
+	{
+		id: 'obsidian',
+		labelKey: 'settings.paletteObsidian',
+		descriptionKey: 'settings.paletteObsidianDescription',
+		swatches: ['#050505', '#111111', '#d9d9d9', '#ffffff']
+	},
+	{
+		id: 'paper',
+		labelKey: 'settings.palettePaper',
+		descriptionKey: 'settings.palettePaperDescription',
+		swatches: ['#171511', '#211e18', '#d7c6a3', '#f6efdf']
+	},
+	{
+		id: 'ultraviolet',
+		labelKey: 'settings.paletteUltraviolet',
+		descriptionKey: 'settings.paletteUltravioletDescription',
+		swatches: ['#0b0714', '#130d22', '#e35cff', '#fbf4ff']
 	}
 ] as const;
 

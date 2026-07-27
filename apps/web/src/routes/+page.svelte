@@ -47,7 +47,10 @@
 	];
 
 	let mounted = $state(false);
-	let podcasts = $state<PodcastItem[]>([]);
+	// Ship the editorial fallback in the prerendered HTML. The hero artwork is
+	// therefore discoverable before hydration instead of 1–2 seconds later.
+	let podcasts = $state<PodcastItem[]>(FEATURED_PODCASTS);
+	let pinnedSpotlight = $state<PodcastItem | null>(FEATURED_PODCASTS[0]);
 	let subscribedIds = $state<string[]>([]);
 	let subscribedFeeds = $state<string[]>([]);
 	let searchQuery = $state('');
@@ -56,7 +59,7 @@
 	let sort = $state<DiscoverSort>('momentum');
 	let fitsSession = $state(false);
 	let isHydratingMetadata = $state(false);
-	let isLoading = $state(true);
+	let isLoading = $state(false);
 	let isLoadingMore = $state(false);
 	let limit = $state(PAGE_SIZE);
 	let visibleChartCount = $state(12);
@@ -80,18 +83,15 @@
 			fitsSession
 		}) as PodcastItem[]
 	);
-	const spotlight = $derived(arranged[0] ?? null);
-	const picks = $derived(arranged.slice(1, 4));
-	const chart = $derived(arranged.slice(4, 4 + visibleChartCount));
-	const hasMoreResults = $derived(chart.length < Math.max(0, arranged.length - 4) || !reachedEnd);
+	const spotlight = $derived(pinnedSpotlight ?? arranged[0] ?? null);
+	const supporting = $derived(arranged.filter((podcast) => podcastKey(podcast) !== (spotlight ? podcastKey(spotlight) : '')));
+	const picks = $derived(supporting.slice(0, 3));
+	const chart = $derived(supporting.slice(3, 3 + visibleChartCount));
+	const hasMoreResults = $derived(chart.length < Math.max(0, supporting.length - 3) || !reachedEnd);
 	const selectedMoodLabel = $derived(t(moods.find((mood) => mood.id === selectedMood)?.labelKey ?? 'quiet.discover.moodCalm'));
 
 	onMount(async () => {
 		mounted = true;
-		// Render the stable editorial fallback before the first asynchronous read.
-		// This keeps the hero and mood grid in their final positions from frame one.
-		podcasts = FEATURED_PODCASTS;
-		isLoading = false;
 		listeningSession.load();
 		const subscriptions = await getLocalSubscriptions();
 		subscribedIds = subscriptions.map((sub) => sub.podcast_id);
@@ -140,6 +140,7 @@
 				}
 			}
 			const safeFallback = languages.includes('en') ? FEATURED_PODCASTS : [];
+			if (!languages.includes('en')) pinnedSpotlight = null;
 			podcasts = (merged.length ? merged : safeFallback).map((podcast, index) => ({
 				...podcast,
 				sourceRank: index
@@ -158,6 +159,7 @@
 
 	async function selectCategory(category: string) {
 		if (category === selectedCategory) return;
+		pinnedSpotlight = null;
 		selectedCategory = category;
 		limit = PAGE_SIZE;
 		visibleChartCount = 12;
@@ -290,9 +292,15 @@
 	}
 
 	async function setSessionMinutes(minutes: SessionMinutes | null) {
+		pinnedSpotlight = null;
 		listeningSession.set(minutes);
 		fitsSession = minutes !== null;
 		if (minutes !== null) await hydrateVisibleMetadata();
+	}
+
+	function selectMood(mood: DiscoverMood) {
+		pinnedSpotlight = null;
+		selectedMood = mood;
 	}
 
 	function plainSummary(value: string | undefined, author: string) {
@@ -408,7 +416,7 @@
 				</div>
 			</div>
 			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
-				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} loading="eager" fetchpriority="high" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+				<img src={optimizeArtwork(spotlight.artwork_url, 420)} alt={spotlight.title} width="208" height="208" loading="eager" fetchpriority="high" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 				<div class="waveform" aria-hidden="true">{#each [8,16,12,24,18,28,13,21,17,26,11,20,15,23,9,18] as height}<i style:height={`${height}px`}></i>{/each}</div>
 				<span>{t('quiet.discover.coverCaption')}</span>
 			</button>
@@ -435,7 +443,7 @@
 		</div>
 		<div class="mood-grid">
 			{#each moods as mood}
-				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => (selectedMood = mood.id)}>
+				<button aria-pressed={selectedMood === mood.id} class:active={selectedMood === mood.id} onclick={() => selectMood(mood.id)}>
 					<i class="ph {mood.icon}" aria-hidden="true"></i>
 					<strong>{t(mood.labelKey)}</strong>
 					<span>{t(mood.effectKey)}</span>
@@ -450,7 +458,7 @@
 			<div>
 				{#each picks as podcast}
 					<button onclick={() => openPodcast(podcast)} title={podcast.title}>
-						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						<span>
 							<strong>{podcast.title}</strong>
 							<small>{t('quiet.discover.moodReason', { mood: selectedMoodLabel })}</small>
@@ -504,7 +512,7 @@
 				<article class="chart-row">
 					<span class="rank">{String(index + 1).padStart(2, '0')}</span>
 					<button class="chart-art" onclick={() => openPodcast(podcast)} aria-label={t('discover.openPodcast', { title: podcast.title })} title={t('discover.openPodcast', { title: podcast.title })}>
-						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+						<img src={optimizeArtwork(podcast.artwork_url, 96)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 					</button>
 					<button class="chart-title" onclick={() => openPodcast(podcast)} title={podcast.title}>
 						<strong>{podcast.title}</strong><span>{podcast.author}</span>

@@ -181,13 +181,13 @@ func TestProxyHandler_GetImageProxyReturnsFallbackWhenUpstreamFails(t *testing.T
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected graceful fallback status 200, got %d", rec.Code)
 	}
-	if contentType := rec.Header().Get("Content-Type"); contentType != "image/svg+xml" {
-		t.Errorf("expected fallback Content-Type image/svg+xml, got %q", contentType)
+	if contentType := rec.Header().Get("Content-Type"); contentType != "image/webp" {
+		t.Errorf("expected fallback Content-Type image/webp, got %q", contentType)
 	}
 	if fallback := rec.Header().Get("X-KoalaCast-Image-Fallback"); fallback != "true" {
 		t.Errorf("expected fallback response marker, got %q", fallback)
 	}
-	if !strings.Contains(rec.Body.String(), "<svg") {
-		t.Error("expected SVG fallback body")
+	if rec.Body.Len() < 1000 {
+		t.Errorf("expected embedded WebP fallback body, got %d bytes", rec.Body.Len())
 	}
 }

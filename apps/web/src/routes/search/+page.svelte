@@ -470,7 +470,7 @@
 			</div>
 		{:else if visibleResults.length === 0}
 			<div class="empty-state">
-				<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+				<img class="empty-illustration" src="/illustrations/empty-search.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{lastExecutedQuery ? t('search.noResults', { query: lastExecutedQuery }) : t('search.startHint')}</p>
 			</div>
 		{:else}
@@ -478,7 +478,7 @@
 				{#each visibleResults as pod, i (pod.id ?? i)}
 					<article class="result-card" use:reveal={{ delay: Math.min(i * 35, 300) }}>
 						<button class="art-hit" onclick={() => openPodcastShow(pod)} aria-label={t('discover.openPodcast', { title: pod.title || pod.trackName })} title={pod.title || pod.trackName}>
-							<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(pod.artwork_url || pod.artworkUrl600, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						</button>
 						<div class="info">
 							<h4><button onclick={() => openPodcastShow(pod)} title={pod.title || pod.trackName}>{pod.title || pod.trackName}</button></h4>
@@ -727,7 +727,7 @@
 		max-width: 520px;
 		margin: 0 auto;
 	}
-	.empty-state :global(.ph) { font-size: 2.2rem; }
+	.empty-illustration { width: min(256px, 72vw); height: auto; aspect-ratio: 1; object-fit: contain; }
 
 	.result-card {
 		position: relative;

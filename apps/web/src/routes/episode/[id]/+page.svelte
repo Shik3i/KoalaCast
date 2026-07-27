@@ -301,7 +301,7 @@
 {:else if episode}
 	<div class="episode-page" style={accentVars}>
 		<div class="episode-header">
-			<img src={optimizeArtwork(episode.artwork_url || podcast?.artwork_url, 350)} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+			<img src={optimizeArtwork(episode.artwork_url || podcast?.artwork_url, 350)} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 
 			<div class="meta">
 				<h2>{episode.title}</h2>

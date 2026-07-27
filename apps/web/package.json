@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "generate:icons": "node scripts/generate-icon-subset.mjs",
     "generate:seo": "node scripts/generate-seo.mjs",
     "prebuild": "npm run generate:seo",
     "build": "svelte-kit sync && vite build",
@@ -29,10 +30,6 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@fontsource/archivo": "^5.3.0",
-    "@fontsource/bricolage-grotesque": "^5.3.0",
-    "@fontsource/ibm-plex-mono": "^5.3.0",
-    "@fontsource/outfit": "^5.3.0",
     "@phosphor-icons/web": "^2.1.2",
     "dompurify": "^3.4.12",
     "idb": "^8.0.0"

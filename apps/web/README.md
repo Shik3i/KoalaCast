@@ -23,7 +23,7 @@ apps/web/
 │   │   ├── styles/              Global CSS + Forest Green design tokens
 │   │   └── theme.ts             Light/dark theme handling
 │   └── routes/                  Pages: /, /search, /library, /podcast/[id], /episode/[id], /settings, /admin
-├── static/                      favicon.svg, placeholder.svg (served at site root)
+├── static/                      app icons, cover placeholder and empty-state artwork
 ├── svelte.config.js             adapter-static config with fallback: 'index.html'
 └── vite.config.ts               Dev server + /api → :3000 proxy
 ```
@@ -64,6 +64,6 @@ In production, the Go server delivers the static SPA with `index.html` fallback 
 
 - **Svelte 5 runes** (`$state`, `$derived`, `$effect`) — no legacy stores for local component state.
 - **Local-first:** account-free usage stores everything in IndexedDB (`src/lib/idb`).
-- **Images:** artwork `<img>` tags use `/api/v1/proxy/image` for privacy-safe Catmull-Rom downscaling and RAM LRU caching, falling back to `/placeholder.svg` via `onerror`.
+- **Images:** artwork `<img>` tags use `/api/v1/proxy/image` for privacy-safe Catmull-Rom downscaling and RAM LRU caching, falling back to `/cover-placeholder.webp` via `onerror`.
 - **Zero CDNs:** All icons (@phosphor-icons/web) and fonts (Outfit) are bundled locally.
 - Keep `npm run check` at **0 errors** before opening a PR.

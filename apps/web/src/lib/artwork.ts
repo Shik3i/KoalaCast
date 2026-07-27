@@ -4,7 +4,7 @@
  * Eliminates 100% of third-party IP leakage and reduces network payloads from 1MB to ~15KB.
  */
 export function optimizeArtwork(url: string | null | undefined, targetSize = 300): string {
-	if (!url) return '/placeholder.svg';
+	if (!url) return '/cover-placeholder.webp';
 
 	// Keep local assets as-is
 	if (url.startsWith('/') || url.startsWith('data:')) {

@@ -10,8 +10,8 @@
 		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 		<meta name="theme-color" content="#06100c" media="(prefers-color-scheme: dark)" />
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
-		<link rel="icon" type="image/svg+xml" href="%sveltekit.assets%/favicon.svg" />
-		<link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icon-40.png" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="any" />
+		<link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icon-32.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icon-192.png" />
 		<title>KoalaCast</title>
 		<script type="application/ld+json">
@@ -45,7 +45,10 @@
 						palette === 'ember' ||
 						palette === 'lavender' ||
 						palette === 'aurora' ||
-						palette === 'sandstone'
+						palette === 'sandstone' ||
+						palette === 'obsidian' ||
+						palette === 'paper' ||
+						palette === 'ultraviolet'
 					) {
 						document.documentElement.setAttribute('data-palette', palette);
 					} else {

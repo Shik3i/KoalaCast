@@ -223,6 +223,7 @@
 	{#if activeTab === 'subscriptions'}
 		{#if subscriptions.length === 0}
 			<div class="empty-state">
+				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptySubscriptions')}</p>
 				<div class="empty-actions">
 					<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
@@ -234,7 +235,7 @@
 				{#each visibleSubscriptions as sub, i (sub.podcast_id)}
 					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 40, 320) }} use:longPress={sub.podcast_id}>
 						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={t('library.openShow', { title: sub.title })} title={sub.title}>
-							<img src={optimizeArtwork(sub.artwork_url, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(sub.artwork_url, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						</a>
 						<div class="details cover-overlay">
 							<h3 title={sub.title}>{sub.title}</h3>
@@ -252,6 +253,7 @@
 	{:else if activeTab === 'episodes'}
 		{#if recentEpisodes.length === 0}
 			<div class="empty-state">
+				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptyInProgress')}</p>
 				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
@@ -260,7 +262,7 @@
 				{#each recentEpisodes as ep (ep.episode_id)}
 					<div class="ep-row">
 						<button class="ep-play" onclick={() => resume(ep)} aria-label={t('library.resumeEpisode')} title={t('library.resumeEpisode')}>
-							<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
@@ -278,6 +280,7 @@
 	{:else if activeTab === 'queue'}
 		{#if queue.length === 0}
 			<div class="empty-state">
+				<img class="empty-illustration queue" src="/illustrations/empty-queue.webp" width="192" height="288" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptyQueue')}</p>
 				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
@@ -310,7 +313,7 @@
 						</div>
 						<span class="drag-handle" aria-hidden="true" title={t('library.dragToReorder')}><i class="ph ph-dots-six-vertical"></i></span>
 						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label={t('library.playEpisode')} title={t('library.playEpisode')}>
-							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
@@ -327,7 +330,7 @@
 	{:else}
 		{#if favorites.length === 0}
 			<div class="empty-state">
-				<i class="ph ph-heart" aria-hidden="true"></i>
+				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptyFavorites')}</p>
 				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
 			</div>
@@ -336,7 +339,7 @@
 				{#each favorites as fav (fav.episode_id)}
 					<div class="ep-row">
 						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label={t('library.playEpisode')} title={t('library.playEpisode')}>
-							<img src={optimizeArtwork(fav.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/placeholder.svg')} />
+							<img src={optimizeArtwork(fav.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
 						</button>
 						<div class="ep-body">
@@ -424,6 +427,8 @@
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 	}
+	.empty-illustration { width: min(256px, 72vw); height: auto; aspect-ratio: 1; object-fit: contain; margin: -1rem auto 0; }
+	.empty-illustration.queue { width: min(176px, 54vw); aspect-ratio: 2 / 3; }
 
 	.podcast-grid {
 		display: grid;

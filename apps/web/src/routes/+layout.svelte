@@ -1,19 +1,7 @@
 <script lang="ts">
-	import '@fontsource/archivo/latin-700.css';
-	import '@fontsource/bricolage-grotesque/latin-400.css';
-	import '@fontsource/bricolage-grotesque/latin-700.css';
-	import '@fontsource/bricolage-grotesque/latin-800.css';
-	import '@fontsource/outfit/400.css';
-	import '@fontsource/outfit/600.css';
-	import '@fontsource/outfit/700.css';
-	import '@fontsource/ibm-plex-mono/latin-400.css';
-	import '@fontsource/ibm-plex-mono/latin-600.css';
-	import '@fontsource/ibm-plex-mono/latin-700.css';
-	import '@phosphor-icons/web/regular/style.css';
-	import '@phosphor-icons/web/fill/style.css';
+	import '$lib/styles/phosphor-subset.css';
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';
-	import Player from '$lib/components/Player.svelte';
 	import RailResizer from '$lib/components/RailResizer.svelte';
 	import RunningOrder from '$lib/components/RunningOrder.svelte';
 	import Seo from '$lib/components/Seo.svelte';
@@ -30,6 +18,8 @@
 	let { children } = $props();
 	let currentUser = $state<{ user_id: string; username: string; role: string } | null>(null);
 	let online = $state(true);
+	let DeferredPlayer = $state<any>(null);
+	let playerImport: Promise<void> | null = null;
 
 	const path = $derived($page.url.pathname);
 	const showRunningOrder = $derived(path === '/');
@@ -51,6 +41,30 @@
 				}
 			})
 			.catch(() => {});
+	});
+	onMount(() => {
+		const warmPlayer = (event: Event) => {
+			const target = event.target as HTMLElement | null;
+			if (target?.closest('button, a')?.querySelector('.ph-play, .ph-play-circle')) ensurePlayer();
+		};
+		window.addEventListener('pointerover', warmPlayer, { passive: true, capture: true });
+		window.addEventListener('pointerdown', warmPlayer, { passive: true, capture: true });
+		return () => {
+			window.removeEventListener('pointerover', warmPlayer, { capture: true });
+			window.removeEventListener('pointerdown', warmPlayer, { capture: true });
+		};
+	});
+
+	function ensurePlayer() {
+		if (DeferredPlayer || playerImport) return playerImport;
+		playerImport = import('$lib/components/Player.svelte').then((module) => {
+			DeferredPlayer = module.default;
+		});
+		return playerImport;
+	}
+
+	$effect(() => {
+		if (player.isActive) ensurePlayer();
 	});
 	onMount(() => {
 		online = navigator.onLine;
@@ -114,7 +128,7 @@
 		{/each}
 	</nav>
 
-	<Player />
+	{#if DeferredPlayer}<DeferredPlayer />{/if}
 	<Toast />
 	<ConfirmDialog />
 </div>
