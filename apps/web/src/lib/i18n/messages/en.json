@@ -103,8 +103,8 @@
 		"loadMore": "Load more",
 		"openPodcast": "Open {title}",
 		"subscribeSuccess": "Subscribed to {title}",
-		"subscribeError": "Could not subscribe. Please try again."
-		,"openError": "This podcast feed could not be opened. Try searching for another source."
+		"subscribeError": "Could not subscribe. Please try again.",
+		"openError": "This podcast feed could not be opened. Try searching for another source."
 	},
 	"search": {
 		"title": "Search podcasts",
@@ -401,10 +401,10 @@
 		"passwordPlaceholder": "Enter your password",
 		"signingIn": "Signing in…",
 		"noAccount": "Don't have an account yet?",
-		"createAccount": "Create a new account"
-		,"showPassword": "Show password"
-		,"hidePassword": "Hide password"
-		,"recoverAccount": "Recover account"
+		"createAccount": "Create a new account",
+		"showPassword": "Show password",
+		"hidePassword": "Hide password",
+		"recoverAccount": "Recover account"
 	},
 	"recover": {
 		"title": "Recover account",
@@ -597,7 +597,6 @@
 			"iHave": "I have",
 			"anyTime": "Any",
 			"sessionLength": "Session length",
-			"sessionHint": "shows verified matching lengths first; unknown lengths remain visible",
 			"moodCalm": "Calm",
 			"moodCurious": "Curious",
 			"moodCompany": "Company",

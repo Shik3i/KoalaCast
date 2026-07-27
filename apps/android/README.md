@@ -64,8 +64,8 @@ for a server running on the host.
 | `core:model` | Domain types and `DataResult` / `DataError`. Milliseconds everywhere. |
 | `core:network` | Retrofit + kotlinx.serialization against `/api/v1`, and `HostSelectionInterceptor` — there is no compile-time base URL, every request is re-pointed at the chosen server, path prefixes included. |
 | `core:data` | DataStore preferences, Room (the web's IndexedDB stores mirrored field for field), `ServerUrl` normalisation/validation, the podcast / library / queue / progress repositories, `ArtworkUrls` (image-proxy routing). |
-| `core:player` | `MediaSessionService` + ExoPlayer, the `PlayerConnection` every screen talks to, and the listening-session arithmetic behind the Profile stats. |
-| `core:ui` | The **4b "Quiet Edition" design system**: all nine palettes in light and dark (generated from the web client's stylesheet — see `apps/android/tools/generate-palettes.py`), the four bundled typefaces, radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
+| `core:player` | `MediaLibraryService` + ExoPlayer (browse tree for Android Auto / Wear), the `PlayerConnection` every screen talks to, and the listening-session arithmetic behind the Profile stats. |
+| `core:ui` | The **4b "Quiet Edition" design system**: all nine palettes in light and dark (generated from the web client's stylesheet — see `apps/android/tools/generate-palettes.py`), the two bundled typefaces (Nunito, Nunito Sans), radii/spacing, and the shared components (cover with the 135° stripe placeholder, chips, segmented control, skeletons, empty/error states, sanitised show notes). |
 | `feature:*` | Onboarding, Discover, Search, Podcast, Episode, Library, Inbox, Downloads, Player, Profile, Account, Global Stats and Settings. |
 | `app` | Hilt entry point, Coil image loader, navigation graph, bottom bar. The bar holds four destinations — Discover, New, Library, Profile — because a fifth label truncates at the narrowest supported width. Community figures are a scope inside Profile, not a tab. |
 
@@ -79,10 +79,11 @@ Deliberately **not** faked:
   needs 7-day trend data that neither iTunes charts nor Podcast Index return — a
   drawn-from-nowhere sparkline would be exactly the kind of "stat the app cannot
   know" the handoff's copy decisions rule out.
-- Silence trimming reports zero saved time in the listening telemetry rather than a
-  guess: the audio processor is not implemented.
-- Chapter UI waits for the episode-bound backend contract in
-  [`api_todo.md`](../../api_todo.md); the RSS parser currently discards the source URL.
+- Silence trimming is implemented (ExoPlayer's own flag, opt-in in Settings), but
+  the listening telemetry still reports zero saved time: nothing computes
+  `silenceSavedMs` yet, so the statistic would be a guess.
+- Chapters are carried end to end and listed on the episode screen. The *player*
+  does not use them yet — no markers on the progress bar, no skip-to-chapter.
 
 ---
 

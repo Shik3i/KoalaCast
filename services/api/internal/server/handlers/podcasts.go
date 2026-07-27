@@ -545,6 +545,21 @@ func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Requ
 func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	podcastID := chi.URLParam(r, "id")
 
+	// Discover hands out iTunes collection ids, because the Top Charts feed
+	// carries no feed URL to resolve against. GET /podcasts/{id} already turns
+	// those into stored podcasts; without the same step here the query below
+	// simply matches nothing and the caller sees a show with no episodes.
+	if numericIDPattern.MatchString(podcastID) {
+		var exists int
+		_ = h.DB.SQL.QueryRowContext(r.Context(),
+			"SELECT EXISTS(SELECT 1 FROM podcasts WHERE id = ?)", podcastID).Scan(&exists)
+		if exists == 0 {
+			if resolved, ok := h.resolveITunesID(r.Context(), podcastID); ok {
+				podcastID = resolved
+			}
+		}
+	}
+
 	limitStr := r.URL.Query().Get("limit")
 	limit := 50
 	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 200 {

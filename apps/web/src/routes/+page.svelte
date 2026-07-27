@@ -438,7 +438,6 @@
 					<button aria-pressed={listeningSession.minutes === minutes} class:active={listeningSession.minutes === minutes} onclick={() => setSessionMinutes(minutes as SessionMinutes)}>{minutes} min</button>
 				{/each}
 			</div>
-			<p>— {t('quiet.discover.sessionHint')}</p>
 		</div>
 		<div class="mood-grid">
 			{#each moods as mood}
@@ -589,7 +588,6 @@
 	.session-control > div { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; }
 	.session-control button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.session-control button.active { background: var(--accent-fill); color: var(--accent-on); }
-	.session-control p { color: var(--ink-4); font-size: 13px; }
 	.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
 	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: linear-gradient(150deg, color-mix(in srgb, var(--accent-fill) 24%, var(--bg-sunken)), var(--bg-sunken)); color: var(--ink); }
 	:global(:root[data-theme='light']) .mood-grid button { background: linear-gradient(150deg,#edf5f0,#dceae1); }
@@ -675,7 +673,6 @@
 		.spotlight-actions button, .session-control button, .sort-tabs button, .chart-filters select, .row-actions button { min-height: 44px; }
 		.reasoned-picks, .chart-section { padding: 16px; }
 		.mood-grid { grid-template-columns: repeat(2, 1fr); }
-		.session-control p { flex-basis: 100%; }
 		.chart-head { align-items: flex-start; flex-direction: column; }
 		.sort-tabs { width: 100%; overflow-x: auto; }
 		.chart-row { grid-template-columns: 24px 42px minmax(0, 1fr) 58px; min-height: 60px; }

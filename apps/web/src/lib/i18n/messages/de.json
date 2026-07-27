@@ -103,8 +103,8 @@
 		"loadMore": "Mehr laden",
 		"openPodcast": "{title} öffnen",
 		"subscribeSuccess": "{title} abonniert",
-		"subscribeError": "Abonnieren fehlgeschlagen. Bitte versuche es erneut."
-		,"openError": "Dieser Podcast-Feed konnte nicht geöffnet werden. Suche nach einer anderen Quelle."
+		"subscribeError": "Abonnieren fehlgeschlagen. Bitte versuche es erneut.",
+		"openError": "Dieser Podcast-Feed konnte nicht geöffnet werden. Suche nach einer anderen Quelle."
 	},
 	"search": {
 		"title": "Podcasts suchen",
@@ -401,10 +401,10 @@
 		"passwordPlaceholder": "Passwort eingeben",
 		"signingIn": "Anmeldung läuft…",
 		"noAccount": "Noch kein Konto?",
-		"createAccount": "Neues Konto erstellen"
-		,"showPassword": "Passwort anzeigen"
-		,"hidePassword": "Passwort verbergen"
-		,"recoverAccount": "Konto wiederherstellen"
+		"createAccount": "Neues Konto erstellen",
+		"showPassword": "Passwort anzeigen",
+		"hidePassword": "Passwort verbergen",
+		"recoverAccount": "Konto wiederherstellen"
 	},
 	"recover": {
 		"title": "Konto wiederherstellen",
@@ -597,7 +597,6 @@
 			"iHave": "Ich habe",
 			"anyTime": "Egal",
 			"sessionLength": "Verfügbare Zeit",
-			"sessionHint": "zeigt bestätigte passende Längen zuerst; unbekannte Längen bleiben sichtbar",
 			"moodCalm": "Ruhig",
 			"moodCurious": "Neugierig",
 			"moodCompany": "Gesellig",
