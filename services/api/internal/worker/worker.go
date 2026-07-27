@@ -321,12 +321,12 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 					id, podcast_id, stable_identity_key, guid, fallback_hash, title, description,
 					content_encoded, pub_date, has_pub_date, duration_ms, enclosure_url,
 					enclosure_type, enclosure_length, artwork_url, episode_number, season_number,
-					episode_type, explicit, link, transcripts, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					episode_type, explicit, link, transcripts, chapters_url, created_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, episodeID, podcastID, ep.StableKey, ep.GUID, ep.FallbackHash, ep.Title, ep.Description,
 				ep.ContentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
 				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber,
-				ep.EpisodeType, explicitInt, ep.Link, transcriptsJSON, nowMs)
+				ep.EpisodeType, explicitInt, ep.Link, transcriptsJSON, ep.ChaptersURL, nowMs)
 			if err != nil {
 				return fmt.Errorf("failed to insert episode: %w", err)
 			}
@@ -342,10 +342,12 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 					enclosure_length = ?,
 					artwork_url = ?,
 					link = ?,
-					transcripts = ?
+					transcripts = ?,
+					chapters_url = ?
 				WHERE id = ?
 			`, ep.Title, ep.Description, ep.ContentEncoded, ep.DurationMS, ep.EnclosureURL,
-				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.Link, transcriptsJSON, existingID)
+				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.Link, transcriptsJSON,
+				ep.ChaptersURL, existingID)
 			if err != nil {
 				return fmt.Errorf("failed to update episode: %w", err)
 			}

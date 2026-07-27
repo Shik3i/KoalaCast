@@ -68,6 +68,7 @@ type EpisodeResponse struct {
 	Explicit        bool             `json:"explicit"`
 	Link            string           `json:"link"`
 	Transcripts     []transcriptItem `json:"transcripts"`
+	ChaptersURL     string           `json:"chapters_url"`
 }
 
 // transcriptItem is a publisher-provided transcript reference (Podcasting 2.0).
@@ -457,12 +458,12 @@ func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (str
 				id, podcast_id, stable_identity_key, guid, fallback_hash, title, description,
 				content_encoded, pub_date, has_pub_date, duration_ms, enclosure_url,
 				enclosure_type, enclosure_length, artwork_url, episode_number, season_number,
-				episode_type, explicit, link, transcripts, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				episode_type, explicit, link, transcripts, chapters_url, created_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, epID, podcastID, ep.StableKey, ep.GUID, ep.FallbackHash, ep.Title, ep.Description,
 			ep.ContentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
 			ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber,
-			ep.EpisodeType, epExplicit, ep.Link, transcriptsJSON, nowMs)
+			ep.EpisodeType, epExplicit, ep.Link, transcriptsJSON, ep.ChaptersURL, nowMs)
 		if err != nil {
 			// Ignore individual episode duplicate collisions
 			continue
@@ -559,7 +560,8 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.DB.SQL.QueryContext(r.Context(), `
 		SELECT id, podcast_id, guid, title, description, content_encoded, pub_date,
 		       has_pub_date, duration_ms, enclosure_url, enclosure_type, enclosure_length,
-		       artwork_url, episode_number, season_number, episode_type, explicit, link
+		       artwork_url, episode_number, season_number, episode_type, explicit, link,
+		       chapters_url
 		FROM episodes
 		WHERE podcast_id = ?
 		ORDER BY pub_date DESC
@@ -579,7 +581,7 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 			&ep.ID, &ep.PodcastID, &ep.GUID, &ep.Title, &ep.Description, &ep.ContentEncoded,
 			&ep.PubDate, &hasPubDateInt, &ep.DurationMS, &ep.EnclosureURL, &ep.EnclosureType,
 			&ep.EnclosureLength, &ep.ArtworkURL, &ep.EpisodeNumber, &ep.SeasonNumber,
-			&ep.EpisodeType, &explicitInt, &ep.Link,
+			&ep.EpisodeType, &explicitInt, &ep.Link, &ep.ChaptersURL,
 		)
 		if err == nil {
 			ep.HasPubDate = (hasPubDateInt == 1)
@@ -612,14 +614,15 @@ func (h *PodcastHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 	err := h.DB.SQL.QueryRowContext(r.Context(), `
 		SELECT id, podcast_id, guid, title, description, content_encoded, pub_date,
 		       has_pub_date, duration_ms, enclosure_url, enclosure_type, enclosure_length,
-		       artwork_url, episode_number, season_number, episode_type, explicit, link, transcripts
+		       artwork_url, episode_number, season_number, episode_type, explicit, link, transcripts,
+		       chapters_url
 		FROM episodes
 		WHERE id = ?
 	`, episodeID).Scan(
 		&ep.ID, &ep.PodcastID, &ep.GUID, &ep.Title, &ep.Description, &ep.ContentEncoded,
 		&ep.PubDate, &hasPubDateInt, &ep.DurationMS, &ep.EnclosureURL, &ep.EnclosureType,
 		&ep.EnclosureLength, &ep.ArtworkURL, &ep.EpisodeNumber, &ep.SeasonNumber,
-		&ep.EpisodeType, &explicitInt, &ep.Link, &transcriptsJSON,
+		&ep.EpisodeType, &explicitInt, &ep.Link, &transcriptsJSON, &ep.ChaptersURL,
 	)
 
 	if err == sql.ErrNoRows {

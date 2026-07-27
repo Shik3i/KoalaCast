@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.core.network
 
 import net.koalastuff.koalacast.core.network.dto.AddFeedRequest
+import net.koalastuff.koalacast.core.network.dto.ChaptersResponse
 import net.koalastuff.koalacast.core.network.dto.DiscoverResponse
 import net.koalastuff.koalacast.core.network.dto.EpisodeDto
 import net.koalastuff.koalacast.core.network.dto.EpisodesResponse
@@ -85,6 +86,14 @@ interface KoalaCastApi {
 
     @GET("api/v1/episodes/{id}")
     suspend fun episode(@Path("id") id: String): Response<EpisodeDto>
+
+    /**
+     * Chapter JSON lives on the publisher's host, so it goes through the server's
+     * proxy: that keeps the listener's address off a third-party origin, exactly as
+     * artwork proxying does.
+     */
+    @GET("api/v1/proxy/chapters")
+    suspend fun chapters(@Query("url") url: String): Response<ChaptersResponse>
 
     @GET("api/v1/episodes/{id}/transcript")
     suspend fun transcript(

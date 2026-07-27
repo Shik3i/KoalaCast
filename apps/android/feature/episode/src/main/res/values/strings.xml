@@ -23,4 +23,9 @@
     <string name="episode_download">Download for offline listening</string>
     <string name="episode_pause_download">Pause download</string>
     <string name="episode_remove_download">Remove offline download</string>
+    <string name="episode_show_chapters">Chapters</string>
+    <string name="episode_hide_chapters">Hide chapters</string>
+    <string name="episode_loading_chapters">Loading chapters…</string>
+    <string name="episode_chapters_error">Chapters could not be loaded.</string>
+    <string name="episode_empty_chapters">This episode lists no chapters.</string>
 </resources>

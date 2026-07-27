@@ -19,6 +19,7 @@ import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
+import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
@@ -41,6 +42,10 @@ data class EpisodeUiState(
     val transcriptLoading: Boolean = false,
     val transcript: String = "",
     val transcriptError: Boolean = false,
+    val chaptersExpanded: Boolean = false,
+    val chaptersLoading: Boolean = false,
+    val chapters: List<Chapter> = emptyList(),
+    val chaptersError: Boolean = false,
     val downloadState: DownloadState? = null,
 )
 
@@ -164,6 +169,41 @@ class EpisodeViewModel @Inject constructor(
                 DownloadState.DONE -> downloads.remove(track.episodeId)
             }
         }
+    }
+
+    fun toggleChapters() {
+        val expanded = !_state.value.chaptersExpanded
+        _state.update { it.copy(chaptersExpanded = expanded) }
+        if (expanded && _state.value.chapters.isEmpty() && !_state.value.chaptersLoading) {
+            loadChapters()
+        }
+    }
+
+    private fun loadChapters() {
+        val url = _state.value.episode?.chaptersUrl.orEmpty()
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            _state.update { it.copy(chaptersLoading = true, chaptersError = false) }
+            when (val result = podcasts.chapters(url)) {
+                is DataResult.Success -> _state.update {
+                    it.copy(chaptersLoading = false, chapters = result.data)
+                }
+                is DataResult.Failure -> _state.update {
+                    it.copy(chaptersLoading = false, chaptersError = true)
+                }
+            }
+        }
+    }
+
+    /** Jumps to a chapter, starting the episode first when it is not the one playing. */
+    fun seekToChapter(chapter: Chapter) {
+        val track = track() ?: return
+        // `resume = false` so a fresh start ignores any stored position — the
+        // listener asked for this chapter, not for where they left off.
+        if (player.state.value.track?.episodeId != track.episodeId) {
+            player.play(track, resume = false)
+        }
+        player.seekTo(chapter.startMs)
     }
 
     fun toggleTranscript() {

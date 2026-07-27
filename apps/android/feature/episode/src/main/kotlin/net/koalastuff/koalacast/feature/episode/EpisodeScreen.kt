@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.feature.episode
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,10 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
@@ -55,7 +58,9 @@ fun EpisodeScreen(
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
-        onToggleTranscript = viewModel::toggleTranscript,
+        onToggleTranscript = viewModel::toggleTranscript,
+        onToggleChapters = viewModel::toggleChapters,
+        onSeekToChapter = viewModel::seekToChapter,
         onToggleDownload = viewModel::toggleDownload,
         modifier = modifier,
         contentPadding = contentPadding,
@@ -71,7 +76,9 @@ internal fun EpisodeContent(
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
-    onToggleTranscript: () -> Unit,
+    onToggleTranscript: () -> Unit,
+    onToggleChapters: () -> Unit,
+    onSeekToChapter: (Chapter) -> Unit,
     onToggleDownload: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -244,6 +251,44 @@ internal fun EpisodeContent(
                         ShowNotes(html = notes)
                     }
 
+                    if (episode.chaptersUrl.isNotBlank()) {
+                        OutlineButton(
+                            text = stringResource(
+                                if (state.chaptersExpanded) R.string.episode_hide_chapters
+                                else R.string.episode_show_chapters,
+                            ),
+                            onClick = onToggleChapters,
+                            leadingIcon = PhosphorIcons.Clock,
+                        )
+                        if (state.chaptersExpanded) {
+                            when {
+                                state.chaptersLoading -> Text(
+                                    text = stringResource(R.string.episode_loading_chapters),
+                                    style = KoalaTheme.type.bodySmall,
+                                    color = colors.ink4,
+                                )
+                                state.chaptersError -> Text(
+                                    text = stringResource(R.string.episode_chapters_error),
+                                    style = KoalaTheme.type.bodySmall,
+                                    color = colors.ink2,
+                                )
+                                state.chapters.isEmpty() -> Text(
+                                    text = stringResource(R.string.episode_empty_chapters),
+                                    style = KoalaTheme.type.bodySmall,
+                                    color = colors.ink4,
+                                )
+                                else -> Column {
+                                    state.chapters.forEach { chapter ->
+                                        ChapterRow(
+                                            chapter = chapter,
+                                            onClick = { onSeekToChapter(chapter) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     if (episode.transcripts.isNotEmpty()) {
                         OutlineButton(
                             text = stringResource(
@@ -278,5 +323,40 @@ internal fun EpisodeContent(
                 }
             }
         }
+    }
+}
+
+/**
+ * One chapter. The start time is the anchor a listener scans for, so it is mono
+ * and tabular; tapping the row jumps the player there.
+ */
+@Composable
+private fun ChapterRow(
+    chapter: Chapter,
+    onClick: () -> Unit,
+) {
+    val colors = KoalaTheme.colors
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = KoalaSpacing.gapSmall),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MonoText(
+            text = Format.timecode(chapter.startMs),
+            color = colors.accentInk,
+            style = KoalaTheme.type.monoStrong,
+        )
+        Text(
+            text = chapter.title,
+            style = KoalaTheme.type.bodySmall,
+            color = colors.ink2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
     }
 }

@@ -220,3 +220,39 @@ func TestParseFeedXML_MultipleTranscriptsAndContentEncoded(t *testing.T) {
 		t.Errorf("unexpected transcript details: %+v", ep.Transcripts)
 	}
 }
+
+// Chapters were parsed but discarded before the chapters_url column existed, which
+// left both clients' chapter UI unable to trigger. Pin the parse so it stays wired.
+func TestParseFeedXML_Chapters(t *testing.T) {
+	xmlData := `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Chapters Feed</title>
+    <item>
+      <title>Episode With Chapters</title>
+      <guid>ep-chapters</guid>
+      <enclosure url="https://example.com/audio/ep.mp3" type="audio/mpeg"/>
+      <podcast:chapters url="https://example.com/ep1/chapters.json" type="application/json+chapters"/>
+    </item>
+    <item>
+      <title>Episode Without Chapters</title>
+      <guid>ep-plain</guid>
+      <enclosure url="https://example.com/audio/ep2.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>`
+
+	feed, err := ParseFeedXML(strings.NewReader(xmlData))
+	if err != nil {
+		t.Fatalf("ParseFeedXML failed: %v", err)
+	}
+	if len(feed.Episodes) != 2 {
+		t.Fatalf("expected 2 episodes, got %d", len(feed.Episodes))
+	}
+	if got := feed.Episodes[0].ChaptersURL; got != "https://example.com/ep1/chapters.json" {
+		t.Errorf("chapters URL not parsed, got %q", got)
+	}
+	if got := feed.Episodes[1].ChaptersURL; got != "" {
+		t.Errorf("expected no chapters URL on the plain episode, got %q", got)
+	}
+}

@@ -23,4 +23,9 @@
     <string name="episode_download">Zum Offline-Hören laden</string>
     <string name="episode_pause_download">Download pausieren</string>
     <string name="episode_remove_download">Offline-Download entfernen</string>
+    <string name="episode_show_chapters">Kapitel</string>
+    <string name="episode_hide_chapters">Kapitel ausblenden</string>
+    <string name="episode_loading_chapters">Kapitel werden geladen…</string>
+    <string name="episode_chapters_error">Kapitel konnten nicht geladen werden.</string>
+    <string name="episode_empty_chapters">Diese Folge nennt keine Kapitel.</string>
 </resources>

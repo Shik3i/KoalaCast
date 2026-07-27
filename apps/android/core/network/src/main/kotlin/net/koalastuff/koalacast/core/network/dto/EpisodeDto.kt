@@ -19,6 +19,7 @@ data class EpisodeDto(
     @SerialName("content_encoded") val contentEncoded: String = "",
     @SerialName("pub_date") val pubDate: Long = 0,
     @SerialName("has_pub_date") val hasPubDate: Boolean = false,
+    @SerialName("chapters_url") val chaptersUrl: String = "",
     @SerialName("duration_ms") val durationMs: Long = 0,
     @SerialName("enclosure_url") val enclosureUrl: String = "",
     @SerialName("enclosure_type") val enclosureType: String = "",
@@ -44,4 +45,18 @@ data class EpisodesResponse(
 data class HealthResponse(
     val status: String = "",
     val version: String = "",
+)
+
+/** `GET /api/v1/proxy/chapters` — Podcasting 2.0 JSON chapters, normalised by the server. */
+@Serializable
+data class ChapterDto(
+    val startTime: Double = 0.0,
+    val title: String = "",
+    val img: String = "",
+    val url: String = "",
+)
+
+@Serializable
+data class ChaptersResponse(
+    val chapters: List<ChapterDto> = emptyList(),
 )

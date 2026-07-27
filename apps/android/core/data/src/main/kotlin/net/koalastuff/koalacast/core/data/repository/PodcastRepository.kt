@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
 import net.koalastuff.koalacast.core.data.mapper.toModel
+import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
@@ -78,6 +79,24 @@ class PodcastRepository @Inject constructor(
     suspend fun episode(id: String): DataResult<Episode> = withContext(dispatcher) {
         apiCall { api.episode(id) }.map { it.toModel() }
     }
+
+    suspend fun chapters(chaptersUrl: String): DataResult<List<Chapter>> =
+        withContext(dispatcher) {
+            apiCall { api.chapters(chaptersUrl) }.map { response ->
+                response.chapters
+                    .map {
+                        Chapter(
+                            // Podcasting 2.0 gives startTime in seconds, often fractional.
+                            startMs = (it.startTime * 1000).toLong().coerceAtLeast(0L),
+                            title = it.title,
+                            imageUrl = it.img,
+                            linkUrl = it.url,
+                        )
+                    }
+                    .filter { it.title.isNotBlank() }
+                    .sortedBy { it.startMs }
+            }
+        }
 
     suspend fun transcript(id: String, index: Int = 0): DataResult<Pair<String, String>> =
         withContext(dispatcher) {

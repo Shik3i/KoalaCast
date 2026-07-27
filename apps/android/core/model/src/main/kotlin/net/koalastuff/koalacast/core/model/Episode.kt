@@ -13,6 +13,8 @@ data class Episode(
     val contentEncoded: String,
     val pubDateMs: Long,
     val hasPubDate: Boolean,
+    /** Publisher's Podcasting 2.0 chapters JSON; blank when the feed has none. */
+    val chaptersUrl: String = "",
     val durationMs: Long,
     val enclosureUrl: String,
     val enclosureType: String,
@@ -32,4 +34,12 @@ data class Episode(
 data class Transcript(
     val url: String,
     val type: String,
+)
+
+/** One entry of a Podcasting 2.0 chapters file. */
+data class Chapter(
+    val startMs: Long,
+    val title: String,
+    val imageUrl: String,
+    val linkUrl: String,
 )
