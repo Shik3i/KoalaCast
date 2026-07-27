@@ -37,7 +37,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Fail loudly if the Gradle project is ever missing from the release ref.
       - name: Preflight — Gradle project present?
