@@ -119,7 +119,7 @@
 
 <div class="admin-page">
 	<div class="admin-head">
-		<h2><i class="ph-fill ph-shield-star" aria-hidden="true"></i> {t('admin.title')}</h2>
+		<h1><i class="ph-fill ph-shield-star" aria-hidden="true"></i> {t('admin.title')}</h1>
 		<p class="admin-sub">{t('admin.subtitle')}</p>
 		<div class="admin-refresh">
 			<span>{lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString() : '—'}</span>
@@ -292,7 +292,7 @@
 		padding: 24px 22px 36px;
 	}
 
-	.admin-head h2 {
+	.admin-head h1 {
 		color: var(--ink-strong);
 		font: 800 30px/1 var(--font-ui);
 		letter-spacing: -.04em;
@@ -300,7 +300,7 @@
 		align-items: center;
 		gap: 9px;
 	}
-	.admin-head h2 :global(.ph-fill) { color: var(--accent-ink); }
+	.admin-head h1 :global(.ph-fill) { color: var(--accent-ink); }
 	.admin-sub { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .05em; margin-top: 7px; text-transform: uppercase; }
 	.admin-refresh { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.admin-refresh button, .table-search { min-height: 44px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-panel); color: var(--ink-2); }

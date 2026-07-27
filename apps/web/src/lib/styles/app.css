@@ -1,7 +1,7 @@
 :root {
-	--font-display: 'Arial Narrow', 'Avenir Next Condensed', system-ui, sans-serif;
-	--font-ui: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
-	--font-sans: 'Avenir Next', 'Segoe UI', system-ui, -apple-system, sans-serif;
+	--font-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	--font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
 	--bg-app: #06100c;
 	--bg-panel: #0a0f0c;
@@ -901,7 +901,7 @@ p { text-wrap: pretty; }
 .quiet-app {
 	--left-rail-width: 206px;
 	--right-rail-width: 220px;
-	--rail-resizer-width: 6px;
+	--rail-resizer-width: 10px;
 	display: grid;
 	grid-template-columns: var(--left-rail-width) var(--rail-resizer-width) minmax(0, 1fr);
 	width: min(100%, calc(var(--left-rail-width) + var(--rail-resizer-width) + 1400px));

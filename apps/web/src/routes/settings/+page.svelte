@@ -313,7 +313,7 @@
 
 <div class="settings-page">
 	<div class="settings-head">
-		<h2><i class="ph-fill ph-gear-six" aria-hidden="true"></i> {t('settings.title')}</h2>
+		<h1><i class="ph-fill ph-gear-six" aria-hidden="true"></i> {t('settings.title')}</h1>
 		<p class="page-sub">{t('settings.subtitle')}</p>
 		<p class="settings-status">
 			<strong>{authUser ? t('settings.loggedInAs') + ' ' + authUser.username : t('settings.localBrowserMode')}</strong>
@@ -623,7 +623,7 @@
 	.settings-nav a:hover, .settings-nav a:focus-visible { background: var(--accent-wash); color: var(--accent-ink); }
 	.card { scroll-margin-top: 64px; }
 
-	.settings-head h2 {
+	.settings-head h1 {
 		font-size: clamp(1.6rem, 3vw, 2.1rem);
 		font-weight: 800;
 		letter-spacing: -0.02em;
@@ -631,7 +631,7 @@
 		align-items: center;
 		gap: 0.55rem;
 	}
-	.settings-head h2 :global(.ph-fill) { color: var(--accent-green); }
+	.settings-head h1 :global(.ph-fill) { color: var(--accent-green); }
 	.settings-head .page-sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
 
 	.card {

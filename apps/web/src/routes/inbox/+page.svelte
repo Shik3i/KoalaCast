@@ -3,10 +3,11 @@
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
-		getCompletedEpisodeIds,
+		getAllLocalPlaybackStates,
 		setSubscriptionInboxMode,
 		setEpisodePlayed,
 		type LocalSubscription,
+		type LocalPlaybackState,
 		type InboxMode
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
@@ -17,6 +18,7 @@
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
 	import { listeningSession } from '$lib/stores/session.svelte';
 
 	interface InboxEpisode {
@@ -39,6 +41,7 @@
 	let modes = $state<Record<string, InboxMode>>({});
 	let rawEpisodes = $state<InboxEpisode[]>([]);
 	let completed = $state<Set<string>>(new Set());
+	let playbackStates = $state<Record<string, LocalPlaybackState>>({});
 	// The Inbox is a "what's new" view, so played episodes are hidden by default;
 	// the toggle lets you reveal them again.
 	let unplayedOnly = $state(true);
@@ -70,7 +73,9 @@
 		const subs = await getLocalSubscriptions();
 		subscriptions = subs;
 		modes = Object.fromEntries(subs.map((s) => [s.podcast_id, s.inbox_mode ?? 'all']));
-		completed = await getCompletedEpisodeIds();
+		const states = await getAllLocalPlaybackStates();
+		playbackStates = Object.fromEntries(states.map((state) => [state.episode_id, state]));
+		completed = new Set(states.filter((state) => state.completed).map((state) => state.episode_id));
 
 		const results = await mapWithConcurrency(subs, 6, async (sub) => {
 			try {
@@ -167,6 +172,14 @@
 	async function markAllPlayed() {
 		await Promise.all(feed.map((episode) => setEpisodePlayed(epMeta(episode), true)));
 		completed = new Set([...completed, ...feed.map((episode) => episode.id)]);
+		playbackStates = Object.fromEntries(
+			Object.entries(playbackStates).map(([id, state]) => [
+				id,
+				feed.some((episode) => episode.id === id)
+					? { ...state, completed: true, progress_percent: 100 }
+					: state
+			])
+		);
 	}
 
 	function groupLabel(date: Date) {
@@ -177,11 +190,24 @@
 
 	async function togglePlayed(ep: InboxEpisode) {
 		const played = !completed.has(ep.id);
+		openMenuId = null;
 		await setEpisodePlayed(epMeta(ep), played);
 		const next = new Set(completed);
 		if (played) next.add(ep.id);
 		else next.delete(ep.id);
 		completed = next; // when unplayedOnly is on, played rows auto-hide
+		const existing = playbackStates[ep.id];
+		playbackStates = {
+			...playbackStates,
+			[ep.id]: {
+				...existing,
+				...epMeta(ep),
+				position_ms: played ? existing?.position_ms ?? 0 : 0,
+				completed: played,
+				progress_percent: played ? 100 : 0,
+				last_played_at: Date.now()
+			}
+		};
 	}
 
 	// "I've caught up to here" — mark this episode plus everything older in the
@@ -198,6 +224,25 @@
 			else next.delete(e.id);
 		}
 		completed = next;
+		playbackStates = {
+			...playbackStates,
+			...Object.fromEntries(
+				list.map((episode) => {
+					const existing = playbackStates[episode.id];
+					return [
+						episode.id,
+						{
+							...existing,
+							...epMeta(episode),
+							position_ms: played ? existing?.position_ms ?? 0 : 0,
+							completed: played,
+							progress_percent: played ? 100 : 0,
+							last_played_at: Date.now()
+						}
+					];
+				})
+			)
+		};
 		toast.success(t(played ? 'inbox.markedPlayed' : 'inbox.markedUnplayed', { count: list.length }));
 	}
 
@@ -211,6 +256,48 @@
 			enclosure_url: ep.enclosure_url,
 			duration_ms: ep.duration_ms || 0
 		});
+	}
+
+	function episodeProgress(ep: InboxEpisode) {
+		if (completed.has(ep.id)) return 100;
+		if (player.current?.episode_id === ep.id) {
+			const duration = player.durationMs || ep.duration_ms || 0;
+			if (duration > 0) return Math.min(100, (player.positionMs / duration) * 100);
+		}
+		return playbackStates[ep.id]?.progress_percent ?? 0;
+	}
+
+	function playLabel(ep: InboxEpisode) {
+		const progress = Math.round(episodeProgress(ep));
+		return progress > 0
+			? `${t('inbox.playEpisode')} · ${progress}%`
+			: t('inbox.playEpisode');
+	}
+
+	function toggleMenu(id: string, trigger: HTMLButtonElement) {
+		const opening = openMenuId !== id;
+		openMenuId = opening ? id : null;
+		if (opening) requestAnimationFrame(() => trigger.parentElement?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus());
+	}
+
+	function handleMenuKeydown(event: KeyboardEvent) {
+		const menu = event.currentTarget as HTMLElement;
+		const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+		const index = items.indexOf(document.activeElement as HTMLButtonElement);
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			const trigger = menu.parentElement?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+			openMenuId = null;
+			requestAnimationFrame(() => trigger?.focus());
+		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			const direction = event.key === 'ArrowDown' ? 1 : -1;
+			items[(index + direction + items.length) % items.length]?.focus();
+		} else if (event.key === 'Home' || event.key === 'End') {
+			event.preventDefault();
+			items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+		}
 	}
 
 	function formatDuration(ms?: number) {
@@ -227,7 +314,7 @@
 <div class="inbox-page">
 	<div class="head">
 		<div>
-			<h2><i class="ph-fill ph-tray" aria-hidden="true"></i> {t('inbox.title')}</h2>
+			<h1><i class="ph-fill ph-tray" aria-hidden="true"></i> {t('inbox.title')}</h1>
 			<p class="sub">{t('inbox.subtitle')}</p>
 		</div>
 		{#if subscriptions.length > 0}
@@ -301,11 +388,10 @@
 					<span>{t('inbox.episodeCount', { count: group.episodes.length })} · {formatDuration(group.episodes.reduce((sum, episode) => sum + (episode.duration_ms || 0), 0))}</span>
 				</header>
 				{#each group.episodes as ep, i (ep.id)}
-					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)}>
-					<button class="ep-play" onclick={() => play(ep)} aria-label={t('inbox.playEpisode')} title={t('inbox.playEpisode')}>
+					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)} class:menu-open={openMenuId === ep.id}>
+					<a class="ep-art" href={`/episode/${ep.id}`} aria-label={ep.title} title={ep.title}>
 						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
-						<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
-					</button>
+					</a>
 					<div class="ep-body">
 						<a class="ep-title" href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a>
 						<span class="ep-meta">
@@ -316,16 +402,23 @@
 						</span>
 					</div>
 
-					<button class="ep-mark" class:done={completed.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={completed.has(ep.id)} aria-label={completed.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')} title={completed.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')}>
-						<i class="{completed.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
-					</button>
+					<EpisodeProgressButton
+						progress={episodeProgress(ep)}
+						current={player.current?.episode_id === ep.id}
+						label={playLabel(ep)}
+						onclick={() => play(ep)}
+					/>
 
 					<div class="row-menu">
-						<button class="ep-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('common.moreActions')} title={t('common.moreActions')}>
+						<button class="ep-kebab" onclick={(event) => toggleMenu(ep.id, event.currentTarget)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('common.moreActions')} title={t('common.moreActions')}>
 							<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
 						</button>
 						{#if openMenuId === ep.id}
-							<div class="menu" role="menu">
+							<div class="menu" role="menu" tabindex="-1" onkeydown={handleMenuKeydown}>
+								<button role="menuitem" onclick={() => togglePlayed(ep)}>
+									<i class="{completed.has(ep.id) ? 'ph ph-arrow-counter-clockwise' : 'ph ph-check-circle'}" aria-hidden="true"></i>
+									{completed.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')}
+								</button>
 								<button role="menuitem" onclick={() => markThisAndOlder(ep, true)}>
 									<i class="ph ph-arrow-line-down" aria-hidden="true"></i> {t('common.markOlderPlayed')}
 								</button>
@@ -356,14 +449,14 @@
 		gap: 1rem;
 		flex-wrap: wrap;
 	}
-	.head h2 {
+	.head h1 {
 		font-size: 1.9rem;
 		font-weight: 800;
 		display: flex;
 		align-items: center;
 		gap: 0.55rem;
 	}
-	.head h2 :global(.ph-fill) { color: var(--accent-green); }
+	.head h1 :global(.ph-fill) { color: var(--accent-green); }
 	.sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
 
 	.head-actions { display: flex; align-items: center; gap: 0.75rem; }
@@ -425,41 +518,26 @@
 	.ep-row.played { opacity: 0.6; }
 	.ep-row.played:hover { opacity: 1; }
 
-	.ep-mark {
-		flex-shrink: 0;
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		border: none;
-		background: transparent;
-		color: var(--text-muted);
-		display: grid;
-		place-items: center;
-		font-size: 1.45rem;
-		transition: transform 0.2s var(--ease-spring, ease), color 0.2s ease;
-	}
-	.ep-mark:hover { color: var(--accent-green); background: var(--bg-elevated); transform: scale(1.05); }
-	.ep-mark.done { color: var(--accent-green); }
-
 	.row-menu { position: relative; flex-shrink: 0; }
 	.ep-kebab {
-		width: 34px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border: none;
 		background: transparent;
 		color: var(--text-muted);
 		display: grid;
 		place-items: center;
 		font-size: 1.3rem;
-		border-radius: 8px;
+		border-radius: 50%;
 	}
 	.ep-kebab:hover { color: var(--text-primary); background: var(--bg-elevated); }
-	.menu-backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; border: none; }
+	.menu-backdrop { position: fixed; inset: 0; z-index: 160; background: transparent; border: none; }
+	.ep-row.menu-open { position: relative; z-index: 170; opacity: 1; }
 	.menu {
 		position: absolute;
 		top: calc(100% + 4px);
 		right: 0;
-		z-index: 50;
+		z-index: 180;
 		min-width: 250px;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
@@ -487,31 +565,16 @@
 	.menu button:hover { background: var(--bg-elevated); }
 	.menu button:hover :global(.ph) { color: var(--accent-green); }
 
-	.ep-play {
-		position: relative;
+	.ep-art {
+		display: block;
 		width: 56px;
 		height: 56px;
 		flex-shrink: 0;
-		border: none;
-		padding: 0;
 		border-radius: 10px;
 		overflow: hidden;
 		line-height: 0;
 	}
-	.ep-play img { width: 100%; height: 100%; object-fit: cover; }
-	.ep-play-icon {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		background: rgba(0, 0, 0, 0.4);
-		color: #fff;
-		font-size: 1.4rem;
-		opacity: 0.82;
-		transition: opacity 0.2s ease;
-	}
-	.ep-play:hover .ep-play-icon { opacity: 1; }
-	.ep-play-icon i { display: block; line-height: 1; }
+	.ep-art img { width: 100%; height: 100%; object-fit: cover; }
 
 	.ep-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 	.ep-title {
@@ -573,8 +636,8 @@
 	/* Quiet Edition 4b */
 	.inbox-page { gap: 0; padding: 20px 22px 32px; }
 	.head { align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-hair); }
-	.head h2 { gap: 0; font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
-	.head h2 :global(.ph-fill) { display: none; }
+	.head h1 { gap: 0; font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
+	.head h1 :global(.ph-fill) { display: none; }
 	.sub { color: var(--ink-4); font: 600 11px/1.4 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
 	.head-actions { gap: 6px; }
 	.switch { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
@@ -598,7 +661,7 @@
 	}
 	.ep-row {
 		display: grid;
-		grid-template-columns: 56px minmax(0, 1fr) 36px 36px;
+		grid-template-columns: 56px minmax(0, 1fr) 44px 44px;
 		gap: 12px;
 		align-items: center;
 		min-height: 76px;
@@ -611,12 +674,11 @@
 	}
 	.ep-row:hover { transform: none; border-color: var(--border-row); background: var(--bg-sunken); }
 	.ep-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
-	.ep-play { width: 56px; height: 56px; border-radius: 5px; background: var(--bg-tile); }
-	.ep-play-icon { background: rgba(5,10,7,.62); }
+	.ep-art { width: 56px; height: 56px; border-radius: 5px; background: var(--bg-tile); }
 	.ep-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); letter-spacing: .03em; text-transform: uppercase; }
 	.ep-show { color: var(--ink-3); }
-	.ep-mark, .ep-kebab { width: 32px; height: 32px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); }
+	.ep-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; color: var(--ink-3); }
 	.empty-state { margin-top: 16px; border-radius: 8px; box-shadow: none; }
 	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
 
@@ -624,10 +686,10 @@
 		.inbox-page { padding: 16px; }
 		.head { align-items: flex-start; }
 		.head-actions { width: 100%; }
-		.ep-row { grid-template-columns: 48px minmax(0,1fr) 36px; gap: 9px; min-height: 68px; }
-		.ep-play { width: 48px; height: 48px; }
+		.ep-row { grid-template-columns: 48px minmax(0,1fr) 44px 44px; gap: 9px; min-height: 68px; }
+		.ep-art { width: 48px; height: 48px; }
 		.row-menu { display: block; }
-		.ep-mark, .ep-kebab, .switch, .btn-ghost { min-width: 44px; min-height: 44px; }
+		.ep-kebab, .switch, .btn-ghost { min-width: 44px; min-height: 44px; }
 		.day-header span { display: none; }
 	}
 </style>

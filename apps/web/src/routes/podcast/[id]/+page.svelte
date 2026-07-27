@@ -8,13 +8,15 @@
 		getCompletedEpisodeIds,
 		getAllLocalPlaybackStates,
 		getLocalListeningSessions,
-		setEpisodePlayed
+		setEpisodePlayed,
+		type LocalPlaybackState
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { dominantColor } from '$lib/color';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
 	import { slide } from 'svelte/transition';
 	import { optimizeArtwork } from '$lib/artwork';
 	import {
@@ -31,6 +33,7 @@
 	let isSubscribed = $state(false);
 	let showAccent = $state<string | null>(null);
 	let playedIds = $state<Set<string>>(new Set());
+	let playbackStates = $state<Record<string, LocalPlaybackState>>({});
 	let collapsedTiers = $state<Set<string>>(new Set());
 	let openMenuId = $state<string | null>(null);
 	let searchQuery = $state('');
@@ -186,6 +189,7 @@
 		]);
 		const showSessions = sessions.filter((session) => session.podcast_id === id);
 		const showStates = states.filter((state) => state.podcast_id === id);
+		playbackStates = Object.fromEntries(showStates.map((state) => [state.episode_id, state]));
 		const wallMs = showSessions.reduce((sum, session) => sum + session.wall_clock_ms, 0);
 		const weighted = showSessions.reduce((sum, session) => sum + session.speed_weighted_ms, 0);
 		showStats = {
@@ -270,11 +274,24 @@
 
 	async function togglePlayed(ep: any) {
 		const played = !playedIds.has(ep.id);
+		openMenuId = null;
 		await setEpisodePlayed(epMeta(ep), played);
 		const next = new Set(playedIds);
 		if (played) next.add(ep.id);
 		else next.delete(ep.id);
 		playedIds = next;
+		const existing = playbackStates[ep.id];
+		playbackStates = {
+			...playbackStates,
+			[ep.id]: {
+				...existing,
+				...epMeta(ep),
+				position_ms: played ? existing?.position_ms ?? 0 : 0,
+				completed: played,
+				progress_percent: played ? 100 : 0,
+				last_played_at: Date.now()
+			}
+		};
 	}
 
 	// Mark a batch (a tier, or all episodes) played/unplayed at once.
@@ -286,7 +303,68 @@
 			else next.delete(ep.id);
 		}
 		playedIds = next;
+		playbackStates = {
+			...playbackStates,
+			...Object.fromEntries(
+				list.map((ep) => {
+					const existing = playbackStates[ep.id];
+					return [
+						ep.id,
+						{
+							...existing,
+							...epMeta(ep),
+							position_ms: played ? existing?.position_ms ?? 0 : 0,
+							completed: played,
+							progress_percent: played ? 100 : 0,
+							last_played_at: Date.now()
+						}
+					];
+				})
+			)
+		};
 		toast.success(t(played ? 'inbox.markedPlayed' : 'inbox.markedUnplayed', { count: list.length }));
+	}
+
+	function episodeProgress(ep: any) {
+		if (playedIds.has(ep.id)) return 100;
+		if (player.current?.episode_id === ep.id) {
+			const duration = player.durationMs || ep.duration_ms || 0;
+			if (duration > 0) return Math.min(100, (player.positionMs / duration) * 100);
+		}
+		return playbackStates[ep.id]?.progress_percent ?? 0;
+	}
+
+	function playLabel(ep: any) {
+		const progress = Math.round(episodeProgress(ep));
+		return progress > 0
+			? `${t('podcast.playEpisode')} · ${progress}%`
+			: t('podcast.playEpisode');
+	}
+
+	function toggleMenu(id: string, trigger: HTMLButtonElement) {
+		const opening = openMenuId !== id;
+		openMenuId = opening ? id : null;
+		if (opening) requestAnimationFrame(() => trigger.parentElement?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus());
+	}
+
+	function handleMenuKeydown(event: KeyboardEvent) {
+		const menu = event.currentTarget as HTMLElement;
+		const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+		const index = items.indexOf(document.activeElement as HTMLButtonElement);
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			const trigger = menu.parentElement?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+			openMenuId = null;
+			requestAnimationFrame(() => trigger?.focus());
+		} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			const direction = event.key === 'ArrowDown' ? 1 : -1;
+			items[(index + direction + items.length) % items.length]?.focus();
+		} else if (event.key === 'Home' || event.key === 'End') {
+			event.preventDefault();
+			items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+		}
 	}
 
 	function toggleTier(key: string) {
@@ -348,7 +426,7 @@
 			/>
 			<div class="meta">
 				<span class="badge">{t('podcast.episodeCount', { count: episodes.length })}</span>
-				<h2>{podcast.title}</h2>
+				<h1>{podcast.title}</h1>
 				<span class="author">{t('podcast.byAuthor', { author: podcast.author })}</span>
 				<p class="desc">{podcast.description}</p>
 
@@ -423,7 +501,7 @@
 		<!-- Episode List, grouped by recency -->
 		<section class="episodes-section">
 			<div class="episodes-head">
-				<h3>{filteredEpisodes.length === episodes.length ? t('podcast.episodesHeading', { count: episodes.length }) : t('podcast.episodesFilteredHeading', { shown: filteredEpisodes.length, total: episodes.length })}</h3>
+				<h2>{filteredEpisodes.length === episodes.length ? t('podcast.episodesHeading', { count: episodes.length }) : t('podcast.episodesFilteredHeading', { shown: filteredEpisodes.length, total: episodes.length })}</h2>
 				{#if episodes.length > 0}
 					<div class="ep-head-actions">
 						<span class="unplayed-pill">{t('podcast.unplayedCount', { count: unplayedCount })}</span>
@@ -461,7 +539,7 @@
 						class:active={filterUnplayedOnly}
 						onclick={() => (filterUnplayedOnly = !filterUnplayedOnly)}
 					>
-						<i class="ph {filterUnplayedOnly ? 'ph-check-circle-fill' : 'ph-circle'}" aria-hidden="true"></i>
+						<i class={filterUnplayedOnly ? 'ph-fill ph-check-circle' : 'ph ph-circle'} aria-hidden="true"></i>
 						{t('podcast.unplayedFilter', { count: unplayedCount })}
 					</button>
 				</div>
@@ -499,13 +577,9 @@
 					{#if open}
 						<div class="episode-list" transition:slide={{ duration: 240 }}>
 							{#each group.episodes as ep (ep.id)}
-								<div class="episode-row" class:current={player.current?.episode_id === ep.id} class:played={playedIds.has(ep.id)}>
-									<button class="btn-play" class:playing={player.current?.episode_id === ep.id} onclick={() => playEpisode(ep)} aria-label={t('podcast.playEpisode')} title={t('podcast.playEpisode')}>
-										<i class="ph-fill {player.current?.episode_id === ep.id ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
-									</button>
-
+								<div class="episode-row" class:current={player.current?.episode_id === ep.id} class:played={playedIds.has(ep.id)} class:menu-open={openMenuId === ep.id}>
 									<div class="ep-info">
-										<h4><a href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a></h4>
+										<h3><a href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a></h3>
 										<p class="ep-desc">{epDescription(ep)}</p>
 										<span class="ep-meta">
 											{ep.pub_date ? prefs.formatDate(ep.pub_date) : t('podcast.noDate')}
@@ -516,15 +590,23 @@
 										</span>
 									</div>
 
-									<button class="btn-mark" class:done={playedIds.has(ep.id)} onclick={() => togglePlayed(ep)} aria-pressed={playedIds.has(ep.id)} aria-label={playedIds.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')} title={playedIds.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')}>
-										<i class="{playedIds.has(ep.id) ? 'ph-fill ph-check-circle' : 'ph ph-circle'}" aria-hidden="true"></i>
-									</button>
+									<EpisodeProgressButton
+										progress={episodeProgress(ep)}
+										current={player.current?.episode_id === ep.id}
+										label={playLabel(ep)}
+										onclick={() => playEpisode(ep)}
+									/>
+
 								<div class="row-menu">
-									<button class="btn-kebab" onclick={() => (openMenuId = openMenuId === ep.id ? null : ep.id)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('podcast.moreActions')} title={t('podcast.moreActions')}>
+									<button class="btn-kebab" onclick={(event) => toggleMenu(ep.id, event.currentTarget)} aria-haspopup="menu" aria-expanded={openMenuId === ep.id} aria-label={t('podcast.moreActions')} title={t('podcast.moreActions')}>
 										<i class="ph ph-dots-three-vertical" aria-hidden="true"></i>
 									</button>
 									{#if openMenuId === ep.id}
-										<div class="menu" role="menu">
+										<div class="menu" role="menu" tabindex="-1" onkeydown={handleMenuKeydown}>
+											<button role="menuitem" onclick={() => togglePlayed(ep)}>
+												<i class="{playedIds.has(ep.id) ? 'ph ph-arrow-counter-clockwise' : 'ph ph-check-circle'}" aria-hidden="true"></i>
+												{playedIds.has(ep.id) ? t('common.markUnplayed') : t('common.markPlayed')}
+											</button>
 											<button role="menuitem" onclick={() => markThisAndOlder(ep, true)}>
 												<i class="ph ph-arrow-line-down" aria-hidden="true"></i> {t('common.markOlderPlayed')}
 											</button>
@@ -609,7 +691,7 @@
 		width: fit-content;
 	}
 
-	.meta h2 {
+	.meta h1 {
 		font-size: 2.2rem;
 		font-weight: 800;
 		line-height: 1.2;
@@ -787,7 +869,7 @@
 		flex-wrap: wrap;
 		margin-bottom: 1.25rem;
 	}
-	.episodes-section h3 {
+	.episodes-section h2 {
 		font-size: 1.5rem;
 		font-weight: 800;
 	}
@@ -877,30 +959,7 @@
 		border-color: var(--show-accent, var(--accent-green));
 	}
 
-	.btn-play {
-		width: 48px;
-		height: 48px;
-		border-radius: 50%;
-		background: var(--show-accent, var(--accent-green));
-		color: white;
-		border: none;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.4rem;
-		flex-shrink: 0;
-		transition: transform 0.2s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)), filter 0.2s ease;
-	}
-	.btn-play:hover { transform: scale(1.1); filter: brightness(1.08); }
-	.btn-play i { display: block; font-size: 1.35rem; line-height: 1; }
-	.btn-play.playing { animation: pulse-ring 1.8s ease-in-out infinite; }
-
 	.episode-row.current { border-color: var(--show-accent, var(--accent-green)); background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 8%, var(--bg-surface)); }
-
-	@keyframes pulse-ring {
-		0%, 100% { box-shadow: 0 0 0 0 var(--show-accent-soft, color-mix(in srgb, var(--accent-green) 45%, transparent)); }
-		50% { box-shadow: 0 0 0 8px transparent; }
-	}
 
 	.ep-info {
 		display: flex;
@@ -909,7 +968,7 @@
 		flex: 1;
 	}
 
-	.ep-info h4 {
+	.ep-info h3 {
 		font-size: 1.1rem;
 		font-weight: 700;
 	}
@@ -941,49 +1000,34 @@
 	.episode-row.played { opacity: 0.6; }
 	.episode-row.played:hover { opacity: 1; }
 
-	.btn-mark {
-		flex-shrink: 0;
-		width: 40px;
-		height: 40px;
-		border-radius: 50%;
-		border: none;
-		background: transparent;
-		color: var(--text-muted);
-		display: grid;
-		place-items: center;
-		font-size: 1.5rem;
-		transition: transform 0.2s var(--ease-spring, ease), color 0.2s ease;
-	}
-	.btn-mark:hover { color: var(--show-accent, var(--accent-green)); background: var(--bg-elevated); transform: scale(1.05); }
-	.btn-mark.done { color: var(--show-accent, var(--accent-green)); }
-
 	.row-menu { position: relative; flex-shrink: 0; }
 	.btn-kebab {
-		width: 36px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border: none;
 		background: transparent;
 		color: var(--text-muted);
 		display: grid;
 		place-items: center;
 		font-size: 1.35rem;
-		border-radius: 8px;
+		border-radius: 50%;
 	}
 	.btn-kebab:hover { color: var(--text-primary); background: var(--bg-elevated); }
 
 	.menu-backdrop {
 		position: fixed;
 		inset: 0;
-		z-index: 40;
+		z-index: 160;
 		background: transparent;
 		border: none;
 		cursor: default;
 	}
+	.episode-row.menu-open { position: relative; z-index: 170; opacity: 1; }
 	.menu {
 		position: absolute;
 		top: calc(100% + 4px);
 		right: 0;
-		z-index: 50;
+		z-index: 180;
 		min-width: 250px;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
@@ -1129,7 +1173,7 @@
 	.sk-cover, .artwork { width: 150px; height: 150px; border-radius: 6px; box-shadow: none; background: var(--bg-tile); }
 	.meta { gap: 7px; justify-content: center; min-width: 0; }
 	.badge { width: fit-content; padding: 5px 7px; border-radius: 3px; background: var(--accent-fill); color: var(--accent-on); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
-	.meta h2 { font: 700 clamp(30px,4vw,40px)/.95 var(--font-display); font-stretch: condensed; letter-spacing: -.045em; text-transform: uppercase; }
+	.meta h1 { font: 750 clamp(30px,4vw,40px)/1.02 var(--font-display); letter-spacing: -.035em; text-transform: uppercase; }
 	.author { color: var(--ink-3); font: 600 11px/1.3 var(--font-sans); }
 	.desc { max-width: 70ch; color: var(--ink-3); font-size: 12px; line-height: 1.45; }
 	.actions { gap: 6px; margin-top: 4px; }
@@ -1149,7 +1193,7 @@
 	}
 	.episodes-section { padding: 18px 22px 30px; }
 	.episodes-head { padding-bottom: 11px; border-bottom: 1px solid var(--border-hair); }
-	.episodes-section h3 { font: 800 17px/1 var(--font-ui); }
+	.episodes-section h2 { font: 800 17px/1 var(--font-ui); }
 	.unplayed-pill, .mark-all-btn { min-height: 32px; border-radius: 4px; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
 	.mark-all-btn { border-color: var(--border-ui); background: transparent; }
 	.episodes-filter-bar { padding: 10px 0; border-bottom: 1px solid var(--border-hair); }
@@ -1170,11 +1214,10 @@
 	}
 	.episode-row:hover { transform: none; border-color: var(--border-row); background: var(--bg-sunken); }
 	.episode-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
-	.btn-play { width: 44px; height: 44px; background: var(--accent-fill); color: var(--accent-on); box-shadow: none; }
-	.ep-info h4 { font: 700 14px/1.3 var(--font-ui); }
+		.ep-info h3 { font: 700 14px/1.3 var(--font-ui); }
 	.ep-desc { color: var(--ink-3); font-size: 10px; }
 	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); text-transform: uppercase; }
-	.btn-mark, .btn-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 4px; }
+		.btn-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; }
 	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
 
 	@media (max-width: 900px) {
@@ -1186,7 +1229,7 @@
 	@media (max-width: 620px) {
 		.podcast-header { align-items: flex-start; flex-direction: column; padding: 16px; }
 		.sk-cover, .artwork { width: 100%; height: auto; aspect-ratio: 1; }
-		.meta h2 { font-size: 32px; }
+		.meta h1 { font-size: 32px; }
 		.show-history, .show-settings { padding: 14px 16px; }
 		.show-settings { grid-template-columns: 1fr; }
 		.episodes-section { padding: 16px; }

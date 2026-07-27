@@ -18,6 +18,7 @@
 	import { goto } from '$app/navigation';
 	import { reveal } from '$lib/actions/reveal';
 	import { optimizeArtwork } from '$lib/artwork';
+	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
@@ -157,6 +158,11 @@
 		});
 	}
 
+	function progressLabel(label: string, progress = 0) {
+		const rounded = Math.round(progress);
+		return rounded > 0 ? `${label} · ${rounded}%` : label;
+	}
+
 	function longPress(node: HTMLElement, podcastId: string) {
 		const start = (event: PointerEvent) => {
 			if (event.pointerType !== 'touch') return;
@@ -192,7 +198,7 @@
 
 <div class="library-page">
 	<div class="lib-head">
-		<div><h2>{t('library.title')}</h2><p class="sub">{t('library.showCount', { count: subscriptions.length })}</p></div>
+		<div><h1>{t('library.title')}</h1><p class="sub">{t('library.showCount', { count: subscriptions.length })}</p></div>
 		{#if activeTab === 'subscriptions' && subscriptions.length > 0}
 			<label class="library-filter">
 				<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
@@ -261,10 +267,9 @@
 			<div class="episode-list">
 				{#each recentEpisodes as ep (ep.episode_id)}
 					<div class="ep-row">
-						<button class="ep-play" onclick={() => resume(ep)} aria-label={t('library.resumeEpisode')} title={t('library.resumeEpisode')}>
+						<a class="ep-art" href={`/episode/${ep.episode_id}`} aria-label={ep.title || t('common.episode')} title={ep.title || t('common.episode')}>
 							<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
-							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
-						</button>
+						</a>
 						<div class="ep-body">
 							<a class="ep-title" href={`/episode/${ep.episode_id}`} title={ep.title || t('common.episode')}>{ep.title || t('common.episode')}</a>
 							<span class="ep-sub" title={ep.podcast_title || undefined}>{ep.podcast_title || ''}</span>
@@ -273,6 +278,14 @@
 							</span>
 						</div>
 						<span class="ep-pct">{Math.round(ep.progress_percent)}%</span>
+						<EpisodeProgressButton
+							progress={player.current?.episode_id === ep.episode_id && player.durationMs > 0
+								? (player.positionMs / player.durationMs) * 100
+								: ep.progress_percent}
+							current={player.current?.episode_id === ep.episode_id}
+							label={progressLabel(t('library.resumeEpisode'), ep.progress_percent)}
+							onclick={() => resume(ep)}
+						/>
 					</div>
 				{/each}
 			</div>
@@ -312,14 +325,14 @@
 							</button>
 						</div>
 						<span class="drag-handle" aria-hidden="true" title={t('library.dragToReorder')}><i class="ph ph-dots-six-vertical"></i></span>
-						<button class="ep-play" onclick={() => playQueueItem(item)} aria-label={t('library.playEpisode')} title={t('library.playEpisode')}>
+						<a class="ep-art" href={`/episode/${item.episode_id}`} aria-label={item.title || t('common.episode')} title={item.title || t('common.episode')}>
 							<img src={optimizeArtwork(item.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
-							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
-						</button>
+						</a>
 						<div class="ep-body">
 							<a class="ep-title" href={`/episode/${item.episode_id}`} title={item.title || t('common.episode')}>{item.title || t('common.episode')}</a>
 							<span class="ep-sub" title={item.podcast_title || t('library.queued')}>{item.podcast_title || t('library.queued')}</span>
 						</div>
+						<EpisodeProgressButton label={t('library.playEpisode')} onclick={() => playQueueItem(item)} />
 						<button class="ep-remove" onclick={() => removeQueueItem(item.episode_id)} aria-label={t('library.removeFromQueue')} title={t('library.removeFromQueue')}>
 							<i class="ph ph-x" aria-hidden="true"></i>
 						</button>
@@ -338,14 +351,14 @@
 			<div class="episode-list">
 				{#each favorites as fav (fav.episode_id)}
 					<div class="ep-row">
-						<button class="ep-play" onclick={() => playFavorite(fav)} aria-label={t('library.playEpisode')} title={t('library.playEpisode')}>
+						<a class="ep-art" href={`/episode/${fav.episode_id}`} aria-label={fav.title || t('common.episode')} title={fav.title || t('common.episode')}>
 							<img src={optimizeArtwork(fav.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
-							<span class="ep-play-icon"><i class="ph-fill ph-play" aria-hidden="true"></i></span>
-						</button>
+						</a>
 						<div class="ep-body">
 							<a class="ep-title" href={`/episode/${fav.episode_id}`} title={fav.title || t('common.episode')}>{fav.title || t('common.episode')}</a>
 							<span class="ep-sub" title={fav.podcast_title || undefined}>{fav.podcast_title || ''}</span>
 						</div>
+						<EpisodeProgressButton label={t('library.playEpisode')} onclick={() => playFavorite(fav)} />
 						<button class="ep-remove fav-heart" onclick={() => unfavorite(fav.episode_id)} aria-label={t('library.removeFromFavorites')} title={t('library.removeFromFavorites')}>
 							<i class="ph-fill ph-heart" aria-hidden="true"></i>
 						</button>
@@ -363,7 +376,7 @@
 		gap: 1.5rem;
 	}
 
-	.lib-head h2 {
+	.lib-head h1 {
 		font-size: clamp(1.6rem, 3vw, 2.1rem);
 		font-weight: 800;
 		letter-spacing: -0.02em;
@@ -371,7 +384,7 @@
 		align-items: center;
 		gap: 0.55rem;
 	}
-	.lib-head h2 :global(.ph-fill) { color: var(--accent-green); }
+	.lib-head h1 :global(.ph-fill) { color: var(--accent-green); }
 	.lib-head .sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
 
 	.tabs {
@@ -496,31 +509,16 @@
 	}
 	.ep-row:hover { border-color: var(--accent-green); transform: translateX(3px); }
 
-	.ep-play {
-		position: relative;
+	.ep-art {
+		display: block;
 		width: 56px;
 		height: 56px;
 		flex-shrink: 0;
-		border: none;
-		padding: 0;
 		border-radius: 10px;
 		overflow: hidden;
 		line-height: 0;
 	}
-	.ep-play img { width: 100%; height: 100%; object-fit: cover; }
-	.ep-play-icon {
-		position: absolute;
-		inset: 0;
-		display: grid;
-		place-items: center;
-		background: rgba(0, 0, 0, 0.4);
-		color: #fff;
-		font-size: 1.4rem;
-		opacity: 0.82;
-		transition: opacity 0.2s ease;
-	}
-	.ep-play:hover .ep-play-icon { opacity: 1; }
-	.ep-play-icon i { display: block; line-height: 1; }
+	.ep-art img { width: 100%; height: 100%; object-fit: cover; }
 
 	.ep-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
 	.ep-title {
@@ -547,10 +545,10 @@
 	.drag-handle { color: var(--text-muted); font-size: 1.3rem; cursor: grab; flex-shrink: 0; display: grid; place-items: center; }
 	.drag-handle:active { cursor: grabbing; }
 
-	.reorder-btns { display: flex; flex-direction: column; flex-shrink: 0; }
+	.reorder-btns { display: flex; gap: 2px; flex-shrink: 0; }
 	.reorder-btn {
-		width: 28px;
-		height: 22px;
+		width: 36px;
+		height: 36px;
 		border: none;
 		background: transparent;
 		color: var(--text-muted);
@@ -612,7 +610,7 @@
 		gap: 18px;
 		margin-bottom: 14px;
 	}
-	.lib-head h2 { font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
+	.lib-head h1 { font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
 	.lib-head .sub { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
 	.library-filter {
 		display: flex;
@@ -706,6 +704,6 @@
 		.quiet-cover-card .cover-overlay h3 { font-size: 11px; }
 		.quiet-cover-card .cover-overlay p { display: none; }
 		.quiet-cover-card .cover-overlay { opacity: 1; pointer-events: auto; background: linear-gradient(0deg, rgba(5,10,7,.96) 8%, rgba(5,10,7,.52) 58%, transparent 78%); }
-		.tabs button, .reorder-btn, .ep-remove, .ep-play { min-height: 44px; min-width: 44px; }
+		.tabs button, .reorder-btn, .ep-remove { min-height: 44px; min-width: 44px; }
 	}
 </style>

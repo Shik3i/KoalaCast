@@ -3,13 +3,39 @@
 	import { KEYBOARD_SHORTCUTS } from '$lib/data/shortcuts';
 
 	let { show = $bindable(false) } = $props();
+	let modalContent: HTMLDivElement | null = $state(null);
+	let closeButton: HTMLButtonElement | null = $state(null);
+
+	$effect(() => {
+		if (!show) return;
+		const returnFocus = document.activeElement as HTMLElement | null;
+		setTimeout(() => closeButton?.focus());
+		return () => returnFocus?.isConnected && returnFocus.focus();
+	});
 
 	function close() {
 		show = false;
 	}
 
 	function handleOverlayKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') close();
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			close();
+			return;
+		}
+		if (e.key !== 'Tab' || !modalContent) return;
+		const controls = [...modalContent.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])')]
+			.filter((element) => !element.hasAttribute('disabled'));
+		if (!controls.length) return;
+		const first = controls[0];
+		const last = controls[controls.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
 	}
 
 	function handleOverlayClick(e: MouseEvent) {
@@ -25,19 +51,20 @@
 		role="presentation"
 	>
 		<div
+			bind:this={modalContent}
 			class="modal-content"
 			role="dialog"
 			aria-modal="true"
-			aria-label={t('shortcuts.title')}
+			aria-labelledby="shortcuts-title"
 			tabindex="-1"
 		>
-			<h3>{t('shortcuts.title')}</h3>
+			<h2 id="shortcuts-title">{t('shortcuts.title')}</h2>
 			<ul>
 				{#each KEYBOARD_SHORTCUTS as shortcut}
 					<li><kbd>{shortcut.key}</kbd> {t(shortcut.descriptionKey)}</li>
 				{/each}
 			</ul>
-			<button type="button" class="btn-close" onclick={close}>{t('common.close')}</button>
+			<button bind:this={closeButton} type="button" class="btn-close" onclick={close}>{t('common.close')}</button>
 		</div>
 	</div>
 {/if}
@@ -68,7 +95,7 @@
 		gap: 1.25rem;
 	}
 
-	h3 {
+	h2 {
 		font-size: 1.2rem;
 		font-weight: 700;
 		color: var(--text-primary);
@@ -115,6 +142,7 @@
 		font-weight: 600;
 		cursor: pointer;
 		transition: var(--transition-smooth);
+		min-height: 44px;
 	}
 
 	.btn-close:hover {

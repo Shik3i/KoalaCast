@@ -132,7 +132,16 @@
 	</header>
 
 	{#if loading}
-		<div class="state-box"><i class="ph ph-spinner-gap spinner" aria-hidden="true"></i> {t('common.loading')}</div>
+		<section class="kpi-grid loading-kpis" aria-hidden="true">
+			{#each Array(4) as _}
+				<article><span class="skeleton-line short"></span><strong class="skeleton-line value"></strong><small class="skeleton-line medium"></small></article>
+			{/each}
+		</section>
+		<div class="state-box loading-state" role="status"><i class="ph ph-spinner-gap spinner" aria-hidden="true"></i> {t('common.loading')}</div>
+		<div class="privacy-note loading-privacy" aria-hidden="true">
+			<span class="skeleton-line icon"></span>
+			<span class="skeleton-line wide"></span>
+		</div>
 	{:else if error}
 		<div class="state-box error" role="alert">
 			<strong>{error}</strong>
@@ -228,7 +237,7 @@
 <style>
 	.global-page { padding: 26px 28px 52px; display: flex; flex-direction: column; gap: 18px; max-width: 1260px; margin: 0 auto; }
 	.global-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border-hair); }
-	.global-head h1 { margin: 3px 0 5px; font: 800 clamp(34px, 5vw, 58px)/.95 var(--font-display); letter-spacing: -.045em; color: var(--ink-1); }
+	.global-head h1 { margin: 3px 0 5px; font: 800 clamp(34px, 5vw, 58px)/1.02 var(--font-display); letter-spacing: -.035em; color: var(--ink-1); }
 	.global-head > div > p:last-child { max-width: 650px; color: var(--ink-4); font-size: 13px; }
 	.eyebrow { color: var(--accent); font: 700 10px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 	.range-tabs { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; flex-shrink: 0; }
@@ -238,7 +247,7 @@
 	.kpi-grid article { padding: 18px; display: flex; flex-direction: column; border-right: 1px solid var(--border-hair); background: var(--bg-panel); }
 	.kpi-grid article:last-child { border: 0; }
 	.kpi-grid span, .kpi-grid small { color: var(--ink-4); font: 600 10px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; }
-	.kpi-grid strong { margin: 8px 0 5px; color: var(--ink-1); font: 700 28px/1 var(--font-display); }
+	.kpi-grid strong { margin: 8px 0 5px; color: var(--ink-1); font: 750 28px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
 	.panel { padding: 18px; border: 1px solid var(--border-ui); background: var(--bg-panel); min-width: 0; }
 	.panel-head { min-height: 35px; margin-bottom: 18px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 	.panel-head h2 { color: var(--ink-1); font: 700 16px/1.1 var(--font-display); }
@@ -264,7 +273,7 @@
 	.saved-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 	.saved-grid > div { position: relative; padding: 12px; overflow: hidden; background: var(--bg-sunken); border: 1px solid var(--border-hair); }
 	.saved-grid span { display: block; color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); text-transform: uppercase; }
-	.saved-grid strong { display: block; margin-top: 7px; color: var(--ink-2); font: 700 16px/1 var(--font-display); }
+	.saved-grid strong { display: block; margin-top: 7px; color: var(--ink-2); font: 700 16px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
 	.saved-grid i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent-fill); }
 	.ranking-panel { padding: 0; }
 	.ranking-panel .panel-head { margin: 0; padding: 17px 18px; border-bottom: 1px solid var(--border-hair); }
@@ -282,8 +291,18 @@
 	.state-box { min-height: 160px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--border-ui); color: var(--ink-4); }
 	.state-box.error { color: var(--danger); }
 	.state-box button { color: var(--accent); font-weight: 700; background: none; border: 0; }
+	.loading-kpis article { min-height: 93px; }
+	.skeleton-line { display: block; height: 10px; border-radius: 2px; background: var(--bg-sunken); animation: skeleton-pulse 1.2s ease-in-out infinite alternate; }
+	.skeleton-line.short { width: 42%; }
+	.skeleton-line.medium { width: 58%; }
+	.skeleton-line.wide { width: min(460px, 78%); }
+	.skeleton-line.value { width: 34%; height: 28px; margin: 8px 0 5px; }
+	.skeleton-line.icon { width: 17px; height: 17px; flex: 0 0 auto; }
+	.loading-state { min-height: 160px; }
+	.loading-privacy { min-height: 48px; align-items: center; }
 	.spinner { animation: spin .8s linear infinite; }
 	@keyframes spin { to { transform: rotate(360deg); } }
+	@keyframes skeleton-pulse { to { opacity: .45; } }
 	@media (max-width: 900px) {
 		.global-page { padding: 20px 18px 90px; }
 		.global-head { align-items: start; flex-direction: column; }

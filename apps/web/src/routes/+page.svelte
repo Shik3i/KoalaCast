@@ -571,7 +571,7 @@
 	.spotlight-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
 	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 	.spotlight-meta span:first-child { padding: 5px 7px; border-radius: 4px; background: var(--accent-fill); color: var(--accent-on); }
-	.spotlight h1 { display: -webkit-box; max-width: 720px; overflow: hidden; font: 700 clamp(34px, 4vw, 46px)/.95 var(--font-display); font-stretch: condensed; letter-spacing: -.045em; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; text-transform: uppercase; }
+	.spotlight h1 { display: -webkit-box; max-width: 720px; overflow: hidden; font: 750 clamp(32px, 4vw, 44px)/1.02 var(--font-display); letter-spacing: -.035em; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; text-transform: uppercase; }
 	.spotlight p { display: -webkit-box; max-width: 58ch; margin-top: 13px; overflow: hidden; color: var(--ink-3); font-size: 15px; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 	.spotlight-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }

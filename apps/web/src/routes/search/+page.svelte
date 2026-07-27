@@ -295,7 +295,7 @@
 
 <div class="search-experience">
 	<div class="search-hero">
-		<h2>{t('search.title')}</h2>
+		<h1>{t('search.title')}</h1>
 
 		<form onsubmit={handleSearchSubmit} class="search-field" class:searching={isSearching}>
 			<i class="ph ph-magnifying-glass lead" aria-hidden="true"></i>
@@ -337,13 +337,18 @@
 					{t('search.clearFilters')}
 				</button>
 			{/if}
-			{#if hasNonDefaultFilters}
-				<button class="filter-reset" onclick={resetFiltersToSettings}>
+				{#if hasNonDefaultFilters}
+					<button class="filter-reset" onclick={resetFiltersToSettings}>
 					<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
 					{t('search.resetFilters')}
+					</button>
+				{/if}
+				<button class="rss-toggle" class:open={showRss} onclick={() => (showRss = !showRss)} aria-expanded={showRss}>
+					<i class="ph ph-rss" aria-hidden="true"></i>
+					{t('search.addByRss')}
+					<i class="ph ph-caret-down chev" aria-hidden="true"></i>
 				</button>
-			{/if}
-		</div>
+			</div>
 
 		{#if showFilters}
 			<div class="filter-panel" transition:slide={{ duration: 220 }}>
@@ -405,16 +410,7 @@
 			</div>
 		{/if}
 
-		<!-- Collapsed by default: advanced "add by RSS" affordance. -->
-		<div class="rss-toggle-row">
-			<button class="rss-toggle" class:open={showRss} onclick={() => (showRss = !showRss)} aria-expanded={showRss}>
-				<i class="ph ph-rss" aria-hidden="true"></i>
-				{t('search.addByRss')}
-				<i class="ph ph-caret-down chev" aria-hidden="true"></i>
-			</button>
-		</div>
-
-		{#if showRss}
+			{#if showRss}
 			<form onsubmit={handleAddDirectRss} class="rss-field" transition:slide={{ duration: 260 }}>
 				<i class="ph ph-link lead" aria-hidden="true"></i>
 				<input
@@ -436,26 +432,20 @@
 
 	<!-- Results Grid -->
 	<section class="results-section" aria-live="polite">
-		<div class="results-head">
-			<h3>
-				{#if isSearching}
-					{t('search.searchingLive')}
-				{:else if !lastExecutedQuery}
-					{t('search.title')}
-				{:else}
-					{t('search.results', { count: visibleResults.length })}
+		{#if isSearching || lastExecutedQuery}
+			<div class="results-head">
+				<h2>{isSearching ? t('search.searchingLive') : t('search.results', { count: visibleResults.length })}</h2>
+				{#if provider && searchResults.length > 0}
+					<span class="provider-credit">
+						{#if provider === 'podcastindex'}
+							{t('search.poweredByIndex')} <a href="https://podcastindex.org" target="_blank" rel="noopener noreferrer">Podcast Index</a>
+						{:else}
+							{t('search.resultsViaApple')}
+						{/if}
+					</span>
 				{/if}
-			</h3>
-			{#if provider && searchResults.length > 0}
-				<span class="provider-credit">
-					{#if provider === 'podcastindex'}
-						{t('search.poweredByIndex')} <a href="https://podcastindex.org" target="_blank" rel="noopener noreferrer">Podcast Index</a>
-					{:else}
-						{t('search.resultsViaApple')}
-					{/if}
-				</span>
-			{/if}
-		</div>
+			</div>
+		{/if}
 
 		{#if isSearching && searchResults.length === 0}
 			<div class="results-grid">
@@ -470,7 +460,7 @@
 			</div>
 		{:else if visibleResults.length === 0}
 			<div class="empty-state">
-				<img class="empty-illustration" src="/illustrations/empty-search.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
+				<img class="empty-illustration" src="/illustrations/empty-search.webp" width="176" height="176" loading="lazy" decoding="async" alt="" />
 				<p>{lastExecutedQuery ? t('search.noResults', { query: lastExecutedQuery }) : t('search.startHint')}</p>
 			</div>
 		{:else}
@@ -508,18 +498,21 @@
 	.search-experience {
 		display: flex;
 		flex-direction: column;
-		gap: 2rem;
+		gap: 16px;
+		padding: 22px;
 	}
 
 	.search-hero {
 		display: flex;
 		flex-direction: column;
-		gap: 0.9rem;
+		gap: 10px;
 	}
-	.search-hero h2 {
-		font-size: clamp(1.6rem, 3vw, 2.1rem);
+	.search-hero h1 {
+		font-size: clamp(1.8rem, 3vw, 2.4rem);
 		font-weight: 800;
+		line-height: 1.08;
 		letter-spacing: -0.02em;
+		margin: 0 0 4px;
 	}
 
 	/* Prominent single search field with a soft focus glow. */
@@ -529,8 +522,9 @@
 		gap: 0.5rem;
 		background: var(--bg-surface);
 		border: 1.5px solid var(--border-subtle);
-		border-radius: 16px;
-		padding: 0.5rem 0.5rem 0.5rem 1.1rem;
+		min-height: 56px;
+		border-radius: 8px;
+		padding: 0.35rem 0.4rem 0.35rem 0.9rem;
 		box-shadow: var(--shadow-sm);
 		transition: border-color 0.2s ease, box-shadow 0.25s ease, transform 0.2s ease;
 	}
@@ -538,14 +532,14 @@
 		border-color: var(--focus-ring);
 		box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus-ring) 20%, transparent), var(--shadow-md);
 	}
-	.search-field .lead { font-size: 1.35rem; color: var(--text-muted); flex-shrink: 0; }
+	.search-field .lead { font-size: 1.25rem; color: var(--text-muted); flex-shrink: 0; }
 	.search-field input {
 		flex: 1;
 		border: none;
 		background: none;
 		outline: none;
 		color: var(--text-primary);
-		font-size: 1.05rem;
+		font-size: 1rem;
 		padding: 0.5rem 0;
 		min-width: 0;
 	}
@@ -554,8 +548,8 @@
 	.clear {
 		display: grid;
 		place-items: center;
-		width: 34px;
-		height: 34px;
+		width: 40px;
+		height: 40px;
 		border-radius: 50%;
 		border: none;
 		background: transparent;
@@ -618,8 +612,8 @@
 	}
 	.recent-chip:hover { border-color: var(--accent-green); color: var(--accent-green); }
 	.recent-clear {
-		width: 28px;
-		height: 28px;
+		width: 36px;
+		height: 36px;
 		border-radius: 50%;
 		border: none;
 		background: transparent;
@@ -629,21 +623,21 @@
 	}
 	.recent-clear:hover { background: var(--bg-elevated); color: var(--text-primary); }
 
-	/* Collapsed RSS affordance — no wasted space until the user wants it. */
-	.rss-toggle-row { display: flex; }
 	.rss-toggle {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		background: none;
-		border: none;
+		min-height: 40px;
+		margin-left: auto;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-subtle);
 		color: var(--text-muted);
 		font-size: 0.9rem;
 		font-weight: 600;
-		padding: 0.3rem 0.2rem;
-		border-radius: 8px;
+		padding: 0.4rem 0.85rem;
+		border-radius: 20px;
 	}
-	.rss-toggle:hover { color: var(--accent-green); }
+	.rss-toggle:hover { color: var(--accent-green); border-color: var(--accent-green); }
 	.rss-toggle .chev { transition: transform 0.28s var(--ease-spring, ease); font-size: 0.95rem; }
 	.rss-toggle.open .chev { transform: rotate(180deg); }
 	.rss-toggle.open { color: var(--accent-green); }
@@ -654,7 +648,7 @@
 		gap: 0.5rem;
 		background: var(--bg-elevated);
 		border: 1px solid var(--border-subtle);
-		border-radius: 14px;
+		border-radius: 8px;
 		padding: 0.4rem 0.4rem 0.4rem 1rem;
 	}
 	.rss-field .lead { color: var(--text-muted); font-size: 1.15rem; flex-shrink: 0; }
@@ -689,10 +683,10 @@
 		justify-content: space-between;
 		gap: 1rem;
 		flex-wrap: wrap;
-		margin-bottom: 1.25rem;
+		margin-bottom: 12px;
 	}
-	.results-section h3 {
-		font-size: 1.4rem;
+	.results-section h2 {
+		font-size: 1.2rem;
 		font-weight: 700;
 	}
 	.provider-credit {
@@ -714,20 +708,21 @@
 	}
 
 	.empty-state {
-		text-align: center;
-		padding: 3.5rem 2rem;
+		min-height: 250px;
+		text-align: left;
+		padding: 28px clamp(24px, 5vw, 56px);
 		background: var(--bg-surface);
-		border: 1px dashed var(--border-subtle);
-		border-radius: 14px;
+		border: 1px solid var(--border-subtle);
+		border-radius: 8px;
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
+		justify-content: center;
 		align-items: center;
-		gap: 0.75rem;
+		gap: clamp(24px, 5vw, 64px);
 		color: var(--text-muted);
-		max-width: 520px;
-		margin: 0 auto;
 	}
-	.empty-illustration { width: min(256px, 72vw); height: auto; aspect-ratio: 1; object-fit: contain; }
+	.empty-state p { max-width: 42ch; font-size: 1rem; line-height: 1.55; }
+	.empty-illustration { width: min(176px, 30vw); height: auto; aspect-ratio: 1; object-fit: contain; flex: 0 0 auto; }
 
 	.result-card {
 		position: relative;
@@ -802,7 +797,7 @@
 		align-items: center;
 		gap: 0.6rem;
 		flex-wrap: wrap;
-		margin: 0.75rem 0 0.25rem;
+		margin: 0;
 	}
 
 	.filter-toggle,
@@ -923,8 +918,16 @@
 	}
 
 	.flag-emoji {
-		font-family: 'Twemoji Country Flags', var(--font-sans);
+		font-family: var(--font-sans);
 		font-size: 1.1rem;
 		line-height: 1;
+	}
+
+	@media (max-width: 700px) {
+		.search-experience { padding: 16px; }
+		.search-field { min-height: 52px; }
+		.rss-toggle { margin-left: 0; }
+		.empty-state { min-height: 0; flex-direction: column; text-align: center; padding: 24px 18px; }
+		.empty-illustration { width: 144px; }
 	}
 </style>

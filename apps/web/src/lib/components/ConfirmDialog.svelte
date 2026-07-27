@@ -1,17 +1,44 @@
 <script lang="ts">
 	import { confirmDialog } from '$lib/stores/confirm.svelte';
 	import { t } from '$lib/i18n';
+	let dialogCard: HTMLDivElement | null = $state(null);
 	let confirmButton: HTMLButtonElement | null = $state(null);
+
 	$effect(() => {
-		if (confirmDialog.request) setTimeout(() => confirmButton?.focus());
+		if (!confirmDialog.request) return;
+		const returnFocus = document.activeElement as HTMLElement | null;
+		setTimeout(() => confirmButton?.focus());
+		return () => returnFocus?.isConnected && returnFocus.focus();
 	});
+
+	function handleDialogKeydown(event: KeyboardEvent) {
+		if (!confirmDialog.request) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			confirmDialog.finish(false);
+			return;
+		}
+		if (event.key !== 'Tab' || !dialogCard) return;
+		const controls = [...dialogCard.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+			.filter((element) => !element.hasAttribute('disabled'));
+		if (!controls.length) return;
+		const first = controls[0];
+		const last = controls[controls.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
 </script>
 
-<svelte:window onkeydown={(event) => event.key === 'Escape' && confirmDialog.request && confirmDialog.finish(false)} />
+<svelte:window onkeydown={handleDialogKeydown} />
 
 {#if confirmDialog.request}
 	<div class="confirm-overlay" role="presentation" onclick={(event) => event.target === event.currentTarget && confirmDialog.finish(false)}>
-		<div class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+		<div bind:this={dialogCard} class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
 			<i class="ph ph-warning" aria-hidden="true"></i>
 			<h2 id="confirm-title">{t('common.confirm')}</h2>
 			<p id="confirm-message">{confirmDialog.request.message}</p>

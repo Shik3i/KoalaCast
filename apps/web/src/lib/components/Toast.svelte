@@ -79,12 +79,14 @@
 	}
 
 	.toast button {
+		width: 32px;
+		height: 32px;
 		background: none;
 		border: none;
 		color: var(--text-muted);
 		display: grid;
 		place-items: center;
-		padding: 0.15rem;
+		padding: 0;
 		border-radius: 6px;
 		flex-shrink: 0;
 	}
