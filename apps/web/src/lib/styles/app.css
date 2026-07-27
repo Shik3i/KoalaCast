@@ -1,8 +1,11 @@
 :root {
-	--font-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	--font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	--font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	--font-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+	/* Bundled in static/fonts, declared in fonts.css — no third-party request.
+	   --font-mono is no longer monospaced: it names the small factual line, and
+	   the column alignment it used to provide now comes from tabular figures. */
+	--font-display: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-ui: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-sans: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
 	--bg-app: #06100c;
 	--bg-panel: #0a0f0c;
 	--bg-rail: #080d0a;
@@ -931,7 +934,7 @@ p { text-wrap: pretty; }
 	min-height: 100dvh;
 	background: var(--bg-panel);
 }
-.offline-banner { position: sticky; top: 0; z-index: 80; display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 6px 12px; background: var(--color-warning-bg); color: var(--ink-2); font: 700 10px/1 var(--font-mono); text-transform: uppercase; }
+.offline-banner { position: sticky; top: 0; z-index: 80; display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 6px 12px; background: var(--color-warning-bg); color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
 
 .quiet-app.has-player .quiet-main,
 .quiet-app.has-player .quiet-rail,
@@ -1063,8 +1066,8 @@ html.is-resizing-rails * {
 .rail-eyebrow {
 	color: var(--ink-4);
 	font: 600 9px/1.4 var(--font-mono);
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
+	letter-spacing: .01em;
+
 }
 .rail-dot { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: var(--data-bar); }
 .truncate { min-width: 0; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
@@ -1154,8 +1157,8 @@ html.is-resizing-rails * {
 .queue-hint {
 	color: var(--ink-4);
 	font: 600 9px/1.4 var(--font-mono);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
+	letter-spacing: .01em;
+
 }
 .queue-now {
 	display: grid;
@@ -1182,7 +1185,7 @@ html.is-resizing-rails * {
 	font: 500 8px/1.5 var(--font-mono);
 	letter-spacing: 0.05em;
 	text-overflow: ellipsis;
-	text-transform: uppercase;
+
 	white-space: nowrap;
 }
 .equalizer { display: flex; align-items: end; gap: 2px; height: 15px; }
@@ -1222,8 +1225,8 @@ html.is-resizing-rails * {
 	background: transparent;
 	color: var(--ink-3);
 	font: 600 8px/1 var(--font-mono);
-	letter-spacing: .05em;
-	text-transform: uppercase;
+	letter-spacing: .01em;
+
 }
 .queue-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 .queue-hint { padding: 4px 17px 10px; font-size: 8px; }
@@ -1295,8 +1298,8 @@ html.is-resizing-rails * {
 		min-height: 60px;
 		color: var(--ink-4);
 		font: 600 9px/1 var(--font-mono);
-		letter-spacing: .04em;
-		text-transform: uppercase;
+		letter-spacing: .01em;
+
 	}
 	.quiet-mobile-nav i { font-size: 20px; }
 	.quiet-mobile-nav a.active { color: var(--accent-ink); }

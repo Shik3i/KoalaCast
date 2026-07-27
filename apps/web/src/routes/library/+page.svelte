@@ -611,7 +611,7 @@
 		margin-bottom: 14px;
 	}
 	.lib-head h1 { font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
-	.lib-head .sub { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.lib-head .sub { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .01em; }
 	.library-filter {
 		display: flex;
 		align-items: center;
@@ -632,11 +632,11 @@
 		background: transparent;
 		color: var(--ink-4);
 		font: 600 10px/1 var(--font-mono);
-		text-transform: uppercase;
+
 	}
 	.library-sort button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.collection-tabs { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-hair); }
-	.tabs button { min-height: 34px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.tabs button { min-height: 34px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); }
 	.tabs button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.podcast-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 	.podcast-card.quiet-cover-card {
@@ -669,7 +669,7 @@
 	.quiet-cover-card:focus-within .cover-overlay,
 	.quiet-cover-card.long-pressed .cover-overlay { opacity: 1; pointer-events: auto; }
 	.quiet-cover-card .cover-overlay h3 { color: #eaf6f0; font: 700 14px/1.15 var(--font-ui); }
-	.quiet-cover-card .cover-overlay p { color: #a9c8ba; font: 500 10px/1.35 var(--font-mono); text-transform: uppercase; }
+	.quiet-cover-card .cover-overlay p { color: #a9c8ba; font: 500 10px/1.35 var(--font-mono); }
 	.quiet-cover-card .actions { display: flex; gap: 5px; margin-top: 6px; }
 	.quiet-cover-card .round-action {
 		display: grid;

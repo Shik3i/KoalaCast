@@ -570,7 +570,7 @@
 	.discover-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
 	.spotlight.loading > div:first-child { display: flex; flex-direction: column; gap: 20px; }
 	.spotlight-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
-	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
 	.spotlight-meta span:first-child { padding: 5px 7px; border-radius: 4px; background: var(--accent-fill); color: var(--accent-on); }
 	.spotlight h1 { display: -webkit-box; max-width: 720px; overflow: hidden; font: 750 clamp(32px, 4vw, 44px)/1.02 var(--font-display); letter-spacing: -.035em; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; text-transform: uppercase; }
 	.spotlight p { display: -webkit-box; max-width: 58ch; margin-top: 13px; overflow: hidden; color: var(--ink-3); font-size: 15px; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
@@ -579,15 +579,15 @@
 	.spotlight-actions button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
 	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
-	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 10px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.spotlight-art > span { margin-top: 7px; color: var(--ink-4); font: 600 10px/1.3 var(--font-mono); letter-spacing: .01em; }
 	.waveform { display: flex; align-items: center; gap: 3px; height: 32px; margin-top: -32px; padding: 0 9px; background: rgba(5,10,7,.76); }
 	.waveform i { flex: 1; max-width: 4px; background: var(--data-bar); }
 
 	.session-section { padding: 18px 22px 22px; border-bottom: 1px solid var(--border-hair); }
 	.session-control { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-	.session-control > span { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+	.session-control > span { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .01em; }
 	.session-control > div { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; }
-	.session-control button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.session-control button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.session-control button.active { background: var(--accent-fill); color: var(--accent-on); }
 	.session-control p { color: var(--ink-4); font-size: 13px; }
 	.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
@@ -596,29 +596,29 @@
 	.mood-grid button.active { background: linear-gradient(150deg, var(--accent-fill), color-mix(in srgb, var(--accent-fill) 72%, var(--bg-app))); color: var(--accent-on); border-color: transparent; }
 	.mood-grid i { grid-row: 1 / 3; font-size: 22px; }
 	.mood-grid strong { font: 700 16px/1.2 var(--font-ui); }
-	.mood-grid span { font: 600 10px/1.3 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+	.mood-grid span { font: 600 10px/1.3 var(--font-mono); letter-spacing: .01em; }
 	.mood-basis { display: flex; align-items: center; gap: 7px; margin-top: 10px; color: var(--ink-4); font-size: 12px; }
 	.mood-basis i { color: var(--accent-ink); font-size: 15px; }
 
 	.reasoned-picks, .chart-section { padding: 20px 22px; border-bottom: 1px solid var(--border-hair); }
 	.reasoned-picks > header, .chart-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 	.reasoned-picks h2, .chart-head h2 { font-size: 20px; letter-spacing: -.02em; }
-	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); letter-spacing: .01em; }
 	.reasoned-picks > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 	.reasoned-picks button { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
 	.reasoned-picks img { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background: var(--bg-tile); }
 	.reasoned-picks button > span { display: flex; flex-direction: column; min-width: 0; }
 	.reasoned-picks strong { overflow: hidden; font: 700 14px/1.25 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
 	.reasoned-picks small { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ink-3); font-size: 12px; line-clamp: 2; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 10px/1.2 var(--font-mono); font-style: normal; text-transform: uppercase; }
+	.reasoned-picks em { margin-top: auto; color: var(--ink-4); font: 500 10px/1.2 var(--font-mono); font-style: normal; }
 
 	.chart-head > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 	.sort-tabs { display: flex; gap: 2px; }
-	.sort-tabs button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.sort-tabs button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.sort-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
-	.chart-filters select { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
-	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-filters select { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
+	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 52px 66px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
 	.rank, .fit { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 	.chart-art, .chart-title, .row-actions button { border: 0; background: transparent; color: inherit; }
@@ -631,7 +631,7 @@
 	.row-actions button { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border-ui); border-radius: 4px; }
 	.row-actions button i { display: block; font-size: 14px; line-height: 1; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.chart-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.chart-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.chart-footer button { padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }
 	.empty-filter { display: grid; justify-items: start; gap: 10px; padding: 22px 0; color: var(--ink-3); font-size: 13px; }
 	.empty-filter button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--ink-2); }

@@ -9,8 +9,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 
 /**
- * Metadata is uppercase mono by decision, not by accident, so the uppercasing lives
- * here instead of in the dozens of call sites that would each have to remember.
+ * Metadata. Sentence case: it used to be uppercased here, which together with a
+ * mono face and wide tracking is what made every second line read as machine
+ * output. The name stays [MonoText] because dozens of call sites use it and it
+ * still means "the small, factual line" — it is simply no longer monospaced.
  */
 @Composable
 fun MonoText(
@@ -21,7 +23,7 @@ fun MonoText(
     maxLines: Int = 1,
 ) {
     Text(
-        text = text.uppercase(),
+        text = text,
         modifier = modifier,
         color = color,
         style = style,

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '$lib/styles/fonts.css';
 	import '$lib/styles/phosphor-subset.css';
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';

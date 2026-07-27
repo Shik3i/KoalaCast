@@ -740,8 +740,8 @@
 	.control-eyebrow {
 		color: var(--text-muted);
 		font: 700 .68rem/1.3 var(--font-mono);
-		letter-spacing: .1em;
-		text-transform: uppercase;
+		letter-spacing: .01em;
+
 	}
 	.show-history strong { font: 800 1.8rem/1 var(--font-ui); letter-spacing: -.04em; }
 	.show-history span { color: var(--text-secondary); font-size: .78rem; }
@@ -1172,7 +1172,7 @@
 	}
 	.sk-cover, .artwork { width: 150px; height: 150px; border-radius: 6px; box-shadow: none; background: var(--bg-tile); }
 	.meta { gap: 7px; justify-content: center; min-width: 0; }
-	.badge { width: fit-content; padding: 5px 7px; border-radius: 3px; background: var(--accent-fill); color: var(--accent-on); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.badge { width: fit-content; padding: 5px 7px; border-radius: 3px; background: var(--accent-fill); color: var(--accent-on); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
 	.meta h1 { font: 750 clamp(30px,4vw,40px)/1.02 var(--font-display); letter-spacing: -.035em; text-transform: uppercase; }
 	.author { color: var(--ink-3); font: 600 11px/1.3 var(--font-sans); }
 	.desc { max-width: 70ch; color: var(--ink-3); font-size: 12px; line-height: 1.45; }
@@ -1194,14 +1194,14 @@
 	.episodes-section { padding: 18px 22px 30px; }
 	.episodes-head { padding-bottom: 11px; border-bottom: 1px solid var(--border-hair); }
 	.episodes-section h2 { font: 800 17px/1 var(--font-ui); }
-	.unplayed-pill, .mark-all-btn { min-height: 32px; border-radius: 4px; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.unplayed-pill, .mark-all-btn { min-height: 32px; border-radius: 4px; font: 600 10px/1 var(--font-mono); }
 	.mark-all-btn { border-color: var(--border-ui); background: transparent; }
 	.episodes-filter-bar { padding: 10px 0; border-bottom: 1px solid var(--border-hair); }
 	.ep-search-input { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-sunken); }
-	.filter-pill { min-height: 32px; border-color: var(--border-ui); border-radius: 4px; background: transparent; font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.filter-pill { min-height: 32px; border-color: var(--border-ui); border-radius: 4px; background: transparent; font: 600 10px/1 var(--font-mono); }
 	.tier { margin: 0; }
 	.tier-head { min-height: 38px; padding: 0 5px; background: var(--bg-sunken); border-bottom: 1px solid var(--border-hair); }
-	.tier-toggle, .tier-mark { min-height: 32px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.tier-toggle, .tier-mark { min-height: 32px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.episode-list { gap: 0; }
 	.episode-row {
 		min-height: 76px;
@@ -1216,7 +1216,7 @@
 	.episode-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
 		.ep-info h3 { font: 700 14px/1.3 var(--font-ui); }
 	.ep-desc { color: var(--ink-3); font-size: 10px; }
-	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); text-transform: uppercase; }
+	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); }
 		.btn-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; }
 	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
 

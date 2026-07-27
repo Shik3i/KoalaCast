@@ -301,7 +301,7 @@
 		gap: 9px;
 	}
 	.admin-head h1 :global(.ph-fill) { color: var(--accent-ink); }
-	.admin-sub { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .05em; margin-top: 7px; text-transform: uppercase; }
+	.admin-sub { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .01em; margin-top: 7px; }
 	.admin-refresh { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.admin-refresh button, .table-search { min-height: 44px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-panel); color: var(--ink-2); }
 	.admin-refresh button { padding: 0 12px; font: inherit; text-transform: uppercase; }
@@ -340,8 +340,8 @@
 	.metric-box .lbl {
 		color: var(--ink-4);
 		font: 600 10px/1 var(--font-mono);
-		letter-spacing: .08em;
-		text-transform: uppercase;
+		letter-spacing: .01em;
+
 	}
 
 	/* Let wide tables scroll on their own instead of blowing out the mobile layout. */
@@ -369,7 +369,7 @@
 		text-align: left;
 		border-bottom: 1px solid var(--border-row);
 	}
-	.admin-table th { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+	.admin-table th { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
 	.admin-table td { color: var(--ink-3); font-size: 12px; }
 	.admin-table td strong { color: var(--ink-2); font-family: var(--font-ui); }
 	.admin-table details { max-width: 360px; }
@@ -382,7 +382,7 @@
 		background: var(--accent-wash);
 		color: var(--accent-ink);
 		font: 600 10px/1 var(--font-mono);
-		text-transform: uppercase;
+
 	}
 
 	.badge.suspended {
@@ -397,7 +397,7 @@
 		border: 1px solid var(--border-ui);
 		background: transparent;
 		color: var(--ink-2);
-		text-transform: uppercase;
+
 	}
 	.btn-sm:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
 	.btn-sm.danger { border-color: var(--color-danger-border); color: var(--color-danger); }
@@ -424,7 +424,7 @@
 		padding: 9px 11px;
 		border-radius: 5px;
 		font: 700 10px/1 var(--font-mono);
-		text-transform: uppercase;
+
 	}
 	.btn-reg.danger { background: var(--color-danger); }
 	.btn-reg:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -436,6 +436,6 @@
 		color: var(--ink);
 		border-radius: 6px;
 	}
-	.loading { color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.loading { color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	@media (max-width: 560px) { .admin-page { padding: 16px; }.metrics-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }.card { padding: 14px; } }
 </style>

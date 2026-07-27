@@ -1551,7 +1551,7 @@
 		border-radius: 4px;
 		color: var(--ink-2);
 		font: 700 10px/1 var(--font-mono);
-		text-transform: uppercase;
+
 	}
 	.queue-button i { color: var(--accent-ink); font-size: 15px; }
 	.close-track { width: 28px; }
@@ -1581,7 +1581,7 @@
 			color: var(--ink-4);
 			font: 500 10px/1.35 var(--font-mono);
 			text-overflow: ellipsis;
-			text-transform: uppercase;
+
 			white-space: nowrap;
 		}
 		.progress-track { display: block; right: 0; width: var(--progress, 0%); background: var(--accent-fill); }

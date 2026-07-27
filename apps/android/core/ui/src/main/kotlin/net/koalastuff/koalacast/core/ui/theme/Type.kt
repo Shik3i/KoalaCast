@@ -16,79 +16,66 @@ import androidx.compose.ui.unit.sp
 import net.koalastuff.koalacast.core.ui.R
 
 /**
- * Three families, three jobs — bundled rather than loaded from a font provider so the
- * app makes no third-party request at launch. All four are SIL Open Font License;
- * copies live in `core/ui/licenses`.
+ * Two families, one voice. Nunito carries display and headings, Nunito Sans
+ * carries body, controls and metadata — a superfamily, so the two agree on
+ * proportions and the interface reads as one thing rather than four.
+ *
+ * Bundled rather than fetched, so the app makes no third-party request at
+ * launch. Both are SIL Open Font License; copies live in `core/ui/licenses`.
+ *
+ * This replaces a stack (Archivo Condensed, Bricolage, Outfit, IBM Plex Mono)
+ * that read as squeezed and mechanical: the display face was compressed to
+ * 62.5% width, and every piece of metadata was uppercase mono on wide tracking.
+ * Nothing here is condensed, and metadata is sentence case.
  */
 
-/** Display: spotlight headline and show title only. Condensed (wdth 62.5), uppercase. */
-val ArchivoCondensed = FontFamily(
+/** Display: spotlight headline and show title. */
+val NunitoDisplay = FontFamily(
     Font(
-        resId = R.font.archivo_variable,
-        weight = FontWeight.Bold,
-        variationSettings = FontVariation.Settings(
-            FontVariation.width(62.5f),
-            FontVariation.weight(700),
-        ),
-    ),
-)
-
-/** Display at 75% width — the 12px section labels in button-style headers. */
-val ArchivoSemiCondensed = FontFamily(
-    Font(
-        resId = R.font.archivo_variable,
-        weight = FontWeight.Bold,
-        variationSettings = FontVariation.Settings(
-            FontVariation.width(75f),
-            FontVariation.weight(700),
-        ),
-    ),
-)
-
-/** UI headings: screen titles, card titles, list titles, KPI numbers. */
-val Bricolage = FontFamily(
-    Font(
-        resId = R.font.bricolage_grotesque_variable,
+        resId = R.font.nunito_variable,
         weight = FontWeight.Bold,
         variationSettings = FontVariation.Settings(FontVariation.weight(700)),
     ),
     Font(
-        resId = R.font.bricolage_grotesque_variable,
+        resId = R.font.nunito_variable,
         weight = FontWeight.ExtraBold,
         variationSettings = FontVariation.Settings(FontVariation.weight(800)),
     ),
 )
 
-/** Body and controls. */
-val Outfit = FontFamily(
+/** UI headings: screen titles, card titles, list titles, KPI numbers. */
+val NunitoHeading = NunitoDisplay
+
+/** Body, controls and metadata. */
+val NunitoText = FontFamily(
     Font(
-        resId = R.font.outfit_variable,
+        resId = R.font.nunito_sans_variable,
         weight = FontWeight.Normal,
         variationSettings = FontVariation.Settings(FontVariation.weight(400)),
     ),
     Font(
-        resId = R.font.outfit_variable,
+        resId = R.font.nunito_sans_variable,
         weight = FontWeight.Medium,
         variationSettings = FontVariation.Settings(FontVariation.weight(500)),
     ),
     Font(
-        resId = R.font.outfit_variable,
+        resId = R.font.nunito_sans_variable,
         weight = FontWeight.SemiBold,
         variationSettings = FontVariation.Settings(FontVariation.weight(600)),
     ),
     Font(
-        resId = R.font.outfit_variable,
+        resId = R.font.nunito_sans_variable,
         weight = FontWeight.Bold,
         variationSettings = FontVariation.Settings(FontVariation.weight(700)),
     ),
 )
 
-/** Every time code, count, keyboard hint and piece of metadata. */
-val PlexMono = FontFamily(
-    Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
-    Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
-    Font(R.font.ibm_plex_mono_bold, FontWeight.Bold),
-)
+/**
+ * Counts, time codes and durations still have to line up in a column, which is
+ * what the old mono face was really for. Tabular figures give the same
+ * alignment without the typewriter voice.
+ */
+private const val TABULAR = "tnum"
 
 private val TightLineHeight = LineHeightStyle(
     alignment = LineHeightStyle.Alignment.Center,
@@ -103,7 +90,7 @@ private val TightLineHeight = LineHeightStyle(
 data class KoalaTypography(
     /** Spotlight headline. Desktop 46px; 30px on a phone, per the mobile spec. */
     val display: TextStyle = TextStyle(
-        fontFamily = ArchivoCondensed,
+        fontFamily = NunitoDisplay,
         fontWeight = FontWeight.Bold,
         fontSize = 30.sp,
         lineHeight = 28.5.sp, // .95
@@ -113,7 +100,7 @@ data class KoalaTypography(
     ),
     /** Show title on the podcast screen. */
     val displaySmall: TextStyle = TextStyle(
-        fontFamily = ArchivoCondensed,
+        fontFamily = NunitoDisplay,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
         lineHeight = 24.7.sp,
@@ -121,7 +108,7 @@ data class KoalaTypography(
     ),
     /** Screen titles. */
     val screenTitle: TextStyle = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = NunitoHeading,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 22.sp,
         lineHeight = 26.sp,
@@ -129,7 +116,7 @@ data class KoalaTypography(
     ),
     /** Section headings and card titles. */
     val sectionTitle: TextStyle = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = NunitoHeading,
         fontWeight = FontWeight.Bold,
         fontSize = 17.sp,
         lineHeight = 21.sp,
@@ -137,7 +124,7 @@ data class KoalaTypography(
     ),
     /** List item titles. */
     val listTitle: TextStyle = TextStyle(
-        fontFamily = Bricolage,
+        fontFamily = NunitoHeading,
         fontWeight = FontWeight.Bold,
         fontSize = 14.sp,
         lineHeight = 18.sp,
@@ -145,50 +132,53 @@ data class KoalaTypography(
     ),
     /** Prose. */
     val body: TextStyle = TextStyle(
-        fontFamily = Outfit,
+        fontFamily = NunitoText,
         fontWeight = FontWeight.Normal,
         fontSize = 15.sp,
         lineHeight = 22.sp,
     ),
     val bodySmall: TextStyle = TextStyle(
-        fontFamily = Outfit,
+        fontFamily = NunitoText,
         fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
         lineHeight = 19.sp,
     ),
     /** Nav labels and buttons. */
     val label: TextStyle = TextStyle(
-        fontFamily = Outfit,
+        fontFamily = NunitoText,
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
         lineHeight = 16.sp,
     ),
     /** Metadata: uppercase, tracked, tabular. */
     val mono: TextStyle = TextStyle(
-        fontFamily = PlexMono,
+        fontFamily = NunitoText,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 14.sp,
-        letterSpacing = 0.08.em,
+        letterSpacing = 0.01.em,
+        fontFeatureSettings = TABULAR,
     ),
     val monoSmall: TextStyle = TextStyle(
-        fontFamily = PlexMono,
+        fontFamily = NunitoText,
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         lineHeight = 13.sp,
-        letterSpacing = 0.1.em,
+        letterSpacing = 0.01.em,
+        fontFeatureSettings = TABULAR,
     ),
     /** Badges — `COVER STORY`, `NEW`. */
     val monoBadge: TextStyle = TextStyle(
-        fontFamily = PlexMono,
+        fontFamily = NunitoText,
         fontWeight = FontWeight.Bold,
         fontSize = 10.sp,
         lineHeight = 12.sp,
-        letterSpacing = 0.14.em,
+        letterSpacing = 0.06.em,
     ),
     /** KPI numbers and time codes. */
     val monoStrong: TextStyle = TextStyle(
-        fontFamily = PlexMono,
+        fontFamily = NunitoText,
+        fontFeatureSettings = TABULAR,
         fontWeight = FontWeight.Bold,
         fontSize = 12.sp,
         lineHeight = 15.sp,

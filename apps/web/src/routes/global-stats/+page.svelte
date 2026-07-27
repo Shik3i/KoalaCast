@@ -239,14 +239,14 @@
 	.global-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border-hair); }
 	.global-head h1 { margin: 3px 0 5px; font: 800 clamp(34px, 5vw, 58px)/1.02 var(--font-display); letter-spacing: -.035em; color: var(--ink-1); }
 	.global-head > div > p:last-child { max-width: 650px; color: var(--ink-4); font-size: 13px; }
-	.eyebrow { color: var(--accent); font: 700 10px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+	.eyebrow { color: var(--accent); font: 700 10px/1 var(--font-mono); letter-spacing: .01em; }
 	.range-tabs { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; flex-shrink: 0; }
-	.range-tabs button { min-height: 34px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.range-tabs button { min-height: 34px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.range-tabs button.active { color: var(--accent-on); background: var(--accent-fill); }
 	.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border-ui); }
 	.kpi-grid article { padding: 18px; display: flex; flex-direction: column; border-right: 1px solid var(--border-hair); background: var(--bg-panel); }
 	.kpi-grid article:last-child { border: 0; }
-	.kpi-grid span, .kpi-grid small { color: var(--ink-4); font: 600 10px/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; }
+	.kpi-grid span, .kpi-grid small { color: var(--ink-4); font: 600 10px/1.4 var(--font-mono); letter-spacing: .01em; }
 	.kpi-grid strong { margin: 8px 0 5px; color: var(--ink-1); font: 750 28px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
 	.panel { padding: 18px; border: 1px solid var(--border-ui); background: var(--bg-panel); min-width: 0; }
 	.panel-head { min-height: 35px; margin-bottom: 18px; display: flex; align-items: start; justify-content: space-between; gap: 12px; }
@@ -272,7 +272,7 @@
 	.hour-chart span { height: 12px; color: var(--ink-5); font: 600 9px/1 var(--font-mono); }
 	.saved-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 	.saved-grid > div { position: relative; padding: 12px; overflow: hidden; background: var(--bg-sunken); border: 1px solid var(--border-hair); }
-	.saved-grid span { display: block; color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); text-transform: uppercase; }
+	.saved-grid span { display: block; color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); }
 	.saved-grid strong { display: block; margin-top: 7px; color: var(--ink-2); font: 700 16px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
 	.saved-grid i { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent-fill); }
 	.ranking-panel { padding: 0; }
@@ -283,7 +283,7 @@
 	.ranking-list b { color: var(--ink-5); font: 600 10px/1 var(--font-mono); }
 	.ranking-list span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 	.ranking-list span strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12px; }
-	.ranking-list small { color: var(--ink-5); font: 500 10px/1 var(--font-mono); text-transform: uppercase; }
+	.ranking-list small { color: var(--ink-5); font: 500 10px/1 var(--font-mono); }
 	.ranking-list em { color: var(--ink-3); font: 600 10px/1 var(--font-mono); font-style: normal; }
 	.privacy-note { padding: 14px 16px; display: flex; gap: 10px; align-items: start; border: 1px solid var(--border-hair); color: var(--ink-4); font-size: 11px; }
 	.privacy-note i { color: var(--accent); font-size: 17px; }

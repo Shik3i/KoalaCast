@@ -638,10 +638,10 @@
 	.head { align-items: center; padding-bottom: 16px; border-bottom: 1px solid var(--border-hair); }
 	.head h1 { gap: 0; font: 800 26px/1 var(--font-ui); letter-spacing: -.035em; }
 	.head h1 :global(.ph-fill) { display: none; }
-	.sub { color: var(--ink-4); font: 600 11px/1.4 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+	.sub { color: var(--ink-4); font: 600 11px/1.4 var(--font-mono); letter-spacing: .01em; }
 	.head-actions { gap: 6px; }
-	.switch { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
-	.btn-ghost { min-height: 34px; padding: 0 10px; border-color: var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); text-transform: uppercase; }
+	.switch { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
+	.btn-ghost { min-height: 34px; padding: 0 10px; border-color: var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.settings-panel { margin: 14px 0; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); box-shadow: none; }
 	.episode-list { gap: 0; }
 	.day-header {
@@ -656,8 +656,8 @@
 		border-bottom: 1px solid var(--border-hair);
 		color: var(--ink-4);
 		font: 600 10px/1 var(--font-mono);
-		letter-spacing: .07em;
-		text-transform: uppercase;
+		letter-spacing: .01em;
+
 	}
 	.ep-row {
 		display: grid;
@@ -676,7 +676,7 @@
 	.ep-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
 	.ep-art { width: 56px; height: 56px; border-radius: 5px; background: var(--bg-tile); }
 	.ep-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
-	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); letter-spacing: .03em; text-transform: uppercase; }
+	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); letter-spacing: .01em; }
 	.ep-show { color: var(--ink-3); }
 	.ep-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; color: var(--ink-3); }
 	.empty-state { margin-top: 16px; border-radius: 8px; box-shadow: none; }
