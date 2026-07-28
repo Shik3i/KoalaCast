@@ -17,6 +17,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.6.1@sha256:923441d7c25f1e2eb5789f
 # platform was pure waste.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS builder-web
 WORKDIR /app
+RUN npm install --global npm@11.16.0
 COPY apps/web/package.json apps/web/package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/web/ ./
