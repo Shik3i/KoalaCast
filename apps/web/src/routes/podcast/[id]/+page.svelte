@@ -279,7 +279,7 @@
 
 	function updateShowSetting(patch: Partial<PodcastPlaybackSettings>) {
 		if (!podcast?.id) return;
-		showSettings = { ...showSettings, ...patch };
+		showSettings = { ...showSettings, ...patch, updatedAt: Date.now() };
 		savePodcastPlaybackSettings(podcast.id, showSettings);
 	}
 
@@ -580,9 +580,29 @@
 						{#each [1, 1.1, 1.2, 1.25, 1.3, 1.5, 1.75, 2] as speed}<option value={speed}>{speed}×</option>{/each}
 					</select>
 				</label>
+				<label>
+					<span>{t('quiet.show.volumeBoost')}</span>
+					<select value={showSettings.volumeBoost == null ? '' : String(showSettings.volumeBoost)} onchange={(event) => updateShowSetting({ volumeBoost: event.currentTarget.value === '' ? null : event.currentTarget.value === 'true' })}>
+						<option value="">{t('quiet.show.useGlobal')}</option>
+						<option value="true">{t('quiet.show.enabled')}</option>
+						<option value="false">{t('quiet.show.disabled')}</option>
+					</select>
+				</label>
+				<label>
+					<span>{t('quiet.show.skipSilence')}</span>
+					<select value={showSettings.skipSilence == null ? '' : String(showSettings.skipSilence)} onchange={(event) => updateShowSetting({ skipSilence: event.currentTarget.value === '' ? null : event.currentTarget.value === 'true' })}>
+						<option value="">{t('quiet.show.useGlobal')}</option>
+						<option value="true">{t('quiet.show.enabled')}</option>
+						<option value="false">{t('quiet.show.disabled')}</option>
+					</select>
+				</label>
 				<label class="auto-queue">
 					<input type="checkbox" checked={showSettings.autoQueueNew} onchange={(event) => updateShowSetting({ autoQueueNew: event.currentTarget.checked })} />
 					<span>{t('quiet.show.autoQueue')}</span>
+				</label>
+				<label class="auto-queue">
+					<input type="checkbox" checked={showSettings.autoDownload} onchange={(event) => updateShowSetting({ autoDownload: event.currentTarget.checked })} />
+					<span>{t('quiet.show.autoDownload')}</span>
 				</label>
 				<label class="auto-queue">
 					<input type="checkbox" checked={showSettings.notifyNewEpisodes} onchange={(event) => toggleNotifications(event.currentTarget.checked)} />

@@ -3,6 +3,7 @@ package net.koalastuff.koalacast.core.data.repository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import net.koalastuff.koalacast.core.data.db.QueueDao
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.QueueItemEntity
 import net.koalastuff.koalacast.core.data.mapper.toModel
 import net.koalastuff.koalacast.core.data.util.Clock
@@ -21,6 +22,7 @@ import javax.inject.Singleton
 class QueueRepository @Inject constructor(
     private val queue: QueueDao,
     private val clock: Clock,
+    private val syncMetadata: SecureAccountStore,
 ) {
 
     val entries: Flow<List<QueueEntry>> =
@@ -55,13 +57,23 @@ class QueueRepository @Inject constructor(
                 categories = track.categories,
             ),
         )
+        syncMetadata.markQueueUpdated(clock.nowMs())
     }
 
-    suspend fun remove(episodeId: String) = queue.deleteByEpisode(episodeId)
+    suspend fun remove(episodeId: String) {
+        queue.deleteByEpisode(episodeId)
+        syncMetadata.markQueueUpdated(clock.nowMs())
+    }
 
-    suspend fun clear() = queue.clear()
+    suspend fun clear() {
+        queue.clear()
+        syncMetadata.markQueueUpdated(clock.nowMs())
+    }
 
-    suspend fun reorder(orderedEpisodeIds: List<String>) = queue.reorder(orderedEpisodeIds)
+    suspend fun reorder(orderedEpisodeIds: List<String>) {
+        queue.reorder(orderedEpisodeIds)
+        syncMetadata.markQueueUpdated(clock.nowMs())
+    }
 
     /** The next thing to play, or null when the queue has run dry. */
     suspend fun head(): QueueEntry? = queue.first()?.toModel()
@@ -83,7 +95,10 @@ class QueueRepository @Inject constructor(
             keep += item
         }
         val dropped = items.drop(keep.size)
-        if (dropped.isNotEmpty()) queue.deleteByEpisodeIds(dropped.map { it.episodeId })
+        if (dropped.isNotEmpty()) {
+            queue.deleteByEpisodeIds(dropped.map { it.episodeId })
+            syncMetadata.markQueueUpdated(clock.nowMs())
+        }
         return dropped.map { it.episodeId }
     }
 }

@@ -122,9 +122,12 @@ fun PodcastSettingsEntity.toModel() = PodcastSettings(
     skipIntroSeconds = skipIntroSeconds,
     skipOutroSeconds = skipOutroSeconds,
     speed = speed,
+    volumeBoost = volumeBoost,
+    skipSilence = skipSilence,
     autoQueueNew = autoQueueNew,
     notifyNewEpisodes = notifyNewEpisodes,
     autoDownload = autoDownload,
+    updatedAt = updatedAt,
 )
 
 fun PodcastSettings.toEntity() = PodcastSettingsEntity(
@@ -132,9 +135,12 @@ fun PodcastSettings.toEntity() = PodcastSettingsEntity(
     skipIntroSeconds = skipIntroSeconds,
     skipOutroSeconds = skipOutroSeconds,
     speed = speed,
+    volumeBoost = volumeBoost,
+    skipSilence = skipSilence,
     autoQueueNew = autoQueueNew,
     notifyNewEpisodes = notifyNewEpisodes,
     autoDownload = autoDownload,
+    updatedAt = updatedAt,
 )
 
 fun ListeningSessionEntity.toModel() = ListeningSession(

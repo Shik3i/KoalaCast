@@ -215,6 +215,6 @@ class LibraryRepository @Inject constructor(
         podcastSettings.get(podcastId)?.toModel() ?: PodcastSettings(podcastId = podcastId)
 
     suspend fun savePodcastSettings(settings: PodcastSettings) {
-        podcastSettings.upsert(settings.toEntity())
+        podcastSettings.upsert(settings.copy(updatedAt = System.currentTimeMillis()).toEntity())
     }
 }

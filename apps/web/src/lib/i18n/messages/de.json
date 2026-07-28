@@ -723,7 +723,13 @@
 			"seconds": "s",
 			"speed": "Tempo",
 			"globalSpeed": "Global",
+			"volumeBoost": "Lautstärke-Boost",
+			"skipSilence": "Stille überspringen",
+			"useGlobal": "Globale Einstellung verwenden",
+			"enabled": "Aktiviert",
+			"disabled": "Deaktiviert",
 			"autoQueue": "Neue Folgen automatisch einreihen",
+			"autoDownload": "Neue Folgen automatisch herunterladen",
 			"notifications": "Browser-Benachrichtigung bei neuen Folgen",
 			"notificationsEnabled": "Benachrichtigungen für diese Sendung aktiviert.",
 			"notificationsDenied": "Benachrichtigungsberechtigung wurde nicht erteilt."

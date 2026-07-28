@@ -113,8 +113,10 @@ class PlaybackService : MediaLibraryService() {
         // readable and whenever it changes rather than only at track start.
         scope.launch {
             preferences.preferences.collect { prefs ->
-                player.skipSilenceEnabled = prefs.skipSilence
-                boostWanted = prefs.volumeBoost
+                val track = TrackMediaItem.toTrack(player.currentMediaItem)
+                val show = track?.let { library.podcastSettingsSnapshot(it.podcastId) }
+                player.skipSilenceEnabled = show?.skipSilence ?: prefs.skipSilence
+                boostWanted = show?.volumeBoost ?: prefs.volumeBoost
                 applyVolumeBoost(player, boostWanted)
             }
         }
@@ -446,6 +448,15 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             publishWidgetState(player)
+            TrackMediaItem.toTrack(mediaItem)?.let { track ->
+                scope.launch {
+                    val global = preferences.preferences.first()
+                    val show = library.podcastSettingsSnapshot(track.podcastId)
+                    player.skipSilenceEnabled = show.skipSilence ?: global.skipSilence
+                    boostWanted = show.volumeBoost ?: global.volumeBoost
+                    applyVolumeBoost(player, boostWanted)
+                }
+            }
             // The player's current item is already the new one here. Persisting
             // through persistNow() would write the old segment against the new
             // episode, so close only the recorder and start the new segment.

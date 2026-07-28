@@ -155,9 +155,12 @@ data class PodcastSettingsEntity(
     @ColumnInfo(defaultValue = "0") val skipOutroSeconds: Int = 0,
     /** null means "use the global default speed". */
     val speed: Float? = null,
+    val volumeBoost: Boolean? = null,
+    val skipSilence: Boolean? = null,
     @ColumnInfo(defaultValue = "0") val autoQueueNew: Boolean = false,
     @ColumnInfo(defaultValue = "0") val notifyNewEpisodes: Boolean = false,
     @ColumnInfo(defaultValue = "0") val autoDownload: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = 0,
 )
 
 @Entity(tableName = "account_data_archives")

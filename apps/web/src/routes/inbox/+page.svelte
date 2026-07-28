@@ -30,6 +30,7 @@
 	} from '$lib/cache/content';
 	import { getPodcastPlaybackSettings } from '$lib/stores/podcast-settings';
 	import { notifyNewPodcastEpisodes } from '$lib/notifications/browser';
+	import { audioDownloads } from '$lib/downloads/manager.svelte';
 
 	interface InboxEpisode {
 		id: string;
@@ -125,10 +126,27 @@
 					enclosure_url: ep.enclosure_url,
 					artwork_url: ep.artwork_url || sub.artwork_url
 				})) as InboxEpisode[];
-				if (entry && getPodcastPlaybackSettings(sub.podcast_id).notifyNewEpisodes) {
+				const podcastSettings = getPodcastPlaybackSettings(sub.podcast_id);
+				if (entry && podcastSettings.notifyNewEpisodes) {
 					const knownIds = new Set(entry.value.map((episode) => episode.id));
 					const newEpisodes = episodes.filter((episode) => !knownIds.has(episode.id));
 					await notifyNewPodcastEpisodes(sub.podcast_id, sub.title, newEpisodes);
+				}
+				if (entry && podcastSettings.autoDownload) {
+					const knownIds = new Set(entry.value.map((episode) => episode.id));
+					const newest = episodes.find(
+						(episode) => !knownIds.has(episode.id) && episode.enclosure_url
+					);
+					if (newest) {
+						await audioDownloads.startAuto({
+							episode_id: newest.id,
+							podcast_id: newest.podcast_id,
+							title: newest.title,
+							podcast_title: newest.podcast_title,
+							artwork_url: newest.artwork_url,
+							enclosure_url: newest.enclosure_url
+						}).catch(() => false);
+					}
 				}
 				const merged = mergeInboxEpisodes(episodes, entry?.value ?? []);
 				await cacheContent(`inbox:${sub.podcast_id}`, merged);

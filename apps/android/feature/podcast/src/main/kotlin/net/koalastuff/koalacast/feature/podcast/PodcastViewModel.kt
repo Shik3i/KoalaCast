@@ -284,6 +284,14 @@ class PodcastViewModel @Inject constructor(
         saveSettings(_state.value.settings.copy(skipOutroSeconds = seconds.coerceIn(0, 600)))
     }
 
+    fun setVolumeBoost(enabled: Boolean?) {
+        saveSettings(_state.value.settings.copy(volumeBoost = enabled))
+    }
+
+    fun setSkipSilence(enabled: Boolean?) {
+        saveSettings(_state.value.settings.copy(skipSilence = enabled))
+    }
+
     fun toggleAutoQueue() {
         val current = _state.value.settings
         saveSettings(current.copy(autoQueueNew = !current.autoQueueNew))

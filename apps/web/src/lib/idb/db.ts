@@ -66,6 +66,17 @@ export interface LocalQueueItem {
 	categories?: string[];
 }
 
+const QUEUE_UPDATED_AT_KEY = 'queue_updated_at';
+
+async function touchQueue(db: IDBPDatabase<any>, updatedAt = Date.now()): Promise<void> {
+	await db.put('settings', { key: QUEUE_UPDATED_AT_KEY, value: updatedAt });
+}
+
+export async function getLocalQueueUpdatedAt(): Promise<number> {
+	const db = await getLocalDB();
+	return Math.max(0, Number((await db.get('settings', QUEUE_UPDATED_AT_KEY))?.value) || 0);
+}
+
 export interface LocalCurrentPlayback {
 	episode_id: string;
 	podcast_id: string;
@@ -96,6 +107,7 @@ export async function reorderLocalQueue(orderedIds: string[]): Promise<void> {
 		if (item) tx.store.put({ ...item, position_order: idx });
 	});
 	await tx.done;
+	await touchQueue(db);
 }
 
 export interface LocalFavorite {
@@ -452,6 +464,7 @@ export async function getLocalQueue(): Promise<LocalQueueItem[]> {
 export async function addToLocalQueue(item: LocalQueueItem): Promise<void> {
 	const db = await getLocalDB();
 	await db.put('queue', { ...item, categories: plainCategories(item.categories) });
+	await touchQueue(db);
 }
 
 export async function addToLocalQueueIfAbsent(item: LocalQueueItem): Promise<boolean> {
@@ -464,6 +477,7 @@ export async function addToLocalQueueIfAbsent(item: LocalQueueItem): Promise<boo
 	}
 	await tx.store.put({ ...item, categories: plainCategories(item.categories) });
 	await tx.done;
+	await touchQueue(db);
 	return true;
 }
 
@@ -475,16 +489,39 @@ export async function addManyToLocalQueue(items: LocalQueueItem[]): Promise<void
 		await tx.store.put({ ...item, categories: plainCategories(item.categories) });
 	}
 	await tx.done;
+	await touchQueue(db);
 }
 
 export async function removeFromLocalQueue(id: string): Promise<void> {
 	const db = await getLocalDB();
 	await db.delete('queue', id);
+	await touchQueue(db);
 }
 
 export async function clearLocalQueue(): Promise<void> {
 	const db = await getLocalDB();
 	await db.clear('queue');
+	await touchQueue(db);
+}
+
+export async function replaceLocalQueueFromSync(
+	items: LocalQueueItem[],
+	updatedAt: number
+): Promise<void> {
+	const db = await getLocalDB();
+	const currentUpdatedAt = await getLocalQueueUpdatedAt();
+	if (currentUpdatedAt >= updatedAt) return;
+	const tx = db.transaction(['queue', 'settings'], 'readwrite');
+	await tx.objectStore('queue').clear();
+	for (const item of items.slice(0, 500)) {
+		if (!item?.episode_id || !item.id) continue;
+		await tx.objectStore('queue').put({
+			...item,
+			categories: plainCategories(item.categories)
+		});
+	}
+	await tx.objectStore('settings').put({ key: QUEUE_UPDATED_AT_KEY, value: updatedAt });
+	await tx.done;
 }
 
 const CURRENT_PLAYBACK_KEY = 'current_playback';

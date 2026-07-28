@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.Track
 import org.junit.After
@@ -28,9 +29,13 @@ class QueueRepositoryTest {
             KoalaCastDatabase::class.java,
         ).allowMainThreadQueries().build()
 
-        repository = QueueRepository(db.queueDao(), object : Clock {
-            override fun nowMs() = 1_700_000_000_000L
-        })
+        repository = QueueRepository(
+            db.queueDao(),
+            object : Clock {
+                override fun nowMs() = 1_700_000_000_000L
+            },
+            SecureAccountStore(ApplicationProvider.getApplicationContext()),
+        )
     }
 
     @After

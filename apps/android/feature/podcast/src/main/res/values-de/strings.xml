@@ -24,6 +24,13 @@
     <string name="podcast_speed_default">Standard</string>
     <string name="podcast_skip_intro">Intro überspringen</string>
     <string name="podcast_skip_outro">Outro überspringen</string>
+    <string name="podcast_audio_processing">Audioverarbeitung für diese Sendung</string>
+    <string name="podcast_audio_default">Boost: Standard</string>
+    <string name="podcast_volume_boost_on">Boost: an</string>
+    <string name="podcast_volume_boost_off">Boost: aus</string>
+    <string name="podcast_silence_default">Stille: Standard</string>
+    <string name="podcast_silence_on">Stille: überspringen</string>
+    <string name="podcast_silence_off">Stille: behalten</string>
     <string name="podcast_skip_seconds">0 Sekunden</string>
     <string name="podcast_auto_queue">Neueste ungehörte Folge automatisch einreihen</string>
     <string name="podcast_mark_all_played">Alle als gehört</string>

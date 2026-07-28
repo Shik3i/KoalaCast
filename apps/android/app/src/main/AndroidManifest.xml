@@ -30,6 +30,10 @@
         android:theme="@style/Theme.KoalaCast"
         tools:targetApi="33">
 
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
@@ -43,17 +47,19 @@
         </activity>
 
         <!--
-          The media session owns the notification, the lock screen, Bluetooth
-          buttons and (later) Android Auto. Not exported: only this app binds it.
+          The media session owns the notification, lock screen, Bluetooth
+          buttons and Android Auto. Exported so trusted system media browsers can
+          discover it; Media3 validates controller access.
         -->
         <service
             android:name="net.koalastuff.koalacast.core.player.PlaybackService"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
                 <!-- Legacy browse action: what Android Auto and Wear OS look for. -->
                 <action android:name="android.media.browse.MediaBrowserService" />
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
             </intent-filter>
         </service>
 

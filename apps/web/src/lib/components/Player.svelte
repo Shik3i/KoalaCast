@@ -16,7 +16,11 @@
 	import ShortcutsModal from './ShortcutsModal.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
-	import { getPodcastPlaybackSettings, type PodcastPlaybackSettings } from '$lib/stores/podcast-settings';
+	import {
+		getPodcastPlaybackSettings,
+		savePodcastPlaybackSettings,
+		type PodcastPlaybackSettings
+	} from '$lib/stores/podcast-settings';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 	import { parsePlaybackSpeed } from '$lib/player/playback-speed';
@@ -39,7 +43,9 @@
 	let lastToken = 0;
 	let activeSession: LocalListeningSession | null = null;
 	let lastListeningSampleAt = 0;
-	let trackSettings: PodcastPlaybackSettings = getPodcastPlaybackSettings('');
+	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
+	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
+	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
 	let pendingIntroOutroSkippedMs = 0;
 	let outroHandled = false;
 
@@ -47,13 +53,20 @@
 
 	const silenceGate = new SilenceGate();
 	let silenceTimer: ReturnType<typeof setInterval> | null = null;
-	let activeTab = $state<'player' | 'chapters' | 'transcript'>('player');
-
 	let chapters = $state<any[]>([]);
 	let transcriptCues = $state<any[]>([]);
+	let transcriptQuery = $state('');
 	let loadingChapters = $state(false);
 	let loadingTranscript = $state(false);
 	let showChaptersDrawer = $state(false);
+	let showTranscriptDrawer = $state(false);
+	const filteredTranscriptCues = $derived(
+		transcriptQuery.trim()
+			? transcriptCues.filter((cue) =>
+					String(cue.text || '').toLowerCase().includes(transcriptQuery.trim().toLowerCase())
+				)
+			: transcriptCues
+	);
 
 	let lastFetchedTrack = '';
 	let chaptersGeneration = 0;
@@ -63,6 +76,7 @@
 		const controller = new AbortController();
 		if (!currentTrack) {
 			chapters = [];
+			transcriptCues = [];
 			return () => controller.abort();
 		}
 		if (currentTrack.episode_id === lastFetchedTrack) return () => controller.abort();
@@ -76,6 +90,12 @@
 					fetchChapters(epData.chapters_url, currentTrack.episode_id, generation, controller.signal);
 				} else {
 					chapters = [];
+				}
+				const transcriptUrl = epData?.transcripts?.[0]?.url;
+				if (transcriptUrl) {
+					fetchTranscript(transcriptUrl, currentTrack.episode_id, generation, controller.signal);
+				} else {
+					transcriptCues = [];
 				}
 			})
 			.catch((error) => {
@@ -134,18 +154,50 @@
 
 	function toggleVolumeBoost() {
 		if (audioEl) audioEngine.init(audioEl);
-		prefs.setVolumeBoost(!prefs.volumeBoost);
-		audioEngine.setVolumeBoost(prefs.volumeBoost);
-		toast.success(t(prefs.volumeBoost ? 'player.boostEnabled' : 'player.boostDisabled'));
+		const enabled = !effectiveVolumeBoost;
+		if (track?.podcast_id && trackSettings.volumeBoost !== null) {
+			trackSettings = { ...trackSettings, volumeBoost: enabled, updatedAt: Date.now() };
+			savePodcastPlaybackSettings(track.podcast_id, trackSettings);
+		} else {
+			prefs.setVolumeBoost(enabled);
+		}
+		audioEngine.setVolumeBoost(enabled);
+		toast.success(t(enabled ? 'player.boostEnabled' : 'player.boostDisabled'));
+	}
+
+	async function fetchTranscript(
+		url: string,
+		episodeId: string,
+		generation: number,
+		signal: AbortSignal
+	) {
+		loadingTranscript = true;
+		transcriptQuery = '';
+		try {
+			const res = await fetch(`/api/v1/proxy/transcript?url=${encodeURIComponent(url)}`, { signal });
+			if (generation !== chaptersGeneration || track?.episode_id !== episodeId) return;
+			const data = res.ok ? await res.json() : null;
+			transcriptCues = Array.isArray(data?.cues) ? data.cues : [];
+		} catch (error: any) {
+			if (error?.name !== 'AbortError' && generation === chaptersGeneration) transcriptCues = [];
+		} finally {
+			if (generation === chaptersGeneration) loadingTranscript = false;
+		}
 	}
 
 	function toggleSkipSilence() {
 		if (audioEl) audioEngine.init(audioEl);
-		prefs.setSkipSilence(!prefs.skipSilence);
-		audioEngine.skipSilence = prefs.skipSilence;
-		if (!prefs.skipSilence) resetSilenceTrimming();
+		const enabled = !effectiveSkipSilence;
+		if (track?.podcast_id && trackSettings.skipSilence !== null) {
+			trackSettings = { ...trackSettings, skipSilence: enabled, updatedAt: Date.now() };
+			savePodcastPlaybackSettings(track.podcast_id, trackSettings);
+		} else {
+			prefs.setSkipSilence(enabled);
+		}
+		audioEngine.skipSilence = enabled;
+		if (!enabled) resetSilenceTrimming();
 		audioEngine.resume();
-		toast.success(t(prefs.skipSilence ? 'player.skipSilenceEnabled' : 'player.skipSilenceDisabled'));
+		toast.success(t(enabled ? 'player.skipSilenceEnabled' : 'player.skipSilenceDisabled'));
 	}
 
 	function resetSilenceTrimming() {
@@ -156,7 +208,7 @@
 	}
 
 	function sampleSilence() {
-		if (!audioEl || !prefs.skipSilence || !isPlaying) {
+		if (!audioEl || !effectiveSkipSilence || !isPlaying) {
 			resetSilenceTrimming();
 			return;
 		}
@@ -173,8 +225,8 @@
 	// Settings can change while the persistent player keeps playing on another
 	// route. Apply them immediately instead of waiting for the next play event.
 	$effect(() => {
-		const boost = prefs.volumeBoost;
-		const trimSilence = prefs.skipSilence;
+		const boost = effectiveVolumeBoost;
+		const trimSilence = effectiveSkipSilence;
 		audioEngine.skipSilence = trimSilence;
 		if (audioEl && (boost || trimSilence)) audioEngine.init(audioEl);
 		audioEngine.setVolumeBoost(boost);
@@ -644,8 +696,8 @@
 	preload="metadata"
 	onplay={() => {
 		if (audioEl) audioEngine.init(audioEl);
-		audioEngine.skipSilence = prefs.skipSilence;
-		audioEngine.setVolumeBoost(prefs.volumeBoost);
+		audioEngine.skipSilence = effectiveSkipSilence;
+		audioEngine.setVolumeBoost(effectiveVolumeBoost);
 		audioEngine.resume();
 		isPlaying = true;
 		player.isPlaying = true;
@@ -863,10 +915,10 @@
 					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? t('player.removeFavorite') : t('player.addFavorite')} title={isFav ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-pill-btn" class:active={prefs.volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
+					<button class="np-pill-btn" class:active={effectiveVolumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
 						<i class="ph ph-speaker-high" aria-hidden="true"></i> {t('player.boost')}
 					</button>
-					<button class="np-pill-btn" class:active={prefs.skipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
+					<button class="np-pill-btn" class:active={effectiveSkipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
 						<i class="ph ph-waveform" aria-hidden="true"></i> {t('player.trimSilence')}
 					</button>
 					<div class="speed-selector">
@@ -892,6 +944,11 @@
 					{#if chapters.length > 0}
 						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')} title={t('player.toggleChapters')}>
 								<i class="ph ph-list-numbers" aria-hidden="true"></i> {t('player.chaptersCount', { count: chapters.length })}
+						</button>
+					{/if}
+					{#if transcriptCues.length > 0 || loadingTranscript}
+						<button class="np-pill-btn" class:active={showTranscriptDrawer} onclick={() => (showTranscriptDrawer = !showTranscriptDrawer)} aria-label={t('episode.transcript')} title={t('episode.transcript')}>
+							<i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}
 						</button>
 					{/if}
 					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
@@ -929,6 +986,34 @@
 								</button>
 							{/each}
 						</div>
+					</div>
+				{/if}
+
+				{#if showTranscriptDrawer}
+					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
+						<div class="drawer-header">
+							<h4><i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}</h4>
+							<button class="close-drawer" onclick={() => (showTranscriptDrawer = false)} aria-label={t('player.closeFullscreen')} title={t('player.closeFullscreen')}>
+								<i class="ph ph-x" aria-hidden="true"></i>
+							</button>
+						</div>
+						{#if loadingTranscript}
+							<p>{t('episode.loadingTranscript')}</p>
+						{:else}
+							<label class="np-transcript-search">
+								<span class="sr-only">{t('episode.searchTranscript')}</span>
+								<input type="search" bind:value={transcriptQuery} placeholder={t('episode.searchTranscript')} />
+								<small>{t('episode.transcriptMatches', { count: filteredTranscriptCues.length })}</small>
+							</label>
+							<div class="chapters-list">
+								{#each filteredTranscriptCues as cue}
+									<button class="chapter-row" onclick={() => seekTo(Number(cue.start || 0) * 1000)}>
+										<span class="ch-time">{formatTime(Number(cue.start || 0) * 1000)}</span>
+										<span class="ch-title">{cue.text}</span>
+									</button>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{/if}
 
@@ -1556,6 +1641,23 @@
 		overflow-y: auto;
 		max-height: 210px;
 		padding-right: 0.3rem;
+	}
+
+	.np-transcript-search {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: .75rem;
+		margin: .75rem 0;
+	}
+
+	.np-transcript-search input {
+		min-width: 0;
+		padding: .7rem .85rem;
+		border: 1px solid var(--border-strong);
+		border-radius: .6rem;
+		background: var(--bg-panel);
+		color: var(--ink-strong);
 	}
 	.chapter-row {
 		display: flex;

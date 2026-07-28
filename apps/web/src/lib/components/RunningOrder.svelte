@@ -129,7 +129,7 @@
 				</button>
 				<span class="queue-number">{index + 1}.</span>
 				<div>
-					<strong title={item.title}>{item.title}</strong>
+					<button class="play-now" onclick={() => player.playFromQueue(item)} title={item.title}>{item.title}</button>
 					<span title={item.podcast_title}>{item.podcast_title} · {t('quiet.queue.ends')} {finishTime(index)}</span>
 				</div>
 				<span>{duration((item.duration_ms || 0) / player.playbackSpeed)}</span>
@@ -159,3 +159,22 @@
 		</footer>
 	{/if}
 </aside>
+
+<style>
+	.play-now {
+		display: block;
+		max-width: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		font-weight: 700;
+		text-align: left;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.play-now:hover { text-decoration: underline; }
+</style>

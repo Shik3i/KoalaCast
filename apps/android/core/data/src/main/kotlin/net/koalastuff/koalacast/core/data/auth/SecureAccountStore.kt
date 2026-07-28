@@ -93,6 +93,12 @@ class SecureAccountStore @Inject constructor(
         prefs.edit { putLong("push_watermark_$userId", timestamp.coerceAtLeast(0)) }
     }
 
+    fun queueUpdatedAt(): Long = prefs.getLong(KEY_QUEUE_UPDATED_AT, 0)
+
+    fun markQueueUpdated(timestamp: Long = System.currentTimeMillis()) {
+        prefs.edit { putLong(KEY_QUEUE_UPDATED_AT, timestamp.coerceAtLeast(0)) }
+    }
+
     private fun readAccount(): Account? {
         val userId = prefs.getString(KEY_USER_ID, null) ?: return null
         return Account(
@@ -151,5 +157,6 @@ class SecureAccountStore @Inject constructor(
         const val KEY_ROLE = "role"
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_TOKEN = "device_token"
+        const val KEY_QUEUE_UPDATED_AT = "queue_updated_at"
     }
 }

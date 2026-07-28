@@ -21,6 +21,7 @@ const UI_LANGUAGE_KEY = 'koalacast_ui_language';
 const ONBOARDED_KEY = 'koalacast_onboarded';
 const VOLUME_BOOST_KEY = 'koalacast_volume_boost';
 const SKIP_SILENCE_KEY = 'koalacast_skip_silence';
+const SETTINGS_UPDATED_AT_KEY = 'koalacast_settings_updated_at';
 
 function initialBoolean(key: string): boolean {
 	if (typeof localStorage === 'undefined') return false;
@@ -103,6 +104,18 @@ class Prefs {
 	onboarded = $state<boolean>(initialOnboarded());
 	volumeBoost = $state<boolean>(initialBoolean(VOLUME_BOOST_KEY));
 	skipSilence = $state<boolean>(initialBoolean(SKIP_SILENCE_KEY));
+	updatedAt = $state<number>(
+		typeof localStorage === 'undefined'
+			? 0
+			: Math.max(0, Number(localStorage.getItem(SETTINGS_UPDATED_AT_KEY)) || 0)
+	);
+
+	#touch() {
+		this.updatedAt = Date.now();
+		try {
+			localStorage.setItem(SETTINGS_UPDATED_AT_KEY, String(this.updatedAt));
+		} catch (_) {}
+	}
 
 	// iTunes storefronts to pull charts from, one per selected language.
 	// Deduplicated because several languages can share a storefront.
@@ -124,6 +137,7 @@ class Prefs {
 		}
 		this.languages = has ? this.languages.filter((l) => l !== langCode) : [...this.languages, langCode];
 		this.#persistLanguages();
+		this.#touch();
 	}
 
 	setUILanguage(locale: string) {
@@ -131,6 +145,7 @@ class Prefs {
 		try {
 			localStorage.setItem(UI_LANGUAGE_KEY, locale);
 		} catch (_) {}
+		this.#touch();
 	}
 
 	setDateFormat(mode: DateFormat) {
@@ -138,6 +153,7 @@ class Prefs {
 		try {
 			localStorage.setItem(KEY, mode);
 		} catch (_) {}
+		this.#touch();
 	}
 
 	setVolumeBoost(enabled: boolean) {
@@ -145,6 +161,7 @@ class Prefs {
 		try {
 			localStorage.setItem(VOLUME_BOOST_KEY, enabled ? '1' : '0');
 		} catch (_) {}
+		this.#touch();
 	}
 
 	setSkipSilence(enabled: boolean) {
@@ -152,6 +169,7 @@ class Prefs {
 		try {
 			localStorage.setItem(SKIP_SILENCE_KEY, enabled ? '1' : '0');
 		} catch (_) {}
+		this.#touch();
 	}
 
 	#persistInterests() {
@@ -169,6 +187,7 @@ class Prefs {
 			this.#persistHidden();
 		}
 		this.#persistInterests();
+		this.#touch();
 	}
 
 	#persistHidden() {
@@ -186,6 +205,60 @@ class Prefs {
 			this.#persistInterests();
 		}
 		this.#persistHidden();
+		this.#touch();
+	}
+
+	syncPayload() {
+		return {
+			date_format: this.dateFormat,
+			interests: [...this.interests],
+			hidden_genres: [...this.hiddenGenres],
+			languages: [...this.languages],
+			ui_language: this.uiLanguage,
+			volume_boost: this.volumeBoost,
+			skip_silence: this.skipSilence,
+			updated_at: this.updatedAt
+		};
+	}
+
+	applySynced(payload: Record<string, unknown>) {
+		const updatedAt = Math.max(0, Number(payload.updated_at) || 0);
+		if (!updatedAt || this.updatedAt >= updatedAt) return;
+		const languages = normalizeLanguageList(Array.isArray(payload.languages) ? payload.languages : []);
+		if (payload.date_format === 'relative' || payload.date_format === 'absolute') {
+			this.dateFormat = payload.date_format;
+		}
+		this.languages = languages.length ? languages : this.languages;
+		if (Array.isArray(payload.interests)) {
+			this.interests = payload.interests.filter(
+				(value): value is string => typeof value === 'string'
+			);
+		}
+		if (Array.isArray(payload.hidden_genres)) {
+			this.hiddenGenres = payload.hidden_genres.filter(
+				(value): value is string => typeof value === 'string'
+			);
+		}
+		if (typeof payload.ui_language === 'string' && isSupportedLocale(payload.ui_language)) {
+			this.uiLanguage = payload.ui_language;
+		}
+		if (typeof payload.volume_boost === 'boolean') {
+			this.volumeBoost = payload.volume_boost;
+		}
+		if (typeof payload.skip_silence === 'boolean') {
+			this.skipSilence = payload.skip_silence;
+		}
+		this.updatedAt = updatedAt;
+		try {
+			localStorage.setItem(KEY, this.dateFormat);
+			localStorage.setItem(LANGUAGES_KEY, JSON.stringify(this.languages));
+			localStorage.setItem(INTERESTS_KEY, JSON.stringify(this.interests));
+			localStorage.setItem(HIDDEN_KEY, JSON.stringify(this.hiddenGenres));
+			localStorage.setItem(UI_LANGUAGE_KEY, this.uiLanguage);
+			localStorage.setItem(VOLUME_BOOST_KEY, this.volumeBoost ? '1' : '0');
+			localStorage.setItem(SKIP_SILENCE_KEY, this.skipSilence ? '1' : '0');
+			localStorage.setItem(SETTINGS_UPDATED_AT_KEY, String(this.updatedAt));
+		} catch (_) {}
 	}
 
 	// True if a podcast's categories intersect the hidden set.

@@ -2,6 +2,7 @@ package net.koalastuff.koalacast.core.data.repository
 
 import android.content.Context
 import androidx.room.Room
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
@@ -11,6 +12,7 @@ import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
 import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
@@ -26,6 +28,7 @@ import org.robolectric.RobolectricTestRunner
 import retrofit2.Response
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 class SyncRepositoryTest {
@@ -48,6 +51,7 @@ class SyncRepositoryTest {
             arrayOf(KoalaCastApi::class.java),
         ) { _, method, args -> apiHandler(method, args) } as KoalaCastApi
         store = SecureAccountStore(context)
+        val preferencesFile = File(context.cacheDir, "sync-test-${System.nanoTime()}.preferences_pb")
         repository = SyncRepository(
             api = api,
             store = store,
@@ -58,6 +62,11 @@ class SyncRepositoryTest {
             playbackStates = database.playbackStateDao(),
             listeningSessions = database.listeningSessionDao(),
             tombstones = database.tombstoneDao(),
+            queue = database.queueDao(),
+            podcastSettings = database.podcastSettingsDao(),
+            preferences = PreferencesRepository(
+                PreferenceDataStoreFactory.create { preferencesFile },
+            ),
         )
     }
 

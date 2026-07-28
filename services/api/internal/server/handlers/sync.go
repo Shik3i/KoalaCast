@@ -400,6 +400,22 @@ func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	queueItems, err := latestSyncPayloads(tx, r.Context(), authUser.ID, "queue")
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+	podcastSettings, err := latestSyncPayloads(tx, r.Context(), authUser.ID, "podcast_settings")
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+	settings, err := latestSyncPayloads(tx, r.Context(), authUser.ID, "settings")
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		http.Error(w, `{"error":"failed to complete snapshot"}`, http.StatusInternalServerError)
 		return
@@ -408,8 +424,50 @@ func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"cursor": cursor, "subscriptions": subscriptions, "favorites": favorites,
 		"playback_states": playbackStates, "listening_sessions": listeningSessions,
-		"podcast_settings": []any{},
+		"queue": queueItems, "podcast_settings": podcastSettings, "settings": settings,
 	})
+}
+
+// Queue and preference records deliberately live in the append-only sync log.
+// They contain denormalized client data and do not need relational server-side
+// queries; the newest non-deleted payload per entity is the compact snapshot.
+func latestSyncPayloads(
+	tx *sql.Tx,
+	ctx context.Context,
+	userID, entityType string,
+) ([]any, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT current.payload_json
+		FROM sync_log current
+		WHERE current.user_id = ? AND current.entity_type = ?
+		  AND current.server_cursor = (
+			  SELECT MAX(candidate.server_cursor)
+			  FROM sync_log candidate
+			  WHERE candidate.user_id = current.user_id
+			    AND candidate.entity_type = current.entity_type
+			    AND candidate.entity_id = current.entity_id
+		  )
+		  AND current.action != 'delete'
+		ORDER BY current.entity_id
+	`, userID, entityType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]any, 0)
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var payload any
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			return nil, err
+		}
+		result = append(result, payload)
+	}
+	return result, rows.Err()
 }
 
 func episodeSnapshotRecord(
@@ -630,8 +688,52 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		if err := validateListeningSession(p); err != nil {
 			return err
 		}
+	case "queue":
+		if op.Action != "upsert" || op.EntityID != "main" {
+			return fmt.Errorf("queue must upsert entity main")
+		}
+		var payload struct {
+			Items     []json.RawMessage `json:"items"`
+			UpdatedAt int64             `json:"updated_at"`
+		}
+		if err := json.Unmarshal(op.Payload, &payload); err != nil ||
+			payload.UpdatedAt <= 0 || len(payload.Items) > 500 {
+			return fmt.Errorf("invalid queue payload")
+		}
+	case "settings":
+		if op.Action != "upsert" || op.EntityID != "global" {
+			return fmt.Errorf("settings must upsert entity global")
+		}
+		if err := validateObjectPayload(op.Payload, op.ClientTimestamp); err != nil {
+			return fmt.Errorf("invalid settings payload")
+		}
+	case "podcast_settings":
+		if op.Action != "upsert" && op.Action != "delete" {
+			return fmt.Errorf("podcast_settings action must be upsert or delete")
+		}
+		if op.Action == "upsert" {
+			var payload struct {
+				PodcastID string `json:"podcast_id"`
+				UpdatedAt int64  `json:"updated_at"`
+			}
+			if err := json.Unmarshal(op.Payload, &payload); err != nil ||
+				payload.PodcastID != op.EntityID || payload.UpdatedAt <= 0 {
+				return fmt.Errorf("invalid podcast_settings payload")
+			}
+		}
 	default:
 		return fmt.Errorf("unsupported entity_type %q", op.EntityType)
+	}
+	return nil
+}
+
+func validateObjectPayload(payload json.RawMessage, timestamp int64) error {
+	if timestamp <= 0 {
+		return fmt.Errorf("timestamp must be positive")
+	}
+	var object map[string]any
+	if err := json.Unmarshal(payload, &object); err != nil || object == nil {
+		return fmt.Errorf("payload must be an object")
 	}
 	return nil
 }
@@ -671,6 +773,10 @@ func (h *SyncHandler) applyOperation(ctx context.Context, tx *sql.Tx, userID str
 		return h.applySubscription(ctx, tx, userID, op, syncVer, nowMs)
 	case "favorite":
 		return h.applyFavorite(ctx, tx, userID, op, syncVer, nowMs)
+	case "queue", "settings", "podcast_settings":
+		// The append-only sync_log written by Push is the materialized record for
+		// these denormalized entities; no second table is required.
+		return nil
 	default:
 		return fmt.Errorf("unsupported entity type")
 	}

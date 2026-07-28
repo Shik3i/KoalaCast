@@ -23,6 +23,7 @@ import net.koalastuff.koalacast.core.data.db.MIGRATION_3_4
 import net.koalastuff.koalacast.core.data.db.MIGRATION_4_5
 import net.koalastuff.koalacast.core.data.db.MIGRATION_5_6
 import net.koalastuff.koalacast.core.data.db.MIGRATION_6_7
+import net.koalastuff.koalacast.core.data.db.MIGRATION_7_8
 import net.koalastuff.koalacast.core.data.db.ContentCacheDao
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.data.util.SystemClock
@@ -46,6 +47,7 @@ object DatabaseModule {
                 MIGRATION_4_5,
                 MIGRATION_5_6,
                 MIGRATION_6_7,
+                MIGRATION_7_8,
             )
             .build()
 

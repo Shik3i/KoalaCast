@@ -15,6 +15,8 @@ import {
 	getAllLocalPlaybackStates,
 	getLocalListeningSessions,
 	getLocalListeningSession,
+	getLocalQueue,
+	getLocalQueueUpdatedAt,
 	getTombstones,
 	getLocalPlaybackState,
 	saveLocalSubscription,
@@ -23,12 +25,19 @@ import {
 	addLocalFavorite,
 	removeLocalSubscriptionSilent,
 	removeLocalFavoriteSilent,
+	replaceLocalQueueFromSync,
 	replaceLocalSyncSnapshot,
 	type LocalSubscription,
 	type LocalFavorite,
 	type LocalPlaybackState,
 	type LocalListeningSession
 } from '$lib/idb/db';
+import {
+	applySyncedPodcastPlaybackSettings,
+	getAllPodcastPlaybackSettings,
+	type PodcastPlaybackSettings
+} from '$lib/stores/podcast-settings';
+import { prefs } from '$lib/stores/prefs.svelte';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
 
@@ -38,7 +47,14 @@ const INTERVAL_MS = 45_000;
 interface SyncOperation {
 	client_op_id: string;
 	device_id: string;
-	entity_type: 'subscription' | 'favorite' | 'playback_state' | 'listening_session';
+	entity_type:
+		| 'subscription'
+		| 'favorite'
+		| 'playback_state'
+		| 'listening_session'
+		| 'queue'
+		| 'podcast_settings'
+		| 'settings';
 	action: 'upsert' | 'delete';
 	entity_id: string;
 	payload: unknown;
@@ -254,6 +270,15 @@ class SyncStore {
 		this.#assertRun(userId, generation, signal);
 		if (!Number.isFinite(snapshot.cursor)) throw new Error('sync snapshot missing cursor');
 		await replaceLocalSyncSnapshot(snapshot);
+		for (const payload of snapshot.queue || []) {
+			await applyQueuePayload(payload);
+		}
+		for (const payload of snapshot.podcast_settings || []) {
+			applyPodcastSettingsPayload(payload);
+		}
+		for (const payload of snapshot.settings || []) {
+			applySettingsPayload(payload);
+		}
 		this.#assertRun(userId, generation, signal);
 		const cursor = Number(snapshot.cursor);
 		this.#setCursor(userId, cursor);
@@ -336,6 +361,45 @@ class SyncStore {
 			});
 		}
 
+		const queueUpdatedAt = await getLocalQueueUpdatedAt();
+		if (queueUpdatedAt > previousWatermark) {
+			ops.push({
+				client_op_id: `q:main:${queueUpdatedAt}`,
+				device_id: dev,
+				entity_type: 'queue',
+				action: 'upsert',
+				entity_id: 'main',
+				payload: { items: await getLocalQueue(), updated_at: queueUpdatedAt },
+				client_timestamp: queueUpdatedAt
+			});
+		}
+
+		if (prefs.updatedAt > previousWatermark) {
+			ops.push({
+				client_op_id: `g:global:${prefs.updatedAt}`,
+				device_id: dev,
+				entity_type: 'settings',
+				action: 'upsert',
+				entity_id: 'global',
+				payload: prefs.syncPayload(),
+				client_timestamp: prefs.updatedAt
+			});
+		}
+
+		for (const setting of getAllPodcastPlaybackSettings()) {
+			if (setting.updatedAt <= previousWatermark) continue;
+			const { podcastId, ...payload } = setting;
+			ops.push({
+				client_op_id: `ps:${podcastId}:${setting.updatedAt}`,
+				device_id: dev,
+				entity_type: 'podcast_settings',
+				action: 'upsert',
+				entity_id: podcastId,
+				payload: { podcast_id: podcastId, ...payload, updated_at: setting.updatedAt },
+				client_timestamp: setting.updatedAt
+			});
+		}
+
 		const tombstones = await getTombstones();
 		for (const t of tombstones) {
 			if (t.entity_type !== 'subscription' && t.entity_type !== 'favorite') continue;
@@ -387,7 +451,15 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 		!Number.isFinite(cs.server_cursor) ||
 		!cs.entity_id ||
 		!['upsert', 'delete'].includes(cs.action) ||
-		!['subscription', 'favorite', 'playback_state', 'listening_session'].includes(cs.entity_type)
+		![
+			'subscription',
+			'favorite',
+			'playback_state',
+			'listening_session',
+			'queue',
+			'podcast_settings',
+			'settings'
+		].includes(cs.entity_type)
 	) {
 		throw new Error('invalid sync changeset');
 	}
@@ -476,7 +548,46 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 			intro_outro_skipped_ms: Math.max(0, p.intro_outro_skipped_ms || 0),
 			speed_weighted_ms: Math.max(0, p.speed_weighted_ms || 0)
 		});
+	} else if (cs.entity_type === 'queue') {
+		if (!isDelete) await applyQueuePayload(cs.payload);
+	} else if (cs.entity_type === 'podcast_settings') {
+		if (!isDelete) applyPodcastSettingsPayload(cs.payload, cs.entity_id);
+	} else if (cs.entity_type === 'settings') {
+		if (!isDelete) applySettingsPayload(cs.payload);
 	}
+}
+
+async function applyQueuePayload(payload: any) {
+	if (!payload || !Array.isArray(payload.items) || !Number.isFinite(payload.updated_at)) {
+		throw new Error('invalid queue changeset payload');
+	}
+	await replaceLocalQueueFromSync(payload.items, Number(payload.updated_at));
+}
+
+function applyPodcastSettingsPayload(payload: any, fallbackPodcastId = '') {
+	if (!payload || typeof payload !== 'object' || !Number.isFinite(payload.updated_at)) {
+		throw new Error('invalid podcast settings changeset payload');
+	}
+	const podcastId = String(payload.podcast_id || fallbackPodcastId);
+	if (!podcastId) throw new Error('podcast settings changeset missing podcast id');
+	applySyncedPodcastPlaybackSettings(podcastId, {
+		...(payload as Partial<PodcastPlaybackSettings>),
+		skipIntroSeconds: payload.skip_intro_seconds ?? payload.skipIntroSeconds,
+		skipOutroSeconds: payload.skip_outro_seconds ?? payload.skipOutroSeconds,
+		volumeBoost: payload.volume_boost ?? payload.volumeBoost,
+		skipSilence: payload.skip_silence ?? payload.skipSilence,
+		autoQueueNew: payload.auto_queue_new ?? payload.autoQueueNew,
+		autoDownload: payload.auto_download ?? payload.autoDownload,
+		notifyNewEpisodes: payload.notify_new_episodes ?? payload.notifyNewEpisodes,
+		updatedAt: Number(payload.updated_at)
+	});
+}
+
+function applySettingsPayload(payload: any) {
+	if (!payload || typeof payload !== 'object' || !Number.isFinite(payload.updated_at)) {
+		throw new Error('invalid settings changeset payload');
+	}
+	prefs.applySynced(payload);
 }
 
 export const sync = new SyncStore();

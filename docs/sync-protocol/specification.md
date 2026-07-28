@@ -25,8 +25,13 @@ end-to-end encrypted.
 - `favorite`
 - `playback_state`
 - `listening_session`
+- `queue`
+- `podcast_settings`
+- `settings`
 
-The web client pushes and applies those same four types. Listening sessions
+The web and Android clients push and apply those types. Queue and portable
+settings use last-writer-wins whole-object payloads; device-specific server URLs,
+credentials, onboarding state, and storage paths remain local. Listening sessions
 contain the aggregates needed for private and separately opt-in global
 statistics.
 
@@ -47,16 +52,11 @@ Playback events carry `event_type`, `episode_id`, `position_ms`,
 The background worker compacts old sync-log entries. A pull older than the
 retained cursor returns `410 Gone` and `FULL_RESYNC_REQUIRED`.
 
-## Known protocol gaps
+### Snapshot recovery and pagination
 
-The following are designs or schema foundations, not shipped sync behavior:
-
-- a full snapshot endpoint after `FULL_RESYNC_REQUIRED`;
-- lossless pagination when more than the pull limit is pending;
-- server materialization and replay for queue operations;
-- server materialization and replay for per-podcast settings;
-- a complete local-to-account merge covering those pending entity types.
-
-The requested wire contracts and acceptance criteria are maintained in
-[`api_todo.md`](../../api_todo.md). Do not describe those items as implemented
-until handler code, OpenAPI definitions, and client tests land together.
+- Pull responses expose `has_more` and a non-regressing `next_cursor`.
+- Clients keep pulling until the page is exhausted.
+- After `FULL_RESYNC_REQUIRED`, clients replace synchronized collections from
+  `GET /api/v1/sync/snapshot` and resume incrementally from its cursor.
+- Queue, podcast settings, and global settings are reconstructed from the latest
+  non-deleted payload per entity in the append-only sync log.

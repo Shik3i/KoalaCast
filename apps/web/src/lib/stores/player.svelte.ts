@@ -157,6 +157,25 @@ class PlayerStore {
 		await this.loadQueue();
 	}
 
+	async playNextAfterCurrent(track: CurrentTrack) {
+		const items = await getLocalQueue();
+		const firstPosition = items[0]?.position_order ?? Date.now();
+		await addToLocalQueueIfAbsent({
+			id: crypto.randomUUID(),
+			episode_id: track.episode_id,
+			podcast_id: track.podcast_id,
+			title: track.title,
+			podcast_title: track.podcast_title,
+			artwork_url: track.artwork_url,
+			enclosure_url: track.enclosure_url,
+			duration_ms: track.duration_ms,
+			categories: track.categories,
+			position_order: firstPosition - 1,
+			added_at: Date.now()
+		});
+		await this.loadQueue();
+	}
+
 	async addManyToQueue(tracks: CurrentTrack[]) {
 		const existing = new Set((await getLocalQueue()).map((item) => item.episode_id));
 		const now = Date.now();

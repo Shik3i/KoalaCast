@@ -24,6 +24,13 @@
     <string name="podcast_speed_default">Default</string>
     <string name="podcast_skip_intro">Skip intro</string>
     <string name="podcast_skip_outro">Skip outro</string>
+    <string name="podcast_audio_processing">Audio processing for this show</string>
+    <string name="podcast_audio_default">Boost: default</string>
+    <string name="podcast_volume_boost_on">Boost: on</string>
+    <string name="podcast_volume_boost_off">Boost: off</string>
+    <string name="podcast_silence_default">Silence: default</string>
+    <string name="podcast_silence_on">Silence: skip</string>
+    <string name="podcast_silence_off">Silence: keep</string>
     <string name="podcast_skip_seconds">0 seconds</string>
     <string name="podcast_auto_queue">Automatically queue the newest unplayed episode</string>
     <string name="podcast_mark_all_played">Mark all played</string>

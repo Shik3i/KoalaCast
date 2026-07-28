@@ -1683,7 +1683,7 @@ components:
 
     SyncEntityType:
       type: string
-      enum: [subscription, favorite, playback_state, listening_session]
+      enum: [subscription, favorite, playback_state, listening_session, queue, podcast_settings, settings]
 
     SyncAction:
       type: string
@@ -1710,7 +1710,8 @@ components:
         payload:
           description: |
             Full entity payload. playback_state and listening_session require their
-            corresponding payload schema; subscription/favorite deletes use an empty object.
+            corresponding payload schema. Queue, podcast settings, and global settings
+            use versioned JSON objects; subscription/favorite deletes use an empty object.
           oneOf:
             - $ref: '#/components/schemas/SubscriptionSyncPayload'
             - $ref: '#/components/schemas/FavoriteSyncPayload'
@@ -2060,7 +2061,7 @@ components:
 
     SyncSnapshot:
       type: object
-      required: [cursor, subscriptions, favorites, playback_states, listening_sessions, podcast_settings]
+      required: [cursor, subscriptions, favorites, playback_states, listening_sessions, queue, podcast_settings, settings]
       additionalProperties: false
       properties:
         cursor:
@@ -2083,9 +2084,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SnapshotListeningSession'
+        queue:
+          type: array
+          description: Latest whole-queue payload; empty before a queue has been synced.
+          items:
+            type: object
+            additionalProperties: true
         podcast_settings:
           type: array
-          description: Reserved for the podcast-settings sync contract; currently empty.
+          description: Latest non-deleted per-podcast setting payloads.
+          items:
+            type: object
+            additionalProperties: true
+        settings:
+          type: array
+          description: Latest portable global settings payload; device-local paths and credentials are excluded.
           items:
             type: object
             additionalProperties: true

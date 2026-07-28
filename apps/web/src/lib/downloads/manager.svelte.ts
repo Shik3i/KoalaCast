@@ -30,6 +30,7 @@ export interface DownloadRequest {
 }
 
 const STORAGE_KEY = 'koalacast_audio_downloads_v2';
+const DEFAULT_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
 
 class AudioDownloadManager {
 	items = $state<AudioDownload[]>([]);
@@ -138,6 +139,7 @@ class AudioDownloadManager {
 				totalBytes: totalBytes || bytesDownloaded,
 				error: ''
 			});
+			await this.enforceBudget();
 		} catch (error: any) {
 			const cancelled = error?.name === 'AbortError';
 			this.patch(request.episode_id, {
@@ -148,6 +150,30 @@ class AudioDownloadManager {
 		} finally {
 			this.controllers.delete(request.episode_id);
 			await this.refreshStorage();
+		}
+	}
+
+	async startAuto(request: DownloadRequest): Promise<boolean> {
+		const connection = (navigator as Navigator & {
+			connection?: { saveData?: boolean; effectiveType?: string };
+		}).connection;
+		if (connection?.saveData || connection?.effectiveType === '2g') return false;
+		if (this.get(request.episode_id)?.state === 'downloaded') return false;
+		await this.start(request);
+		return true;
+	}
+
+	async enforceBudget(budgetBytes = DEFAULT_BUDGET_BYTES) {
+		let used = this.items
+			.filter((item) => item.state === 'downloaded')
+			.reduce((sum, item) => sum + item.bytesDownloaded, 0);
+		const oldestFirst = this.items
+			.filter((item) => item.state === 'downloaded')
+			.sort((a, b) => a.updatedAt - b.updatedAt);
+		for (const item of oldestFirst) {
+			if (used <= budgetBytes) break;
+			used -= item.bytesDownloaded;
+			await this.remove(item.episodeId);
 		}
 	}
 

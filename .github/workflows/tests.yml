@@ -87,6 +87,23 @@ jobs:
         working-directory: apps/web
         run: npm run build
 
+      - name: Install compact UI test browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Compact viewport UI regressions
+        working-directory: apps/web
+        run: npm run test:ui
+
+      - name: Upload UI failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: compact-ui-test-results
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+
   openapi:
     name: OpenAPI lint
     runs-on: ubuntu-latest

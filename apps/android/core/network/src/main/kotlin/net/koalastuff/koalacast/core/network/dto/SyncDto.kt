@@ -54,5 +54,7 @@ data class SyncSnapshotResponse(
     val favorites: List<JsonObject> = emptyList(),
     @SerialName("playback_states") val playbackStates: List<JsonObject> = emptyList(),
     @SerialName("listening_sessions") val listeningSessions: List<JsonObject> = emptyList(),
+    val queue: List<JsonObject> = emptyList(),
     @SerialName("podcast_settings") val podcastSettings: List<JsonObject> = emptyList(),
+    val settings: List<JsonObject> = emptyList(),
 )

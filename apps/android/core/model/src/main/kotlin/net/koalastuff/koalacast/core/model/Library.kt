@@ -61,6 +61,10 @@ data class PodcastSettings(
     val skipOutroSeconds: Int = 0,
     /** null means "use the global default speed". */
     val speed: Float? = null,
+    /** null means "use the global audio-processing preference". */
+    val volumeBoost: Boolean? = null,
+    /** null means "use the global audio-processing preference". */
+    val skipSilence: Boolean? = null,
     val autoQueueNew: Boolean = false,
     /** Notify when the background refresh finds genuinely new episodes. */
     val notifyNewEpisodes: Boolean = false,
@@ -70,6 +74,7 @@ data class PodcastSettings(
      * metered connection, their money.
      */
     val autoDownload: Boolean = false,
+    val updatedAt: Long = 0,
 )
 
 /**

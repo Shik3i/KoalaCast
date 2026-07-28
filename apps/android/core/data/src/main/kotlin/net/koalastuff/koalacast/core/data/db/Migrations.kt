@@ -3,6 +3,14 @@ package net.koalastuff.koalacast.core.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `podcast_settings` ADD COLUMN `volumeBoost` INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE `podcast_settings` ADD COLUMN `skipSilence` INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE `podcast_settings` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 val MIGRATION_6_7 = object : Migration(6, 7) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(

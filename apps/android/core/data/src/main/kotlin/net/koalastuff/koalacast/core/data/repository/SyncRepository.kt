@@ -26,10 +26,19 @@ import net.koalastuff.koalacast.core.data.db.ListeningSessionDao
 import net.koalastuff.koalacast.core.data.db.ListeningSessionEntity
 import net.koalastuff.koalacast.core.data.db.PlaybackStateDao
 import net.koalastuff.koalacast.core.data.db.PlaybackStateEntity
+import net.koalastuff.koalacast.core.data.db.PodcastSettingsDao
+import net.koalastuff.koalacast.core.data.db.PodcastSettingsEntity
+import net.koalastuff.koalacast.core.data.db.QueueDao
+import net.koalastuff.koalacast.core.data.db.QueueItemEntity
 import net.koalastuff.koalacast.core.data.db.SubscriptionDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneDao
 import net.koalastuff.koalacast.core.model.SyncStatus
+import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.PaletteId
+import net.koalastuff.koalacast.core.model.ThemeMode
+import net.koalastuff.koalacast.core.model.UserPreferences
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
 import net.koalastuff.koalacast.core.network.dto.SyncOperationDto
@@ -50,6 +59,9 @@ class SyncRepository @Inject constructor(
     private val playbackStates: PlaybackStateDao,
     private val listeningSessions: ListeningSessionDao,
     private val tombstones: TombstoneDao,
+    private val queue: QueueDao,
+    private val podcastSettings: PodcastSettingsDao,
+    private val preferences: PreferencesRepository,
 ) {
     private val mutex = Mutex()
     private val _status = MutableStateFlow(if (store.account.value == null) SyncStatus.OFF else SyncStatus.IDLE)
@@ -196,7 +208,10 @@ class SyncRepository @Inject constructor(
                 if (id.isBlank()) return@forEach
                 listeningSessions.upsert(listeningEntity(id, payload, payload.long("ended_at")))
             }
+            snapshot.queue.forEach { applyQueue(it) }
+            snapshot.podcastSettings.forEach { applyPodcastSettings(it) }
         }
+        snapshot.settings.forEach { applySettings(it) }
     }
 
     private suspend fun push(userId: String, deviceId: String) {
@@ -257,6 +272,38 @@ class SyncRepository @Inject constructor(
                 payload = listeningPayload(item),
             )
         }
+        val queueUpdatedAt = store.queueUpdatedAt()
+        if (queueUpdatedAt > 0) {
+            operations += operation(
+                id = "q:main:$queueUpdatedAt",
+                deviceId = deviceId,
+                type = "queue",
+                entityId = "main",
+                timestamp = queueUpdatedAt,
+                payload = queuePayload(queue.getAll(), queueUpdatedAt),
+            )
+        }
+        podcastSettings.getAll().filter { it.updatedAt > 0 }.forEach { item ->
+            operations += operation(
+                id = "ps:${item.podcastId}:${item.updatedAt}",
+                deviceId = deviceId,
+                type = "podcast_settings",
+                entityId = item.podcastId,
+                timestamp = item.updatedAt,
+                payload = podcastSettingsPayload(item),
+            )
+        }
+        val (settings, settingsUpdatedAt) = preferences.syncSnapshot()
+        if (settingsUpdatedAt > 0) {
+            operations += operation(
+                id = "g:global:$settingsUpdatedAt",
+                deviceId = deviceId,
+                type = "settings",
+                entityId = "global",
+                timestamp = settingsUpdatedAt,
+                payload = settingsPayload(settings, settingsUpdatedAt),
+            )
+        }
         tombstones.getAll()
             .filter { it.entityType == "subscription" || it.entityType == "favorite" }
             .forEach { item ->
@@ -281,8 +328,13 @@ class SyncRepository @Inject constructor(
                 "favorite" -> applyFavorite(change, payload)
                 "playback_state" -> applyPlayback(change, payload)
                 "listening_session" -> applyListening(change, payload)
+                "queue" -> if (change.action != "delete") applyQueue(payload)
+                "podcast_settings" -> if (change.action != "delete") {
+                    applyPodcastSettings(payload, change.entityId)
+                }
             }
         }
+        if (change.entityType == "settings" && change.action != "delete") applySettings(payload)
     }
 
     private suspend fun applySubscription(change: SyncChangesetDto, payload: JsonObject) {
@@ -351,6 +403,101 @@ class SyncRepository @Inject constructor(
         val existing = listeningSessions.get(id)
         if (existing != null && existing.endedAt >= incomingAt) return
         listeningSessions.upsert(listeningEntity(id, payload, incomingAt))
+    }
+
+    private suspend fun applyQueue(payload: JsonObject) {
+        val updatedAt = payload.long("updated_at")
+        if (updatedAt <= store.queueUpdatedAt()) return
+        val items = payload["items"] as? JsonArray ?: return
+        queue.clear()
+        items.take(500).forEachIndexed { index, element ->
+            val item = element as? JsonObject ?: return@forEachIndexed
+            val episodeId = item.string("episode_id")
+            if (episodeId.isBlank()) return@forEachIndexed
+            queue.insert(
+                QueueItemEntity(
+                    id = item.string("id").ifBlank { "sync-$episodeId" },
+                    episodeId = episodeId,
+                    podcastId = item.string("podcast_id"),
+                    title = item.string("title").ifBlank { "Episode" },
+                    podcastTitle = item.string("podcast_title"),
+                    artworkUrl = item.string("artwork_url"),
+                    enclosureUrl = item.string("enclosure_url"),
+                    durationMs = item.long("duration_ms"),
+                    positionOrder = item.longOrNull("position_order") ?: index.toLong(),
+                    addedAt = item.long("added_at").takeIf { it > 0 } ?: updatedAt,
+                    categories = item.strings("categories"),
+                ),
+            )
+        }
+        store.markQueueUpdated(updatedAt)
+    }
+
+    private suspend fun applyPodcastSettings(payload: JsonObject, fallbackId: String = "") {
+        val podcastId = payload.string("podcast_id").ifBlank { fallbackId }
+        val updatedAt = payload.long("updated_at")
+        if (podcastId.isBlank() || updatedAt <= 0) return
+        if ((podcastSettings.get(podcastId)?.updatedAt ?: 0) >= updatedAt) return
+        podcastSettings.upsert(
+            PodcastSettingsEntity(
+                podcastId = podcastId,
+                skipIntroSeconds = payload.intEither("skip_intro_seconds", "skipIntroSeconds")
+                    .coerceIn(0, 600),
+                skipOutroSeconds = payload.intEither("skip_outro_seconds", "skipOutroSeconds")
+                    .coerceIn(0, 600),
+                speed = payload["speed"]?.jsonPrimitive?.floatOrNull,
+                volumeBoost = payload.booleanOrNull("volume_boost", "volumeBoost"),
+                skipSilence = payload.booleanOrNull("skip_silence", "skipSilence"),
+                autoQueueNew = payload.booleanEither("auto_queue_new", "autoQueueNew"),
+                notifyNewEpisodes = payload.booleanEither(
+                    "notify_new_episodes",
+                    "notifyNewEpisodes",
+                ),
+                autoDownload = payload.booleanEither("auto_download", "autoDownload"),
+                updatedAt = updatedAt,
+            ),
+        )
+    }
+
+    private suspend fun applySettings(payload: JsonObject) {
+        val updatedAt = payload.long("updated_at")
+        if (updatedAt <= 0) return
+        val (current, localUpdatedAt) = preferences.syncSnapshot()
+        if (localUpdatedAt >= updatedAt) return
+        preferences.applySynced(
+            current.copy(
+                themeMode = payload.string("theme_mode").ifBlank {
+                    payload.string("theme")
+                }.let { runCatching { ThemeMode.valueOf(it.uppercase()) }.getOrNull() }
+                    ?: current.themeMode,
+                palette = payload.string("palette").takeIf { it.isNotBlank() }
+                    ?.let(PaletteId::fromId) ?: current.palette,
+                languages = payload.strings("languages").toSet().ifEmpty { current.languages },
+                category = payload.string("category").ifBlank { current.category },
+                proxyImages = payload.booleanOr("proxy_images", current.proxyImages),
+                playbackSpeed = payload.floatOr("playback_speed", current.playbackSpeed),
+                downloadWifiOnly = payload.booleanOr(
+                    "download_wifi_only",
+                    current.downloadWifiOnly,
+                ),
+                skipSilence = payload.booleanOr("skip_silence", current.skipSilence),
+                volumeBoost = payload.booleanOr("volume_boost", current.volumeBoost),
+                autoDownloadCount = payload.intOr(
+                    "auto_download_count",
+                    current.autoDownloadCount,
+                ),
+                downloadRetention = payload.string("download_retention")
+                    .takeIf { it.isNotBlank() }
+                    ?.let(DownloadRetention::fromId) ?: current.downloadRetention,
+                downloadConcurrency = payload.intOr(
+                    "download_concurrency",
+                    current.downloadConcurrency,
+                ),
+                downloadBudgetBytes = payload.long("download_budget_bytes")
+                    .takeIf { it > 0 } ?: current.downloadBudgetBytes,
+            ),
+            updatedAt,
+        )
     }
 
     private fun playbackEntity(
@@ -465,6 +612,58 @@ class SyncRepository @Inject constructor(
         put("speed_weighted_ms", item.speedWeightedMs)
     }
 
+    private fun queuePayload(items: List<QueueItemEntity>, updatedAt: Long) = buildJsonObject {
+        put(
+            "items",
+            JsonArray(items.map { item ->
+                buildJsonObject {
+                    put("id", item.id)
+                    put("episode_id", item.episodeId)
+                    put("podcast_id", item.podcastId)
+                    put("title", item.title)
+                    put("podcast_title", item.podcastTitle)
+                    put("artwork_url", item.artworkUrl)
+                    put("enclosure_url", item.enclosureUrl)
+                    put("duration_ms", item.durationMs)
+                    put("position_order", item.positionOrder)
+                    put("added_at", item.addedAt)
+                    put("categories", JsonArray(item.categories.map(::JsonPrimitive)))
+                }
+            }),
+        )
+        put("updated_at", updatedAt)
+    }
+
+    private fun podcastSettingsPayload(item: PodcastSettingsEntity) = buildJsonObject {
+        put("podcast_id", item.podcastId)
+        put("skip_intro_seconds", item.skipIntroSeconds)
+        put("skip_outro_seconds", item.skipOutroSeconds)
+        item.speed?.let { put("speed", it) }
+        item.volumeBoost?.let { put("volume_boost", it) }
+        item.skipSilence?.let { put("skip_silence", it) }
+        put("auto_queue_new", item.autoQueueNew)
+        put("notify_new_episodes", item.notifyNewEpisodes)
+        put("auto_download", item.autoDownload)
+        put("updated_at", item.updatedAt)
+    }
+
+    private fun settingsPayload(item: UserPreferences, updatedAt: Long) = buildJsonObject {
+        put("theme_mode", item.themeMode.name.lowercase())
+        put("palette", item.palette.id)
+        put("languages", JsonArray(item.languages.map(::JsonPrimitive)))
+        put("category", item.category)
+        put("proxy_images", item.proxyImages)
+        put("playback_speed", item.playbackSpeed)
+        put("download_wifi_only", item.downloadWifiOnly)
+        put("skip_silence", item.skipSilence)
+        put("volume_boost", item.volumeBoost)
+        put("auto_download_count", item.autoDownloadCount)
+        put("download_retention", item.downloadRetention.id)
+        put("download_concurrency", item.downloadConcurrency)
+        put("download_budget_bytes", item.downloadBudgetBytes)
+        put("updated_at", updatedAt)
+    }
+
     private fun JsonObject.string(key: String) =
         get(key)?.jsonPrimitive?.contentOrNull.orEmpty()
     private fun JsonObject.long(key: String) = get(key)?.jsonPrimitive?.longOrNull ?: 0
@@ -475,6 +674,23 @@ class SyncRepository @Inject constructor(
             ?: 0
     private fun JsonObject.boolean(key: String) =
         get(key)?.jsonPrimitive?.booleanOrNull ?: false
+    private fun JsonObject.booleanEither(first: String, second: String) =
+        get(first)?.jsonPrimitive?.booleanOrNull
+            ?: get(second)?.jsonPrimitive?.booleanOrNull
+            ?: false
+    private fun JsonObject.booleanOrNull(first: String, second: String) =
+        get(first)?.jsonPrimitive?.booleanOrNull
+            ?: get(second)?.jsonPrimitive?.booleanOrNull
+    private fun JsonObject.booleanOr(key: String, fallback: Boolean) =
+        get(key)?.jsonPrimitive?.booleanOrNull ?: fallback
+    private fun JsonObject.intEither(first: String, second: String) =
+        get(first)?.jsonPrimitive?.intOrNull
+            ?: get(second)?.jsonPrimitive?.intOrNull
+            ?: 0
+    private fun JsonObject.intOr(key: String, fallback: Int) =
+        get(key)?.jsonPrimitive?.intOrNull ?: fallback
+    private fun JsonObject.floatOr(key: String, fallback: Float) =
+        get(key)?.jsonPrimitive?.floatOrNull ?: fallback
     private fun JsonObject.strings(key: String) =
         (get(key) as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
     private fun kotlinx.serialization.json.JsonObjectBuilder.nullable(key: String, value: String?) {

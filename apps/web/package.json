@@ -17,9 +17,11 @@
     "check:release-policy": "node scripts/check-release-policy.mjs",
     "check:seo": "node scripts/check-seo.mjs",
     "test": "vitest run",
+    "test:ui": "playwright test",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@sveltejs/adapter-node": "^5.0.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.5.0",

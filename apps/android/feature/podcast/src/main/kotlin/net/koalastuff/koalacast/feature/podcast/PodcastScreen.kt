@@ -126,6 +126,8 @@ fun PodcastScreen(
         onSetSpeed = viewModel::setSpeed,
         onSetSkipIntro = viewModel::setSkipIntro,
         onSetSkipOutro = viewModel::setSkipOutro,
+        onSetVolumeBoost = viewModel::setVolumeBoost,
+        onSetSkipSilence = viewModel::setSkipSilence,
         onToggleAutoQueue = viewModel::toggleAutoQueue,
         onToggleAutoDownload = viewModel::toggleAutoDownload,
         onToggleNotifications = toggleNotifications,
@@ -152,6 +154,8 @@ internal fun PodcastContent(
     onSetSpeed: (Float?) -> Unit,
     onSetSkipIntro: (Int) -> Unit,
     onSetSkipOutro: (Int) -> Unit,
+    onSetVolumeBoost: (Boolean?) -> Unit,
+    onSetSkipSilence: (Boolean?) -> Unit,
     onToggleAutoQueue: () -> Unit,
     onToggleAutoDownload: () -> Unit,
     onToggleNotifications: () -> Unit,
@@ -194,6 +198,8 @@ internal fun PodcastContent(
                     onSetSpeed = onSetSpeed,
                     onSetSkipIntro = onSetSkipIntro,
                     onSetSkipOutro = onSetSkipOutro,
+                    onSetVolumeBoost = onSetVolumeBoost,
+                    onSetSkipSilence = onSetSkipSilence,
                     onToggleAutoQueue = onToggleAutoQueue,
                     onToggleAutoDownload = onToggleAutoDownload,
                     onToggleNotifications = onToggleNotifications,
@@ -321,6 +327,8 @@ private fun PodcastHeader(
     onSetSpeed: (Float?) -> Unit,
     onSetSkipIntro: (Int) -> Unit,
     onSetSkipOutro: (Int) -> Unit,
+    onSetVolumeBoost: (Boolean?) -> Unit,
+    onSetSkipSilence: (Boolean?) -> Unit,
     onToggleAutoQueue: () -> Unit,
     onToggleAutoDownload: () -> Unit,
     onToggleNotifications: () -> Unit,
@@ -460,6 +468,37 @@ private fun PodcastHeader(
                             onChange = onSetSkipOutro,
                             modifier = Modifier.weight(1f),
                         )
+                    }
+                    MonoText(
+                        text = stringResource(R.string.podcast_audio_processing),
+                        color = colors.ink4,
+                        style = KoalaTheme.type.monoSmall,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                        listOf<Boolean?>(null, true, false).forEach { enabled ->
+                            KoalaChip(
+                                label = when (enabled) {
+                                    null -> stringResource(R.string.podcast_audio_default)
+                                    true -> stringResource(R.string.podcast_volume_boost_on)
+                                    false -> stringResource(R.string.podcast_volume_boost_off)
+                                },
+                                selected = settings.volumeBoost == enabled,
+                                onClick = { onSetVolumeBoost(enabled) },
+                            )
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                        listOf<Boolean?>(null, true, false).forEach { enabled ->
+                            KoalaChip(
+                                label = when (enabled) {
+                                    null -> stringResource(R.string.podcast_silence_default)
+                                    true -> stringResource(R.string.podcast_silence_on)
+                                    false -> stringResource(R.string.podcast_silence_off)
+                                },
+                                selected = settings.skipSilence == enabled,
+                                onClick = { onSetSkipSilence(enabled) },
+                            )
+                        }
                     }
                     PodcastSettingSwitch(
                         title = stringResource(R.string.podcast_auto_queue),

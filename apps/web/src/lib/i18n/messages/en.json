@@ -723,7 +723,13 @@
 			"seconds": "s",
 			"speed": "Speed",
 			"globalSpeed": "Global",
+			"volumeBoost": "Volume boost",
+			"skipSilence": "Skip silence",
+			"useGlobal": "Use global setting",
+			"enabled": "Enabled",
+			"disabled": "Disabled",
 			"autoQueue": "Auto-queue new",
+			"autoDownload": "Auto-download new episodes",
 			"notifications": "Browser notification for new episodes",
 			"notificationsEnabled": "Notifications enabled for this show.",
 			"notificationsDenied": "Notification permission was not granted."
