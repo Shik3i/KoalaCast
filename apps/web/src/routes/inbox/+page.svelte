@@ -15,6 +15,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
+	import { podcastHref } from '$lib/podcast-link';
 	import { reveal } from '$lib/actions/reveal';
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
@@ -175,6 +176,13 @@
 	async function setMode(podcast_id: string, mode: InboxMode) {
 		modes = { ...modes, [podcast_id]: mode };
 		await setSubscriptionInboxMode(podcast_id, mode);
+	}
+
+	function showHref(podcastId: string): string {
+		const subscription = subscriptions.find((item) => item.podcast_id === podcastId);
+		return subscription
+			? podcastHref(subscription)
+			: `/podcast/${encodeURIComponent(podcastId)}`;
 	}
 
 	function epMeta(ep: InboxEpisode) {
@@ -438,7 +446,7 @@
 					<div class="ep-body">
 						<a class="ep-title" href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a>
 						<span class="ep-meta">
-							<span class="ep-show" title={ep.podcast_title}>{ep.podcast_title}</span>
+							<a class="ep-show" href={showHref(ep.podcast_id)} title={ep.podcast_title}>{ep.podcast_title}</a>
 							{#if ep.pub_date}<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}{/if}
 							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
 							{#if completed.has(ep.id)}<span class="played-tag">{t('common.played')}</span>{/if}
@@ -639,6 +647,7 @@
 		text-overflow: ellipsis;
 	}
 	.ep-show { font-weight: 600; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }
+	.ep-show:hover { color: var(--accent-green); text-decoration: underline; }
 	.dot { opacity: 0.5; }
 	.played-tag {
 		background: color-mix(in srgb, var(--accent-green) 16%, transparent);

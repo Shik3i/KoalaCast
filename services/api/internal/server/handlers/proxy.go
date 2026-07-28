@@ -118,7 +118,12 @@ func NewProxyHandler() *ProxyHandler {
 // "decompression bomb") could decode to gigabytes of RGBA and OOM the process.
 // 40 MP comfortably covers legitimate podcast artwork (typically <=3000x3000).
 const maxDecodedPixels = 40 * 1000 * 1000
-const imageProxyTimeout = 1200 * time.Millisecond
+// Cold publisher/CDN connections routinely exceed one second. A 1.2 s deadline
+// made the proxy return its temporary placeholder before otherwise healthy
+// artwork arrived, forcing users to reload until a request happened to be fast.
+// Singleflight still coalesces identical requests while this bounded deadline
+// gives DNS, TLS and the first upstream response a realistic window.
+const imageProxyTimeout = 8 * time.Second
 const maxAudioDownloadBytes = int64(2 * 1024 * 1024 * 1024)
 
 //go:embed assets/cover-placeholder.webp
