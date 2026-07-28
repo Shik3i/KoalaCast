@@ -15,6 +15,8 @@
 	import { shell } from '$lib/stores/shell.svelte';
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
+	import { getLocalSubscriptions } from '$lib/idb/db';
+	import { preloadSubscriptionArtwork } from '$lib/artwork';
 
 	let { children } = $props();
 	let currentUser = $state<{ user_id: string; username: string; role: string } | null>(null);
@@ -45,6 +47,7 @@
 		} catch {
 			await activateAccountContext(null);
 		}
+		void getLocalSubscriptions().then(preloadSubscriptionArtwork);
 	});
 	onMount(() => {
 		const warmPlayer = (event: Event) => {
@@ -78,6 +81,25 @@
 		return () => {
 			window.removeEventListener('online', update);
 			window.removeEventListener('offline', update);
+		};
+	});
+	onMount(() => {
+		const viewport = window.visualViewport;
+		const updateMobileViewportInset = () => {
+			const inset = viewport
+				? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+				: 0;
+			document.documentElement.style.setProperty('--mobile-browser-inset', `${Math.round(inset)}px`);
+		};
+		updateMobileViewportInset();
+		viewport?.addEventListener('resize', updateMobileViewportInset);
+		viewport?.addEventListener('scroll', updateMobileViewportInset);
+		window.addEventListener('orientationchange', updateMobileViewportInset);
+		return () => {
+			viewport?.removeEventListener('resize', updateMobileViewportInset);
+			viewport?.removeEventListener('scroll', updateMobileViewportInset);
+			window.removeEventListener('orientationchange', updateMobileViewportInset);
+			document.documentElement.style.removeProperty('--mobile-browser-inset');
 		};
 	});
 

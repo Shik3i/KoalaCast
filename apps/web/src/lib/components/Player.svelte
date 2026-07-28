@@ -1685,7 +1685,9 @@
 		.extras { display: none; }
 	}
 	@media (max-width: 720px) {
-		.player-shell { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+		.player-shell {
+			bottom: calc(68px + max(env(safe-area-inset-bottom, 0px), 8px) + var(--mobile-browser-inset, 0px));
+		}
 		.player-bar {
 			display: grid;
 			grid-template-columns: minmax(0,1fr) auto;

@@ -43,12 +43,22 @@ data class EpisodeUiState(
     val transcriptLoading: Boolean = false,
     val transcript: String = "",
     val transcriptError: Boolean = false,
+    val transcriptQuery: String = "",
     val chaptersExpanded: Boolean = false,
     val chaptersLoading: Boolean = false,
     val chapters: List<Chapter> = emptyList(),
     val chaptersError: Boolean = false,
     val downloadState: DownloadState? = null,
-)
+) {
+    val visibleTranscript: String
+        get() {
+            val query = transcriptQuery.trim()
+            if (query.isEmpty()) return transcript
+            return transcript.lineSequence()
+                .filter { it.contains(query, ignoreCase = true) }
+                .joinToString("\n")
+        }
+}
 
 @HiltViewModel
 class EpisodeViewModel @Inject constructor(
@@ -266,6 +276,10 @@ class EpisodeViewModel @Inject constructor(
         if (expanded && _state.value.transcript.isBlank() && !_state.value.transcriptLoading) {
             loadTranscript()
         }
+    }
+
+    fun setTranscriptQuery(query: String) {
+        _state.update { it.copy(transcriptQuery = query) }
     }
 
     private fun loadTranscript() {

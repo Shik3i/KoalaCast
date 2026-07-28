@@ -119,6 +119,7 @@ func NewProxyHandler() *ProxyHandler {
 // 40 MP comfortably covers legitimate podcast artwork (typically <=3000x3000).
 const maxDecodedPixels = 40 * 1000 * 1000
 const imageProxyTimeout = 1200 * time.Millisecond
+const maxAudioDownloadBytes = int64(2 * 1024 * 1024 * 1024)
 
 //go:embed assets/cover-placeholder.webp
 var imageFallbackWebP []byte
@@ -132,6 +133,61 @@ func writeImageFallback(w http.ResponseWriter) {
 	w.Header().Set("X-KoalaCast-Image-Fallback", "true")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(imageFallbackWebP)
+}
+
+// GetAudioProxy streams an enclosure through the listener's KoalaCast instance.
+// It exists for explicit PWA downloads only; normal playback still contacts the
+// publisher directly and therefore does not spend server bandwidth.
+func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
+	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
+		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
+	if err != nil {
+		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
+		return
+	}
+	req.Header.Set("User-Agent", "KoalaCast/1.0 Podcast Player")
+	req.Header.Set("Accept", "audio/*,application/octet-stream;q=0.8")
+	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		http.Error(w, `{"error":"audio upstream unavailable"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		http.Error(w, `{"error":"audio upstream rejected request"}`, http.StatusBadGateway)
+		return
+	}
+	if resp.ContentLength > maxAudioDownloadBytes {
+		http.Error(w, `{"error":"audio file exceeds 2 GiB limit"}`, http.StatusRequestEntityTooLarge)
+		return
+	}
+	if resp.ContentLength < 0 && r.Header.Get("Range") == "" {
+		http.Error(w, `{"error":"audio size is unknown"}`, http.StatusBadGateway)
+		return
+	}
+
+	for _, header := range []string{
+		"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified",
+	} {
+		if value := resp.Header.Get(header); value != "" {
+			w.Header().Set(header, value)
+		}
+	}
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(resp.StatusCode)
+	if r.Method != http.MethodHead {
+		_, _ = io.Copy(w, io.LimitReader(resp.Body, maxAudioDownloadBytes+1))
+	}
 }
 
 // GetImageProxy fetches an external image, resizes it, converts/compresses it to optimized JPEG,

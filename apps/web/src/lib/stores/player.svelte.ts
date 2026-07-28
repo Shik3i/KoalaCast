@@ -16,6 +16,7 @@ import {
 	type LocalQueueItem
 } from '$lib/idb/db';
 import { normalizePlaybackSpeed } from '$lib/player/playback-speed';
+import { resolveOfflineAudioUrl } from '$lib/downloads/offline-audio';
 
 export interface CurrentTrack {
 	episode_id: string;
@@ -66,6 +67,11 @@ class PlayerStore {
 		this.positionUpdatedAt = Date.now();
 		this.playToken++;
 		void saveLocalCurrentPlayback({ ...track, position_ms: 0 }).catch(() => {});
+		void resolveOfflineAudioUrl(track.episode_id, track.enclosure_url).then((resolvedUrl) => {
+			if (resolvedUrl === track.enclosure_url || this.current?.episode_id !== track.episode_id) return;
+			this.current = { ...this.current, enclosure_url: resolvedUrl };
+			this.playToken++;
+		});
 	}
 
 	stop() {

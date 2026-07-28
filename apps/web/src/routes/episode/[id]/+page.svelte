@@ -17,6 +17,11 @@
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
+	import {
+		downloadAudio,
+		isAudioDownloaded,
+		removeAudioDownload
+	} from '$lib/downloads/offline-audio';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -25,6 +30,8 @@
 	let isLoading = $state(true);
 	let isFavorite = $state(false);
 	let showAccent = $state<string | null>(null);
+	let audioDownloaded = $state(false);
+	let audioDownloadBusy = $state(false);
 
 	const accentVars = $derived(
 		showAccent
@@ -55,8 +62,10 @@
 		transcriptCues = [];
 		transcriptHtml = '';
 		transcriptText = '';
+		transcriptQuery = '';
 		chaptersError = '';
 		transcriptError = '';
+		audioDownloaded = await isAudioDownloaded(id);
 		try {
 			const cachedEpisode = await readCachedContent<any>(
 				`episode:${id}`,
@@ -173,6 +182,29 @@
 		toast.success(t('toast.addedToQueue'));
 	}
 
+	async function toggleAudioDownload() {
+		if (!episode || audioDownloadBusy) return;
+		audioDownloadBusy = true;
+		try {
+			if (audioDownloaded) {
+				await removeAudioDownload(episode.id);
+				audioDownloaded = false;
+				toast.success(t('episode.downloadRemoved'));
+			} else {
+				await downloadAudio({
+					episode_id: episode.id,
+					enclosure_url: episode.enclosure_url
+				});
+				audioDownloaded = true;
+				toast.success(t('episode.downloadReady'));
+			}
+		} catch {
+			toast.error(t('episode.downloadFailed'));
+		} finally {
+			audioDownloadBusy = false;
+		}
+	}
+
 	function formatDuration(ms: number) {
 		if (!ms) return t('episode.unknownDuration');
 		const totalSec = Math.floor(ms / 1000);
@@ -229,6 +261,32 @@
 	let transcriptHtml = $state(''); // sanitized, for html-type transcripts
 	let transcriptText = $state(''); // plain text, for vtt/srt/json/plain
 	let transcriptLoaded = $state(false);
+	let transcriptQuery = $state('');
+	const filteredTranscriptCues = $derived(
+		transcriptQuery.trim()
+			? transcriptCues.filter((cue) =>
+					String(cue.text || '').toLowerCase().includes(transcriptQuery.trim().toLowerCase())
+				)
+			: transcriptCues
+	);
+	const activeChapterIndex = $derived.by(() => {
+		if (!isCurrent || chaptersList.length === 0) return -1;
+		const seconds = player.positionMs / 1000;
+		for (let i = chaptersList.length - 1; i >= 0; i--) {
+			if (seconds >= Number(chaptersList[i].startTime || 0)) return i;
+		}
+		return -1;
+	});
+	const activeCueStart = $derived.by(() => {
+		if (!isCurrent || transcriptCues.length === 0) return -1;
+		const seconds = player.positionMs / 1000;
+		for (let i = transcriptCues.length - 1; i >= 0; i--) {
+			if (seconds >= Number(transcriptCues[i].start || 0)) {
+				return Number(transcriptCues[i].start || 0);
+			}
+		}
+		return -1;
+	});
 
 	async function toggleTranscript() {
 		showTranscript = !showTranscript;
@@ -373,6 +431,14 @@
 					<button class="btn-secondary" onclick={handleAddToQueue}>
 						<i class="ph ph-plus" aria-hidden="true"></i> {t('episode.addToQueue')}
 					</button>
+					<button class="btn-secondary" class:active={audioDownloaded} disabled={audioDownloadBusy} onclick={toggleAudioDownload}>
+						<i class="ph {audioDownloaded ? 'ph-trash' : 'ph-download-simple'}" aria-hidden="true"></i>
+						{audioDownloadBusy
+							? t('episode.downloading')
+							: audioDownloaded
+								? t('episode.removeDownload')
+								: t('episode.download')}
+					</button>
 					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? 'Favorited' : 'Favorite'}
@@ -401,7 +467,7 @@
 				{:else if chaptersList.length > 0}
 					<div class="chapters-list">
 						{#each chaptersList as ch, i}
-							<button class="chapter-row" onclick={() => seekToCue(ch.startTime)} title={ch.title || `Chapter ${i + 1}`}>
+							<button class="chapter-row" class:active={activeChapterIndex === i} onclick={() => seekToCue(ch.startTime)} title={ch.title || `Chapter ${i + 1}`}>
 								<span class="ch-time">{formatDuration(ch.startTime * 1000)}</span>
 								{#if ch.img}<img src={optimizeArtwork(ch.img, 120)} alt="" class="ch-img" />{/if}
 								<span class="ch-title">{ch.title || `Chapter ${i + 1}`}</span>
@@ -423,9 +489,19 @@
 				{:else if transcriptError}
 					<p class="transcript-status">{transcriptError}</p>
 				{:else if transcriptCues.length > 0}
+					<label class="transcript-search">
+						<span class="sr-only">{t('episode.searchTranscript')}</span>
+						<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+						<input
+							type="search"
+							bind:value={transcriptQuery}
+							placeholder={t('episode.searchTranscript')}
+						/>
+						<span>{t('episode.transcriptMatches', { count: filteredTranscriptCues.length })}</span>
+					</label>
 					<div class="cue-list">
-						{#each transcriptCues as cue}
-							<button class="cue-row" onclick={() => seekToCue(cue.start)}>
+						{#each filteredTranscriptCues as cue}
+							<button class="cue-row" class:active={activeCueStart === Number(cue.start || 0)} onclick={() => seekToCue(cue.start)}>
 								<span class="cue-time">{formatDuration(cue.start * 1000)}</span>
 								<span class="cue-text">{cue.text}</span>
 							</button>
@@ -615,6 +691,30 @@
 		border-color: var(--show-accent, var(--accent-green));
 		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 10%, var(--bg-surface));
 	}
+	.chapter-row.active, .cue-row.active {
+		border-color: var(--show-accent, var(--accent-green));
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 14%, var(--bg-surface));
+	}
+	.transcript-search {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: .65rem;
+		margin-top: 1rem;
+		padding: .65rem .8rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		background: var(--bg-elevated);
+		color: var(--text-muted);
+	}
+	.transcript-search input {
+		min-width: 0;
+		border: 0;
+		outline: 0;
+		background: transparent;
+		color: var(--text-primary);
+	}
+	.transcript-search span:last-child { font-size: .75rem; white-space: nowrap; }
 	.ch-time, .cue-time {
 		font-family: monospace;
 		font-size: 0.85rem;

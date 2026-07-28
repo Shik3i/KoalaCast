@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.ui.component.CoverArt
@@ -70,13 +72,16 @@ fun InboxScreen(
         onSetPodcastFilter = viewModel::setPodcastFilter,
         onSetDateRange = viewModel::setDateRange,
         onSetMood = viewModel::setMood,
+        onSetHideSpecials = viewModel::setHideSpecials,
         onSetSessionMinutes = viewModel::setSessionMinutes,
         onQueueSession = viewModel::queueSession,
         onSetMode = viewModel::setInboxMode,
+        onTogglePriority = viewModel::togglePriority,
         onOpenEpisode = onOpenEpisode,
         onOpenDiscover = onOpenDiscover,
         onPlay = viewModel::play,
         onQueue = viewModel::addToQueue,
+        onDownload = viewModel::toggleDownload,
         onTogglePlayed = viewModel::togglePlayed,
         onMarkAllPlayed = viewModel::markAllPlayed,
         onMarkOlder = viewModel::markThisAndOlder,
@@ -95,13 +100,16 @@ internal fun InboxContent(
     onSetPodcastFilter: (String?) -> Unit,
     onSetDateRange: (InboxDateRange) -> Unit,
     onSetMood: (InboxMood) -> Unit,
+    onSetHideSpecials: (Boolean) -> Unit,
     onSetSessionMinutes: (Int?) -> Unit,
     onQueueSession: () -> Unit,
     onSetMode: (String, InboxMode) -> Unit,
+    onTogglePriority: (String) -> Unit,
     onOpenEpisode: (String) -> Unit,
     onOpenDiscover: () -> Unit,
     onPlay: (InboxEpisode) -> Unit,
     onQueue: (InboxEpisode) -> Unit,
+    onDownload: (InboxEpisode) -> Unit,
     onTogglePlayed: (InboxEpisode) -> Unit,
     onMarkAllPlayed: () -> Unit,
     onMarkOlder: (String, Boolean) -> Unit,
@@ -110,6 +118,15 @@ internal fun InboxContent(
 ) {
     val colors = KoalaTheme.colors
     val feed = state.feed
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    val activeFilterCount = listOf(
+        state.downloadedOnly,
+        state.selectedPodcastId != null,
+        state.dateRange != InboxDateRange.ALL,
+        state.mood != InboxMood.ALL,
+        state.sessionMinutes != null,
+        state.hideSpecials,
+    ).count { it }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.bgPanel),
@@ -148,6 +165,19 @@ internal fun InboxContent(
                             onClick = onToggleSettings,
                             leadingIcon = PhosphorIcons.SlidersHorizontal,
                         )
+                        OutlineButton(
+                            text = if (activeFilterCount > 0) {
+                                stringResource(R.string.inbox_filters_active, activeFilterCount)
+                            } else {
+                                stringResource(R.string.inbox_filters)
+                            },
+                            onClick = { showFilters = !showFilters },
+                            leadingIcon = if (showFilters) {
+                                PhosphorIcons.CaretUp
+                            } else {
+                                PhosphorIcons.Funnel
+                            },
+                        )
                     }
                     Row(
                         modifier = Modifier
@@ -170,22 +200,30 @@ internal fun InboxContent(
                             ),
                         )
                     }
-                    InboxFilters(
-                        state = state,
-                        onSetDownloadedOnly = onSetDownloadedOnly,
-                        onSetPodcastFilter = onSetPodcastFilter,
-                        onSetDateRange = onSetDateRange,
-                        onSetMood = onSetMood,
-                        onSetSessionMinutes = onSetSessionMinutes,
-                        onQueueSession = onQueueSession,
-                    )
+                    if (showFilters) {
+                        InboxFilters(
+                            state = state,
+                            onSetDownloadedOnly = onSetDownloadedOnly,
+                            onSetPodcastFilter = onSetPodcastFilter,
+                            onSetDateRange = onSetDateRange,
+                            onSetMood = onSetMood,
+                            onSetHideSpecials = onSetHideSpecials,
+                            onSetSessionMinutes = onSetSessionMinutes,
+                            onQueueSession = onQueueSession,
+                        )
+                    }
                 }
             }
         }
 
         if (state.showSettings) {
             item(key = "settings") {
-                InboxSettings(state.subscriptions, onSetMode)
+                InboxSettings(
+                    subscriptions = state.subscriptions,
+                    priorityPodcastIds = state.priorityPodcastIds,
+                    onSetMode = onSetMode,
+                    onTogglePriority = onTogglePriority,
+                )
             }
         }
 
@@ -238,6 +276,8 @@ internal fun InboxContent(
                             onOpen = { onOpenEpisode(item.episode.id) },
                             onPlay = { onPlay(item) },
                             onQueue = { onQueue(item) },
+                            downloadState = state.downloadStates[item.episode.id],
+                            onDownload = { onDownload(item) },
                             onTogglePlayed = { onTogglePlayed(item) },
                             onMarkOlder = { played ->
                                 onMarkOlder(item.episode.id, played)
@@ -258,6 +298,7 @@ private fun InboxFilters(
     onSetPodcastFilter: (String?) -> Unit,
     onSetDateRange: (InboxDateRange) -> Unit,
     onSetMood: (InboxMood) -> Unit,
+    onSetHideSpecials: (Boolean) -> Unit,
     onSetSessionMinutes: (Int?) -> Unit,
     onQueueSession: () -> Unit,
 ) {
@@ -270,6 +311,11 @@ private fun InboxFilters(
             label = stringResource(R.string.inbox_downloaded),
             selected = state.downloadedOnly,
             onClick = { onSetDownloadedOnly(!state.downloadedOnly) },
+        )
+        KoalaChip(
+            label = stringResource(R.string.inbox_hide_specials),
+            selected = state.hideSpecials,
+            onClick = { onSetHideSpecials(!state.hideSpecials) },
         )
         Column {
             KoalaChip(
@@ -364,7 +410,9 @@ private fun InboxFilters(
 @Composable
 private fun InboxSettings(
     subscriptions: List<Subscription>,
+    priorityPodcastIds: Set<String>,
     onSetMode: (String, InboxMode) -> Unit,
+    onTogglePriority: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -396,6 +444,11 @@ private fun InboxSettings(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
+                )
+                KoalaChip(
+                    label = stringResource(R.string.inbox_priority),
+                    selected = subscription.podcastId in priorityPodcastIds,
+                    onClick = { onTogglePriority(subscription.podcastId) },
                 )
                 SegmentedControl(
                     options = listOf(
@@ -454,6 +507,8 @@ private fun InboxEpisodeRow(
     onOpen: () -> Unit,
     onPlay: () -> Unit,
     onQueue: () -> Unit,
+    downloadState: DownloadState?,
+    onDownload: () -> Unit,
     onTogglePlayed: () -> Unit,
     onMarkOlder: (Boolean) -> Unit,
 ) {
@@ -504,6 +559,30 @@ private fun InboxEpisodeRow(
                     icon = PhosphorIcons.ListPlus,
                     contentDescription = stringResource(R.string.inbox_queue),
                     onClick = onQueue,
+                    boxSize = 30.dp,
+                    iconSize = 16.dp,
+                )
+                IconButtonSquare(
+                    icon = when (downloadState) {
+                        DownloadState.QUEUED, DownloadState.DOWNLOADING ->
+                            PhosphorIcons.PauseFill
+                        DownloadState.DONE -> PhosphorIcons.Trash
+                        else -> PhosphorIcons.DownloadSimple
+                    },
+                    contentDescription = stringResource(
+                        when (downloadState) {
+                            DownloadState.QUEUED, DownloadState.DOWNLOADING ->
+                                R.string.inbox_pause_download
+                            DownloadState.DONE -> R.string.inbox_remove_download
+                            else -> R.string.inbox_download
+                        },
+                    ),
+                    onClick = onDownload,
+                    tint = if (downloadState == DownloadState.DONE) {
+                        colors.accentInk
+                    } else {
+                        colors.ink3
+                    },
                     boxSize = 30.dp,
                     iconSize = 16.dp,
                 )

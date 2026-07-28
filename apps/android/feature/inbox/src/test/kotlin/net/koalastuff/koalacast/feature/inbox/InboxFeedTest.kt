@@ -88,6 +88,22 @@ class InboxFeedTest {
         )
     }
 
+    @Test
+    fun `priority shows sort first and special episodes can be hidden`() {
+        val feed = buildInboxFeed(
+            episodes = listOf(
+                item("regular", "normal", 300),
+                item("bonus trailer", "priority", 250),
+                item("priority regular", "priority", 200),
+            ),
+            completedIds = emptySet(),
+            filter = InboxFilter(unplayedOnly = false, hideSpecials = true),
+            priorityPodcastIds = setOf("priority"),
+        )
+
+        assertEquals(listOf("priority regular", "regular"), feed.map { it.episode.id })
+    }
+
     private fun item(
         id: String,
         podcastId: String,

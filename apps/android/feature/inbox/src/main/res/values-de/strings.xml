@@ -4,8 +4,12 @@
     <string name="inbox_subtitle">Die neuesten Folgen deiner Abonnements.</string>
     <string name="inbox_mark_all">Alle als gehört</string>
     <string name="inbox_settings">Sendungsoptionen</string>
+    <string name="inbox_filters">Filter</string>
+    <string name="inbox_filters_active">Filter · %1$d</string>
     <string name="inbox_unplayed_only">Nur ungehörte</string>
     <string name="inbox_downloaded">Heruntergeladen</string>
+    <string name="inbox_hide_specials">Trailer &amp; Bonus ausblenden</string>
+    <string name="inbox_priority">Priorität</string>
     <string name="inbox_all_shows">Alle Sendungen</string>
     <string name="inbox_date_all">Jedes Datum</string>
     <string name="inbox_date_today">Heute</string>
@@ -36,6 +40,9 @@
     </plurals>
     <string name="inbox_play">Folge abspielen</string>
     <string name="inbox_queue">Zur Warteschlange</string>
+    <string name="inbox_download">Folge herunterladen</string>
+    <string name="inbox_pause_download">Download pausieren</string>
+    <string name="inbox_remove_download">Download entfernen</string>
     <string name="inbox_mark_played">Als gehört markieren</string>
     <string name="inbox_mark_unplayed">Als ungehört markieren</string>
     <string name="inbox_more">Weitere Aktionen</string>

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -62,6 +63,7 @@ fun EpisodeScreen(
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
         onToggleTranscript = viewModel::toggleTranscript,
+        onTranscriptQueryChange = viewModel::setTranscriptQuery,
 
         onToggleChapters = viewModel::toggleChapters,
 
@@ -82,6 +84,7 @@ internal fun EpisodeContent(
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
     onToggleTranscript: () -> Unit,
+    onTranscriptQueryChange: (String) -> Unit,
 
     onToggleChapters: () -> Unit,
 
@@ -317,13 +320,30 @@ internal fun EpisodeContent(
                                     style = KoalaTheme.type.bodySmall,
                                     color = colors.ink2,
                                 )
-                                else -> Text(
-                                    text = state.transcript.ifBlank {
-                                        stringResource(R.string.episode_empty_transcript)
-                                    },
-                                    style = KoalaTheme.type.bodySmall,
-                                    color = colors.ink2,
-                                )
+                                else -> {
+                                    OutlinedTextField(
+                                        value = state.transcriptQuery,
+                                        onValueChange = onTranscriptQueryChange,
+                                        label = {
+                                            Text(stringResource(R.string.episode_search_transcript))
+                                        },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Text(
+                                        text = state.visibleTranscript.ifBlank {
+                                            stringResource(
+                                                if (state.transcriptQuery.isBlank()) {
+                                                    R.string.episode_empty_transcript
+                                                } else {
+                                                    R.string.episode_no_transcript_matches
+                                                },
+                                            )
+                                        },
+                                        style = KoalaTheme.type.bodySmall,
+                                        color = colors.ink2,
+                                    )
+                                }
                             }
                         }
                     }

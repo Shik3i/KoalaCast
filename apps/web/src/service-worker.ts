@@ -8,6 +8,7 @@
 // the last useful screen immediately while the next snapshot is fetched.
 
 import { build, files, version } from '$service-worker';
+import { AUDIO_DOWNLOAD_CACHE } from '$lib/downloads/offline-audio';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -59,7 +60,7 @@ sw.addEventListener('activate', (event) => {
 			.then((keys) =>
 				Promise.all(
 					keys
-						.filter((k) => k !== CACHE && k !== PUBLIC_API_CACHE)
+						.filter((k) => k !== CACHE && k !== PUBLIC_API_CACHE && k !== AUDIO_DOWNLOAD_CACHE)
 						.map((k) => caches.delete(k))
 				)
 			)
@@ -75,6 +76,34 @@ sw.addEventListener('fetch', (event) => {
 
 	// Only handle same-origin traffic; leave audio CDNs and third parties alone.
 	if (url.origin !== sw.location.origin) return;
+
+	if (url.pathname.startsWith('/offline/audio/')) {
+		event.respondWith(
+			caches.open(AUDIO_DOWNLOAD_CACHE).then(async (cache) => {
+				const cached = await cache.match(url.pathname);
+				if (!cached) return new Response('Audio is not downloaded', { status: 404 });
+				const range = request.headers.get('range');
+				if (!range) return cached;
+				const blob = await cached.blob();
+				const match = /^bytes=(\d+)-(\d*)$/.exec(range);
+				if (!match) return new Response(null, { status: 416 });
+				const start = Number(match[1]);
+				const end = match[2] ? Math.min(Number(match[2]), blob.size - 1) : blob.size - 1;
+				if (start > end || start >= blob.size) return new Response(null, { status: 416 });
+				const chunk = blob.slice(start, end + 1, blob.type);
+				return new Response(chunk, {
+					status: 206,
+					headers: {
+						'Content-Type': blob.type || 'application/octet-stream',
+						'Content-Length': String(chunk.size),
+						'Content-Range': `bytes ${start}-${end}/${blob.size}`,
+						'Accept-Ranges': 'bytes'
+					}
+				});
+			})
+		);
+		return;
+	}
 
 	// Artwork is public and keyed by the complete source URL + requested width.
 	// Keep successful real covers across SPA navigations. Never store the proxy's

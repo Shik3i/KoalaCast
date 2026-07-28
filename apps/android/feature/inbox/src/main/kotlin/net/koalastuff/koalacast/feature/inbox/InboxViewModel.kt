@@ -1,8 +1,10 @@
 package net.koalastuff.koalacast.feature.inbox
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Job
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -21,6 +24,7 @@ import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.ContentTtl
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.InboxMode
@@ -36,9 +40,12 @@ data class InboxUiState(
     val unplayedOnly: Boolean = true,
     val downloadedOnly: Boolean = false,
     val downloadedIds: Set<String> = emptySet(),
+    val downloadStates: Map<String, DownloadState> = emptyMap(),
     val selectedPodcastId: String? = null,
     val dateRange: InboxDateRange = InboxDateRange.ALL,
     val mood: InboxMood = InboxMood.ALL,
+    val hideSpecials: Boolean = false,
+    val priorityPodcastIds: Set<String> = emptySet(),
     val sessionMinutes: Int? = null,
     val showSettings: Boolean = false,
     val failedFeeds: Int = 0,
@@ -56,8 +63,10 @@ data class InboxUiState(
                     podcastId = selectedPodcastId,
                     dateRange = dateRange,
                     mood = mood,
+                    hideSpecials = hideSpecials,
                 ),
                 downloadedIds,
+                priorityPodcastIds,
             )
             return sessionMinutes?.let { buildSessionPlan(filtered, it * 60_000L) } ?: filtered
         }
@@ -65,18 +74,33 @@ data class InboxUiState(
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(
+    @ApplicationContext context: Context,
     private val account: AccountRepository,
     private val library: LibraryRepository,
     private val podcasts: PodcastRepository,
     private val progress: ProgressRepository,
     private val queue: QueueRepository,
     private val downloads: DownloadRepository,
+    private val preferences: PreferencesRepository,
     private val player: PlayerConnection,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(InboxUiState())
+    private val filterPrefs = context.getSharedPreferences("inbox-filters", Context.MODE_PRIVATE)
+    private val _state = MutableStateFlow(
+        InboxUiState(
+            unplayedOnly = filterPrefs.getBoolean("unplayed", true),
+            downloadedOnly = filterPrefs.getBoolean("downloaded", false),
+            selectedPodcastId = filterPrefs.getString("podcast", null),
+            dateRange = enumPreference("date", InboxDateRange.ALL),
+            mood = enumPreference("mood", InboxMood.ALL),
+            sessionMinutes = filterPrefs.getInt("session", 0).takeIf { it > 0 },
+            hideSpecials = filterPrefs.getBoolean("hide_specials", false),
+            priorityPodcastIds = filterPrefs.getStringSet("priority", emptySet()).orEmpty().toSet(),
+        ),
+    )
     val state: StateFlow<InboxUiState> = _state.asStateFlow()
     private var refreshJob: Job? = null
+    private val pendingInboxModes = mutableMapOf<String, InboxMode>()
 
     init {
         viewModelScope.launch {
@@ -85,6 +109,7 @@ class InboxViewModel @Inject constructor(
                     it.copy(
                         downloadedIds = items.filter { item -> item.state == DownloadState.DONE }
                             .mapTo(mutableSetOf()) { item -> item.episodeId },
+                        downloadStates = items.associate { item -> item.episodeId to item.state },
                     )
                 }
             }
@@ -114,9 +139,20 @@ class InboxViewModel @Inject constructor(
                 progress.completedEpisodeIds,
             ) { subscriptions, completed -> subscriptions to completed }
                 .collect { (subscriptions, completed) ->
+                    pendingInboxModes.entries.removeAll { (podcastId, mode) ->
+                        subscriptions.firstOrNull { it.podcastId == podcastId }?.inboxMode == mode
+                    }
+                    val visibleSubscriptions = subscriptions.map { subscription ->
+                        pendingInboxModes[subscription.podcastId]?.let { pendingMode ->
+                            subscription.copy(inboxMode = pendingMode)
+                        } ?: subscription
+                    }
                     val idsChanged =
-                        subscriptions.map { it.podcastId } != _state.value.subscriptions.map { it.podcastId }
-                    _state.update { it.copy(subscriptions = subscriptions, completedIds = completed) }
+                        visibleSubscriptions.map { it.podcastId } !=
+                            _state.value.subscriptions.map { it.podcastId }
+                    _state.update {
+                        it.copy(subscriptions = visibleSubscriptions, completedIds = completed)
+                    }
                     if (idsChanged || !seeded) {
                         seeded = true
                         refreshFromCache()
@@ -208,22 +244,48 @@ class InboxViewModel @Inject constructor(
 
     fun setUnplayedOnly(enabled: Boolean) {
         _state.update { it.copy(unplayedOnly = enabled) }
+        filterPrefs.edit().putBoolean("unplayed", enabled).apply()
     }
 
     fun setDownloadedOnly(enabled: Boolean) =
-        _state.update { it.copy(downloadedOnly = enabled) }
+        _state.update { it.copy(downloadedOnly = enabled) }.also {
+            filterPrefs.edit().putBoolean("downloaded", enabled).apply()
+        }
 
     fun setPodcastFilter(podcastId: String?) =
-        _state.update { it.copy(selectedPodcastId = podcastId) }
+        _state.update { it.copy(selectedPodcastId = podcastId) }.also {
+            filterPrefs.edit().putString("podcast", podcastId).apply()
+        }
 
     fun setDateRange(range: InboxDateRange) =
-        _state.update { it.copy(dateRange = range) }
+        _state.update { it.copy(dateRange = range) }.also {
+            filterPrefs.edit().putString("date", range.name).apply()
+        }
 
     fun setMood(mood: InboxMood) =
-        _state.update { it.copy(mood = mood) }
+        _state.update { it.copy(mood = mood) }.also {
+            filterPrefs.edit().putString("mood", mood.name).apply()
+        }
 
     fun setSessionMinutes(minutes: Int?) =
-        _state.update { it.copy(sessionMinutes = minutes) }
+        _state.update { it.copy(sessionMinutes = minutes) }.also {
+            filterPrefs.edit().putInt("session", minutes ?: 0).apply()
+        }
+
+    fun setHideSpecials(enabled: Boolean) {
+        _state.update { it.copy(hideSpecials = enabled) }
+        filterPrefs.edit().putBoolean("hide_specials", enabled).apply()
+    }
+
+    fun togglePriority(podcastId: String) {
+        _state.update { state ->
+            val next = state.priorityPodcastIds.toMutableSet().apply {
+                if (!add(podcastId)) remove(podcastId)
+            }
+            filterPrefs.edit().putStringSet("priority", next).apply()
+            state.copy(priorityPodcastIds = next)
+        }
+    }
 
     fun queueSession() {
         val items = _state.value.feed
@@ -235,6 +297,7 @@ class InboxViewModel @Inject constructor(
     }
 
     fun setInboxMode(podcastId: String, mode: InboxMode) {
+        pendingInboxModes[podcastId] = mode
         _state.update { current ->
             current.copy(
                 subscriptions = current.subscriptions.map {
@@ -256,6 +319,27 @@ class InboxViewModel @Inject constructor(
 
     fun addToQueue(item: InboxEpisode) {
         viewModelScope.launch { queue.addToEnd(item.track) }
+    }
+
+    fun toggleDownload(item: InboxEpisode) {
+        viewModelScope.launch {
+            when (_state.value.downloadStates[item.episode.id]) {
+                null, DownloadState.PAUSED, DownloadState.FAILED -> {
+                    val prefs = preferences.preferences.first()
+                    downloads.enqueue(
+                        item.track,
+                        wifiOnly = prefs.downloadWifiOnly,
+                        concurrency = prefs.downloadConcurrency,
+                        storage = prefs.downloadStorage,
+                        treeUri = prefs.downloadTreeUri,
+                        budgetBytes = prefs.downloadBudgetBytes,
+                    )
+                }
+                DownloadState.QUEUED, DownloadState.DOWNLOADING ->
+                    downloads.pause(item.episode.id)
+                DownloadState.DONE -> downloads.remove(item.episode.id)
+            }
+        }
     }
 
     fun togglePlayed(item: InboxEpisode) {
@@ -283,4 +367,8 @@ class InboxViewModel @Inject constructor(
         val episodes: List<InboxEpisode> = emptyList(),
         val failed: Boolean = false,
     )
+
+    private inline fun <reified T : Enum<T>> enumPreference(key: String, fallback: T): T =
+        runCatching { enumValueOf<T>(filterPrefs.getString(key, null).orEmpty()) }
+            .getOrDefault(fallback)
 }

@@ -14,14 +14,19 @@
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
-	import { optimizeArtwork } from '$lib/artwork';
+	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
 	import { reveal } from '$lib/actions/reveal';
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
 	import { listeningSession } from '$lib/stores/session.svelte';
-	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
+	import {
+		cacheContent,
+		CONTENT_TTL,
+		readCachedContent,
+		revalidateOnce
+	} from '$lib/cache/content';
 
 	interface InboxEpisode {
 		id: string;
@@ -96,7 +101,7 @@
 
 		const results = await mapWithConcurrency(cached, 6, async ({ sub, entry }) => {
 			if (entry?.fresh) return entry.value;
-			try {
+			const refreshed = await revalidateOnce(`inbox:${sub.podcast_id}`, async () => {
 				const newestKnown = Math.max(0, ...(entry?.value ?? []).map((episode) => episode.pub_date ?? 0));
 				const params = new URLSearchParams();
 				if (newestKnown > 0) params.set('since', String(newestKnown));
@@ -104,7 +109,7 @@
 				const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes${suffix}`, {
 					cache: 'no-cache'
 				});
-				if (!res.ok) return entry?.value ?? [];
+				if (!res.ok) throw new Error(`Inbox refresh failed: ${res.status}`);
 				const data = await res.json();
 				const episodes = ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
 					id: ep.id,
@@ -120,9 +125,8 @@
 				const merged = mergeInboxEpisodes(episodes, entry?.value ?? []);
 				await cacheContent(`inbox:${sub.podcast_id}`, merged);
 				return merged;
-			} catch {
-				return entry?.value ?? [];
-			}
+			});
+			return refreshed ?? entry?.value ?? [];
 		});
 		rawEpisodes = results.flat();
 		isLoading = false;
@@ -381,7 +385,7 @@
 			<div class="settings-list">
 				{#each subscriptions as sub (sub.podcast_id)}
 					<div class="settings-row">
-						<img src={optimizeArtwork(sub.artwork_url, 80)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
+						<img src={optimizeArtwork(sub.artwork_url, SUBSCRIPTION_ARTWORK_SIZE)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						<span class="s-title">{sub.title}</span>
 						<div class="seg">
 							<button class:active={(modes[sub.podcast_id] ?? 'all') === 'all'} onclick={() => setMode(sub.podcast_id, 'all')}>{t('inbox.modeAll')}</button>
@@ -429,7 +433,7 @@
 				{#each group.episodes as ep, i (ep.id)}
 					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)} class:menu-open={openMenuId === ep.id}>
 					<a class="ep-art" href={`/episode/${ep.id}`} aria-label={ep.title} title={ep.title}>
-						<img src={optimizeArtwork(ep.artwork_url, 120)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
+						<img src={optimizeArtwork(ep.artwork_url, SUBSCRIPTION_ARTWORK_SIZE)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 					</a>
 					<div class="ep-body">
 						<a class="ep-title" href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a>

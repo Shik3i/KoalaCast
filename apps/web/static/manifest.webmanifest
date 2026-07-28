@@ -1,14 +1,30 @@
 {
   "name": "KoalaCast",
+  "id": "/",
   "short_name": "KoalaCast",
   "description": "Free, open-source, privacy-first podcast player with cross-device sync.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0b1411",
   "theme_color": "#13221c",
   "orientation": "portrait-primary",
   "categories": ["music", "entertainment", "news"],
+  "shortcuts": [
+    {
+      "name": "New episodes",
+      "short_name": "New",
+      "url": "/inbox",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Search podcasts",
+      "short_name": "Search",
+      "url": "/search",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.webp",

@@ -23,6 +23,7 @@ import okhttp3.OkHttpClient
 import javax.inject.Inject
 import net.koalastuff.koalacast.core.data.repository.AppShortcuts
 import net.koalastuff.koalacast.core.data.repository.AutoDownloadWorker
+import net.koalastuff.koalacast.core.data.repository.ContentRefreshWorker
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.AccountDataNamespace
@@ -76,6 +77,7 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
         // Idempotent (KEEP policy), so registering on every start costs nothing
         // and survives a reboot or an app update clearing the schedule.
         AutoDownloadWorker.schedule(this)
+        ContentRefreshWorker.schedule(this)
         // Launcher-side cache; refreshing at start is soon enough for something
         // the listener reaches before the app is open.
         CoroutineScope(Dispatchers.IO).launch { appShortcuts.refresh() }
@@ -87,18 +89,20 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
                 .distinctUntilChanged()
                 .collect { rawUrls ->
                     val loader = SingletonImageLoader.get(this@KoalaCastApplication)
-                    val artworkPx = (
-                        LIBRARY_ARTWORK_DP * resources.displayMetrics.density
-                    ).roundToInt()
                     rawUrls.forEach { rawUrl ->
-                        val url = artworkUrls.forArtworkReady(rawUrl, artworkPx)
-                            ?: return@forEach
-                        loader.enqueue(
-                            ImageRequest.Builder(this@KoalaCastApplication)
-                                .data(url)
-                                .size(Size(artworkPx, artworkPx))
-                                .build(),
-                        )
+                        SUBSCRIPTION_ARTWORK_DP.forEach { artworkDp ->
+                            val artworkPx = (
+                                artworkDp * resources.displayMetrics.density
+                            ).roundToInt()
+                            val url = artworkUrls.forArtworkReady(rawUrl, artworkPx)
+                                ?: return@forEach
+                            loader.enqueue(
+                                ImageRequest.Builder(this@KoalaCastApplication)
+                                    .data(url)
+                                    .size(Size(artworkPx, artworkPx))
+                                    .build(),
+                            )
+                        }
                     }
                 }
         }
@@ -124,6 +128,6 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
             .build()
 
     private companion object {
-        const val LIBRARY_ARTWORK_DP = 160
+        val SUBSCRIPTION_ARTWORK_DP = intArrayOf(40, 56, 160)
     }
 }

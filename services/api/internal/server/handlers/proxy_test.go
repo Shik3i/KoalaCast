@@ -100,6 +100,33 @@ Enjoy your podcast experience.
 	}
 }
 
+func TestProxyHandler_GetAudioProxy(t *testing.T) {
+	audio := []byte("ID3 podcast audio")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(audio)
+	}))
+	defer ts.Close()
+
+	proxy := NewProxyHandler()
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/audio?url="+ts.URL, nil)
+	rec := httptest.NewRecorder()
+	proxy.GetAudioProxy(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "audio/mpeg" {
+		t.Fatalf("expected audio/mpeg, got %q", got)
+	}
+	if got := rec.Body.String(); got != string(audio) {
+		t.Fatalf("expected proxied audio %q, got %q", audio, got)
+	}
+}
+
 // TestProxyHandler_BlocksLoopbackByDefault verifies the production handler (whose
 // client is built by NewProxyHandler, i.e. AllowLoopback=false) refuses to fetch a
 // loopback/private target — the SSRF guard that must not regress.

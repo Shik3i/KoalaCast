@@ -4,8 +4,12 @@
     <string name="inbox_subtitle">The newest episodes from your subscriptions.</string>
     <string name="inbox_mark_all">Mark all played</string>
     <string name="inbox_settings">Show settings</string>
+    <string name="inbox_filters">Filters</string>
+    <string name="inbox_filters_active">Filters · %1$d</string>
     <string name="inbox_unplayed_only">Unplayed only</string>
     <string name="inbox_downloaded">Downloaded</string>
+    <string name="inbox_hide_specials">Hide trailers &amp; bonus</string>
+    <string name="inbox_priority">Priority</string>
     <string name="inbox_all_shows">All shows</string>
     <string name="inbox_date_all">Any date</string>
     <string name="inbox_date_today">Today</string>
@@ -36,6 +40,9 @@
     </plurals>
     <string name="inbox_play">Play episode</string>
     <string name="inbox_queue">Add to queue</string>
+    <string name="inbox_download">Download episode</string>
+    <string name="inbox_pause_download">Pause download</string>
+    <string name="inbox_remove_download">Remove download</string>
     <string name="inbox_mark_played">Mark played</string>
     <string name="inbox_mark_unplayed">Mark unplayed</string>
     <string name="inbox_more">More actions</string>

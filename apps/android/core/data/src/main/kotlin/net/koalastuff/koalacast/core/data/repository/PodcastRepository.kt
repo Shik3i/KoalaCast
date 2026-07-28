@@ -2,6 +2,9 @@ package net.koalastuff.koalacast.core.data.repository
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
 import net.koalastuff.koalacast.core.data.mapper.toModel
 import net.koalastuff.koalacast.core.model.Chapter
@@ -33,6 +36,8 @@ class PodcastRepository @Inject constructor(
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
     private val cache: ContentCache? = null,
 ) {
+    private val refreshLocks = ConcurrentHashMap<String, Mutex>()
+    private val refreshedAt = ConcurrentHashMap<String, Long>()
 
     suspend fun discover(
         category: String? = null,
@@ -159,6 +164,16 @@ class PodcastRepository @Inject constructor(
         limit: Int = PAGE_SIZE,
     ): DataResult<List<Episode>> = withContext(dispatcher) {
         val key = episodesKey(podcastId, limit, 0)
+        refreshLocks.getOrPut(key) { Mutex() }.withLock {
+            val now = System.currentTimeMillis()
+            if (now - (refreshedAt[key] ?: 0L) < REVALIDATION_DEDUPE_MS) {
+                val existing = cache?.get(key, EpisodesResponse.serializer())
+                if (existing != null) {
+                    return@withLock DataResult.Success(
+                        existing.value.episodes.map { it.toModel() },
+                    )
+                }
+            }
         val cached = cache?.get(key, EpisodesResponse.serializer())
         val since = cached?.value?.episodes
             ?.maxOfOrNull { it.pubDate }
@@ -182,8 +197,10 @@ class PodcastRepository @Inject constructor(
                 merged.forEach { episode ->
                     cache?.put(episodeKey(episode.id), episode, EpisodeDto.serializer())
                 }
+                refreshedAt[key] = now
                 DataResult.Success(merged.map { it.toModel() })
             }
+        }
         }
     }
 
@@ -236,6 +253,7 @@ class PodcastRepository @Inject constructor(
 
     companion object {
         const val PAGE_SIZE = 50
+        private const val REVALIDATION_DEDUPE_MS = 30_000L
 
         private fun normalizedLanguages(languages: Set<String>) =
             languages.filter { it.isNotBlank() }.sorted().joinToString(",")

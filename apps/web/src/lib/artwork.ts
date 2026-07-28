@@ -16,6 +16,7 @@ export function optimizeArtwork(url: string | null | undefined, targetSize = 300
 }
 
 const preloadRequests = new Map<string, Promise<void>>();
+export const SUBSCRIPTION_ARTWORK_SIZE = 220;
 
 /**
  * Warms the exact browser-cache entry used by a destination view. Artwork proxy
@@ -37,4 +38,15 @@ export function preloadArtwork(url: string | null | undefined, targetSize = 300)
 
 	preloadRequests.set(src, request);
 	return request;
+}
+
+/** Keep every subscribed show's canonical library cover in the browser/SW cache. */
+export async function preloadSubscriptionArtwork(
+	subscriptions: Array<{ artwork_url?: string | null }>
+): Promise<void> {
+	await Promise.all(
+		subscriptions.map((subscription) =>
+			preloadArtwork(subscription.artwork_url, SUBSCRIPTION_ARTWORK_SIZE)
+		)
+	);
 }

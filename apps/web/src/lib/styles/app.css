@@ -1301,16 +1301,16 @@ html.is-resizing-rails * {
 		position: fixed;
 		z-index: 90;
 		right: 0;
-		bottom: 0;
+		bottom: var(--mobile-browser-inset, 0px);
 		left: 0;
 		display: grid;
 		grid-template-columns: repeat(5, 1fr);
 		min-height: 60px;
-		padding-bottom: env(safe-area-inset-bottom, 0);
+		padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
 		background: var(--bg-transport);
 		border-top: 1px solid var(--border-ui);
 	}
-	.quiet-mobile-nav.has-player { bottom: 67px; }
+	.quiet-mobile-nav.has-player { bottom: var(--mobile-browser-inset, 0px); }
 	.quiet-mobile-nav a {
 		display: flex;
 		align-items: center;

@@ -72,14 +72,15 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 					{ label: 'Artwork Proxy (/api/v1/proxy/image)', text: 'Podcast cover images are fetched by the server, Catmull-Rom downscaled, compressed to JPEG, and cached in a 100MB RAM LRU cache. Third-party image hosts do not see client IP addresses.' },
 					{ label: 'Search & Discovery', text: 'Search queries (iTunes Search API & PodcastIndex API) are executed by the Go backend. Search APIs see only the KoalaCast server IP address.' },
 					{ label: 'RSS Feed Parsing', text: 'Podcast RSS XML feed files are fetched and parsed on the server side.' },
-					{ label: 'Chapters & Transcripts', text: 'Episode chapter JSON and WebVTT/SRT transcript files are fetched via CORS-safe proxy endpoints (/api/v1/proxy/chapters, /api/v1/proxy/transcript).' }
+					{ label: 'Chapters & Transcripts', text: 'Episode chapter JSON and WebVTT/SRT transcript files are fetched via CORS-safe proxy endpoints (/api/v1/proxy/chapters, /api/v1/proxy/transcript).' },
+					{ label: 'Explicit offline downloads', text: 'When you press Download in the PWA, that episode audio is streamed once through /api/v1/proxy/audio into this browser’s private Cache Storage. Normal playback still contacts the publisher directly.' }
 				]
 			},
 			direct: {
 				title: 'Direct Connection (NOT Proxied):',
 				items: [
 					{ label: 'Audio Streams (MP3 / AAC)', text: "Audio media files are streamed directly from podcast publishers' CDNs (e.g. Libsyn, Megaphone, Podbean, Anchor, AWS S3) to your browser HTML5 player." },
-					{ label: 'Reasoning', text: 'KoalaCast servers do not proxy or re-encode gigabytes of audio data, ensuring zero server latency and minimal resource overhead.' },
+					{ label: 'Reasoning', text: 'Normal playback remains direct for minimal server latency. Only an explicit PWA download uses the bounded, rate-limited audio proxy needed to make publisher audio reliably available offline.' },
 					{ label: 'Publisher Metadata', text: "When playing an episode, the publisher's CDN receives standard HTTP GET requests directly from your browser, containing your IP address and User-Agent header as required for web audio delivery." }
 				]
 			}

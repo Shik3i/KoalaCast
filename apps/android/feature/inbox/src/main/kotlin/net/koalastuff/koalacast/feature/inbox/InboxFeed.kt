@@ -20,6 +20,7 @@ data class InboxFilter(
     val podcastId: String? = null,
     val dateRange: InboxDateRange = InboxDateRange.ALL,
     val mood: InboxMood = InboxMood.ALL,
+    val hideSpecials: Boolean = false,
     val nowMs: Long = System.currentTimeMillis(),
 )
 
@@ -47,6 +48,7 @@ internal fun buildInboxFeed(
     completedIds: Set<String>,
     filter: InboxFilter,
     downloadedIds: Set<String> = emptySet(),
+    priorityPodcastIds: Set<String> = emptySet(),
 ): List<InboxEpisode> =
     episodes
         .groupBy { it.subscription.podcastId }
@@ -68,7 +70,12 @@ internal fun buildInboxFeed(
             age == null || (it.episode.hasPubDate && it.episode.pubDateMs >= filter.nowMs - age)
         }
         .filter { filter.mood == InboxMood.ALL || filter.mood in moodsFor(it) }
-        .sortedByDescending { it.episode.pubDateMs }
+        .filter { !filter.hideSpecials || !it.episode.isSpecial() }
+        .sortedWith(
+            compareByDescending<InboxEpisode> {
+                it.subscription.podcastId in priorityPodcastIds
+            }.thenByDescending { it.episode.pubDateMs },
+        )
 
 internal fun buildInboxFeed(
     episodes: List<InboxEpisode>,
@@ -111,6 +118,12 @@ internal fun moodsFor(item: InboxEpisode): Set<InboxMood> {
         }
     }
     return matches.ifEmpty { setOf(InboxMood.FOCUS, InboxMood.UNWIND) }
+}
+
+private fun Episode.isSpecial(): Boolean {
+    val text = "$title $episodeType".lowercase()
+    return episodeType.lowercase() in setOf("trailer", "bonus") ||
+        listOf("trailer", "teaser", "preview", "bonus", "vorschau").any(text::contains)
 }
 
 internal fun episodesFrom(

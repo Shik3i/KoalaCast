@@ -91,6 +91,12 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Get("/proxy/image", proxyHandler.GetImageProxy)
 			r.Head("/proxy/image", proxyHandler.GetImageProxy)
 		})
+		audioProxyLimiter := customMiddleware.NewRateLimiter(12, 1*time.Hour)
+		r.Group(func(r chi.Router) {
+			r.Use(audioProxyLimiter.Limit)
+			r.Get("/proxy/audio", proxyHandler.GetAudioProxy)
+			r.Head("/proxy/audio", proxyHandler.GetAudioProxy)
+		})
 
 		// Podcasts & Discovery. Discover and Search proxy out to iTunes / Podcast
 		// Index, so they are throttled per client IP to stop the server being used to

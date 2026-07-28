@@ -49,6 +49,7 @@ data class PlaybackUiState(
     val sleepAtEpisodeEnd: Boolean = false,
     val sleepAtChapterEnd: Boolean = false,
     val upNextCount: Int = 0,
+    val playbackError: String? = null,
 ) {
     val isActive: Boolean get() = track != null
     val remainingMs: Long get() = (durationMs - positionMs).coerceAtLeast(0)
@@ -146,6 +147,16 @@ class PlayerConnection @Inject constructor(
         explicitPositionMs: Long?,
     ) {
         val generation = playGeneration.incrementAndGet()
+        // Render the selected episode immediately. MediaController can briefly
+        // report an empty timeline while it hands the item to the service; that
+        // transition must not make the mini player flash and disappear.
+        _state.update {
+            it.copy(
+                track = track,
+                isBuffering = true,
+                playbackError = null,
+            )
+        }
         scope.launch {
             val controller = controller()
             val savedPosition = if (resume) {
@@ -286,6 +297,16 @@ class PlayerConnection @Inject constructor(
             }
             syncFromController()
         }
+
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            _state.update {
+                it.copy(
+                    isPlaying = false,
+                    isBuffering = false,
+                    playbackError = error.errorCodeName,
+                )
+            }
+        }
     }
 
     private fun startPositionTicker() {
@@ -302,7 +323,11 @@ class PlayerConnection @Inject constructor(
         val controller = controller ?: return
         scope.launch {
             withContext(Dispatchers.Main) {
-                val track = TrackMediaItem.toTrack(controller.currentMediaItem)
+                val currentItem = controller.currentMediaItem
+                val track = TrackMediaItem.toTrack(currentItem)
+                    ?: _state.value.track?.takeIf {
+                        currentItem == null || currentItem.mediaId == it.episodeId
+                    }
                 val duration = controller.duration
                     .takeIf { it != C.TIME_UNSET && it > 0 }
                     ?: track?.durationMs
@@ -315,6 +340,11 @@ class PlayerConnection @Inject constructor(
                         positionMs = controller.currentPosition.coerceAtLeast(0),
                         durationMs = duration,
                         speed = controller.playbackParameters.speed,
+                        playbackError = if (controller.playerError == null) {
+                            it.playbackError
+                        } else {
+                            controller.playerError?.errorCodeName
+                        },
                     )
                 }
             }
