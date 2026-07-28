@@ -28,6 +28,8 @@
 		readCachedContent,
 		revalidateOnce
 	} from '$lib/cache/content';
+	import { getPodcastPlaybackSettings } from '$lib/stores/podcast-settings';
+	import { notifyNewPodcastEpisodes } from '$lib/notifications/browser';
 
 	interface InboxEpisode {
 		id: string;
@@ -123,6 +125,11 @@
 					enclosure_url: ep.enclosure_url,
 					artwork_url: ep.artwork_url || sub.artwork_url
 				})) as InboxEpisode[];
+				if (entry && getPodcastPlaybackSettings(sub.podcast_id).notifyNewEpisodes) {
+					const knownIds = new Set(entry.value.map((episode) => episode.id));
+					const newEpisodes = episodes.filter((episode) => !knownIds.has(episode.id));
+					await notifyNewPodcastEpisodes(sub.podcast_id, sub.title, newEpisodes);
+				}
 				const merged = mergeInboxEpisodes(episodes, entry?.value ?? []);
 				await cacheContent(`inbox:${sub.podcast_id}`, merged);
 				return merged;

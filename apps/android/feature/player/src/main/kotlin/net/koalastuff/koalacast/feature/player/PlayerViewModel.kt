@@ -58,6 +58,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun togglePlayPause() = player.togglePlayPause()
+    fun retry() = player.retry()
     fun seekBack() = player.seekBack()
     fun seekForward() = player.seekForward()
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)

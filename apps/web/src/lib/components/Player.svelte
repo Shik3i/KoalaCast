@@ -26,7 +26,8 @@
 	let currentTimeMs = $state(0);
 	let durationMs = $state(0);
 	let showShortcutsModal = $state(false);
-	let loadError = $state(false);
+	let loadError = $state('');
+	let loadErrorCode = $state('');
 	let expanded = $state(false);
 	let nowPlayingDialog: HTMLElement | null = $state(null);
 	let previousFocus: HTMLElement | null = null;
@@ -164,7 +165,8 @@
 			player.setPlaybackSpeed(trackSettings.speed ?? player.defaultPlaybackSpeed, false);
 			outroHandled = false;
 			pendingIntroOutroSkippedMs = 0;
-			loadError = false;
+			loadError = '';
+			loadErrorCode = '';
 			audioEl.src = t.enclosure_url;
 			currentTimeMs = 0;
 			loadSavedPosition(t.episode_id);
@@ -204,6 +206,25 @@
 		if (!audioEl || !track) return;
 		if (isPlaying) audioEl.pause();
 		else audioEl.play().catch(() => {});
+	}
+
+	function retryPlayback() {
+		if (!audioEl || !track) return;
+		loadError = '';
+		loadErrorCode = '';
+		audioEl.load();
+		audioEl.currentTime = currentTimeMs / 1000;
+		audioEl.play().catch(() => {});
+	}
+
+	function playbackSource() {
+		if (!track) return '';
+		if (track.enclosure_url.startsWith('/offline/audio/')) return t('player.sourceOffline');
+		try {
+			return new URL(track.enclosure_url, location.href).host;
+		} catch {
+			return t('player.sourceUnknown');
+		}
 	}
 
 	function seekTo(ms: number) {
@@ -594,10 +615,14 @@
 	onplay={() => {
 		isPlaying = true;
 		player.isPlaying = true;
-		loadError = false;
+		loadError = '';
+		loadErrorCode = '';
 		startListeningSession();
 	}}
-	oncanplay={() => (loadError = false)}
+	oncanplay={() => {
+		loadError = '';
+		loadErrorCode = '';
+	}}
 	onpause={() => {
 		sampleListening();
 		isPlaying = false;
@@ -608,7 +633,9 @@
 	onerror={() => {
 		isPlaying = false;
 		player.isPlaying = false;
-		loadError = true;
+		const code = audioEl?.error?.code || 0;
+		loadErrorCode = code ? `MEDIA_ERR_${code}` : 'MEDIA_ERR_UNKNOWN';
+		loadError = audioEl?.error?.message || t('player.loadError');
 	}}
 	ontimeupdate={handleTimeUpdate}
 	onended={handleEnded}
@@ -657,7 +684,11 @@
 				{#if loadError}
 					<div class="load-error" role="alert">
 						<i class="ph ph-warning-circle" aria-hidden="true"></i>
-						{t('player.loadError')}
+						<span>
+							<strong>{t('player.loadError')}</strong>
+							<small>{t('player.source')}: {playbackSource()} · {loadErrorCode}</small>
+						</span>
+						<button onclick={retryPlayback}>{t('player.retry')}</button>
 					</div>
 				{/if}
 				<div class="controls">
@@ -1006,6 +1037,9 @@
 		max-width: 460px;
 		text-align: center;
 	}
+	.load-error span { display: grid; text-align: left; }
+	.load-error small { color: var(--player-muted); font-family: var(--font-mono); }
+	.load-error button { border: 1px solid currentColor; color: inherit; background: transparent; padding: 5px 8px; }
 
 	.ctrl {
 		width: 38px;

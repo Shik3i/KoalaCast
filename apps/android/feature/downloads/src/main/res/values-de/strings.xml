@@ -9,6 +9,7 @@
     <string name="downloads_failed">Download fehlgeschlagen</string>
     <string name="downloads_play">Abspielen</string>
     <string name="downloads_pause">Pausieren</string>
+    <string name="downloads_cancel">Abbrechen</string>
     <string name="downloads_retry">Fortsetzen</string>
     <string name="downloads_remove">Löschen</string>
     <string name="downloads_remove_all">Alle löschen</string>

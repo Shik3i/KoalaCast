@@ -50,6 +50,7 @@ data class PlaybackUiState(
     val sleepAtChapterEnd: Boolean = false,
     val upNextCount: Int = 0,
     val playbackError: String? = null,
+    val isOfflineSource: Boolean = false,
 ) {
     val isActive: Boolean get() = track != null
     val remainingMs: Long get() = (durationMs - positionMs).coerceAtLeast(0)
@@ -183,6 +184,7 @@ class PlayerConnection @Inject constructor(
                     if (it.startsWith("content://")) it
                     else android.net.Uri.fromFile(java.io.File(it)).toString()
                 }
+            _state.update { it.copy(isOfflineSource = localMediaUri != null) }
 
             withContext(Dispatchers.Main) {
                 if (generation != playGeneration.get()) return@withContext
@@ -208,6 +210,14 @@ class PlayerConnection @Inject constructor(
     }
 
     fun togglePlayPause() = onController { if (it.isPlaying) it.pause() else it.play() }
+
+    fun retry() {
+        _state.update { it.copy(playbackError = null, isBuffering = true) }
+        onController {
+            it.prepare()
+            it.play()
+        }
+    }
 
     fun seekTo(positionMs: Long) = onController { it.seekTo(positionMs.coerceAtLeast(0)) }
 

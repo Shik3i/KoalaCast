@@ -85,10 +85,7 @@ class ContentRefreshWorker @AssistedInject constructor(
                                 }
                             }
                         }
-                        if (
-                            settings[subscription.podcastId]?.autoQueueNew == true ||
-                            settings[subscription.podcastId]?.autoDownload == true
-                        ) {
+                        if (settings[subscription.podcastId]?.notifyNewEpisodes == true) {
                             newEpisodes.map { subscription.title to it.title }
                         } else {
                             emptyList()

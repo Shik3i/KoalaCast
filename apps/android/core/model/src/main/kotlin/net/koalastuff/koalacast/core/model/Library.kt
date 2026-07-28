@@ -62,6 +62,8 @@ data class PodcastSettings(
     /** null means "use the global default speed". */
     val speed: Float? = null,
     val autoQueueNew: Boolean = false,
+    /** Notify when the background refresh finds genuinely new episodes. */
+    val notifyNewEpisodes: Boolean = false,
     /**
      * Opt in, per show: fetch the newest episodes as they appear. Off by default
      * because downloading on someone's behalf spends their storage and, on a

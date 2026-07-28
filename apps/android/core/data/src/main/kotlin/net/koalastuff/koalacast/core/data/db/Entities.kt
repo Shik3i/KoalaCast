@@ -156,6 +156,7 @@ data class PodcastSettingsEntity(
     /** null means "use the global default speed". */
     val speed: Float? = null,
     @ColumnInfo(defaultValue = "0") val autoQueueNew: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val notifyNewEpisodes: Boolean = false,
     @ColumnInfo(defaultValue = "0") val autoDownload: Boolean = false,
 )
 

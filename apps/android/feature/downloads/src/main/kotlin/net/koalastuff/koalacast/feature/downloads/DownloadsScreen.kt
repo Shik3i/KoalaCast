@@ -129,7 +129,11 @@ private fun DownloadRow(
         )
         MonoText(
             "${item.track.podcastTitle} · ${stateLabel(item.state)} · " +
-                formatBytes(item.bytesDownloaded),
+                if (item.totalBytes > 0) {
+                    "${formatBytes(item.bytesDownloaded)} / ${formatBytes(item.totalBytes)} · ${item.progressPercent}%"
+                } else {
+                    formatBytes(item.bytesDownloaded)
+                },
             color = colors.ink4,
             style = KoalaTheme.type.monoSmall,
         )
@@ -149,7 +153,7 @@ private fun DownloadRow(
                 text = stringResource(
                     when (item.state) {
                         DownloadState.DONE -> R.string.downloads_play
-                        DownloadState.DOWNLOADING, DownloadState.QUEUED -> R.string.downloads_pause
+                        DownloadState.DOWNLOADING, DownloadState.QUEUED -> R.string.downloads_cancel
                         DownloadState.PAUSED, DownloadState.FAILED -> R.string.downloads_retry
                     },
                 ),

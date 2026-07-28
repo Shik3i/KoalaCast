@@ -17,11 +17,8 @@
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
-	import {
-		downloadAudio,
-		isAudioDownloaded,
-		removeAudioDownload
-	} from '$lib/downloads/offline-audio';
+	import { isAudioDownloaded } from '$lib/downloads/offline-audio';
+	import { audioDownloads } from '$lib/downloads/manager.svelte';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -31,7 +28,8 @@
 	let isFavorite = $state(false);
 	let showAccent = $state<string | null>(null);
 	let audioDownloaded = $state(false);
-	let audioDownloadBusy = $state(false);
+	const currentDownload = $derived(audioDownloads.get(episodeId));
+	const audioDownloadBusy = $derived(currentDownload?.state === 'downloading');
 
 	const accentVars = $derived(
 		showAccent
@@ -49,6 +47,7 @@
 	let loadReqId = 0;
 
 	async function loadEpisodeDetails(id: string) {
+		await audioDownloads.load();
 		const reqId = ++loadReqId;
 		chaptersController?.abort();
 		isLoading = true;
@@ -184,15 +183,18 @@
 
 	async function toggleAudioDownload() {
 		if (!episode || audioDownloadBusy) return;
-		audioDownloadBusy = true;
 		try {
 			if (audioDownloaded) {
-				await removeAudioDownload(episode.id);
+				await audioDownloads.remove(episode.id);
 				audioDownloaded = false;
 				toast.success(t('episode.downloadRemoved'));
 			} else {
-				await downloadAudio({
+				await audioDownloads.start({
 					episode_id: episode.id,
+					podcast_id: episode.podcast_id,
+					title: episode.title,
+					podcast_title: podcast?.title || '',
+					artwork_url: episode.artwork_url || podcast?.artwork_url || '',
 					enclosure_url: episode.enclosure_url
 				});
 				audioDownloaded = true;
@@ -200,9 +202,11 @@
 			}
 		} catch {
 			toast.error(t('episode.downloadFailed'));
-		} finally {
-			audioDownloadBusy = false;
 		}
+	}
+
+	function cancelAudioDownload() {
+		audioDownloads.cancel(episode.id);
 	}
 
 	function formatDuration(ms: number) {
@@ -431,14 +435,19 @@
 					<button class="btn-secondary" onclick={handleAddToQueue}>
 						<i class="ph ph-plus" aria-hidden="true"></i> {t('episode.addToQueue')}
 					</button>
-					<button class="btn-secondary" class:active={audioDownloaded} disabled={audioDownloadBusy} onclick={toggleAudioDownload}>
-						<i class="ph {audioDownloaded ? 'ph-trash' : 'ph-download-simple'}" aria-hidden="true"></i>
-						{audioDownloadBusy
-							? t('episode.downloading')
-							: audioDownloaded
-								? t('episode.removeDownload')
-								: t('episode.download')}
-					</button>
+					{#if audioDownloadBusy}
+						<button class="btn-secondary active" onclick={cancelAudioDownload}>
+							<i class="ph ph-x" aria-hidden="true"></i>
+							{t('downloads.cancel')} {currentDownload?.totalBytes
+								? `${Math.round(((currentDownload?.bytesDownloaded || 0) / currentDownload.totalBytes) * 100)}%`
+								: ''}
+						</button>
+					{:else}
+						<button class="btn-secondary" class:active={audioDownloaded} onclick={toggleAudioDownload}>
+							<i class="ph {audioDownloaded ? 'ph-trash' : 'ph-download-simple'}" aria-hidden="true"></i>
+							{audioDownloaded ? t('episode.removeDownload') : t('episode.download')}
+						</button>
+					{/if}
 					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? 'Favorited' : 'Favorite'}

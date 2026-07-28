@@ -294,6 +294,11 @@ class PodcastViewModel @Inject constructor(
         saveSettings(current.copy(autoDownload = !current.autoDownload))
     }
 
+    fun toggleNotifications() {
+        val current = _state.value.settings
+        saveSettings(current.copy(notifyNewEpisodes = !current.notifyNewEpisodes))
+    }
+
     fun markAllPlayed(played: Boolean) {
         val tracks = _state.value.episodes.mapNotNull(::trackFor)
         viewModelScope.launch {

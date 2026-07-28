@@ -3,13 +3,15 @@ export interface PodcastPlaybackSettings {
 	skipOutroSeconds: number;
 	speed: number | null;
 	autoQueueNew: boolean;
+	notifyNewEpisodes: boolean;
 }
 
 const defaults: PodcastPlaybackSettings = {
 	skipIntroSeconds: 0,
 	skipOutroSeconds: 0,
 	speed: null,
-	autoQueueNew: false
+	autoQueueNew: false,
+	notifyNewEpisodes: false
 };
 
 function key(podcastId: string) {
@@ -24,7 +26,8 @@ export function getPodcastPlaybackSettings(podcastId: string): PodcastPlaybackSe
 			skipIntroSeconds: Math.max(0, Math.min(600, Number(parsed.skipIntroSeconds) || 0)),
 			skipOutroSeconds: Math.max(0, Math.min(600, Number(parsed.skipOutroSeconds) || 0)),
 			speed: parsed.speed == null ? null : Math.max(.25, Math.min(4, Number(parsed.speed) || 1)),
-			autoQueueNew: !!parsed.autoQueueNew
+			autoQueueNew: !!parsed.autoQueueNew,
+			notifyNewEpisodes: !!parsed.notifyNewEpisodes
 		};
 	} catch {
 		return { ...defaults };

@@ -27,6 +27,7 @@
 		type PodcastPlaybackSettings
 	} from '$lib/stores/podcast-settings';
 	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
+	import { setBrowserNotificationsEnabled } from '$lib/notifications/browser';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -277,6 +278,18 @@
 		if (!podcast?.id) return;
 		showSettings = { ...showSettings, ...patch };
 		savePodcastPlaybackSettings(podcast.id, showSettings);
+	}
+
+	async function toggleNotifications(enabled: boolean) {
+		if (!enabled) {
+			updateShowSetting({ notifyNewEpisodes: false });
+			return;
+		}
+		const granted = await setBrowserNotificationsEnabled(true);
+		updateShowSetting({ notifyNewEpisodes: granted });
+		toast[granted ? 'success' : 'error'](
+			t(granted ? 'quiet.show.notificationsEnabled' : 'quiet.show.notificationsDenied')
+		);
 	}
 
 	async function handleSubscribe() {
@@ -567,6 +580,10 @@
 				<label class="auto-queue">
 					<input type="checkbox" checked={showSettings.autoQueueNew} onchange={(event) => updateShowSetting({ autoQueueNew: event.currentTarget.checked })} />
 					<span>{t('quiet.show.autoQueue')}</span>
+				</label>
+				<label class="auto-queue">
+					<input type="checkbox" checked={showSettings.notifyNewEpisodes} onchange={(event) => toggleNotifications(event.currentTarget.checked)} />
+					<span>{t('quiet.show.notifications')}</span>
 				</label>
 			</div>
 		</section>

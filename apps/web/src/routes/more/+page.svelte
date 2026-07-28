@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
 	const links = [
+		{ href: '/downloads', icon: 'ph-download-simple', label: 'downloads.title' as const },
 		{ href: '/profile', icon: 'ph-chart-bar', label: 'quiet.nav.profile' as const },
 		{ href: '/settings', icon: 'ph-gear', label: 'quiet.nav.settings' as const },
 		{ href: '/account', icon: 'ph-user-circle', label: 'nav.account' as const },

@@ -53,6 +53,7 @@ fun MiniPlayer(
         state = state,
         onExpand = onExpand,
         onTogglePlayPause = viewModel::togglePlayPause,
+        onRetry = viewModel::retry,
         onSeekForward = viewModel::seekForward,
         modifier = modifier,
     )
@@ -63,6 +64,7 @@ internal fun MiniPlayerContent(
     state: PlaybackUiState,
     onExpand: () -> Unit,
     onTogglePlayPause: () -> Unit,
+    onRetry: () -> Unit,
     onSeekForward: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -136,6 +138,28 @@ internal fun MiniPlayerContent(
                 onClick = onTogglePlayPause,
                 size = 38.dp,
             )
+        }
+
+        state.playbackError?.let { error ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.bgPanel)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = KoalaSpacing.gap, vertical = KoalaSpacing.gapTiny),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                MonoText(
+                    text = stringResource(R.string.player_error_short, error),
+                    color = colors.ink3,
+                    style = KoalaTheme.type.monoSmall,
+                )
+                MonoText(
+                    text = stringResource(R.string.player_retry),
+                    color = colors.accentInk,
+                    style = KoalaTheme.type.monoStrong,
+                )
+            }
         }
 
         ProgressTrack(

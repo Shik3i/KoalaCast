@@ -1,5 +1,10 @@
 package net.koalastuff.koalacast.feature.podcast
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +39,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Episode
@@ -67,6 +73,27 @@ fun PodcastScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted && !state.settings.notifyNewEpisodes) viewModel.toggleNotifications()
+    }
+    val toggleNotifications = {
+        if (state.settings.notifyNewEpisodes) {
+            viewModel.toggleNotifications()
+        } else if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.toggleNotifications()
+        } else {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Paging without a Paging library: the list asks for more once the tail is in
     // sight. Episode lists are bounded (a few hundred rows), so this is enough.
@@ -98,6 +125,7 @@ fun PodcastScreen(
         onSetSkipOutro = viewModel::setSkipOutro,
         onToggleAutoQueue = viewModel::toggleAutoQueue,
         onToggleAutoDownload = viewModel::toggleAutoDownload,
+        onToggleNotifications = toggleNotifications,
         onMarkAllPlayed = { viewModel.markAllPlayed(true) },
         onMarkAllUnplayed = { viewModel.markAllPlayed(false) },
         modifier = modifier,
@@ -123,6 +151,7 @@ internal fun PodcastContent(
     onSetSkipOutro: (Int) -> Unit,
     onToggleAutoQueue: () -> Unit,
     onToggleAutoDownload: () -> Unit,
+    onToggleNotifications: () -> Unit,
     onMarkAllPlayed: () -> Unit,
     onMarkAllUnplayed: () -> Unit,
     modifier: Modifier = Modifier,
@@ -164,6 +193,7 @@ internal fun PodcastContent(
                     onSetSkipOutro = onSetSkipOutro,
                     onToggleAutoQueue = onToggleAutoQueue,
                     onToggleAutoDownload = onToggleAutoDownload,
+                    onToggleNotifications = onToggleNotifications,
                 )
             }
         }
@@ -290,6 +320,7 @@ private fun PodcastHeader(
     onSetSkipOutro: (Int) -> Unit,
     onToggleAutoQueue: () -> Unit,
     onToggleAutoDownload: () -> Unit,
+    onToggleNotifications: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     Column(
@@ -434,6 +465,35 @@ private fun PodcastHeader(
                     checked = settings.autoDownload && subscribed,
                     enabled = subscribed,
                     onCheckedChange = { onToggleAutoDownload() },
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.podcast_notifications),
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink2,
+                    )
+                    Text(
+                        text = stringResource(
+                            if (subscribed) {
+                                R.string.podcast_notifications_note
+                            } else {
+                                R.string.podcast_notifications_needs_sub
+                            },
+                        ),
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink4,
+                    )
+                }
+                Switch(
+                    checked = settings.notifyNewEpisodes && subscribed,
+                    enabled = subscribed,
+                    onCheckedChange = { onToggleNotifications() },
                 )
             }
         }

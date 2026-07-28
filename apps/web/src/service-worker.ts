@@ -32,6 +32,18 @@ const OFFLINE_FILES = new Set([
 	'/illustrations/empty-search.webp',
 	'/illustrations/empty-queue.webp'
 ]);
+
+sw.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const target = String(event.notification.data?.url || '/inbox');
+	event.waitUntil(
+		sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
+			const existing = clients.find((client) => new URL(client.url).pathname === target);
+			if (existing) return existing.focus();
+			return sw.clients.openWindow(target);
+		})
+	);
+});
 const PRECACHE = [...PRECACHE_BUILD, ...files.filter((path) => OFFLINE_FILES.has(path))];
 
 sw.addEventListener('install', (event) => {

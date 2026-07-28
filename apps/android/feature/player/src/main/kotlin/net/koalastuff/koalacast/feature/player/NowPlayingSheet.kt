@@ -67,6 +67,7 @@ fun NowPlayingScreen(
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
         onTogglePlayPause = viewModel::togglePlayPause,
+        onRetry = viewModel::retry,
         onSeekBack = viewModel::seekBack,
         onSeekForward = viewModel::seekForward,
         onSeekTo = viewModel::seekTo,
@@ -85,6 +86,7 @@ internal fun NowPlayingContent(
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
+    onRetry: () -> Unit,
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onSeekTo: (Long) -> Unit,
@@ -151,6 +153,43 @@ internal fun NowPlayingContent(
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+
+        state.playbackError?.let { error ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.bgTransport)
+                    .padding(KoalaSpacing.gap),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+            ) {
+                Text(
+                    text = stringResource(R.string.player_error),
+                    style = KoalaTheme.type.bodySmall,
+                    color = colors.inkStrong,
+                )
+                MonoText(
+                    text = stringResource(
+                        R.string.player_error_diagnostic,
+                        stringResource(
+                            if (state.isOfflineSource) {
+                                R.string.player_source_offline
+                            } else {
+                                R.string.player_source_stream
+                            },
+                        ),
+                        error,
+                    ),
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                )
+                Text(
+                    text = stringResource(R.string.player_retry),
+                    modifier = Modifier.clickable(onClick = onRetry),
+                    style = KoalaTheme.type.bodySmall,
+                    color = colors.accentInk,
+                )
+            }
         }
 
         Scrubber(

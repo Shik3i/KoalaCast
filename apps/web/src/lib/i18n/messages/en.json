@@ -475,6 +475,10 @@
 		"toggleVolumeBoost": "Toggle Volume Boost",
 		"endOfEpisode": "End of episode",
 		"loadError": "Audio couldn't be loaded — a tracking/ad blocker may be blocking the file.",
+		"retry": "Retry",
+		"source": "Source",
+		"sourceOffline": "Offline download",
+		"sourceUnknown": "Unknown source",
 		"sleepOff": "Off",
 		"sleepTimerOff": "Sleep off",
 		"sleepChapterEnd": "End of chapter",
@@ -596,6 +600,21 @@
 		"chaptersLoadError": "Chapters could not be loaded.",
 		"transcriptLoadError": "Transcript could not be loaded."
 	},
+	"downloads": {
+		"title": "Downloads",
+		"offline": "Listen offline",
+		"description": "Every locally stored episode, its progress and storage in one place.",
+		"audioStored": "Podcast audio stored",
+		"browserStorage": "Browser total: {used} of {quota}",
+		"cancel": "Cancel",
+		"cancelled": "Cancelled",
+		"retry": "Retry",
+		"remove": "Remove download",
+		"failed": "Failed",
+		"ready": "Available offline",
+		"empty": "No downloads yet",
+		"emptyHint": "Download an episode and its progress and storage will appear here."
+	},
 	"quiet": {
 		"shell": {
 			"collapseNavigation": "Collapse navigation",
@@ -694,7 +713,10 @@
 			"seconds": "s",
 			"speed": "Speed",
 			"globalSpeed": "Global",
-			"autoQueue": "Auto-queue new"
+			"autoQueue": "Auto-queue new",
+			"notifications": "Browser notification for new episodes",
+			"notificationsEnabled": "Notifications enabled for this show.",
+			"notificationsDenied": "Notification permission was not granted."
 		},
 		"library": {
 			"collections": "Collections",

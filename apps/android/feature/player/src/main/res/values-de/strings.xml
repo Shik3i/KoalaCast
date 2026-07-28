@@ -15,4 +15,10 @@
     <string name="player_previous_chapter">Vorheriges Kapitel</string>
     <string name="player_next_chapter">Nächstes Kapitel</string>
     <string name="player_before_first_chapter">Vor dem ersten Kapitel</string>
+    <string name="player_error">Audiowiedergabe fehlgeschlagen</string>
+    <string name="player_error_short">Player-Fehler · %1$s</string>
+    <string name="player_error_diagnostic">Quelle: %1$s · %2$s</string>
+    <string name="player_source_offline">Offline-Download</string>
+    <string name="player_source_stream">Publisher-Stream</string>
+    <string name="player_retry">Erneut versuchen</string>
 </resources>

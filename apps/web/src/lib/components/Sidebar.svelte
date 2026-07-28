@@ -21,6 +21,7 @@
 		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('quiet.nav.new'), count: recentCount },
 		{ href: '/library', icon: 'ph-squares-four', label: t('quiet.nav.library') },
+		{ href: '/downloads', icon: 'ph-download-simple', label: t('downloads.title') },
 		{ href: '/profile', icon: 'ph-chart-bar', label: t('quiet.nav.profile') },
 		{ href: '/settings', icon: 'ph-gear', label: t('quiet.nav.settings') },
 		...(isAdmin ? [{ href: '/admin', icon: 'ph-shield-star', label: t('nav.admin') }] : [])

@@ -123,6 +123,7 @@ fun PodcastSettingsEntity.toModel() = PodcastSettings(
     skipOutroSeconds = skipOutroSeconds,
     speed = speed,
     autoQueueNew = autoQueueNew,
+    notifyNewEpisodes = notifyNewEpisodes,
     autoDownload = autoDownload,
 )
 
@@ -132,6 +133,7 @@ fun PodcastSettings.toEntity() = PodcastSettingsEntity(
     skipOutroSeconds = skipOutroSeconds,
     speed = speed,
     autoQueueNew = autoQueueNew,
+    notifyNewEpisodes = notifyNewEpisodes,
     autoDownload = autoDownload,
 )
 

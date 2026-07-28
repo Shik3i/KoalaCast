@@ -475,6 +475,10 @@
 		"toggleVolumeBoost": "Lautstärkeverstärkung ein-/ausschalten",
 		"endOfEpisode": "Ende der Folge",
 		"loadError": "Audio konnte nicht geladen werden — möglicherweise blockiert ein Tracking-/Werbeblocker die Datei.",
+		"retry": "Erneut versuchen",
+		"source": "Quelle",
+		"sourceOffline": "Offline-Download",
+		"sourceUnknown": "Unbekannte Quelle",
 		"sleepOff": "Aus",
 		"sleepTimerOff": "Sleep-Timer aus",
 		"sleepChapterEnd": "Ende des Kapitels",
@@ -596,6 +600,21 @@
 		"chaptersLoadError": "Kapitel konnten nicht geladen werden.",
 		"transcriptLoadError": "Transkript konnte nicht geladen werden."
 	},
+	"downloads": {
+		"title": "Downloads",
+		"offline": "Offline hören",
+		"description": "Alle lokal gespeicherten Folgen, Fortschritt und Speicher an einem Ort.",
+		"audioStored": "Podcast-Audio gespeichert",
+		"browserStorage": "Browser gesamt: {used} von {quota}",
+		"cancel": "Abbrechen",
+		"cancelled": "Abgebrochen",
+		"retry": "Erneut versuchen",
+		"remove": "Download entfernen",
+		"failed": "Fehlgeschlagen",
+		"ready": "Offline verfügbar",
+		"empty": "Noch keine Downloads",
+		"emptyHint": "Lade eine Folge herunter; Fortschritt und Speicher erscheinen dann hier."
+	},
 	"quiet": {
 		"shell": {
 			"collapseNavigation": "Navigation einklappen",
@@ -694,7 +713,10 @@
 			"seconds": "s",
 			"speed": "Tempo",
 			"globalSpeed": "Global",
-			"autoQueue": "Neue Folgen automatisch einreihen"
+			"autoQueue": "Neue Folgen automatisch einreihen",
+			"notifications": "Browser-Benachrichtigung bei neuen Folgen",
+			"notificationsEnabled": "Benachrichtigungen für diese Sendung aktiviert.",
+			"notificationsDenied": "Benachrichtigungsberechtigung wurde nicht erteilt."
 		},
 		"library": {
 			"collections": "Sammlungen",

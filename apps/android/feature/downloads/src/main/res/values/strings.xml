@@ -9,6 +9,7 @@
     <string name="downloads_failed">Download failed</string>
     <string name="downloads_play">Play</string>
     <string name="downloads_pause">Pause</string>
+    <string name="downloads_cancel">Cancel</string>
     <string name="downloads_retry">Resume</string>
     <string name="downloads_remove">Delete</string>
     <string name="downloads_remove_all">Delete all</string>
