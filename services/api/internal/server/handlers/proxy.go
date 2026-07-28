@@ -118,6 +118,7 @@ func NewProxyHandler() *ProxyHandler {
 // "decompression bomb") could decode to gigabytes of RGBA and OOM the process.
 // 40 MP comfortably covers legitimate podcast artwork (typically <=3000x3000).
 const maxDecodedPixels = 40 * 1000 * 1000
+
 // Cold publisher/CDN connections routinely exceed one second. A 1.2 s deadline
 // made the proxy return its temporary placeholder before otherwise healthy
 // artwork arrived, forcing users to reload until a request happened to be fast.
