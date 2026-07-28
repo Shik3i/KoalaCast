@@ -19,6 +19,17 @@ const HIDDEN_KEY = 'koalacast_hidden_genres';
 const LANGUAGES_KEY = 'koalacast_preferred_languages';
 const UI_LANGUAGE_KEY = 'koalacast_ui_language';
 const ONBOARDED_KEY = 'koalacast_onboarded';
+const VOLUME_BOOST_KEY = 'koalacast_volume_boost';
+const SKIP_SILENCE_KEY = 'koalacast_skip_silence';
+
+function initialBoolean(key: string): boolean {
+	if (typeof localStorage === 'undefined') return false;
+	try {
+		return localStorage.getItem(key) === '1';
+	} catch (_) {
+		return false;
+	}
+}
 
 // Reads the stored content languages, migrating the legacy storefront codes
 // ("us", "gb") this preference used to hold before languages and regions were
@@ -90,6 +101,8 @@ class Prefs {
 	// preference that drives it (see `applyLocale` in +layout.svelte).
 	uiLanguage = $state<string>(initialUILanguage());
 	onboarded = $state<boolean>(initialOnboarded());
+	volumeBoost = $state<boolean>(initialBoolean(VOLUME_BOOST_KEY));
+	skipSilence = $state<boolean>(initialBoolean(SKIP_SILENCE_KEY));
 
 	// iTunes storefronts to pull charts from, one per selected language.
 	// Deduplicated because several languages can share a storefront.
@@ -124,6 +137,20 @@ class Prefs {
 		this.dateFormat = mode;
 		try {
 			localStorage.setItem(KEY, mode);
+		} catch (_) {}
+	}
+
+	setVolumeBoost(enabled: boolean) {
+		this.volumeBoost = enabled;
+		try {
+			localStorage.setItem(VOLUME_BOOST_KEY, enabled ? '1' : '0');
+		} catch (_) {}
+	}
+
+	setSkipSilence(enabled: boolean) {
+		this.skipSilence = enabled;
+		try {
+			localStorage.setItem(SKIP_SILENCE_KEY, enabled ? '1' : '0');
 		} catch (_) {}
 	}
 

@@ -10,6 +10,8 @@
 
     <string name="podcast_subscribe">Abonnieren</string>
     <string name="podcast_subscribed">Abonniert</string>
+    <string name="podcast_options_show">Optionen</string>
+    <string name="podcast_options_hide">Schließen</string>
     <string name="podcast_played">Gehört</string>
     <string name="podcast_action_queue">Zur Warteschlange</string>
     <string name="podcast_action_dequeue">Aus der Warteschlange entfernen</string>

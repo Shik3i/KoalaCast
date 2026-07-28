@@ -10,6 +10,8 @@
 
     <string name="podcast_subscribe">Subscribe</string>
     <string name="podcast_subscribed">Subscribed</string>
+    <string name="podcast_options_show">Options</string>
+    <string name="podcast_options_hide">Close</string>
     <string name="podcast_played">Played</string>
     <string name="podcast_action_queue">Add to queue</string>
     <string name="podcast_action_dequeue">Remove from queue</string>

@@ -28,8 +28,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,7 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
@@ -323,6 +326,7 @@ private fun PodcastHeader(
     onToggleNotifications: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -334,169 +338,192 @@ private fun PodcastHeader(
             modifier = Modifier.padding(
                 start = KoalaSpacing.screenH,
                 end = KoalaSpacing.screenH,
-                bottom = KoalaSpacing.gapSection,
+                bottom = KoalaSpacing.gap,
             ),
             verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
         ) {
-            CoverArt(
-                url = podcast.artworkUrl,
-                contentDescription = null,
-                modifier = Modifier.size(140.dp),
-                // Match the library grid's proxy width so both screens share one
-                // Coil disk-cache key instead of downloading two near-identical files.
-                sizeHint = 160.dp,
-            )
-            MonoText(
-                text = listOf(
-                    podcast.author,
-                    podcast.language.uppercase(),
-                    if (podcast.explicit) stringResource(R.string.podcast_explicit) else "",
-                ).filter { it.isNotBlank() }.joinToString(" · "),
-                color = colors.ink4,
-                style = KoalaTheme.type.monoSmall,
-            )
-            Text(
-                text = podcast.title,
-                style = KoalaTheme.type.displaySmall,
-                color = colors.inkStrong,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CoverArt(
+                    url = podcast.artworkUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(88.dp),
+                    sizeHint = 160.dp,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                ) {
+                    MonoText(
+                        text = listOf(
+                            podcast.author,
+                            podcast.language.uppercase(),
+                            if (podcast.explicit) stringResource(R.string.podcast_explicit) else "",
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        color = colors.ink4,
+                        style = KoalaTheme.type.monoSmall,
+                    )
+                    Text(
+                        text = podcast.title,
+                        style = KoalaTheme.type.displaySmall,
+                        color = colors.inkStrong,
+                    )
+                }
+            }
             val description = Format.plainText(podcast.description)
             if (description.isNotBlank()) {
                 Text(
                     text = description,
                     style = KoalaTheme.type.bodySmall,
                     color = colors.ink3,
-                    maxLines = 6,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
 
-            // Subscribing is purely local: no account, no request, works offline.
-            if (subscribed) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            ) {
+                // Subscribing is purely local: no account, no request, works offline.
+                if (subscribed) {
+                    OutlineButton(
+                        text = stringResource(R.string.podcast_subscribed),
+                        onClick = onToggleSubscribe,
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = PhosphorIcons.Check,
+                    )
+                } else {
+                    AccentButton(
+                        text = stringResource(R.string.podcast_subscribe),
+                        onClick = onToggleSubscribe,
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = PhosphorIcons.Plus,
+                    )
+                }
                 OutlineButton(
-                    text = stringResource(R.string.podcast_subscribed),
-                    onClick = onToggleSubscribe,
-                    leadingIcon = PhosphorIcons.Check,
-                )
-            } else {
-                AccentButton(
-                    text = stringResource(R.string.podcast_subscribe),
-                    onClick = onToggleSubscribe,
-                    leadingIcon = PhosphorIcons.Plus,
+                    text = stringResource(
+                        if (showSettings) {
+                            R.string.podcast_options_hide
+                        } else {
+                            R.string.podcast_options_show
+                        },
+                    ),
+                    onClick = { showSettings = !showSettings },
+                    modifier = Modifier.weight(1f),
+                    leadingIcon = if (showSettings) {
+                        PhosphorIcons.CaretUp
+                    } else {
+                        PhosphorIcons.SlidersHorizontal
+                    },
                 )
             }
 
-            MonoText(
-                text = stringResource(R.string.podcast_show_speed),
-                color = colors.ink4,
-                style = KoalaTheme.type.monoSmall,
+            if (showSettings) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.bgSunken)
+                        .padding(KoalaSpacing.gap),
+                    verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                ) {
+                    MonoText(
+                        text = stringResource(R.string.podcast_show_speed),
+                        color = colors.ink4,
+                        style = KoalaTheme.type.monoSmall,
+                    )
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                        listOf(null, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                            KoalaChip(
+                                label = speed?.let { "${it}×" }
+                                    ?: stringResource(R.string.podcast_speed_default),
+                                selected = settings.speed == speed,
+                                onClick = { onSetSpeed(speed) },
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                    ) {
+                        SkipField(
+                            label = stringResource(R.string.podcast_skip_intro),
+                            seconds = settings.skipIntroSeconds,
+                            onChange = onSetSkipIntro,
+                            modifier = Modifier.weight(1f),
+                        )
+                        SkipField(
+                            label = stringResource(R.string.podcast_skip_outro),
+                            seconds = settings.skipOutroSeconds,
+                            onChange = onSetSkipOutro,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    PodcastSettingSwitch(
+                        title = stringResource(R.string.podcast_auto_queue),
+                        checked = settings.autoQueueNew,
+                        onToggle = onToggleAutoQueue,
+                    )
+                    PodcastSettingSwitch(
+                        title = stringResource(R.string.podcast_auto_download),
+                        note = stringResource(
+                            if (subscribed) R.string.podcast_auto_download_note
+                            else R.string.podcast_auto_download_needs_sub,
+                        ),
+                        checked = settings.autoDownload && subscribed,
+                        enabled = subscribed,
+                        onToggle = onToggleAutoDownload,
+                    )
+                    PodcastSettingSwitch(
+                        title = stringResource(R.string.podcast_notifications),
+                        note = stringResource(
+                            if (subscribed) R.string.podcast_notifications_note
+                            else R.string.podcast_notifications_needs_sub,
+                        ),
+                        checked = settings.notifyNewEpisodes && subscribed,
+                        enabled = subscribed,
+                        onToggle = onToggleNotifications,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PodcastSettingSwitch(
+    title: String,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    note: String? = null,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = KoalaTheme.type.bodySmall,
+                color = KoalaTheme.colors.ink2,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
-                listOf(null, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
-                    KoalaChip(
-                        label = speed?.let { "${it}×" }
-                            ?: stringResource(R.string.podcast_speed_default),
-                        selected = settings.speed == speed,
-                        onClick = { onSetSpeed(speed) },
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
-            ) {
-                SkipField(
-                    label = stringResource(R.string.podcast_skip_intro),
-                    seconds = settings.skipIntroSeconds,
-                    onChange = onSetSkipIntro,
-                    modifier = Modifier.weight(1f),
-                )
-                SkipField(
-                    label = stringResource(R.string.podcast_skip_outro),
-                    seconds = settings.skipOutroSeconds,
-                    onChange = onSetSkipOutro,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            if (note != null) {
                 Text(
-                    text = stringResource(R.string.podcast_auto_queue),
+                    text = note,
                     style = KoalaTheme.type.bodySmall,
-                    color = colors.ink2,
-                    // Without the weight this label pushes the switch off the right
-                    // edge at 320dp — SpaceBetween cannot shrink an unweighted child.
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = settings.autoQueueNew,
-                    onCheckedChange = { onToggleAutoQueue() },
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.podcast_auto_download),
-                        style = KoalaTheme.type.bodySmall,
-                        color = colors.ink2,
-                    )
-                    Text(
-                        text = stringResource(
-                            // Auto-download walks the subscription list, so without a
-                            // subscription the switch would sit on and do nothing.
-                            if (subscribed) {
-                                R.string.podcast_auto_download_note
-                            } else {
-                                R.string.podcast_auto_download_needs_sub
-                            },
-                        ),
-                        style = KoalaTheme.type.bodySmall,
-                        color = colors.ink4,
-                    )
-                }
-                Switch(
-                    checked = settings.autoDownload && subscribed,
-                    enabled = subscribed,
-                    onCheckedChange = { onToggleAutoDownload() },
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.podcast_notifications),
-                        style = KoalaTheme.type.bodySmall,
-                        color = colors.ink2,
-                    )
-                    Text(
-                        text = stringResource(
-                            if (subscribed) {
-                                R.string.podcast_notifications_note
-                            } else {
-                                R.string.podcast_notifications_needs_sub
-                            },
-                        ),
-                        style = KoalaTheme.type.bodySmall,
-                        color = colors.ink4,
-                    )
-                }
-                Switch(
-                    checked = settings.notifyNewEpisodes && subscribed,
-                    enabled = subscribed,
-                    onCheckedChange = { onToggleNotifications() },
+                    color = KoalaTheme.colors.ink4,
                 )
             }
         }
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = { onToggle() },
+        )
     }
 }
 

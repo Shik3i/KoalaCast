@@ -20,6 +20,7 @@
 	let isSearching = $state(false);
 	let isAddingRss = $state(false);
 	let errorMessage = $state('');
+	let searchRequestFailed = $state(false);
 	let searchResults = $state<any[]>([]);
 	let provider = $state<string>('');
 	let subscribedIds = $state<string[]>([]);
@@ -143,6 +144,7 @@
 		lastExecutedQuery = '';
 		provider = '';
 		errorMessage = '';
+		searchRequestFailed = false;
 	}
 
 	$effect(() => {
@@ -168,6 +170,7 @@
 		lastExecutedQuery = query.trim();
 		isSearching = searchResults.length === 0;
 		errorMessage = '';
+		searchRequestFailed = false;
 
 		// The storefront follows the first selected language; the language filter
 		// itself is what actually restricts results (a storefront is a market, not
@@ -200,6 +203,7 @@
 
 		try {
 			const res = await fetch(path, { signal: controller.signal, cache: 'no-cache' });
+			if (!res.ok) throw new Error(`Search failed: ${res.status}`);
 			const data = await res.json();
 			if (reqId !== searchReqId) return; // superseded by a newer query
 			searchResults = data.results ?? [];
@@ -207,7 +211,10 @@
 			if (res.ok) await cacheContent(cacheKey, data);
 		} catch (err) {
 			if (reqId !== searchReqId) return;
-			if (!cached) errorMessage = t('search.searchError');
+			if (!cached) {
+				errorMessage = t('search.searchError');
+				searchRequestFailed = true;
+			}
 		} finally {
 			if (reqId === searchReqId) isSearching = false;
 			if (searchController === controller) searchController = null;
@@ -286,6 +293,7 @@
 		if (!rssUrlInput.trim()) return;
 		isAddingRss = true;
 		errorMessage = '';
+		searchRequestFailed = false;
 
 		try {
 			const res = await fetch('/api/v1/podcasts/feed', {
@@ -454,12 +462,12 @@
 	</div>
 
 	{#if errorMessage}
-		<div class="alert error" transition:slide={{ duration: 200 }}>{errorMessage}</div>
+		<div class="alert error" role="alert" transition:slide={{ duration: 200 }}>{errorMessage}</div>
 	{/if}
 
 	<!-- Results Grid -->
 	<section class="results-section" aria-live="polite">
-		{#if isSearching || lastExecutedQuery}
+		{#if isSearching || (lastExecutedQuery && !searchRequestFailed)}
 			<div class="results-head">
 				<h2>{isSearching ? t('search.searchingLive') : t('search.results', { count: visibleResults.length })}</h2>
 				{#if provider && searchResults.length > 0}
@@ -485,6 +493,8 @@
 					</div>
 				{/each}
 			</div>
+		{:else if searchRequestFailed}
+			<!-- The alert above is the complete state; do not misreport a request failure as zero matches. -->
 		{:else if visibleResults.length === 0}
 			<div class="empty-state">
 				<img class="empty-illustration" src="/illustrations/empty-search.webp" width="176" height="176" loading="lazy" decoding="async" alt="" />

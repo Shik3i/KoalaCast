@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,7 +30,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.InboxMode
@@ -152,18 +150,16 @@ internal fun InboxContent(
                 )
                 if (state.subscriptions.isNotEmpty()) {
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        OutlineButton(
-                            text = stringResource(R.string.inbox_mark_all),
-                            onClick = onMarkAllPlayed,
-                            enabled = feed.isNotEmpty(),
-                        )
-                        OutlineButton(
-                            text = stringResource(R.string.inbox_settings),
-                            onClick = onToggleSettings,
-                            leadingIcon = PhosphorIcons.SlidersHorizontal,
+                        KoalaChip(
+                            label = stringResource(R.string.inbox_unplayed_only),
+                            selected = state.unplayedOnly,
+                            onClick = { onSetUnplayedOnly(!state.unplayedOnly) },
                         )
                         OutlineButton(
                             text = if (activeFilterCount > 0) {
@@ -178,26 +174,16 @@ internal fun InboxContent(
                                 PhosphorIcons.Funnel
                             },
                         )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSetUnplayedOnly(!state.unplayedOnly) },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.inbox_unplayed_only),
-                            style = KoalaTheme.type.label,
-                            color = colors.ink2,
+                        IconButtonSquare(
+                            icon = PhosphorIcons.SlidersHorizontal,
+                            contentDescription = stringResource(R.string.inbox_settings),
+                            onClick = onToggleSettings,
                         )
-                        Switch(
-                            checked = state.unplayedOnly,
-                            onCheckedChange = onSetUnplayedOnly,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = colors.accentOn,
-                                checkedTrackColor = colors.accentInk,
-                            ),
+                        IconButtonSquare(
+                            icon = PhosphorIcons.CheckCircle,
+                            contentDescription = stringResource(R.string.inbox_mark_all),
+                            onClick = onMarkAllPlayed,
+                            enabled = feed.isNotEmpty(),
                         )
                     }
                     if (showFilters) {

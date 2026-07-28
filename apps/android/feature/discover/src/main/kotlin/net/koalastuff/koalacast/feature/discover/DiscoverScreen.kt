@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,7 +30,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.PodcastSummary
 import net.koalastuff.koalacast.core.ui.component.AccentBadge
@@ -192,8 +191,8 @@ private fun SpotlightCard(
         modifier = Modifier
             .fillMaxWidth()
             .spotlightGlow(colors.accentFill)
-            .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.gapSection),
-        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.gap),
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
@@ -213,31 +212,39 @@ private fun SpotlightCard(
             )
         }
 
-        CoverArt(
-            url = spotlight.show.artworkUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxWidth(0.52f)
-                .aspectRatio(1f),
-            sizeHint = 320.dp,
-        )
-
-        Text(
-            text = episode?.title ?: spotlight.show.title,
-            style = KoalaTheme.type.display,
-            color = colors.inkStrong,
-        )
-
         val dek = episode?.let { Format.plainText(it.description) }
             ?: Format.plainText(spotlight.show.description)
-        if (dek.isNotBlank()) {
-            Text(
-                text = dek,
-                style = KoalaTheme.type.body,
-                color = colors.ink3,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CoverArt(
+                url = spotlight.show.artworkUrl,
+                contentDescription = null,
+                modifier = Modifier.size(96.dp),
+                sizeHint = 160.dp,
             )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            ) {
+                Text(
+                    text = episode?.title ?: spotlight.show.title,
+                    style = KoalaTheme.type.displaySmall,
+                    color = colors.inkStrong,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (dek.isNotBlank()) {
+                    Text(
+                        text = dek,
+                        style = KoalaTheme.type.bodySmall,
+                        color = colors.ink3,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {

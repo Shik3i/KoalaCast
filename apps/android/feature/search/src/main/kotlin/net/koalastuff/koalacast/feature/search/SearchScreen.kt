@@ -18,12 +18,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.PodcastSummary
 import net.koalastuff.koalacast.core.ui.component.AccentButton
@@ -34,6 +37,7 @@ import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
 import net.koalastuff.koalacast.core.ui.genre.GENRES
@@ -45,6 +49,7 @@ import net.koalastuff.koalacast.core.ui.R as CoreR
 
 @Composable
 fun SearchScreen(
+    onBack: () -> Unit,
     onOpenPodcast: (feedUrl: String, podcastId: String?) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -61,6 +66,7 @@ fun SearchScreen(
 
     SearchContent(
         state = state,
+        onBack = onBack,
         onQueryChange = viewModel::onQueryChange,
         onClearQuery = viewModel::clearQuery,
         onToggleLanguage = viewModel::toggleLanguage,
@@ -78,6 +84,7 @@ fun SearchScreen(
 @Composable
 internal fun SearchContent(
     state: SearchUiState,
+    onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
     onToggleLanguage: (String) -> Unit,
@@ -92,6 +99,8 @@ internal fun SearchContent(
 ) {
     val colors = KoalaTheme.colors
     val hasFilters = state.languages.isNotEmpty() || state.category.isNotBlank()
+    val activeFilterCount = state.languages.size + if (state.category.isNotBlank()) 1 else 0
+    var showFilters by rememberSaveable { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -106,23 +115,32 @@ internal fun SearchContent(
                     .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.gap),
                 verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
             ) {
-                KoalaTextField(
-                    value = state.query,
-                    onValueChange = onQueryChange,
-                    placeholder = stringResource(R.string.search_placeholder),
-                    trailingContent = {
-                        if (state.query.isNotEmpty()) {
-                            IconButtonSquare(
-                                icon = PhosphorIcons.X,
-                                contentDescription = stringResource(CoreR.string.action_clear),
-                                onClick = onClearQuery,
-                                bordered = false,
-                                boxSize = 24.dp,
-                                iconSize = 15.dp,
-                            )
-                        }
-                    },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButtonSquare(
+                        icon = PhosphorIcons.CaretLeft,
+                        contentDescription = stringResource(CoreR.string.action_back),
+                        onClick = onBack,
+                        bordered = false,
+                    )
+                    KoalaTextField(
+                        value = state.query,
+                        onValueChange = onQueryChange,
+                        placeholder = stringResource(R.string.search_placeholder),
+                        modifier = Modifier.weight(1f),
+                        trailingContent = {
+                            if (state.query.isNotEmpty()) {
+                                IconButtonSquare(
+                                    icon = PhosphorIcons.X,
+                                    contentDescription = stringResource(CoreR.string.action_clear),
+                                    onClick = onClearQuery,
+                                    bordered = false,
+                                    boxSize = 24.dp,
+                                    iconSize = 15.dp,
+                                )
+                            }
+                        },
+                    )
+                }
                 MonoText(
                     text = stringResource(R.string.search_rss_hint),
                     color = colors.ink4,
@@ -142,16 +160,39 @@ internal fun SearchContent(
         }
 
         item(key = "filters") {
-            FilterBlock(
-                languages = state.languages,
-                category = state.category,
-                hasFilters = hasFilters,
-                fromSettings = state.filtersFromSettings,
-                onToggleLanguage = onToggleLanguage,
-                onSelectCategory = onSelectCategory,
-                onClearFilters = onClearFilters,
-                onResetFilters = onResetFilters,
-            )
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = KoalaSpacing.screenH,
+                    vertical = KoalaSpacing.gapSmall,
+                ),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            ) {
+                OutlineButton(
+                    text = if (activeFilterCount > 0) {
+                        stringResource(R.string.search_filters_active, activeFilterCount)
+                    } else {
+                        stringResource(R.string.search_filters_label)
+                    },
+                    onClick = { showFilters = !showFilters },
+                    leadingIcon = if (showFilters) {
+                        PhosphorIcons.CaretUp
+                    } else {
+                        PhosphorIcons.Funnel
+                    },
+                )
+                if (showFilters) {
+                    FilterBlock(
+                        languages = state.languages,
+                        category = state.category,
+                        hasFilters = hasFilters,
+                        fromSettings = state.filtersFromSettings,
+                        onToggleLanguage = onToggleLanguage,
+                        onSelectCategory = onSelectCategory,
+                        onClearFilters = onClearFilters,
+                        onResetFilters = onResetFilters,
+                    )
+                }
+            }
         }
 
         when {
@@ -248,13 +289,7 @@ private fun FilterBlock(
     val colors = KoalaTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = KoalaSpacing.screenH,
-                    end = KoalaSpacing.screenH,
-                    top = KoalaSpacing.gap,
-                ),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -281,7 +316,6 @@ private fun FilterBlock(
         }
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = KoalaSpacing.screenH),
             horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
         ) {
             items(items = CONTENT_LANGUAGES, key = { it.code }) { language ->
@@ -294,7 +328,6 @@ private fun FilterBlock(
         }
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = KoalaSpacing.screenH),
             horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
         ) {
             item(key = "all") {
@@ -318,7 +351,6 @@ private fun FilterBlock(
                 text = stringResource(R.string.search_no_filters_note),
                 style = KoalaTheme.type.bodySmall,
                 color = colors.ink4,
-                modifier = Modifier.padding(horizontal = KoalaSpacing.screenH),
             )
         }
     }

@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
@@ -43,6 +45,7 @@ fun KoalaTextField(
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    contentDescription: String = placeholder,
     leadingIcon: ImageVector? = PhosphorIcons.MagnifyingGlass,
     trailingContent: (@Composable () -> Unit)? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
@@ -89,7 +92,11 @@ fun KoalaTextField(
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            this.contentDescription = contentDescription
+                        },
                     textStyle = KoalaTheme.type.bodySmall.copy(color = colors.ink),
                     cursorBrush = SolidColor(colors.accentFill),
                     singleLine = singleLine,

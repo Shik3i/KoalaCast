@@ -7,6 +7,7 @@ export class AudioEngine {
 	private gainNode: GainNode | null = null;
 	private compressorNode: DynamicsCompressorNode | null = null;
 	private analyserNode: AnalyserNode | null = null;
+	private levelData: Uint8Array<ArrayBuffer> | null = null;
 
 	public volumeBoost = false;
 	public skipSilence = false;
@@ -22,12 +23,14 @@ export class AudioEngine {
 			this.gainNode = this.audioCtx.createGain();
 			this.compressorNode = this.audioCtx.createDynamicsCompressor();
 			this.analyserNode = this.audioCtx.createAnalyser();
-			this.analyserNode.fftSize = 256;
+			this.analyserNode.fftSize = 512;
+			this.levelData = new Uint8Array(this.analyserNode.fftSize);
 
 			this.sourceNode.connect(this.gainNode);
 			this.gainNode.connect(this.compressorNode);
 			this.compressorNode.connect(this.analyserNode);
 			this.analyserNode.connect(this.audioCtx.destination);
+			this.gainNode.gain.setValueAtTime(this.volumeBoost ? 2.2 : 1.0, this.audioCtx.currentTime);
 			return true;
 		} catch (err) {
 			console.warn('Web Audio API initialized with warning:', err);
@@ -49,14 +52,15 @@ export class AudioEngine {
 		}
 	}
 
-	public isSilent(): boolean {
-		if (!this.skipSilence || !this.analyserNode) return false;
-		const data = new Uint8Array(this.analyserNode.frequencyBinCount);
-		this.analyserNode.getByteFrequencyData(data);
-		let sum = 0;
-		for (let i = 0; i < data.length; i++) sum += data[i];
-		const avg = sum / data.length;
-		return avg < 4;
+	public getLevel(): number | null {
+		if (!this.skipSilence || !this.analyserNode || !this.levelData) return null;
+		this.analyserNode.getByteTimeDomainData(this.levelData);
+		let sumSquares = 0;
+		for (let i = 0; i < this.levelData.length; i++) {
+			const centered = (this.levelData[i] - 128) / 128;
+			sumSquares += centered * centered;
+		}
+		return Math.sqrt(sumSquares / this.levelData.length);
 	}
 }
 

@@ -8,6 +8,7 @@
     <string name="search_feed_adding">Reading the feed…</string>
 
     <string name="search_filters_label">Filters</string>
+    <string name="search_filters_active">Filters (%1$d)</string>
     <string name="search_clear_filters">Search everything</string>
     <string name="search_reset_filters">Back to my settings</string>
     <string name="search_no_filters_note">Searching every language and category.</string>

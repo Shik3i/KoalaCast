@@ -20,6 +20,8 @@
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
 	import { parsePlaybackSpeed } from '$lib/player/playback-speed';
+	import { prefs } from '$lib/stores/prefs.svelte';
+	import { SilenceGate } from '$lib/audio/silence-gate';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
@@ -43,8 +45,8 @@
 
 	import { audioEngine } from '$lib/audio/engine';
 
-	let volumeBoost = $state(false);
-	let skipSilence = $state(false);
+	const silenceGate = new SilenceGate();
+	let silenceTimer: ReturnType<typeof setInterval> | null = null;
 	let activeTab = $state<'player' | 'chapters' | 'transcript'>('player');
 
 	let chapters = $state<any[]>([]);
@@ -131,22 +133,53 @@
 	});
 
 	function toggleVolumeBoost() {
-		volumeBoost = !volumeBoost;
 		if (audioEl) audioEngine.init(audioEl);
-		audioEngine.setVolumeBoost(volumeBoost);
-		toast.success(t(volumeBoost ? 'player.boostEnabled' : 'player.boostDisabled'));
+		prefs.setVolumeBoost(!prefs.volumeBoost);
+		audioEngine.setVolumeBoost(prefs.volumeBoost);
+		toast.success(t(prefs.volumeBoost ? 'player.boostEnabled' : 'player.boostDisabled'));
 	}
 
 	function toggleSkipSilence() {
-		skipSilence = !skipSilence;
-		audioEngine.skipSilence = skipSilence;
-		if (!skipSilence && audioEl) {
+		if (audioEl) audioEngine.init(audioEl);
+		prefs.setSkipSilence(!prefs.skipSilence);
+		audioEngine.skipSilence = prefs.skipSilence;
+		if (!prefs.skipSilence) resetSilenceTrimming();
+		audioEngine.resume();
+		toast.success(t(prefs.skipSilence ? 'player.skipSilenceEnabled' : 'player.skipSilenceDisabled'));
+	}
+
+	function resetSilenceTrimming() {
+		silenceGate.reset();
+		if (audioEl && audioEl.playbackRate !== player.playbackSpeed) {
 			audioEl.playbackRate = player.playbackSpeed;
 		}
-		if (audioEl) audioEngine.init(audioEl);
-		audioEngine.resume();
-		toast.success(t(skipSilence ? 'player.skipSilenceEnabled' : 'player.skipSilenceDisabled'));
 	}
+
+	function sampleSilence() {
+		if (!audioEl || !prefs.skipSilence || !isPlaying) {
+			resetSilenceTrimming();
+			return;
+		}
+		const level = audioEngine.getLevel();
+		if (level === null) {
+			resetSilenceTrimming();
+			return;
+		}
+		const trim = silenceGate.update(level, performance.now());
+		const targetRate = trim ? Math.min(3, player.playbackSpeed * 2) : player.playbackSpeed;
+		if (audioEl.playbackRate !== targetRate) audioEl.playbackRate = targetRate;
+	}
+
+	// Settings can change while the persistent player keeps playing on another
+	// route. Apply them immediately instead of waiting for the next play event.
+	$effect(() => {
+		const boost = prefs.volumeBoost;
+		const trimSilence = prefs.skipSilence;
+		audioEngine.skipSilence = trimSilence;
+		if (audioEl && (boost || trimSilence)) audioEngine.init(audioEl);
+		audioEngine.setVolumeBoost(boost);
+		if (!trimSilence) resetSilenceTrimming();
+	});
 
 	let autoSaveTimer: any = null;
 
@@ -253,7 +286,7 @@
 
 	function setSpeed(speed: number) {
 		player.setPlaybackSpeed(speed);
-		if (audioEl) audioEl.playbackRate = player.playbackSpeed;
+		resetSilenceTrimming();
 	}
 
 	function applyCustomSpeed(input: HTMLInputElement) {
@@ -340,12 +373,6 @@
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		durationMs = Math.round((audioEl.duration || 0) * 1000);
 		player.updatePosition(currentTimeMs, durationMs || track?.duration_ms || 0);
-
-		if (skipSilence && isPlaying && audioEngine.isSilent()) {
-			audioEl.playbackRate = Math.min(3.0, player.playbackSpeed * 2.0);
-		} else if (audioEl.playbackRate !== player.playbackSpeed) {
-			audioEl.playbackRate = player.playbackSpeed;
-		}
 
 		if (player.sleepTimerEndsAt && Date.now() >= player.sleepTimerEndsAt) {
 			audioEl.pause();
@@ -563,6 +590,7 @@
 				flushListeningSession();
 			}
 		}, 30000);
+		silenceTimer = setInterval(sampleSilence, 50);
 
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
@@ -594,6 +622,8 @@
 			document.removeEventListener('visibilitychange', handleVisibility);
 			flushListeningSession(true);
 			if (autoSaveTimer) clearInterval(autoSaveTimer);
+			if (silenceTimer) clearInterval(silenceTimer);
+			resetSilenceTrimming();
 		};
 	});
 
@@ -613,6 +643,10 @@
 	bind:this={audioEl}
 	preload="metadata"
 	onplay={() => {
+		if (audioEl) audioEngine.init(audioEl);
+		audioEngine.skipSilence = prefs.skipSilence;
+		audioEngine.setVolumeBoost(prefs.volumeBoost);
+		audioEngine.resume();
 		isPlaying = true;
 		player.isPlaying = true;
 		loadError = '';
@@ -625,6 +659,7 @@
 	}}
 	onpause={() => {
 		sampleListening();
+		resetSilenceTrimming();
 		isPlaying = false;
 		player.isPlaying = false;
 		flushListeningSession(true);
@@ -828,10 +863,10 @@
 					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? t('player.removeFavorite') : t('player.addFavorite')} title={isFav ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-pill-btn" class:active={volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
+					<button class="np-pill-btn" class:active={prefs.volumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
 						<i class="ph ph-speaker-high" aria-hidden="true"></i> {t('player.boost')}
 					</button>
-					<button class="np-pill-btn" class:active={skipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
+					<button class="np-pill-btn" class:active={prefs.skipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
 						<i class="ph ph-waveform" aria-hidden="true"></i> {t('player.trimSilence')}
 					</button>
 					<div class="speed-selector">

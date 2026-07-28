@@ -12,7 +12,7 @@
 	async function handleRegister(e: Event) {
 		e.preventDefault();
 		if (!usernameInput.trim() || !passwordInput) {
-			authError = 'Please enter both username and password.';
+			authError = t('register.missingCredentials');
 			return;
 		}
 
@@ -28,22 +28,26 @@
 
 			const data = await res.json();
 			if (!res.ok) {
-				authError = data.error || 'Registration failed.';
+				authError = data.error || t('register.failed');
 				return;
 			}
 
 			recoveryCodeDisplay = data.recovery_code;
 			toast.success(t('toast.accountCreated'));
 		} catch (err) {
-			authError = 'Network error during registration.';
+			authError = t('register.networkError');
 		} finally {
 			isRegistering = false;
 		}
 	}
 
-	function copyRecoveryCode() {
-		navigator.clipboard.writeText(recoveryCodeDisplay);
-		toast.success(t('toast.recoveryCopied'));
+	async function copyRecoveryCode() {
+		try {
+			await navigator.clipboard.writeText(recoveryCodeDisplay);
+			toast.success(t('toast.recoveryCopied'));
+		} catch {
+			toast.error(t('toast.recoveryCopyError'));
+		}
 	}
 </script>
 

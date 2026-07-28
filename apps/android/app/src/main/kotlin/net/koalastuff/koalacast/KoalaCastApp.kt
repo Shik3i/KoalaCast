@@ -114,6 +114,7 @@ fun KoalaCastApp(
 
                 composable(Routes.SEARCH) {
                     SearchScreen(
+                        onBack = { navController.popBackStack() },
                         onOpenPodcast = { feedUrl, id ->
                             navController.navigate(Routes.podcast(feedUrl, id))
                         },

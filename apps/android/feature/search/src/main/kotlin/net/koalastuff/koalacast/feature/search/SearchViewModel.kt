@@ -42,6 +42,17 @@ data class SearchUiState(
     val addedPodcastId: String? = null,
 )
 
+internal data class SearchRequest(
+    val query: String,
+    val languages: Set<String>,
+    val category: String,
+)
+
+internal fun SearchUiState.matches(request: SearchRequest): Boolean =
+    query.trim() == request.query &&
+        languages == request.languages &&
+        category == request.category
+
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -56,11 +67,15 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             val prefs = preferences.preferences.first()
             _state.update {
-                it.copy(
-                    serverUrl = prefs.serverUrl,
-                    languages = prefs.languages,
-                    category = prefs.category,
-                )
+                if (it.filtersFromSettings) {
+                    it.copy(
+                        serverUrl = prefs.serverUrl,
+                        languages = prefs.languages,
+                        category = prefs.category,
+                    )
+                } else {
+                    it.copy(serverUrl = prefs.serverUrl)
+                }
             }
         }
 
@@ -166,7 +181,7 @@ class SearchViewModel @Inject constructor(
             category = request.category,
         )
         _state.update {
-            if (it.query.trim() != query) {
+            if (!it.matches(request)) {
                 it
             } else {
                 it.copy(
@@ -177,7 +192,7 @@ class SearchViewModel @Inject constructor(
             }
         }
         if (cached != null && !force && podcasts.isFresh(cached, ContentTtl.SEARCH)) {
-            _state.update { it.copy(searching = false) }
+            _state.update { if (it.matches(request)) it.copy(searching = false) else it }
             return
         }
         when (
@@ -188,12 +203,13 @@ class SearchViewModel @Inject constructor(
             )
         ) {
             is DataResult.Success -> _state.update {
-                // A slower earlier query must not overwrite a newer one.
-                if (it.query.trim() != query) it else it.copy(searching = false, results = result.data)
+                // A slower request must not overwrite the same query after its
+                // language or category filters changed.
+                if (!it.matches(request)) it else it.copy(searching = false, results = result.data)
             }
 
             is DataResult.Failure -> _state.update {
-                if (it.query.trim() != query) {
+                if (!it.matches(request)) {
                     it
                 } else {
                     it.copy(
@@ -208,12 +224,6 @@ class SearchViewModel @Inject constructor(
     private fun looksLikeFeedUrl(value: String): Boolean =
         value.startsWith("http://", ignoreCase = true) ||
             value.startsWith("https://", ignoreCase = true)
-
-    private data class SearchRequest(
-        val query: String,
-        val languages: Set<String>,
-        val category: String,
-    )
 
     private companion object {
         const val DEBOUNCE_MS = 300L

@@ -28,6 +28,7 @@
 	} from '$lib/stores/podcast-settings';
 	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
 	import { setBrowserNotificationsEnabled } from '$lib/notifications/browser';
+	import { safeExternalHref } from '$lib/safe-url';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -94,6 +95,8 @@
 	});
 
 	const unplayedCount = $derived(episodes.filter((ep) => !playedIds.has(ep.id)).length);
+	const fundingHref = $derived(safeExternalHref(podcast?.funding_url));
+	const liveHref = $derived(safeExternalHref(podcast?.live_url));
 
 	const accentVars = $derived(
 		showAccent
@@ -529,8 +532,8 @@
 							<i class="ph ph-plus" aria-hidden="true"></i> {t('common.subscribe')}
 						{/if}
 					</button>
-					{#if podcast.funding_url}
-						<a class="btn-funding" href={podcast.funding_url} target="_blank" rel="noopener noreferrer">
+					{#if fundingHref}
+						<a class="btn-funding" href={fundingHref} target="_blank" rel="noopener noreferrer">
 							<i class="ph-fill ph-heart" aria-hidden="true"></i> {podcast.funding_text || t('podcast.supportShow')}
 						</a>
 					{/if}
@@ -539,8 +542,8 @@
 							<i class="ph-fill ph-lightning" aria-hidden="true"></i> Value4Value
 						</span>
 					{/if}
-					{#if podcast.is_live}
-						<a class="live-badge" href={podcast.live_url || '#'} target="_blank" rel="noopener noreferrer">
+					{#if podcast.is_live && liveHref}
+						<a class="live-badge" href={liveHref} target="_blank" rel="noopener noreferrer">
 							<i class="ph-fill ph-broadcast" aria-hidden="true"></i> {t('podcast.liveNow')}
 						</a>
 					{/if}

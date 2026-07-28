@@ -340,7 +340,7 @@
 	<nav class="settings-nav" aria-label={t('settings.title')}>
 		<a href="#appearance">{t('settings.appearance')}</a>
 		<a href="#discovery">{t('quiet.nav.discover')}</a>
-		<a href="#playback">{t('settings.episodeDates')}</a>
+		<a href="#playback">{t('settings.playback')}</a>
 		<a href="#privacy">{t('settings.privacy')}</a>
 		<a href="#account">{t('settings.accountSync')}</a>
 		<a href="#data">{t('settings.dataManagement')}</a>
@@ -415,7 +415,41 @@
 	</section>
 
 	<section class="card" id="playback">
-		<h3><i class="ph ph-play-circle" aria-hidden="true"></i> {t('settings.episodeDates')}</h3>
+		<h3><i class="ph ph-play-circle" aria-hidden="true"></i> {t('settings.playback')}</h3>
+		<p class="subtitle">{t('settings.playbackHint')}</p>
+		<div class="audio-settings">
+			<div class="consent-row">
+				<div>
+					<h4>{t('settings.volumeBoost')}</h4>
+					<p>{t('settings.volumeBoostHint')}</p>
+				</div>
+				<label class="consent-switch">
+					<input
+						type="checkbox"
+						checked={prefs.volumeBoost}
+						onchange={(event) => prefs.setVolumeBoost(event.currentTarget.checked)}
+						aria-label={t('settings.volumeBoost')}
+					/>
+					<span aria-hidden="true"></span>
+				</label>
+			</div>
+			<div class="consent-row">
+				<div>
+					<h4>{t('settings.skipSilence')}</h4>
+					<p>{t('settings.skipSilenceHint')}</p>
+				</div>
+				<label class="consent-switch">
+					<input
+						type="checkbox"
+						checked={prefs.skipSilence}
+						onchange={(event) => prefs.setSkipSilence(event.currentTarget.checked)}
+						aria-label={t('settings.skipSilence')}
+					/>
+					<span aria-hidden="true"></span>
+				</label>
+			</div>
+		</div>
+		<h4 class="date-heading">{t('settings.episodeDates')}</h4>
 		<div class="theme-selector">
 			<button
 				type="button"
@@ -689,6 +723,9 @@
 	.consent-switch input:checked + span::after { transform: translateX(18px); background: var(--accent-on); }
 	.consent-switch input:focus-visible + span { outline: 2px solid var(--accent-green); outline-offset: 2px; }
 	.consent-switch input:disabled + span { opacity: .55; cursor: wait; }
+	.audio-settings { display: grid; gap: .7rem; margin: 1rem 0 1.2rem; }
+	.audio-settings .consent-row { background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: 12px; }
+	.date-heading { margin: 0 0 .65rem; }
 	.privacy-box.muted { opacity: .78; }
 
 	.subtitle {
