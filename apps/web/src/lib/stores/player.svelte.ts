@@ -13,6 +13,7 @@ import {
 	clearLocalQueue,
 	type LocalQueueItem
 } from '$lib/idb/db';
+import { normalizePlaybackSpeed } from '$lib/player/playback-speed';
 
 export interface CurrentTrack {
 	episode_id: string;
@@ -51,20 +52,25 @@ class PlayerStore {
 	sleepTimerEndsAt = $state<number | null>(null);
 	sleepAtEpisodeEnd = $state(false);
 	sleepAtChapterEnd = $state(false);
+	isPlaying = $state(false);
 	positionMs = $state(0);
 	durationMs = $state(0);
+	positionUpdatedAt = $state(Date.now());
 
 	play(track: CurrentTrack) {
 		this.current = track;
 		this.positionMs = 0;
 		this.durationMs = track.duration_ms;
+		this.positionUpdatedAt = Date.now();
 		this.playToken++;
 	}
 
 	stop() {
 		this.current = null;
+		this.isPlaying = false;
 		this.positionMs = 0;
 		this.durationMs = 0;
+		this.positionUpdatedAt = Date.now();
 	}
 
 	get isActive() {
@@ -83,12 +89,18 @@ class PlayerStore {
 	}
 
 	setPlaybackSpeed(speed: number, persist = true) {
-		this.playbackSpeed = Math.max(0.25, Math.min(4, speed));
+		this.playbackSpeed = normalizePlaybackSpeed(speed);
 		if (persist) this.defaultPlaybackSpeed = this.playbackSpeed;
 		if (!persist) return;
 		try {
 			localStorage.setItem('koalacast_playback_speed', String(this.playbackSpeed));
 		} catch (_) {}
+	}
+
+	updatePosition(positionMs: number, durationMs: number) {
+		this.positionMs = Math.max(0, positionMs);
+		this.durationMs = Math.max(0, durationMs);
+		this.positionUpdatedAt = Date.now();
 	}
 
 	setSleepTimer(value: string) {

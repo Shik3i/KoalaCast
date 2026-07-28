@@ -263,6 +263,10 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		genreID := itunes.GenreIDForCategory(category)
 		if tp, err := h.ITunes.FetchTopChart(region, genreID, fetchLimit); err == nil {
 			topPodcasts = tp
+			// One cached, batched Apple lookup supplies the fields omitted by
+			// the legacy chart response. Failure is non-fatal: clients can still
+			// fall back to feed ingestion for individual rows.
+			_ = h.ITunes.EnrichLatestEpisodes(topPodcasts)
 		}
 	}
 
@@ -309,6 +313,10 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	// Discover is public and query-addressed. Let browsers and reverse proxies
+	// reuse the normalized chart while the server-side Apple metadata cache
+	// absorbs cold misses after that window.
+	w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=900")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "ok",

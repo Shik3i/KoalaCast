@@ -176,6 +176,9 @@ func TestParseDurationToMS(t *testing.T) {
 		{"00:30:00", 1800000},
 		{"30:00", 1800000},
 		{"01:15:30", 4530000},
+		{"42.5", 42500},
+		{"00:01:02.5", 62500},
+		{"00:nope:10", 0},
 		{"invalid", 0},
 		{"", 0},
 	}
@@ -185,6 +188,40 @@ func TestParseDurationToMS(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("parseDurationToMS(%s) = %d, expected %d", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestParseFeedXML_MediaDurationFallbacks(t *testing.T) {
+	rssXML := `<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel><title>Media RSS</title><item>
+    <title>Media duration</title><guid>media-rss</guid>
+    <enclosure url="https://example.com/rss.mp3" type="audio/mpeg"/>
+    <media:content duration="123.5"/>
+  </item></channel>
+</rss>`
+	feed, err := ParseFeedXML(strings.NewReader(rssXML))
+	if err != nil {
+		t.Fatalf("ParseFeedXML RSS failed: %v", err)
+	}
+	if got := feed.Episodes[0].DurationMS; got != 123500 {
+		t.Fatalf("RSS media duration = %d, want 123500", got)
+	}
+
+	atomXML := `<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Media Atom</title><entry>
+    <id>media-atom</id><title>Media duration</title>
+    <media:content url="https://example.com/atom.mp3" type="audio/mpeg" fileSize="42" duration="90"/>
+  </entry>
+</feed>`
+	feed, err = ParseFeedXML(strings.NewReader(atomXML))
+	if err != nil {
+		t.Fatalf("ParseFeedXML Atom failed: %v", err)
+	}
+	episode := feed.Episodes[0]
+	if episode.DurationMS != 90000 || episode.EnclosureURL != "https://example.com/atom.mp3" {
+		t.Fatalf("unexpected Atom media fallback: %+v", episode)
 	}
 }
 

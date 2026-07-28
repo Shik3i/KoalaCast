@@ -156,7 +156,13 @@
 					const key = item?.feed_url || item?.id;
 					if (item && key && !seen.has(key)) {
 						seen.add(key);
-						merged.push(item);
+						const latestDurationMs = Number(item.latest_duration_ms || 0);
+						const latestPublishedAt = Number(item.latest_published_at || 0);
+						merged.push({
+							...item,
+							latestDurationMs: latestDurationMs > 0 ? latestDurationMs : undefined,
+							latestPublishedAt: latestPublishedAt > 0 ? latestPublishedAt : undefined
+						});
 					}
 				}
 			}
@@ -616,9 +622,10 @@
 	.session-control button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.session-control button.active { background: var(--accent-fill); color: var(--accent-on); }
 	.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
-	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: linear-gradient(150deg, color-mix(in srgb, var(--accent-fill) 24%, var(--bg-sunken)), var(--bg-sunken)); color: var(--ink); }
-	:global(:root[data-theme='light']) .mood-grid button { background: linear-gradient(150deg,#edf5f0,#dceae1); }
-	.mood-grid button.active { background: linear-gradient(150deg, var(--accent-fill), color-mix(in srgb, var(--accent-fill) 72%, var(--bg-app))); color: var(--accent-on); border-color: transparent; }
+	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-ui); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); transition: var(--transition-smooth); }
+	.mood-grid button:hover { background: var(--accent-wash); border-color: var(--accent-ink); }
+	.mood-grid button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+	.mood-grid button.active { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); }
 	.mood-grid i { grid-row: 1 / 3; font-size: 22px; }
 	.mood-grid strong { font: 700 16px/1.2 var(--font-ui); }
 	.mood-grid span { font: 600 10px/1.3 var(--font-mono); letter-spacing: .01em; }

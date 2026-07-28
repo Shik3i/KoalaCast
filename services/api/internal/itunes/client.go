@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/lang"
@@ -64,18 +66,23 @@ func sanitizeRegion(region string) string {
 }
 
 type ITunesClient struct {
-	httpClient *http.Client
+	httpClient         *http.Client
+	latestMu           sync.Mutex
+	latestFetchMu      sync.Mutex
+	latestEpisodeCache map[string]cachedLatestEpisode
 }
 
 type PodcastResult struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Author      string   `json:"author"`
-	FeedURL     string   `json:"feed_url"`
-	ArtworkURL  string   `json:"artwork_url"`
-	Category    string   `json:"category"`
-	Categories  []string `json:"categories,omitempty"`
-	Description string   `json:"description"`
+	ID                string   `json:"id"`
+	Title             string   `json:"title"`
+	Author            string   `json:"author"`
+	FeedURL           string   `json:"feed_url"`
+	ArtworkURL        string   `json:"artwork_url"`
+	Category          string   `json:"category"`
+	Categories        []string `json:"categories,omitempty"`
+	Description       string   `json:"description"`
+	LatestDurationMS  int64    `json:"latest_duration_ms,omitempty"`
+	LatestPublishedAt int64    `json:"latest_published_at,omitempty"`
 	// Language is a bare language code ("de", "en") or "" when unknown. iTunes
 	// reports no language on either the chart or the search endpoint, so it is
 	// inferred from the title and description; callers that can resolve an
@@ -83,9 +90,19 @@ type PodcastResult struct {
 	Language string `json:"language,omitempty"`
 }
 
+type cachedLatestEpisode struct {
+	feedURL     string
+	durationMS  int64
+	publishedAt int64
+	expiresAt   time.Time
+}
+
+const latestEpisodeCacheTTL = 15 * time.Minute
+
 func NewITunesClient() *ITunesClient {
 	return &ITunesClient{
-		httpClient: rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second}),
+		httpClient:         rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second}),
+		latestEpisodeCache: make(map[string]cachedLatestEpisode),
 	}
 }
 
@@ -95,7 +112,132 @@ func NewITunesClientWithHTTPClient(httpClient *http.Client) *ITunesClient {
 	if httpClient == nil {
 		return NewITunesClient()
 	}
-	return &ITunesClient{httpClient: httpClient}
+	return &ITunesClient{
+		httpClient:         httpClient,
+		latestEpisodeCache: make(map[string]cachedLatestEpisode),
+	}
+}
+
+// EnrichLatestEpisodes adds the newest episode's exact Apple duration and
+// publication time to chart entries in one batched lookup. The legacy Top
+// Podcasts chart omits both fields (and the feed URL), which previously forced
+// the web client into one feed ingestion request per visible row.
+func (c *ITunesClient) EnrichLatestEpisodes(results []PodcastResult) error {
+	if len(results) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	missing := make([]string, 0, len(results))
+	byID := make(map[string][]int, len(results))
+	queued := make(map[string]bool, len(results))
+
+	c.latestMu.Lock()
+	for i := range results {
+		id := results[i].ID
+		if _, err := strconv.ParseInt(id, 10, 64); err != nil {
+			continue
+		}
+		byID[id] = append(byID[id], i)
+		if cached, ok := c.latestEpisodeCache[id]; ok && now.Before(cached.expiresAt) {
+			applyLatestEpisode(&results[i], cached)
+			continue
+		}
+		if !queued[id] {
+			missing = append(missing, id)
+			queued[id] = true
+		}
+	}
+	c.latestMu.Unlock()
+
+	if len(missing) == 0 {
+		return nil
+	}
+
+	// Coalesce concurrent Discover requests. Re-check after acquiring the fetch
+	// lock so only the first request reaches Apple; followers consume its cache.
+	c.latestFetchMu.Lock()
+	defer c.latestFetchMu.Unlock()
+	unresolved := missing[:0]
+	c.latestMu.Lock()
+	for _, id := range missing {
+		if cached, ok := c.latestEpisodeCache[id]; ok && now.Before(cached.expiresAt) {
+			for _, index := range byID[id] {
+				applyLatestEpisode(&results[index], cached)
+			}
+			continue
+		}
+		unresolved = append(unresolved, id)
+	}
+	c.latestMu.Unlock()
+	missing = unresolved
+	if len(missing) == 0 {
+		return nil
+	}
+
+	reqURL := "https://itunes.apple.com/lookup?id=" + strings.Join(missing, ",") + "&entity=podcastEpisode&limit=1"
+	resp, err := c.httpClient.Get(reqURL)
+	if err != nil {
+		return fmt.Errorf("iTunes episode lookup failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("iTunes episode lookup HTTP error status %d", resp.StatusCode)
+	}
+
+	var lookupResp struct {
+		Results []struct {
+			WrapperType  string `json:"wrapperType"`
+			Kind         string `json:"kind"`
+			CollectionID int64  `json:"collectionId"`
+			TrackTimeMS  int64  `json:"trackTimeMillis"`
+			ReleaseDate  string `json:"releaseDate"`
+			FeedURL      string `json:"feedUrl"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&lookupResp); err != nil {
+		return fmt.Errorf("failed to decode iTunes episode lookup JSON: %w", err)
+	}
+
+	resolved := make(map[string]cachedLatestEpisode, len(missing))
+	for _, item := range lookupResp.Results {
+		id := strconv.FormatInt(item.CollectionID, 10)
+		meta := resolved[id]
+		if item.FeedURL != "" {
+			meta.feedURL = item.FeedURL
+		}
+		if item.WrapperType == "podcastEpisode" || item.Kind == "podcast-episode" {
+			publishedAt := int64(0)
+			if published, parseErr := time.Parse(time.RFC3339, item.ReleaseDate); parseErr == nil {
+				publishedAt = published.UnixMilli()
+			}
+			if publishedAt >= meta.publishedAt {
+				meta.durationMS = item.TrackTimeMS
+				meta.publishedAt = publishedAt
+			}
+		}
+		resolved[id] = meta
+	}
+
+	c.latestMu.Lock()
+	for _, id := range missing {
+		meta := resolved[id]
+		meta.expiresAt = now.Add(latestEpisodeCacheTTL)
+		c.latestEpisodeCache[id] = meta
+		for _, index := range byID[id] {
+			applyLatestEpisode(&results[index], meta)
+		}
+	}
+	c.latestMu.Unlock()
+	return nil
+}
+
+func applyLatestEpisode(result *PodcastResult, meta cachedLatestEpisode) {
+	if result.FeedURL == "" {
+		result.FeedURL = meta.feedURL
+	}
+	result.LatestDurationMS = meta.durationMS
+	result.LatestPublishedAt = meta.publishedAt
 }
 
 // FetchTopPodcasts returns the current overall top trending podcasts (US chart).

@@ -100,6 +100,13 @@ const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
+// Svelte state may expose arrays as reactive proxies. IndexedDB's structured
+// clone algorithm rejects those proxies, so normalize denormalized list fields
+// exactly once at the persistence boundary.
+function plainCategories(categories?: readonly string[]): string[] | undefined {
+	return categories ? Array.from(categories, (category) => String(category)) : undefined;
+}
+
 export function getLocalDB(): Promise<IDBPDatabase> {
 	if (!dbPromise) {
 		dbPromise = openDB(DB_NAME, DB_VERSION, {
@@ -195,7 +202,7 @@ export async function getLocalPlaybackState(episode_id: string): Promise<LocalPl
 
 export async function saveLocalPlaybackState(state: LocalPlaybackState): Promise<void> {
 	const db = await getLocalDB();
-	await db.put('playback_states', state);
+	await db.put('playback_states', { ...state, categories: plainCategories(state.categories) });
 }
 
 // Set of episode ids the user has completed — used to filter the Inbox to unplayed.
@@ -237,7 +244,7 @@ export async function setEpisodePlayed(
 		artwork_url: meta.artwork_url ?? existing?.artwork_url,
 		enclosure_url: meta.enclosure_url ?? existing?.enclosure_url,
 		duration_ms: meta.duration_ms ?? existing?.duration_ms,
-		categories: meta.categories ?? existing?.categories
+		categories: plainCategories(meta.categories ?? existing?.categories)
 	});
 }
 
@@ -264,7 +271,7 @@ export async function setEpisodesPlayed(
 			artwork_url: meta.artwork_url ?? existing?.artwork_url,
 			enclosure_url: meta.enclosure_url ?? existing?.enclosure_url,
 			duration_ms: meta.duration_ms ?? existing?.duration_ms,
-			categories: meta.categories ?? existing?.categories
+			categories: plainCategories(meta.categories ?? existing?.categories)
 		});
 	}
 	await tx.done;
@@ -290,7 +297,7 @@ export async function getRecentPlaybackStates(limit = 12): Promise<LocalPlayback
 // Listening analytics source records.
 export async function saveLocalListeningSession(session: LocalListeningSession): Promise<void> {
 	const db = await getLocalDB();
-	await db.put('listening_sessions', session);
+	await db.put('listening_sessions', { ...session, categories: plainCategories(session.categories) });
 }
 
 export async function getLocalListeningSessions(): Promise<LocalListeningSession[]> {
@@ -313,14 +320,16 @@ export async function getLocalQueue(): Promise<LocalQueueItem[]> {
 
 export async function addToLocalQueue(item: LocalQueueItem): Promise<void> {
 	const db = await getLocalDB();
-	await db.put('queue', item);
+	await db.put('queue', { ...item, categories: plainCategories(item.categories) });
 }
 
 export async function addManyToLocalQueue(items: LocalQueueItem[]): Promise<void> {
 	if (items.length === 0) return;
 	const db = await getLocalDB();
 	const tx = db.transaction('queue', 'readwrite');
-	for (const item of items) await tx.store.put(item);
+	for (const item of items) {
+		await tx.store.put({ ...item, categories: plainCategories(item.categories) });
+	}
 	await tx.done;
 }
 
@@ -354,7 +363,11 @@ export async function isLocalFavorite(episode_id: string): Promise<boolean> {
 
 export async function addLocalFavorite(fav: LocalFavorite): Promise<void> {
 	const db = await getLocalDB();
-	await db.put('favorites', { ...fav, added_at: fav.added_at || Date.now() });
+	await db.put('favorites', {
+		...fav,
+		categories: plainCategories(fav.categories),
+		added_at: fav.added_at || Date.now()
+	});
 	await db.delete('tombstones', tombstoneId('favorite', fav.episode_id));
 }
 

@@ -449,6 +449,8 @@
 		"skipBack": "15 Sekunden zurück",
 		"skipForward": "30 Sekunden vor",
 		"speed": "Abspielgeschwindigkeit",
+		"customSpeed": "Eigene Abspielgeschwindigkeit",
+		"customSpeedHint": "Wert von 0,25 bis 4,00 eingeben",
 		"volume": "Lautstärke",
 		"mute": "Stummschalten",
 		"unmute": "Ton einschalten",

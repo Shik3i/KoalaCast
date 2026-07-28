@@ -18,6 +18,7 @@
 	import { getPodcastPlaybackSettings, type PodcastPlaybackSettings } from '$lib/stores/podcast-settings';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
+	import { parsePlaybackSpeed } from '$lib/player/playback-speed';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
@@ -170,7 +171,7 @@
 			if (!track || track.episode_id !== epId) return;
 			el.currentTime = seconds;
 			currentTimeMs = seconds * 1000;
-			player.positionMs = currentTimeMs;
+			player.updatePosition(currentTimeMs, durationMs || track?.duration_ms || 0);
 			if (!resume) {
 				if (activeSession) activeSession.intro_outro_skipped_ms += currentTimeMs;
 				else pendingIntroOutroSkippedMs += currentTimeMs;
@@ -208,11 +209,6 @@
 		saveProgress('SEEK');
 	}
 
-	function cycleSpeed() {
-		const idx = speeds.indexOf(player.playbackSpeed);
-		setSpeed(speeds[(idx + 1) % speeds.length] ?? 1.0);
-	}
-
 	const volIcon = $derived(
 		player.volume === 0 ? 'ph-speaker-simple-x' : player.volume < 0.5 ? 'ph-speaker-simple-low' : 'ph-speaker-simple-high'
 	);
@@ -220,6 +216,14 @@
 	function setSpeed(speed: number) {
 		player.setPlaybackSpeed(speed);
 		if (audioEl) audioEl.playbackRate = player.playbackSpeed;
+	}
+
+	function applyCustomSpeed(input: HTMLInputElement) {
+		const parsed = parsePlaybackSpeed(input.value);
+		if (parsed !== null) {
+			setSpeed(parsed);
+		}
+		input.value = String(player.playbackSpeed);
 	}
 
 	function setSleepTimer(value: string) {
@@ -297,8 +301,7 @@
 		sampleListening();
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		durationMs = Math.round((audioEl.duration || 0) * 1000);
-		player.positionMs = currentTimeMs;
-		player.durationMs = durationMs || track?.duration_ms || 0;
+		player.updatePosition(currentTimeMs, durationMs || track?.duration_ms || 0);
 
 		if (skipSilence && isPlaying && audioEngine.isSilent()) {
 			audioEl.playbackRate = Math.min(3.0, player.playbackSpeed * 2.0);
@@ -331,6 +334,7 @@
 	async function handleEnded() {
 		sampleListening();
 		isPlaying = false;
+		player.isPlaying = false;
 		await flushListeningSession(true);
 		await saveProgress('MARK_PLAYED', true);
 		// Stop here if a "sleep at end of episode" timer is armed.
@@ -466,7 +470,7 @@
 			const saved = localStorage.getItem('koalacast_playback_speed');
 			if (saved) {
 				const spd = parseFloat(saved);
-				if (spd > 0 && spd <= 3) setSpeed(spd);
+				if (spd >= 0.25 && spd <= 4) setSpeed(spd);
 			}
 			const vol = localStorage.getItem('koalacast_volume');
 			if (vol !== null) player.volume = Math.max(0, Math.min(1, parseFloat(vol)));
@@ -523,7 +527,7 @@
 		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 
-	const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5];
+	const speeds = [0.75, 1.0, 1.15, 1.25, 1.5, 1.75, 2.0, 2.5];
 </script>
 
 <audio
@@ -531,6 +535,7 @@
 	preload="metadata"
 	onplay={() => {
 		isPlaying = true;
+		player.isPlaying = true;
 		loadError = false;
 		startListeningSession();
 	}}
@@ -538,11 +543,13 @@
 	onpause={() => {
 		sampleListening();
 		isPlaying = false;
+		player.isPlaying = false;
 		flushListeningSession(true);
 		saveProgress('PROGRESS_TICK');
 	}}
 	onerror={() => {
 		isPlaying = false;
+		player.isPlaying = false;
 		loadError = true;
 	}}
 	ontimeupdate={handleTimeUpdate}
@@ -629,7 +636,22 @@
 			</div>
 
 			<div class="extras">
-				<button class="ctrl speed-cycle" onclick={cycleSpeed} aria-label={t('player.speed')} title={t('player.speed')}>{player.playbackSpeed}×</button>
+				<input
+					class="speed-input"
+					inputmode="decimal"
+					value={String(player.playbackSpeed)}
+					onfocus={(event) => event.currentTarget.select()}
+					onblur={(event) => applyCustomSpeed(event.currentTarget)}
+					onkeydown={(event) => {
+						if (event.key === 'Enter') {
+							event.preventDefault();
+							applyCustomSpeed(event.currentTarget);
+							event.currentTarget.blur();
+						}
+					}}
+					aria-label={t('player.customSpeed')}
+					title={t('player.customSpeedHint')}
+				/><span class="speed-suffix" aria-hidden="true">×</span>
 				<div class="vol-wrap">
 					<button class="ctrl" onclick={() => (showVolume = !showVolume)} aria-label={t('player.volume')} title={t('player.volume')}>
 						<i class="ph {volIcon}" aria-hidden="true"></i>
@@ -727,6 +749,21 @@
 						{#each speeds as spd}
 							<button onclick={() => setSpeed(spd)} class:active={player.playbackSpeed === spd}>{spd}x</button>
 						{/each}
+						<input
+							class="speed-input"
+							inputmode="decimal"
+							placeholder={String(player.playbackSpeed)}
+							onblur={(event) => applyCustomSpeed(event.currentTarget)}
+							onkeydown={(event) => {
+								if (event.key === 'Enter') {
+									event.preventDefault();
+									applyCustomSpeed(event.currentTarget);
+									event.currentTarget.blur();
+								}
+							}}
+							aria-label={t('player.customSpeed')}
+							title={t('player.customSpeedHint')}
+						/>
 					</div>
 					{#if chapters.length > 0}
 						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')} title={t('player.toggleChapters')}>
@@ -1018,6 +1055,20 @@
 		font-weight: 700;
 		font-variant-numeric: tabular-nums;
 	}
+	.speed-input {
+		width: 52px;
+		height: 30px;
+		box-sizing: border-box;
+		border: 1px solid color-mix(in srgb, var(--player-text) 18%, transparent);
+		border-radius: 7px;
+		background: color-mix(in srgb, var(--player-text) 8%, transparent);
+		color: var(--player-text);
+		text-align: center;
+		font: 700 0.75rem/1 var(--font-mono);
+		font-variant-numeric: tabular-nums;
+	}
+	.speed-input:focus { outline: 2px solid var(--show-accent, var(--accent-green)); outline-offset: 1px; }
+	.speed-suffix { margin-left: -5px; font: 700 10px/1 var(--font-mono); color: var(--ink-3); }
 
 	.vol-wrap { position: relative; display: flex; }
 	.vol-pop {
@@ -1040,6 +1091,7 @@
 		background: color-mix(in srgb, var(--player-text) 8%, transparent);
 		padding: 3px;
 		border-radius: 9px;
+		align-items: center;
 	}
 	.speed-selector button {
 		background: transparent;
@@ -1056,6 +1108,7 @@
 		color: #fff;
 		opacity: 1;
 	}
+	.speed-selector .speed-input { width: 48px; height: 26px; }
 
 	.eq-bars {
 		display: flex;

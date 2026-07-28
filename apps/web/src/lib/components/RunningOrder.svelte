@@ -4,6 +4,7 @@
 	import { reorderLocalQueue } from '$lib/idb/db';
 	import { t } from '$lib/i18n';
 	import { listeningSession } from '$lib/stores/session.svelte';
+	import { calculateQueueTiming } from '$lib/player/queue-timing';
 
 	let now = $state(Date.now());
 	let dragIndex = $state<number | null>(null);
@@ -11,15 +12,20 @@
 	onMount(() => {
 		player.loadQueue();
 		listeningSession.load();
-		const timer = window.setInterval(() => (now = Date.now()), 60_000);
+		const timer = window.setInterval(() => (now = Date.now()), 1_000);
 		return () => window.clearInterval(timer);
 	});
 
-	const queueMs = $derived(player.queue.reduce((sum, item) => sum + Math.max(0, item.duration_ms || 0), 0));
-	const currentRemainingMs = $derived(player.current ? Math.max(0, (player.durationMs || player.current.duration_ms) - player.positionMs) : 0);
-	const totalRemainingMs = $derived(currentRemainingMs + queueMs);
-	const naturalEndsAt = $derived(now + totalRemainingMs / player.playbackSpeed);
-	const endsAtMs = $derived(player.sleepTimerEndsAt ? Math.min(naturalEndsAt, player.sleepTimerEndsAt) : naturalEndsAt);
+	const timing = $derived(calculateQueueTiming({
+		now,
+		positionMs: player.positionMs,
+		positionUpdatedAt: player.positionUpdatedAt,
+		currentDurationMs: player.current ? player.durationMs || player.current.duration_ms : 0,
+		queueDurationsMs: player.queue.map((item) => item.duration_ms || 0),
+		playbackSpeed: player.playbackSpeed,
+		isPlaying: player.isPlaying
+	}));
+	const endsAtMs = $derived(player.sleepTimerEndsAt ? Math.min(timing.naturalEndsAt, player.sleepTimerEndsAt) : timing.naturalEndsAt);
 
 	function duration(ms: number) {
 		const minutes = Math.max(0, Math.round(ms / 60_000));
@@ -27,8 +33,7 @@
 	}
 
 	function finishTime(index: number) {
-		const elapsed = currentRemainingMs + player.queue.slice(0, index + 1).reduce((sum, item) => sum + (item.duration_ms || 0), 0);
-		return new Date(now + elapsed / player.playbackSpeed).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		return new Date(now + (timing.finishOffsetsMs[index] || 0)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
 
 	async function remove(item: CurrentTrack) {
@@ -97,7 +102,7 @@
 	<header>
 		<div>
 			<h2>{t('quiet.queue.title')}</h2>
-			<span>{player.queue.length} · {duration(queueMs / player.playbackSpeed)}</span>
+			<span>{player.queue.length} · {duration(timing.queueWallMs)}</span>
 		</div>
 	</header>
 
@@ -106,7 +111,7 @@
 			<span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
 			<div>
 				<strong title={player.current.title}>{player.current.title}</strong>
-					<span>{t('quiet.queue.playingNow')} · {t('quiet.queue.remaining', { duration: duration(currentRemainingMs / player.playbackSpeed) })}</span>
+					<span>{t('quiet.queue.playingNow')} · {t('quiet.queue.remaining', { duration: duration(timing.currentRemainingWallMs) })}</span>
 			</div>
 		</div>
 	{/if}
@@ -127,7 +132,7 @@
 					<strong title={item.title}>{item.title}</strong>
 					<span title={item.podcast_title}>{item.podcast_title} · {t('quiet.queue.ends')} {finishTime(index)}</span>
 				</div>
-				<span>{duration(item.duration_ms)}</span>
+				<span>{duration((item.duration_ms || 0) / player.playbackSpeed)}</span>
 				<button class="remove" onclick={() => remove(item)} aria-label={t('quiet.queue.remove')} title={t('quiet.queue.remove')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
 				</button>

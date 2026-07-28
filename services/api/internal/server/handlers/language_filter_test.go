@@ -144,8 +144,11 @@ func TestDiscover_InfersStorefrontForSingleLanguage(t *testing.T) {
 	var requestedPath string
 	httpClient := &http.Client{
 		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			requestedPath = req.URL.Path
-			body := `{"feed":{"entry":[{"id":{"attributes":{"im:id":"1"}},"im:name":{"label":"Lage der Nation"},"im:artist":{"label":"Ulf und Philip"},"summary":{"label":"Der Politik-Podcast aus Berlin und die Welt"},"im:image":[],"category":{"attributes":{"label":"Nachrichten"}}}]}}`
+			body := `{"results":[]}`
+			if req.URL.Path != "/lookup" {
+				requestedPath = req.URL.Path
+				body = `{"feed":{"entry":[{"id":{"attributes":{"im:id":"1"}},"im:name":{"label":"Lage der Nation"},"im:artist":{"label":"Ulf und Philip"},"summary":{"label":"Der Politik-Podcast aus Berlin und die Welt"},"im:image":[],"category":{"attributes":{"label":"Nachrichten"}}}]}}`
+			}
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     make(http.Header),

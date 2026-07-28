@@ -123,6 +123,9 @@ type rssItem struct {
 	ItunesImage       struct {
 		Href string `xml:"href,attr"`
 	} `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
+	MediaContent []struct {
+		Duration string `xml:"duration,attr"`
+	} `xml:"http://search.yahoo.com/mrss/ content"`
 	PodcastChapters struct {
 		URL string `xml:"url,attr"`
 	} `xml:"https://podcastindex.org/namespace/1.0 chapters"`
@@ -148,14 +151,21 @@ type atomFeed struct {
 }
 
 type atomEntry struct {
-	ID        string     `xml:"id"`
-	Title     string     `xml:"title"`
-	Summary   string     `xml:"summary"`
-	Content   string     `xml:"content"`
-	Updated   string     `xml:"updated"`
-	Published string     `xml:"published"`
-	Links     []atomLink `xml:"link"`
-	Author    atomAuthor `xml:"author"`
+	ID             string     `xml:"id"`
+	Title          string     `xml:"title"`
+	Summary        string     `xml:"summary"`
+	Content        string     `xml:"http://www.w3.org/2005/Atom content"`
+	Updated        string     `xml:"updated"`
+	Published      string     `xml:"published"`
+	Links          []atomLink `xml:"link"`
+	Author         atomAuthor `xml:"author"`
+	ItunesDuration string     `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd duration"`
+	MediaContent   []struct {
+		URL      string `xml:"url,attr"`
+		Type     string `xml:"type,attr"`
+		Length   int64  `xml:"fileSize,attr"`
+		Duration string `xml:"duration,attr"`
+	} `xml:"http://search.yahoo.com/mrss/ content"`
 }
 
 type atomLink struct {
@@ -252,6 +262,9 @@ func parseRSS(buf []byte) (*ParsedFeed, error) {
 		guid := strings.TrimSpace(item.GUID.Value)
 		pubDate, hasPubDate := parseDate(item.PubDate)
 		durationMS := parseDurationToMS(item.ItunesDuration)
+		if durationMS == 0 && len(item.MediaContent) > 0 {
+			durationMS = parseDurationToMS(item.MediaContent[0].Duration)
+		}
 
 		enclosureURL := strings.TrimSpace(item.Enclosure.URL)
 		title := strings.TrimSpace(item.Title)
@@ -368,6 +381,21 @@ func parseAtom(buf []byte) (*ParsedFeed, error) {
 				epLink = l.Href
 			}
 		}
+		if enclosureURL == "" {
+			for _, media := range entry.MediaContent {
+				if media.URL == "" {
+					continue
+				}
+				enclosureURL = media.URL
+				enclosureType = media.Type
+				enclosureLength = media.Length
+				break
+			}
+		}
+		durationMS := parseDurationToMS(entry.ItunesDuration)
+		if durationMS == 0 && len(entry.MediaContent) > 0 {
+			durationMS = parseDurationToMS(entry.MediaContent[0].Duration)
+		}
 
 		title := strings.TrimSpace(entry.Title)
 		desc := strings.TrimSpace(entry.Summary)
@@ -406,7 +434,7 @@ func parseAtom(buf []byte) (*ParsedFeed, error) {
 			ContentEncoded:  content,
 			PubDate:         pubDate,
 			HasPubDate:      hasPubDate,
-			DurationMS:      0,
+			DurationMS:      durationMS,
 			EnclosureURL:    strings.TrimSpace(enclosureURL),
 			EnclosureType:   strings.TrimSpace(enclosureType),
 			EnclosureLength: enclosureLength,
@@ -425,22 +453,31 @@ func parseDurationToMS(durationStr string) int64 {
 		return 0
 	}
 
-	// Pure seconds or ms
+	// Pure seconds. Some publishers emit fractional seconds.
 	if sec, err := strconv.ParseInt(durationStr, 10, 64); err == nil {
 		return sec * 1000
+	}
+	if sec, err := strconv.ParseFloat(durationStr, 64); err == nil && sec >= 0 {
+		return int64(sec * 1000)
 	}
 
 	// HH:MM:SS or MM:SS format
 	parts := strings.Split(durationStr, ":")
 	if len(parts) == 3 {
-		h, _ := strconv.ParseInt(parts[0], 10, 64)
-		m, _ := strconv.ParseInt(parts[1], 10, 64)
-		s, _ := strconv.ParseInt(parts[2], 10, 64)
-		return ((h * 3600) + (m * 60) + s) * 1000
+		h, hErr := strconv.ParseInt(parts[0], 10, 64)
+		m, mErr := strconv.ParseInt(parts[1], 10, 64)
+		s, sErr := strconv.ParseFloat(parts[2], 64)
+		if hErr != nil || mErr != nil || sErr != nil || h < 0 || m < 0 || s < 0 {
+			return 0
+		}
+		return int64((float64(h*3600+m*60) + s) * 1000)
 	} else if len(parts) == 2 {
-		m, _ := strconv.ParseInt(parts[0], 10, 64)
-		s, _ := strconv.ParseInt(parts[1], 10, 64)
-		return ((m * 60) + s) * 1000
+		m, mErr := strconv.ParseInt(parts[0], 10, 64)
+		s, sErr := strconv.ParseFloat(parts[1], 64)
+		if mErr != nil || sErr != nil || m < 0 || s < 0 {
+			return 0
+		}
+		return int64((float64(m*60) + s) * 1000)
 	}
 
 	return 0

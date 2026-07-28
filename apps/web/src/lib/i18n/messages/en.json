@@ -449,6 +449,8 @@
 		"skipBack": "Skip back 15 seconds",
 		"skipForward": "Skip forward 30 seconds",
 		"speed": "Playback speed",
+		"customSpeed": "Custom playback speed",
+		"customSpeedHint": "Enter a value from 0.25 to 4.00",
 		"volume": "Volume",
 		"mute": "Mute",
 		"unmute": "Unmute",

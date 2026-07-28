@@ -5,7 +5,7 @@ const RIGHT_WIDTH_KEY = 'koalacast_right_rail_width';
 
 export const railSizes = {
 	left: { collapsed: 64, min: 176, default: 206, max: 360, snap: 136 },
-	right: { collapsed: 48, min: 180, default: 220, max: 420, snap: 132 }
+	right: { collapsed: 0, min: 180, default: 220, max: 420, snap: 132 }
 } as const;
 
 function initialWidth(side: 'left' | 'right'): number {
@@ -13,9 +13,13 @@ function initialWidth(side: 'left' | 'right'): number {
 	if (typeof localStorage === 'undefined') return config.default;
 	const widthKey = side === 'left' ? LEFT_WIDTH_KEY : RIGHT_WIDTH_KEY;
 	const collapsedKey = side === 'left' ? LEFT_COLLAPSED_KEY : RIGHT_COLLAPSED_KEY;
-	const saved = Number(localStorage.getItem(widthKey));
+	// Honor the explicit collapsed marker before the saved legacy width. This
+	// migrates right rails persisted as 48px to the new true 0px state.
+	if (localStorage.getItem(collapsedKey) === '1') return config.collapsed;
+	const savedValue = localStorage.getItem(widthKey);
+	const saved = savedValue === null ? Number.NaN : Number(savedValue);
 	if (Number.isFinite(saved) && saved >= config.collapsed && saved <= config.max) return saved;
-	return localStorage.getItem(collapsedKey) === '1' ? config.collapsed : config.default;
+	return config.default;
 }
 
 class ShellStore {
