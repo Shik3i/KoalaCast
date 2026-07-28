@@ -2,7 +2,7 @@ name: Tests
 
 # Reusable test suite. Called by CI (on every push/PR) and gated in front of the
 # Docker release so nothing ships without a green build.
-# Action majors reviewed against official upstream documentation: 2026-07-27.
+# Action majors reviewed against official upstream documentation: 2026-07-28.
 on:
   workflow_call:
 
@@ -14,9 +14,9 @@ jobs:
     name: Go backend (vet, fmt, race tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           # Track the toolchain declared in go.mod instead of a hard-coded version.
           go-version-file: services/api/go.mod
@@ -44,9 +44,9 @@ jobs:
     name: SvelteKit frontend (check + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -111,8 +111,8 @@ jobs:
     name: OpenAPI lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: npx -y @redocly/cli lint packages/openapi/openapi.yaml

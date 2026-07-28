@@ -41,7 +41,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Generate Git-derived sitemap metadata
         run: node apps/web/scripts/generate-seo.mjs
