@@ -6,6 +6,7 @@ import net.koalastuff.koalacast.core.network.dto.DiscoverResponse
 import net.koalastuff.koalacast.core.network.dto.EpisodeDto
 import net.koalastuff.koalacast.core.network.dto.EpisodesResponse
 import net.koalastuff.koalacast.core.network.dto.HealthResponse
+import net.koalastuff.koalacast.core.network.dto.ReadinessResponse
 import net.koalastuff.koalacast.core.network.dto.PodcastDto
 import net.koalastuff.koalacast.core.network.dto.SearchResponse
 import net.koalastuff.koalacast.core.network.dto.AuthMessageResponse
@@ -21,6 +22,7 @@ import net.koalastuff.koalacast.core.network.dto.SessionsResponse
 import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
 import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
 import net.koalastuff.koalacast.core.network.dto.SyncPushResponse
+import net.koalastuff.koalacast.core.network.dto.SyncSnapshotResponse
 import net.koalastuff.koalacast.core.network.dto.GlobalStatsDto
 import net.koalastuff.koalacast.core.network.dto.TranscriptContentDto
 import okhttp3.RequestBody
@@ -53,6 +55,10 @@ interface KoalaCastApi {
     @Headers("X-KoalaCast-Absolute-Url: 1")
     @GET
     suspend fun healthzAt(@Url absoluteUrl: String): Response<HealthResponse>
+
+    @Headers("X-KoalaCast-Absolute-Url: 1")
+    @GET
+    suspend fun readyzAt(@Url absoluteUrl: String): Response<ReadinessResponse>
 
     @GET("api/v1/podcasts/discover")
     suspend fun discover(
@@ -123,7 +129,13 @@ interface KoalaCastApi {
     suspend fun revokeSession(@Path("id") id: String): Response<AuthMessageResponse>
 
     @GET("api/v1/sync")
-    suspend fun pullSync(@Query("since_cursor") sinceCursor: Long): Response<SyncPullResponse>
+    suspend fun pullSync(
+        @Query("since_cursor") sinceCursor: Long,
+        @Query("limit") limit: Int = 500,
+    ): Response<SyncPullResponse>
+
+    @GET("api/v1/sync/snapshot")
+    suspend fun syncSnapshot(): Response<SyncSnapshotResponse>
 
     @POST("api/v1/sync")
     suspend fun pushSync(@Body body: SyncPushRequest): Response<SyncPushResponse>

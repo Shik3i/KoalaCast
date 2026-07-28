@@ -2,7 +2,7 @@
 	import { t } from '$lib/i18n';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { sync } from '$lib/stores/sync.svelte';
+	import { activateLoggedInAccount } from '$lib/stores/account-context';
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');
@@ -34,8 +34,8 @@
 			}
 
 			toast.success(t('toast.welcomeBack', { username: data.username }));
-			if (data.user_id) sync.enable(data.user_id);
-			goto('/account');
+			if (data.user_id) await activateLoggedInAccount(data.user_id);
+			await goto('/account');
 		} catch (err) {
 			authError = 'Network error during login.';
 		} finally {

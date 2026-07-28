@@ -36,7 +36,9 @@ func TestSync_PayloadRoundTrip(t *testing.T) {
 	// A user row is required for the sync_log / cursor foreign keys.
 	if _, err := database.SQL.Exec(`
 		INSERT INTO users (id, username, normalized_username, password_hash, recovery_code_hash, role, is_suspended, created_at, updated_at)
-		VALUES ('u1','User','user','x','y','user',0,0,0)
+		VALUES ('u1','User','user','x','y','user',0,0,0);
+		INSERT INTO podcasts (id, feed_url, title, created_at, updated_at)
+		VALUES ('pod-1','https://example.com/feed.xml','My Show',0,0)
 	`); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}

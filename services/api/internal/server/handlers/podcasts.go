@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -22,11 +23,12 @@ import (
 )
 
 type PodcastHandler struct {
-	DB           *db.DB
-	PodcastIndex *podcastindex.Client
-	ITunes       *itunes.ITunesClient
-	Worker       *worker.FeedWorker
-	MaxResponseB int64
+	DB             *db.DB
+	PodcastIndex   *podcastindex.Client
+	ITunes         *itunes.ITunesClient
+	Worker         *worker.FeedWorker
+	MaxResponseB   int64
+	FeedHTTPClient *http.Client
 }
 
 type AddFeedRequest struct {
@@ -372,14 +374,18 @@ func (h *PodcastHandler) IngestFeedURL(ctx context.Context, feedURL string) (str
 // and backfilled rather than being served as an empty shell forever.
 // Errors are *ingestError with an HTTP status hint.
 func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (string, error) {
+	feedURL = strings.TrimSpace(feedURL)
 	// Validate URL & SSRF checks
 	if err := rss.ValidateURL(feedURL); err != nil {
 		return "", &ingestError{Status: http.StatusBadRequest, Msg: err.Error()}
 	}
 
-	// Look for an existing record; only short-circuit if it already has episodes.
-	var existingID string
-	if err := h.DB.SQL.QueryRowContext(ctx, "SELECT id FROM podcasts WHERE feed_url = ?", feedURL).Scan(&existingID); err == nil {
+	// Resolve both canonical feed URLs and every previously observed alias.
+	existingID, err := h.resolvePodcastURL(ctx, feedURL)
+	if err != nil && err != sql.ErrNoRows {
+		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to resolve feed URL"}
+	}
+	if existingID != "" {
 		var epCount int
 		_ = h.DB.SQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM episodes WHERE podcast_id = ?", existingID).Scan(&epCount)
 		if epCount > 0 {
@@ -388,7 +394,10 @@ func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (str
 	}
 
 	// Fetch & Parse RSS/Atom Feed using Safe HTTP Client
-	client := rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second})
+	client := h.FeedHTTPClient
+	if client == nil {
+		client = rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second})
+	}
 	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	httpReq.Header.Set("User-Agent", "KoalaCast/1.0 (+https://github.com/Shik3i/KoalaCast)")
 
@@ -400,6 +409,29 @@ func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (str
 
 	if resp.StatusCode != http.StatusOK {
 		return "", &ingestError{Status: http.StatusBadRequest, Msg: "feed URL returned status " + strconv.Itoa(resp.StatusCode)}
+	}
+	canonicalURL := feedURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		canonicalURL = resp.Request.URL.String()
+	}
+	if err := rss.ValidateURL(canonicalURL); err != nil {
+		return "", &ingestError{Status: http.StatusBadRequest, Msg: "invalid canonical feed URL"}
+	}
+
+	canonicalID, err := h.resolvePodcastURL(ctx, canonicalURL)
+	if err != nil && err != sql.ErrNoRows {
+		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to resolve canonical feed URL"}
+	}
+	if canonicalID != "" && canonicalID != existingID {
+		var epCount int
+		_ = h.DB.SQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM episodes WHERE podcast_id = ?", canonicalID).Scan(&epCount)
+		if epCount > 0 {
+			if err := h.storePodcastAliases(ctx, canonicalID, feedURL, canonicalURL); err != nil {
+				return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to save feed alias"}
+			}
+			return canonicalID, nil
+		}
+		existingID = canonicalID
 	}
 
 	limitReader := rss.LimitResponseBody(resp.Body, h.MaxResponseB)
@@ -432,7 +464,7 @@ func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (str
 				explicit, copyright, update_frequency_ms, last_fetch_attempt_at,
 				last_successful_fetch_at, next_scheduled_fetch_at, created_at, updated_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, podcastID, feedURL, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author,
+		`, podcastID, canonicalURL, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author,
 			parsedFeed.ArtworkURL, parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright,
 			86400000, nowMs, nowMs, nowMs+86400000, nowMs, nowMs)
 	} else {
@@ -491,11 +523,58 @@ func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (str
 		}
 	}
 
+	for _, aliasURL := range []string{feedURL, canonicalURL} {
+		if aliasURL == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO podcast_aliases (id, alias_url, target_podcast_id, created_at)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(alias_url) DO UPDATE SET target_podcast_id = excluded.target_podcast_id
+		`, uuid.New().String(), aliasURL, podcastID, nowMs); err != nil {
+			return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to save feed alias"}
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to commit transaction"}
 	}
 
 	return podcastID, nil
+}
+
+func (h *PodcastHandler) resolvePodcastURL(ctx context.Context, feedURL string) (string, error) {
+	var podcastID string
+	err := h.DB.SQL.QueryRowContext(ctx, `
+		SELECT id FROM podcasts WHERE feed_url = ?
+		UNION ALL
+		SELECT target_podcast_id FROM podcast_aliases WHERE alias_url = ?
+		LIMIT 1
+	`, feedURL, feedURL).Scan(&podcastID)
+	return podcastID, err
+}
+
+func (h *PodcastHandler) storePodcastAliases(ctx context.Context, podcastID string, urls ...string) error {
+	tx, err := h.DB.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	nowMs := time.Now().UnixMilli()
+	for _, aliasURL := range urls {
+		aliasURL = strings.TrimSpace(aliasURL)
+		if aliasURL == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO podcast_aliases (id, alias_url, target_podcast_id, created_at)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(alias_url) DO UPDATE SET target_podcast_id = excluded.target_podcast_id
+		`, uuid.New().String(), aliasURL, podcastID, nowMs); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (h *PodcastHandler) GetPodcast(w http.ResponseWriter, r *http.Request) {

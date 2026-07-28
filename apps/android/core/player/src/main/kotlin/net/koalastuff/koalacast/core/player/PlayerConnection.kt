@@ -32,6 +32,7 @@ import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.atomic.AtomicLong
 
 /** What every player surface renders from. */
 data class PlaybackUiState(
@@ -82,6 +83,7 @@ class PlayerConnection @Inject constructor(
     private val connectMutex = Mutex()
     private var positionTicker: Job? = null
     private var sleepJob: Job? = null
+    private val playGeneration = AtomicLong()
 
     init {
         scope.launch {
@@ -130,6 +132,20 @@ class PlayerConnection @Inject constructor(
      * overrides the global default, matching the web client.
      */
     fun play(track: Track, resume: Boolean = true) {
+        startPlayback(track, resume, explicitPositionMs = null)
+    }
+
+    /** Starts and seeks as one generation-safe controller operation. */
+    fun playAt(track: Track, positionMs: Long) {
+        startPlayback(track, resume = false, explicitPositionMs = positionMs.coerceAtLeast(0))
+    }
+
+    private fun startPlayback(
+        track: Track,
+        resume: Boolean,
+        explicitPositionMs: Long?,
+    ) {
+        val generation = playGeneration.incrementAndGet()
         scope.launch {
             val controller = controller()
             val savedPosition = if (resume) {
@@ -142,11 +158,11 @@ class PlayerConnection @Inject constructor(
             }
             val showSettings = library.podcastSettingsSnapshot(track.podcastId)
             val speed = showSettings.speed ?: preferences.preferences.first().playbackSpeed
-            val startPosition = if (savedPosition == 0L) {
-                showSettings.skipIntroSeconds * 1_000L
-            } else {
-                savedPosition
-            }
+            val startPosition = explicitPositionMs ?: if (savedPosition == 0L) {
+                    showSettings.skipIntroSeconds * 1_000L
+                } else {
+                    savedPosition
+                }
 
             // Artwork goes through the listener's own instance when the proxy is
             // on, so the notification does not leak their IP to a publisher CDN.
@@ -158,6 +174,7 @@ class PlayerConnection @Inject constructor(
                 }
 
             withContext(Dispatchers.Main) {
+                if (generation != playGeneration.get()) return@withContext
                 controller.setMediaItem(
                     TrackMediaItem.from(track, artwork, localMediaUri),
                     startPosition,
@@ -166,6 +183,7 @@ class PlayerConnection @Inject constructor(
                 controller.prepare()
                 controller.play()
             }
+            if (generation != playGeneration.get()) return@launch
             queue.remove(track.episodeId)
         }
     }

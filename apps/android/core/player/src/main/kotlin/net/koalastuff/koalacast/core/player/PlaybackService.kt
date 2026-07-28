@@ -32,6 +32,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
@@ -366,8 +367,11 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         releaseLoudnessEnhancer()
-        persistNow(finalise = true)
         positionTicker?.cancel()
+        val finalPlayback = capturePlayback(finalise = true)
+        if (finalPlayback != null) {
+            runBlocking(Dispatchers.IO) { persist(finalPlayback) }
+        }
         mediaSession?.run {
             playerListener?.let { player.removeListener(it) }
             player.release()
@@ -521,16 +525,22 @@ class PlaybackService : MediaLibraryService() {
      *   write the position, so a single long listen stays a single session.
      */
     private fun persistNow(finalise: Boolean) {
-        val player = mediaSession?.player ?: return
-        val track = TrackMediaItem.toTrack(player.currentMediaItem) ?: return
+        val playback = capturePlayback(finalise) ?: return
+        scope.launch { persist(playback) }
+    }
+
+    private fun capturePlayback(finalise: Boolean): PlaybackPersistence? {
+        val player = mediaSession?.player ?: return null
+        val track = TrackMediaItem.toTrack(player.currentMediaItem) ?: return null
         val positionMs = player.currentPosition
         val durationMs = player.duration.takeIf { it != C.TIME_UNSET } ?: track.durationMs
         val session = if (finalise) recorder.stop(clock.nowMs(), positionMs) else null
+        return PlaybackPersistence(track, positionMs, durationMs, session)
+    }
 
-        scope.launch {
-            progress.savePosition(track, positionMs, durationMs)
-            session?.let { progress.recordListeningSession(it) }
-        }
+    private suspend fun persist(playback: PlaybackPersistence) {
+        progress.savePosition(playback.track, playback.positionMs, playback.durationMs)
+        playback.session?.let { progress.recordListeningSession(it) }
     }
 
     /**
@@ -610,4 +620,11 @@ class PlaybackService : MediaLibraryService() {
         /** +10 dB, the usual lift for speech that was mastered too quietly. */
         const val BOOST_GAIN_MILLIBEL = 1_000
     }
+
+    private data class PlaybackPersistence(
+        val track: Track,
+        val positionMs: Long,
+        val durationMs: Long,
+        val session: net.koalastuff.koalacast.core.model.ListeningSession?,
+    )
 }

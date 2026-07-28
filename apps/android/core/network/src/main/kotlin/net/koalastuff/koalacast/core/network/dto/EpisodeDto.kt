@@ -47,6 +47,12 @@ data class HealthResponse(
     val version: String = "",
 )
 
+@Serializable
+data class ReadinessResponse(
+    val status: String = "",
+    val database: String = "",
+)
+
 /** `GET /api/v1/proxy/chapters` — Podcasting 2.0 JSON chapters, normalised by the server. */
 @Serializable
 data class ChapterDto(

@@ -2,6 +2,7 @@ plugins {
     id("koalacast.android.library")
     id("koalacast.android.hilt")
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {

@@ -141,51 +141,129 @@ func (db *DB) Migrate(logger *slog.Logger) error {
 	sort.Strings(upFiles)
 
 	for _, file := range upFiles {
+		tx, err := db.SQL.Begin()
+		if err != nil {
+			return fmt.Errorf("begin migration %s: %w", file, err)
+		}
+
 		var applied int
-		if err := db.SQL.QueryRow(
+		if err := tx.QueryRow(
 			`SELECT COUNT(1) FROM schema_migrations WHERE version = ?`, file,
 		).Scan(&applied); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to read migration state for %s: %w", file, err)
 		}
 		if applied > 0 {
+			_ = tx.Rollback()
 			continue
 		}
 
 		content, err := migrationsFS.ReadFile("migrations/" + file)
 		if err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to read migration file %s: %w", file, err)
 		}
 
 		logger.Info("executing migration", "file", file)
-		if _, err := db.SQL.Exec(string(content)); err != nil {
-			// Self-heal databases that predate migration tracking: the schema
-			// change may already be present from an earlier un-tracked run. Treat
-			// "already exists" style errors as applied instead of crash-looping.
-			if isAlreadyAppliedErr(err) {
-				logger.Warn("migration already applied to existing schema; recording as done",
-					"file", file, "detail", err.Error())
-			} else {
+		reconciled, err := reconcileLegacyPartialMigration(tx, file)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("failed to reconcile migration %s: %w", file, err)
+		}
+		if !reconciled {
+			if _, err := tx.Exec(string(content)); err != nil {
+				_ = tx.Rollback()
 				return fmt.Errorf("failed to execute migration %s: %w", file, err)
 			}
 		}
 
-		if _, err := db.SQL.Exec(
+		if _, err := tx.Exec(
 			`INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)`,
 			file, time.Now().UnixMilli(),
 		); err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("failed to record migration %s: %w", file, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration %s: %w", file, err)
 		}
 	}
 
 	return nil
 }
 
-// isAlreadyAppliedErr reports whether a migration error just means the change is
-// already present (e.g. re-adding a column/table on a pre-tracking database).
-func isAlreadyAppliedErr(err error) bool {
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "duplicate column name") ||
-		strings.Contains(msg, "already exists")
+// reconcileLegacyPartialMigration repairs schemas created before migration
+// tracking existed. It recognizes only concrete historical columns; it never
+// treats an arbitrary "already exists" error as proof that a whole file ran.
+func reconcileLegacyPartialMigration(tx *sql.Tx, file string) (bool, error) {
+	switch file {
+	case "000002_device_token_expiry.up.sql":
+		hasExpiry, err := tableHasColumn(tx, "device_credentials", "expires_at")
+		if err != nil || !hasExpiry {
+			return false, err
+		}
+		_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_device_credentials_token ON device_credentials(token_hash)`)
+		return true, err
+	case "000003_episode_transcripts.up.sql":
+		hasTranscripts, err := tableHasColumn(tx, "episodes", "transcripts")
+		return hasTranscripts, err
+	case "000006_global_statistics_opt_in.up.sql":
+		hasOptIn, err := tableHasColumn(tx, "users", "global_stats_opt_in")
+		if err != nil {
+			return false, err
+		}
+		hasOptInAt, err := tableHasColumn(tx, "users", "global_stats_opt_in_at")
+		if err != nil {
+			return false, err
+		}
+		if !hasOptIn && !hasOptInAt {
+			return false, nil
+		}
+		if !hasOptIn {
+			if _, err := tx.Exec(`ALTER TABLE users ADD COLUMN global_stats_opt_in INTEGER NOT NULL DEFAULT 0 CHECK (global_stats_opt_in IN (0, 1))`); err != nil {
+				return false, err
+			}
+		}
+		if !hasOptInAt {
+			if _, err := tx.Exec(`ALTER TABLE users ADD COLUMN global_stats_opt_in_at INTEGER NOT NULL DEFAULT 0`); err != nil {
+				return false, err
+			}
+		}
+		if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_users_global_stats_opt_in ON users(global_stats_opt_in, is_suspended)`); err != nil {
+			return false, err
+		}
+		if _, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_listening_sessions_started ON listening_sessions(started_at)`); err != nil {
+			return false, err
+		}
+		return true, nil
+	case "000007_episode_chapters.up.sql":
+		hasChapters, err := tableHasColumn(tx, "episodes", "chapters_url")
+		return hasChapters, err
+	default:
+		return false, nil
+	}
+}
+
+func tableHasColumn(tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // Close runs a final optimize pass (cheap, uses the stats gathered this session)

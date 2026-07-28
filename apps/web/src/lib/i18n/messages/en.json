@@ -388,7 +388,9 @@
 		"browser": "Browser",
 		"currentDevice": "Current Device",
 		"ipSubnet": "IP Subnet",
-		"direct": "Direct"
+		"direct": "Direct",
+		"unknown": "Unknown",
+		"lastActive": "Last active"
 	},
 	"login": {
 		"pageTitle": "Sign In — KoalaCast",
@@ -480,7 +482,15 @@
 		"boost": "Boost",
 		"trimSilence": "Trim Silence",
 		"playing": "Playing",
-		"upNext": "Up next"
+		"upNext": "Up next",
+		"nextLabel": "next: {title}",
+		"queueCount": "Queue {count}",
+		"chaptersCount": "Chapters ({count})",
+		"episodeChaptersCount": "Episode Chapters ({count})",
+		"boostEnabled": "Volume Boost Enabled (2.2x)",
+		"boostDisabled": "Volume Boost Off",
+		"skipSilenceEnabled": "Skip Silence Enabled",
+		"skipSilenceDisabled": "Skip Silence Off"
 	},
 	"shortcuts": {
 		"title": "Keyboard Shortcuts",
@@ -573,7 +583,10 @@
 		"addToQueue": "Add to Queue",
 		"chapters": "Chapters",
 		"episodeChapters": "Episode Chapters",
-		"transcript": "Transcript"
+		"transcript": "Transcript",
+		"unknownDuration": "Unknown duration",
+		"chaptersLoadError": "Chapters could not be loaded.",
+		"transcriptLoadError": "Transcript could not be loaded."
 	},
 	"quiet": {
 		"shell": {

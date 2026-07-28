@@ -7,10 +7,12 @@
 
 import {
 	getLocalQueue,
-	addToLocalQueue,
+	addToLocalQueueIfAbsent,
 	addManyToLocalQueue,
 	removeFromLocalQueue,
 	clearLocalQueue,
+	getLocalCurrentPlayback,
+	saveLocalCurrentPlayback,
 	type LocalQueueItem
 } from '$lib/idb/db';
 import { normalizePlaybackSpeed } from '$lib/player/playback-speed';
@@ -63,6 +65,7 @@ class PlayerStore {
 		this.durationMs = track.duration_ms;
 		this.positionUpdatedAt = Date.now();
 		this.playToken++;
+		void saveLocalCurrentPlayback({ ...track, position_ms: 0 }).catch(() => {});
 	}
 
 	stop() {
@@ -71,6 +74,7 @@ class PlayerStore {
 		this.positionMs = 0;
 		this.durationMs = 0;
 		this.positionUpdatedAt = Date.now();
+		void saveLocalCurrentPlayback(null).catch(() => {});
 	}
 
 	get isActive() {
@@ -117,10 +121,21 @@ class PlayerStore {
 			.map(itemToTrack);
 	}
 
+	async loadContext() {
+		this.isPlaying = false;
+		this.playToken = 0;
+		const [items, saved] = await Promise.all([getLocalQueue(), getLocalCurrentPlayback()]);
+		this.current = saved ? itemToTrack({ ...saved, id: '', position_order: 0, added_at: 0 }) : null;
+		this.positionMs = saved?.position_ms ?? 0;
+		this.durationMs = saved?.duration_ms ?? 0;
+		this.positionUpdatedAt = Date.now();
+		this.queue = items
+			.filter((item) => item.episode_id !== this.current?.episode_id)
+			.map(itemToTrack);
+	}
+
 	async addToQueue(track: CurrentTrack) {
-		const existing = await getLocalQueue();
-		if (existing.some((i) => i.episode_id === track.episode_id)) return;
-		await addToLocalQueue({
+		await addToLocalQueueIfAbsent({
 			id: crypto.randomUUID(),
 			episode_id: track.episode_id,
 			podcast_id: track.podcast_id,

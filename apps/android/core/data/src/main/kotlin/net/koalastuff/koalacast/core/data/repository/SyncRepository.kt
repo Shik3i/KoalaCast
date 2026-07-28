@@ -34,6 +34,7 @@ import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
 import net.koalastuff.koalacast.core.network.dto.SyncOperationDto
 import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
+import net.koalastuff.koalacast.core.network.dto.SyncSnapshotResponse
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,6 +43,7 @@ import javax.inject.Singleton
 class SyncRepository @Inject constructor(
     private val api: KoalaCastApi,
     private val store: SecureAccountStore,
+    private val accountData: AccountDataNamespace,
     private val database: KoalaCastDatabase,
     private val subscriptions: SubscriptionDao,
     private val favorites: FavoriteDao,
@@ -68,6 +70,7 @@ class SyncRepository @Inject constructor(
             _status.value = SyncStatus.IDLE
             true
         } catch (error: AuthExpired) {
+            accountData.switchTo(null)
             store.clear()
             _status.value = SyncStatus.OFF
             false
@@ -81,25 +84,118 @@ class SyncRepository @Inject constructor(
         _status.value = SyncStatus.OFF
     }
 
-    private suspend fun pull(userId: String) {
+    internal suspend fun pull(userId: String) {
         var cursor = store.cursor(userId)
+        var recoveredFromSnapshot = false
         while (true) {
-            val response = api.pullSync(cursor)
+            val response = api.pullSync(cursor, PAGE_LIMIT)
             when (response.code()) {
                 401 -> throw AuthExpired()
                 410 -> {
-                    cursor = 0
-                    store.setCursor(userId, 0)
+                    if (recoveredFromSnapshot) {
+                        throw IOException("sync pull returned 410 after snapshot recovery")
+                    }
+                    val snapshotResponse = api.syncSnapshot()
+                    if (snapshotResponse.code() == 401) throw AuthExpired()
+                    if (!snapshotResponse.isSuccessful) {
+                        throw IOException("sync snapshot failed: ${snapshotResponse.code()}")
+                    }
+                    val snapshot = snapshotResponse.body()
+                        ?: throw IOException("sync snapshot returned no body")
+                    applySnapshot(snapshot)
+                    cursor = snapshot.cursor.coerceAtLeast(0)
+                    store.setCursor(userId, cursor)
+                    recoveredFromSnapshot = true
                     continue
                 }
             }
             if (!response.isSuccessful) throw IOException("sync pull failed: ${response.code()}")
             val body = response.body() ?: throw IOException("sync pull returned no body")
             body.changesets.forEach { apply(it) }
-            cursor = body.changesets.lastOrNull()?.serverCursor
+            val nextCursor = body.nextCursor
+                ?: body.changesets.lastOrNull()?.serverCursor
                 ?: maxOf(cursor, body.currentCursor)
+            val hasMore = body.hasMore ?: (body.changesets.size >= PAGE_LIMIT)
+            if (hasMore && nextCursor <= cursor) {
+                throw IOException("sync pull made no cursor progress")
+            }
+            cursor = nextCursor.coerceAtLeast(cursor)
             store.setCursor(userId, cursor)
-            if (body.changesets.size < PAGE_LIMIT) return
+            if (!hasMore) return
+        }
+    }
+
+    private suspend fun applySnapshot(snapshot: SyncSnapshotResponse) {
+        if (snapshot.cursor < 0 ||
+            snapshot.subscriptions.any {
+                it.string("podcast_id").isBlank() || it.long("added_at") <= 0
+            } ||
+            snapshot.favorites.any {
+                it.string("episode_id").isBlank() || it.long("added_at") <= 0
+            } ||
+            snapshot.playbackStates.any {
+                it.string("episode_id").isBlank() || it.long("last_played_at") < 0
+            } ||
+            snapshot.listeningSessions.any {
+                it.string("id").isBlank() || it.long("ended_at") <= 0
+            }
+        ) {
+            throw IOException("sync snapshot contains invalid records")
+        }
+        database.withTransaction {
+            subscriptions.clear()
+            favorites.clear()
+            playbackStates.clear()
+            listeningSessions.clear()
+            tombstones.clear()
+
+            snapshot.subscriptions.forEach { payload ->
+                val podcastId = payload.string("podcast_id").ifBlank { payload.string("id") }
+                if (podcastId.isBlank()) return@forEach
+                subscriptions.upsert(
+                    SubscriptionEntity(
+                        podcastId = podcastId,
+                        feedUrl = payload.string("feed_url"),
+                        title = payload.string("title").ifBlank { "Podcast" },
+                        artworkUrl = payload.string("artwork_url"),
+                        addedAt = payload.long("added_at").takeIf { it > 0 }
+                            ?: payload.long("created_at").takeIf { it > 0 }
+                            ?: System.currentTimeMillis(),
+                        inboxMode = payload.string("inbox_mode")
+                            .takeIf { it == SubscriptionEntity.INBOX_MODE_LATEST }
+                            ?: SubscriptionEntity.INBOX_MODE_ALL,
+                    ),
+                )
+            }
+            snapshot.favorites.forEach { payload ->
+                val episodeId = payload.string("episode_id").ifBlank { payload.string("id") }
+                if (episodeId.isBlank()) return@forEach
+                favorites.upsert(
+                    FavoriteEntity(
+                        episodeId = episodeId,
+                        addedAt = payload.long("added_at").takeIf { it > 0 }
+                            ?: payload.long("created_at").takeIf { it > 0 }
+                            ?: System.currentTimeMillis(),
+                        podcastId = payload.string("podcast_id").ifBlank { null },
+                        title = payload.string("title").ifBlank { null },
+                        podcastTitle = payload.string("podcast_title").ifBlank { null },
+                        artworkUrl = payload.string("artwork_url").ifBlank { null },
+                        enclosureUrl = payload.string("enclosure_url").ifBlank { null },
+                        durationMs = payload.longOrNull("duration_ms"),
+                        categories = payload.strings("categories"),
+                    ),
+                )
+            }
+            snapshot.playbackStates.forEach { payload ->
+                val episodeId = payload.string("episode_id").ifBlank { payload.string("id") }
+                if (episodeId.isBlank()) return@forEach
+                playbackStates.upsert(playbackEntity(episodeId, payload, payload.long("last_played_at")))
+            }
+            snapshot.listeningSessions.forEach { payload ->
+                val id = payload.string("id")
+                if (id.isBlank()) return@forEach
+                listeningSessions.upsert(listeningEntity(id, payload, payload.long("ended_at")))
+            }
         }
     }
 
@@ -245,22 +341,7 @@ class SyncRepository @Inject constructor(
             ?: change.clientTimestamp
         val existing = playbackStates.get(episodeId)
         if (existing != null && existing.lastPlayedAt >= incomingAt) return
-        playbackStates.upsert(
-            PlaybackStateEntity(
-                episodeId = episodeId,
-                podcastId = payload.string("podcast_id"),
-                positionMs = payload.long("position_ms"),
-                completed = payload.boolean("completed"),
-                progressPercent = payload.int("progress_percent"),
-                lastPlayedAt = incomingAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
-                title = payload.string("title").ifBlank { null },
-                podcastTitle = payload.string("podcast_title").ifBlank { null },
-                artworkUrl = payload.string("artwork_url").ifBlank { null },
-                enclosureUrl = payload.string("enclosure_url").ifBlank { null },
-                durationMs = payload.longOrNull("duration_ms"),
-                categories = payload.strings("categories"),
-            ),
-        )
+        playbackStates.upsert(playbackEntity(episodeId, payload, incomingAt))
     }
 
     private suspend fun applyListening(change: SyncChangesetDto, payload: JsonObject) {
@@ -269,26 +350,51 @@ class SyncRepository @Inject constructor(
         val incomingAt = payload.long("ended_at").takeIf { it > 0 } ?: change.clientTimestamp
         val existing = listeningSessions.get(id)
         if (existing != null && existing.endedAt >= incomingAt) return
-        listeningSessions.upsert(
-            ListeningSessionEntity(
-                id = id,
-                episodeId = payload.string("episode_id"),
-                podcastId = payload.string("podcast_id"),
-                title = payload.string("title").ifBlank { "Episode" },
-                podcastTitle = payload.string("podcast_title").ifBlank { "Podcast" },
-                categories = payload.strings("categories"),
-                startedAt = payload.long("started_at").takeIf { it > 0 } ?: incomingAt,
-                endedAt = incomingAt,
-                wallClockMs = payload.long("wall_clock_ms").coerceAtLeast(0),
-                audioListenedMs = payload.long("audio_listened_ms").coerceAtLeast(0),
-                speedSavedMs = payload.long("speed_saved_ms").coerceAtLeast(0),
-                silenceSavedMs = payload.long("silence_saved_ms").coerceAtLeast(0),
-                manualSkippedMs = payload.long("manual_skipped_ms").coerceAtLeast(0),
-                introOutroSkippedMs = payload.long("intro_outro_skipped_ms").coerceAtLeast(0),
-                speedWeightedMs = payload.long("speed_weighted_ms").coerceAtLeast(0),
-            ),
-        )
+        listeningSessions.upsert(listeningEntity(id, payload, incomingAt))
     }
+
+    private fun playbackEntity(
+        episodeId: String,
+        payload: JsonObject,
+        incomingAt: Long,
+    ) = PlaybackStateEntity(
+        episodeId = episodeId,
+        podcastId = payload.string("podcast_id"),
+        positionMs = payload.long("position_ms"),
+        completed = payload.boolean("completed"),
+        progressPercent = payload.int("progress_percent"),
+        lastPlayedAt = incomingAt.takeIf { it > 0 }
+            ?: payload.long("client_timestamp").takeIf { it > 0 }
+            ?: System.currentTimeMillis(),
+        title = payload.string("title").ifBlank { null },
+        podcastTitle = payload.string("podcast_title").ifBlank { null },
+        artworkUrl = payload.string("artwork_url").ifBlank { null },
+        enclosureUrl = payload.string("enclosure_url").ifBlank { null },
+        durationMs = payload.longOrNull("duration_ms"),
+        categories = payload.strings("categories"),
+    )
+
+    private fun listeningEntity(
+        id: String,
+        payload: JsonObject,
+        incomingAt: Long,
+    ) = ListeningSessionEntity(
+        id = id,
+        episodeId = payload.string("episode_id"),
+        podcastId = payload.string("podcast_id"),
+        title = payload.string("title").ifBlank { "Episode" },
+        podcastTitle = payload.string("podcast_title").ifBlank { "Podcast" },
+        categories = payload.strings("categories"),
+        startedAt = payload.long("started_at").takeIf { it > 0 } ?: incomingAt,
+        endedAt = incomingAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
+        wallClockMs = payload.long("wall_clock_ms").coerceAtLeast(0),
+        audioListenedMs = payload.long("audio_listened_ms").coerceAtLeast(0),
+        speedSavedMs = payload.long("speed_saved_ms").coerceAtLeast(0),
+        silenceSavedMs = payload.long("silence_saved_ms").coerceAtLeast(0),
+        manualSkippedMs = payload.long("manual_skipped_ms").coerceAtLeast(0),
+        introOutroSkippedMs = payload.long("intro_outro_skipped_ms").coerceAtLeast(0),
+        speedWeightedMs = payload.long("speed_weighted_ms").coerceAtLeast(0),
+    )
 
     private fun operation(
         id: String,

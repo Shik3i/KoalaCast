@@ -1,7 +1,9 @@
 openapi: 3.0.3
 info:
   title: KoalaCast REST API
-  description: Privacy-first podcast player REST API for web and cross-device synchronization.
+  description: |
+    Privacy-first podcast player API. Unix timestamps are explicitly identified as
+    either seconds or milliseconds. Durations and playback positions use milliseconds.
   version: 1.0.0
   license:
     name: MIT
@@ -9,82 +11,424 @@ info:
 
 servers:
   - url: /
-    description: "Server Root (Operational Probes & Versioned API)"
+    description: Server root
 
 security: []
+
+tags:
+  - name: Health
+  - name: Proxy
+  - name: Podcasts
+  - name: Authentication
+  - name: Sync
+  - name: OPML
+  - name: Statistics
+  - name: Admin
 
 paths:
   /healthz:
     get:
+      tags: [Health]
       operationId: getHealthz
-      summary: "Liveness Probe (Status: Implemented)"
-      description: "Returns operational liveness status of the API server."
+      summary: Check service liveness
       responses:
         '200':
-          description: "Service is healthy"
+          description: Service is alive
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-        '400':
-          description: "Bad request"
         '500':
-          description: "Internal server error"
+          $ref: '#/components/responses/InternalError'
 
   /readyz:
     get:
+      tags: [Health]
       operationId: getReadyz
-      summary: "Readiness Probe (Status: Implemented)"
-      description: "Returns operational readiness status of the API server and SQLite database connection."
+      summary: Check service readiness
       responses:
         '200':
-          description: "Service and database are ready"
+          description: Service and database are ready
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReadinessResponse'
-        '400':
-          description: "Bad request"
         '503':
-          description: "Database or service is unavailable"
+          description: Service or database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
 
   /api/v1/healthz:
     get:
-      operationId: getApiV1Healthz
-      summary: "Versioned Liveness Probe (Status: Implemented)"
+      tags: [Health]
+      operationId: getApiHealthz
+      summary: Check versioned API liveness
       responses:
         '200':
-          description: "Service is healthy"
+          description: Service is alive
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-        '400':
-          description: "Bad request"
         '500':
-          description: "Internal server error"
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/readyz:
     get:
-      operationId: getApiV1Readyz
-      summary: "Versioned Readiness Probe (Status: Implemented)"
+      tags: [Health]
+      operationId: getApiReadyz
+      summary: Check versioned API readiness
       responses:
         '200':
-          description: "Service and database are ready"
+          description: Service and database are ready
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReadinessResponse'
-        '400':
-          description: "Bad request"
         '503':
-          description: "Database or service is unavailable"
+          description: Service or database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /api/v1/proxy/image:
+    parameters:
+      - $ref: '#/components/parameters/ProxyURL'
+      - name: w
+        in: query
+        description: Target image width in pixels. Invalid values fall back to 300.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1200
+          default: 300
+    get:
+      tags: [Proxy]
+      operationId: getProxiedImage
+      summary: Fetch and resize an external image
+      responses:
+        '200':
+          description: JPEG image, or a WebP fallback marked by X-KoalaCast-Image-Fallback
+          headers:
+            X-KoalaCast-Image-Fallback:
+              schema:
+                type: string
+                enum: ['true']
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    head:
+      tags: [Proxy]
+      operationId: headProxiedImage
+      summary: Fetch proxied image headers
+      responses:
+        '200':
+          description: Image headers
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/proxy/chapters:
+    parameters:
+      - $ref: '#/components/parameters/ProxyURL'
+    get:
+      tags: [Proxy]
+      operationId: getProxiedChapters
+      summary: Fetch external Podcasting 2.0 chapters
+      responses:
+        '200':
+          description: Publisher JSON, normalized when it contains recognized chapters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChaptersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+    head:
+      tags: [Proxy]
+      operationId: headProxiedChapters
+      summary: Fetch proxied chapter headers
+      responses:
+        '200':
+          description: Chapter response headers
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+
+  /api/v1/proxy/transcript:
+    parameters:
+      - $ref: '#/components/parameters/ProxyURL'
+    get:
+      tags: [Proxy]
+      operationId: getProxiedTranscript
+      summary: Fetch and normalize an external transcript
+      responses:
+        '200':
+          description: Publisher JSON or normalized SRT/VTT cues
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TranscriptCuesResponse'
+                  - type: object
+                    additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+    head:
+      tags: [Proxy]
+      operationId: headProxiedTranscript
+      summary: Fetch proxied transcript headers
+      responses:
+        '200':
+          description: Transcript response headers
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+
+  /api/v1/podcasts/discover:
+    get:
+      tags: [Podcasts]
+      operationId: discoverPodcasts
+      summary: Discover podcasts
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: region
+          in: query
+          description: Two-letter storefront region.
+          schema:
+            type: string
+        - name: languages
+          in: query
+          description: Comma-separated spoken-language codes.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 60
+      responses:
+        '200':
+          description: Discovery results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/podcasts/search:
+    get:
+      tags: [Podcasts]
+      operationId: searchPodcasts
+      summary: Search podcasts
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: languages
+          in: query
+          description: Comma-separated spoken-language codes.
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: region
+          in: query
+          schema:
+            type: string
+        - name: country
+          in: query
+          deprecated: true
+          description: Legacy alias for region.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/podcasts/feed:
+    post:
+      tags: [Podcasts]
+      operationId: addPodcastFeed
+      summary: Resolve and ingest a podcast feed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddFeedRequest'
+      responses:
+        '200':
+          description: Canonical stored podcast
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Podcast'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/podcasts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      tags: [Podcasts]
+      operationId: getPodcast
+      summary: Get a podcast
+      responses:
+        '200':
+          description: Stored podcast
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Podcast'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/podcasts/{id}/episodes:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      tags: [Podcasts]
+      operationId: listPodcastEpisodes
+      summary: List podcast episodes
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Episode page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodesResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/episodes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      tags: [Podcasts]
+      operationId: getEpisode
+      summary: Get an episode
+      responses:
+        '200':
+          description: Stored episode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Episode'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/episodes/{id}/transcript:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      tags: [Podcasts]
+      operationId: getEpisodeTranscript
+      summary: Fetch a stored episode transcript
+      parameters:
+        - name: i
+          in: query
+          description: Zero-based transcript reference index.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Transcript content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptContent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/auth/register:
     post:
-      operationId: postApiV1AuthRegister
-      summary: "User Registration (Status: Specified / Planned)"
-      description: "Registers a new user account and presents a 32-byte Base32 recovery code."
+      tags: [Authentication]
+      operationId: registerUser
+      summary: Register a user
       requestBody:
         required: true
         content:
@@ -93,21 +437,31 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '201':
-          description: "Registration successful"
+          description: User registered
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
         '400':
-          description: "Invalid registration payload"
+          $ref: '#/components/responses/BadRequest'
         '403':
-          description: "Registration is disabled"
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Username is already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/auth/login:
     post:
-      operationId: postApiV1AuthLogin
-      summary: "Web Session Login (Status: Specified / Planned)"
-      description: "Authenticates user credentials and sets a same-origin HttpOnly session cookie."
+      tags: [Authentication]
+      operationId: loginWebSession
+      summary: Log in with a browser session
       requestBody:
         required: true
         content:
@@ -116,61 +470,349 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: "Login successful"
+          description: Login succeeded and koalacast_session cookie was set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
         '400':
-          description: "Bad request"
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: "Invalid credentials"
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/auth/device/login:
+    post:
+      tags: [Authentication]
+      operationId: loginDevice
+      summary: Issue native device credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceLoginRequest'
+      responses:
+        '200':
+          description: Device credential issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceLoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/auth/recovery/verify:
+    post:
+      tags: [Authentication]
+      operationId: recoverAccount
+      summary: Reset a password with a recovery code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryRequest'
+      responses:
+        '200':
+          description: Password reset and replacement recovery code issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/auth/status:
     get:
-      operationId: getApiV1AuthStatus
-      summary: "Optional browser session status"
-      description: "Returns HTTP 200 for both anonymous and authenticated clients so the web app can restore an optional session without producing an expected 401 console error."
+      tags: [Authentication]
+      operationId: getAuthStatus
+      summary: Get optional authentication status
       security:
         - {}
         - cookieAuth: []
         - bearerAuth: []
       responses:
         '200':
-          description: "Current optional authentication status"
+          description: Anonymous or authenticated status
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthStatus'
-        '429':
-          description: "Rate limit exceeded"
+
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      operationId: getCurrentUser
+      summary: Get the authenticated user
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserIdentity'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Revoke the current session or device credential
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/sessions:
+    get:
+      tags: [Authentication]
+      operationId: listSessions
+      summary: List active web sessions and device credentials
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/auth/sessions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    delete:
+      tags: [Authentication]
+      operationId: revokeSession
+      summary: Revoke a web session or device credential
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/sync:
     get:
-      operationId: getApiV1Sync
-      summary: "Incremental Sync Pull (Status: Specified / Planned)"
-      description: "Returns incremental changesets since the specified server cursor."
+      tags: [Sync]
+      operationId: pullSync
+      summary: Pull incremental sync changes
       security:
         - cookieAuth: []
         - bearerAuth: []
       parameters:
         - name: since_cursor
           in: query
-          required: false
           schema:
             type: integer
+            format: int64
+            minimum: 0
             default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 500
       responses:
         '200':
-          description: "Incremental changesets returned"
+          description: Incremental changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPullResponse'
         '400':
-          description: "Bad request"
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: "Unauthorized"
+          $ref: '#/components/responses/Unauthorized'
         '410':
-          description: "Full resync required"
+          description: Requested cursor has been compacted; fetch a snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FullResyncRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Sync]
+      operationId: pushSync
+      summary: Push sync operations
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+      responses:
+        '200':
+          description: Operations committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/sync/merge:
+    post:
+      tags: [Sync]
+      operationId: mergeLocalSyncData
+      summary: Merge local data using normal sync push semantics
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+      responses:
+        '200':
+          description: Operations committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/sync/snapshot:
+    get:
+      tags: [Sync]
+      operationId: getSyncSnapshot
+      summary: Get the current materialized sync state
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Full sync snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/opml/import:
+    post:
+      tags: [OPML]
+      operationId: importOpml
+      summary: Import podcast subscriptions from OPML
+      security:
+        - {}
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Import report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpmlImportReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/opml/export:
+    get:
+      tags: [OPML]
+      operationId: exportOpml
+      summary: Export authenticated subscriptions as OPML
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OPML document
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/xml:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/stats/global:
     get:
-      operationId: getGlobalListeningStatistics
-      summary: "Opt-in global listening aggregates"
-      description: "Returns site-wide aggregates and rankings built exclusively from accounts with global statistics participation enabled."
+      tags: [Statistics]
+      operationId: getGlobalStatistics
+      summary: Get opt-in global listening aggregates
       parameters:
         - name: range
           in: query
@@ -180,33 +822,41 @@ paths:
             default: year
       responses:
         '200':
-          description: "Global statistics"
+          description: Global statistics
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GlobalStatsResponse'
         '400':
-          description: "Invalid range"
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /api/v1/stats/preferences:
     get:
+      tags: [Statistics]
       operationId: getGlobalStatsPreference
-      summary: "Read the authenticated user's global statistics consent"
+      summary: Get global statistics consent
       security:
         - cookieAuth: []
         - bearerAuth: []
       responses:
         '200':
-          description: "Current preference"
+          description: Current consent
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GlobalStatsPreference'
         '401':
-          description: "Unauthorized"
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
     put:
+      tags: [Statistics]
       operationId: updateGlobalStatsPreference
-      summary: "Enable or revoke global statistics participation"
+      summary: Update global statistics consent
       security:
         - cookieAuth: []
         - bearerAuth: []
@@ -218,15 +868,197 @@ paths:
               $ref: '#/components/schemas/GlobalStatsPreferenceUpdate'
       responses:
         '200':
-          description: "Updated preference"
+          description: Updated consent
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GlobalStatsPreference'
         '400':
-          description: "Invalid preference"
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: "Unauthorized"
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      operationId: adminListUsers
+      summary: List users
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUsersResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/admin/registration/toggle:
+    post:
+      tags: [Admin]
+      operationId: adminToggleRegistration
+      summary: Change public registration availability
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationToggleRequest'
+      responses:
+        '200':
+          description: Updated registration state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistrationToggleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/admin/users/{id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    post:
+      tags: [Admin]
+      operationId: adminSuspendUser
+      summary: Suspend or unsuspend a user
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuspendUserRequest'
+      responses:
+        '200':
+          description: Updated user state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuspendUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/admin/users/{id}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    delete:
+      tags: [Admin]
+      operationId: adminRevokeUserSessions
+      summary: Revoke all web sessions for a user
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Revocation count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeUserSessionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/admin/feed-health:
+    get:
+      tags: [Admin]
+      operationId: adminGetFeedHealth
+      summary: Get feed health records
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Feed health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedHealthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/admin/podcasts/{id}/refresh:
+    parameters:
+      - $ref: '#/components/parameters/ResourceID'
+    post:
+      tags: [Admin]
+      operationId: adminRefreshPodcast
+      summary: Refresh a podcast feed immediately
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Feed refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/admin/status:
+    get:
+      tags: [Admin]
+      operationId: adminGetSystemStatus
+      summary: Get system status
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
 components:
   securitySchemes:
@@ -238,42 +1070,409 @@ components:
       type: http
       scheme: bearer
 
+  parameters:
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    ProxyURL:
+      name: url
+      in: query
+      required: true
+      schema:
+        type: string
+        format: uri
+        pattern: '^https?://'
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required or credentials invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Operation is forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    BadGateway:
+      description: Upstream resource could not be fetched
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+
+    Message:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+
     HealthResponse:
       type: object
-      required:
-        - status
-        - timestamp
-        - version
+      required: [status, timestamp, version]
+      additionalProperties: false
       properties:
         status:
           type: string
-          example: "ok"
+          enum: [ok]
         timestamp:
           type: string
           format: date-time
         version:
           type: string
-          example: "1.0.0"
 
     ReadinessResponse:
       type: object
-      required:
-        - status
-        - database
+      required: [status, database]
+      additionalProperties: false
       properties:
         status:
           type: string
-          example: "ready"
+          enum: [ready, not_ready]
         database:
           type: string
-          example: "connected"
+          enum: [connected, disconnected]
+
+    Chapter:
+      type: object
+      required: [startTime, title]
+      additionalProperties: false
+      properties:
+        startTime:
+          type: number
+          format: double
+          description: Start time in seconds.
+          minimum: 0
+        title:
+          type: string
+        img:
+          type: string
+          format: uri
+        url:
+          type: string
+          format: uri
+
+    ChaptersResponse:
+      type: object
+      required: [chapters]
+      properties:
+        chapters:
+          type: array
+          items:
+            $ref: '#/components/schemas/Chapter'
+      additionalProperties: true
+
+    TranscriptCue:
+      type: object
+      required: [start, end, text]
+      additionalProperties: false
+      properties:
+        start:
+          type: number
+          format: double
+          description: Start time in seconds.
+        end:
+          type: number
+          format: double
+          description: End time in seconds.
+        text:
+          type: string
+
+    TranscriptCuesResponse:
+      type: object
+      required: [cues]
+      additionalProperties: false
+      properties:
+        cues:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/TranscriptCue'
+
+    PodcastSummary:
+      type: object
+      required: [id, title, author, feed_url, artwork_url, category, description]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+        feed_url:
+          type: string
+        artwork_url:
+          type: string
+        category:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        latest_duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Latest episode duration in milliseconds.
+        latest_published_at:
+          type: integer
+          format: int64
+          description: Latest episode publication as Unix milliseconds.
+        language:
+          type: string
+
+    DiscoverResponse:
+      type: object
+      required: [status, results, total]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PodcastSummary'
+        total:
+          type: integer
+          minimum: 0
+
+    SearchResponse:
+      type: object
+      required: [search_available, provider, results]
+      additionalProperties: false
+      properties:
+        search_available:
+          type: boolean
+        provider:
+          type: string
+          enum: [itunes, podcastindex]
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PodcastSummary'
+
+    AddFeedRequest:
+      type: object
+      required: [feed_url]
+      additionalProperties: true
+      properties:
+        feed_url:
+          type: string
+          format: uri
+          pattern: '^https?://'
+
+    Podcast:
+      type: object
+      required:
+        - id
+        - feed_url
+        - title
+        - description
+        - author
+        - artwork_url
+        - link
+        - language
+        - explicit
+        - copyright
+        - last_successful_fetch_at
+        - episode_count
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        feed_url:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        author:
+          type: string
+        artwork_url:
+          type: string
+        link:
+          type: string
+        language:
+          type: string
+        explicit:
+          type: boolean
+        copyright:
+          type: string
+        last_successful_fetch_at:
+          type: integer
+          format: int64
+          description: Last successful fetch as Unix milliseconds; zero if never fetched.
+        episode_count:
+          type: integer
+          minimum: 0
+
+    TranscriptReference:
+      type: object
+      required: [url, type]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+        type:
+          type: string
+
+    Episode:
+      type: object
+      required:
+        - id
+        - podcast_id
+        - guid
+        - title
+        - description
+        - content_encoded
+        - pub_date
+        - has_pub_date
+        - duration_ms
+        - enclosure_url
+        - enclosure_type
+        - enclosure_length
+        - artwork_url
+        - episode_number
+        - season_number
+        - episode_type
+        - explicit
+        - link
+        - transcripts
+        - chapters_url
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        podcast_id:
+          type: string
+        guid:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        content_encoded:
+          type: string
+        pub_date:
+          type: integer
+          format: int64
+          description: Publication time as whole Unix seconds; zero when has_pub_date is false.
+        has_pub_date:
+          type: boolean
+        duration_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Episode duration in milliseconds; zero when unknown.
+        enclosure_url:
+          type: string
+        enclosure_type:
+          type: string
+        enclosure_length:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Enclosure length in bytes; zero when unknown.
+        artwork_url:
+          type: string
+        episode_number:
+          type: integer
+          minimum: 0
+        season_number:
+          type: integer
+          minimum: 0
+        episode_type:
+          type: string
+        explicit:
+          type: boolean
+        link:
+          type: string
+        transcripts:
+          type: array
+          nullable: true
+          description: Null in list responses; an array in the single-episode response.
+          items:
+            $ref: '#/components/schemas/TranscriptReference'
+        chapters_url:
+          type: string
+
+    EpisodesResponse:
+      type: object
+      required: [episodes, count, limit, offset]
+      additionalProperties: false
+      properties:
+        episodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Episode'
+        count:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+        offset:
+          type: integer
+          minimum: 0
+
+    TranscriptContent:
+      type: object
+      required: [type, content]
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        content:
+          type: string
 
     RegisterRequest:
       type: object
-      required:
-        - username
-        - password
+      required: [username, password]
+      additionalProperties: true
       properties:
         username:
           type: string
@@ -282,61 +1481,665 @@ components:
         password:
           type: string
           minLength: 8
+          writeOnly: true
 
     RegisterResponse:
       type: object
-      required:
-        - user_id
-        - username
-        - recovery_code
+      required: [user_id, username, role, recovery_code, warning]
+      additionalProperties: false
       properties:
         user_id:
           type: string
-          format: uuid
         username:
           type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
         recovery_code:
           type: string
-          example: "AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH"
+        warning:
+          type: string
 
     LoginRequest:
       type: object
-      required:
-        - username
-        - password
+      required: [username, password]
+      additionalProperties: true
       properties:
         username:
           type: string
         password:
           type: string
+          writeOnly: true
 
-    AuthStatus:
+    LoginResponse:
       type: object
-      required:
-        - authenticated
+      required: [user_id, username, role]
+      additionalProperties: false
       properties:
-        authenticated:
-          type: boolean
         user_id:
           type: string
-          format: uuid
         username:
           type: string
         role:
+          $ref: '#/components/schemas/UserRole'
+
+    DeviceLoginRequest:
+      type: object
+      required: [username, password, device_id, device_name, client_type]
+      additionalProperties: true
+      properties:
+        username:
           type: string
-          enum: [user, admin]
+        password:
+          type: string
+          writeOnly: true
+        device_id:
+          type: string
+          description: Installation identifier; blank causes the server to generate one.
+        device_name:
+          type: string
         client_type:
           type: string
+
+    DeviceLoginResponse:
+      type: object
+      required: [user_id, username, device_id, device_token]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        device_id:
+          type: string
+        device_token:
+          type: string
+          writeOnly: true
+
+    RecoveryRequest:
+      type: object
+      required: [username, recovery_code, new_password]
+      additionalProperties: true
+      properties:
+        username:
+          type: string
+        recovery_code:
+          type: string
+          writeOnly: true
+        new_password:
+          type: string
+          minLength: 8
+          writeOnly: true
+
+    RecoveryResponse:
+      type: object
+      required: [message, new_recovery_code]
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+        new_recovery_code:
+          type: string
+
+    UserRole:
+      type: string
+      enum: [user, admin]
+
+    UserIdentity:
+      type: object
+      required: [user_id, username, role, client_type]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        client_type:
+          type: string
+
+    AuthStatus:
+      oneOf:
+        - type: object
+          required: [authenticated]
+          additionalProperties: false
+          properties:
+            authenticated:
+              type: boolean
+              enum: [false]
+        - type: object
+          required: [authenticated, user_id, username, role, client_type]
+          additionalProperties: false
+          properties:
+            authenticated:
+              type: boolean
+              enum: [true]
+            user_id:
+              type: string
+            username:
+              type: string
+            role:
+              $ref: '#/components/schemas/UserRole'
+            client_type:
+              type: string
+
+    Session:
+      type: object
+      required:
+        - id
+        - kind
+        - device_name
+        - device_type
+        - truncated_ip
+        - sanitized_user_agent
+        - created_at
+        - last_used_at
+        - is_current
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [session, device]
+        device_name:
+          type: string
+        device_type:
+          type: string
+        truncated_ip:
+          type: string
+        sanitized_user_agent:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        last_used_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        is_current:
+          type: boolean
+
+    SessionsResponse:
+      type: object
+      required: [sessions]
+      additionalProperties: false
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+
+    SyncEntityType:
+      type: string
+      enum: [subscription, favorite, playback_state, listening_session]
+
+    SyncAction:
+      type: string
+      enum: [upsert, delete]
+
+    SyncOperation:
+      type: object
+      required: [client_op_id, device_id, entity_type, action, entity_id, payload, client_timestamp]
+      additionalProperties: false
+      properties:
+        client_op_id:
+          type: string
+          minLength: 1
+        device_id:
+          type: string
+          minLength: 1
+        entity_type:
+          $ref: '#/components/schemas/SyncEntityType'
+        action:
+          $ref: '#/components/schemas/SyncAction'
+        entity_id:
+          type: string
+          minLength: 1
+        payload:
+          description: |
+            Full entity payload. playback_state and listening_session require their
+            corresponding payload schema; subscription/favorite deletes use an empty object.
+          oneOf:
+            - $ref: '#/components/schemas/SubscriptionSyncPayload'
+            - $ref: '#/components/schemas/FavoriteSyncPayload'
+            - $ref: '#/components/schemas/PlaybackStatePayload'
+            - $ref: '#/components/schemas/ListeningSessionPayload'
+            - type: object
+              maxProperties: 0
+        client_timestamp:
+          type: integer
+          format: int64
+          description: Client event time as Unix milliseconds.
+
+    SyncPushRequest:
+      type: object
+      required: [operations, client_schema_version]
+      additionalProperties: true
+      properties:
+        operations:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/SyncOperation'
+        client_schema_version:
+          type: integer
+
+    SyncPushResponse:
+      type: object
+      required: [applied_ops, current_cursor]
+      additionalProperties: false
+      properties:
+        applied_ops:
+          type: integer
+          minimum: 0
+        current_cursor:
+          type: integer
+          format: int64
+          minimum: 0
+
+    SyncChangeset:
+      type: object
+      required:
+        - id
+        - device_id
+        - client_op_id
+        - entity_type
+        - entity_id
+        - action
+        - payload
+        - client_timestamp
+        - server_timestamp
+        - server_cursor
+      additionalProperties: false
+      properties:
+        id:
+          type: integer
+          format: int64
+        device_id:
+          type: string
+        client_op_id:
+          type: string
+        entity_type:
+          $ref: '#/components/schemas/SyncEntityType'
+        entity_id:
+          type: string
+        action:
+          $ref: '#/components/schemas/SyncAction'
+        payload:
+          type: object
+          additionalProperties: true
+        client_timestamp:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        server_timestamp:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        server_cursor:
+          type: integer
+          format: int64
+          minimum: 0
+
+    SyncPullResponse:
+      type: object
+      required: [since_cursor, next_cursor, current_cursor, has_more, changesets]
+      additionalProperties: false
+      properties:
+        since_cursor:
+          type: integer
+          format: int64
+          minimum: 0
+        next_cursor:
+          type: integer
+          format: int64
+          minimum: 0
+        current_cursor:
+          type: integer
+          format: int64
+          minimum: 0
+        has_more:
+          type: boolean
+        changesets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncChangeset'
+
+    FullResyncRequired:
+      type: object
+      required: [code, message, min_server_cursor, current_cursor]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [FULL_RESYNC_REQUIRED]
+        message:
+          type: string
+        min_server_cursor:
+          type: integer
+          format: int64
+        current_cursor:
+          type: integer
+          format: int64
+
+    SubscriptionSyncPayload:
+      type: object
+      properties:
+        podcast_id:
+          type: string
+        feed_url:
+          type: string
+        title:
+          type: string
+        artwork_url:
+          type: string
+        added_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        inbox_mode:
+          type: string
+          enum: [all, latest]
+      additionalProperties: true
+
+    FavoriteSyncPayload:
+      type: object
+      properties:
+        episode_id:
+          type: string
+        added_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        podcast_id:
+          type: string
+        title:
+          type: string
+        podcast_title:
+          type: string
+        artwork_url:
+          type: string
+        enclosure_url:
+          type: string
+        duration_ms:
+          type: integer
+          format: int64
+          description: Milliseconds.
+        categories:
+          type: array
+          items:
+            type: string
+      additionalProperties: true
+
+    PlaybackStatePayload:
+      type: object
+      required:
+        - episode_id
+        - position_ms
+        - completed
+        - progress_percent
+        - event_type
+        - playback_session_id
+        - device_id
+        - per_session_seq
+        - client_timestamp
+      additionalProperties: true
+      properties:
+        episode_id:
+          type: string
+        position_ms:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Milliseconds.
+        completed:
+          type: boolean
+        progress_percent:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+        event_type:
+          type: string
+          enum: [PROGRESS_TICK, SEEK, RESTART, MARK_PLAYED, MARK_UNPLAYED]
+        playback_session_id:
+          type: string
+        device_id:
+          type: string
+        per_session_seq:
+          type: integer
+          format: int64
+          minimum: 0
+        client_timestamp:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+
+    ListeningSessionPayload:
+      type: object
+      required:
+        - episode_id
+        - podcast_id
+        - title
+        - podcast_title
+        - categories
+        - started_at
+        - ended_at
+        - wall_clock_ms
+        - audio_listened_ms
+        - speed_saved_ms
+        - silence_saved_ms
+        - manual_skipped_ms
+        - intro_outro_skipped_ms
+        - speed_weighted_ms
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+          description: Defaults to the operation entity_id when omitted.
+        episode_id:
+          type: string
+        podcast_id:
+          type: string
+        title:
+          type: string
+        podcast_title:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        started_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        ended_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        wall_clock_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        audio_listened_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        speed_saved_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        silence_saved_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        manual_skipped_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        intro_outro_skipped_ms:
+          type: integer
+          format: int64
+          minimum: 0
+        speed_weighted_ms:
+          type: integer
+          format: int64
+          minimum: 0
+
+    SnapshotSubscription:
+      type: object
+      required: [podcast_id, created_at, updated_at, sync_version]
+      additionalProperties: false
+      properties:
+        podcast_id:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        sync_version:
+          type: integer
+          format: int64
+
+    SnapshotFavorite:
+      type: object
+      required: [episode_id, created_at, sync_version]
+      additionalProperties: false
+      properties:
+        episode_id:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        sync_version:
+          type: integer
+          format: int64
+
+    SnapshotPlaybackState:
+      allOf:
+        - $ref: '#/components/schemas/PlaybackStatePayload'
+        - type: object
+          required: [server_receive_timestamp, sync_version]
+          properties:
+            server_receive_timestamp:
+              type: integer
+              format: int64
+              description: Unix milliseconds.
+            sync_version:
+              type: integer
+              format: int64
+
+    SnapshotListeningSession:
+      allOf:
+        - $ref: '#/components/schemas/ListeningSessionPayload'
+        - type: object
+          required: [id, sync_version]
+          properties:
+            id:
+              type: string
+            sync_version:
+              type: integer
+              format: int64
+
+    SyncSnapshot:
+      type: object
+      required: [cursor, subscriptions, favorites, playback_states, listening_sessions, podcast_settings]
+      additionalProperties: false
+      properties:
+        cursor:
+          type: integer
+          format: int64
+          minimum: 0
+        subscriptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SnapshotSubscription'
+        favorites:
+          type: array
+          items:
+            $ref: '#/components/schemas/SnapshotFavorite'
+        playback_states:
+          type: array
+          items:
+            $ref: '#/components/schemas/SnapshotPlaybackState'
+        listening_sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SnapshotListeningSession'
+        podcast_settings:
+          type: array
+          description: Reserved for the podcast-settings sync contract; currently empty.
+          items:
+            type: object
+            additionalProperties: true
+
+    OpmlImportFailure:
+      type: object
+      required: [url, reason]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+        reason:
+          type: string
+
+    OpmlImportedPodcast:
+      type: object
+      required: [id, title, source_url, feed_url, artwork_url]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        source_url:
+          type: string
+        feed_url:
+          type: string
+        artwork_url:
+          type: string
+
+    OpmlImportReport:
+      type: object
+      required: [total_found, imported, skipped, failures, podcasts]
+      additionalProperties: false
+      properties:
+        total_found:
+          type: integer
+          minimum: 0
+        imported:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpmlImportFailure'
+        podcasts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpmlImportedPodcast'
 
     GlobalStatsPreference:
       type: object
       required: [global_stats_opt_in, global_stats_opt_in_at]
+      additionalProperties: false
       properties:
         global_stats_opt_in:
           type: boolean
         global_stats_opt_in_at:
           type: integer
           format: int64
+          description: Opt-in time as Unix milliseconds; zero when disabled.
 
     GlobalStatsPreferenceUpdate:
       type: object
@@ -346,6 +2149,63 @@ components:
         global_stats_opt_in:
           type: boolean
 
+    GlobalDayTotal:
+      type: object
+      required: [date, ms]
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+          format: date
+        ms:
+          type: integer
+          format: int64
+
+    GlobalLabeledTotal:
+      type: object
+      required: [label, ms]
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+        ms:
+          type: integer
+          format: int64
+
+    GlobalPodcastRank:
+      type: object
+      required: [rank, id, title, ms, episodes]
+      additionalProperties: false
+      properties:
+        rank:
+          type: integer
+        id:
+          type: string
+        title:
+          type: string
+        ms:
+          type: integer
+          format: int64
+        episodes:
+          type: integer
+
+    GlobalListenerRank:
+      type: object
+      required: [rank, username, ms, active_days, podcasts]
+      additionalProperties: false
+      properties:
+        rank:
+          type: integer
+        username:
+          type: string
+        ms:
+          type: integer
+          format: int64
+        active_days:
+          type: integer
+        podcasts:
+          type: integer
+
     GlobalStatsResponse:
       type: object
       required:
@@ -354,18 +2214,35 @@ components:
         - timezone
         - participants
         - total_wall_ms
+        - baseline_audio_ms
+        - total_saved_ms
+        - speed_saved_ms
+        - silence_saved_ms
+        - manual_skipped_ms
+        - intro_outro_skipped_ms
+        - average_speed
+        - active_days
+        - listening_sessions
+        - episodes
+        - podcasts
+        - weekday_totals
+        - hour_totals
+        - day_totals
+        - category_totals
         - podcast_rankings
         - listener_leaderboard
+      additionalProperties: false
       properties:
         generated_at:
           type: integer
           format: int64
+          description: Generation time as Unix milliseconds.
         range:
           type: string
           enum: [90days, year, all]
         timezone:
           type: string
-          example: UTC
+          enum: [UTC]
         participants:
           type: integer
         total_wall_ms:
@@ -402,19 +2279,201 @@ components:
           type: integer
         weekday_totals:
           type: array
-          items: { type: integer, format: int64 }
+          minItems: 7
+          maxItems: 7
+          items:
+            type: integer
+            format: int64
         hour_totals:
           type: array
-          items: { type: integer, format: int64 }
+          minItems: 24
+          maxItems: 24
+          items:
+            type: integer
+            format: int64
         day_totals:
           type: array
-          items: { type: object }
+          items:
+            $ref: '#/components/schemas/GlobalDayTotal'
         category_totals:
           type: array
-          items: { type: object }
+          items:
+            $ref: '#/components/schemas/GlobalLabeledTotal'
         podcast_rankings:
           type: array
-          items: { type: object }
+          items:
+            $ref: '#/components/schemas/GlobalPodcastRank'
         listener_leaderboard:
           type: array
-          items: { type: object }
+          items:
+            $ref: '#/components/schemas/GlobalListenerRank'
+
+    AdminUser:
+      type: object
+      required: [id, username, role, is_suspended, created_at, active_sessions]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        is_suspended:
+          type: boolean
+        created_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        active_sessions:
+          type: integer
+
+    AdminUsersResponse:
+      type: object
+      required: [users, count]
+      additionalProperties: false
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+        count:
+          type: integer
+
+    RegistrationToggleRequest:
+      type: object
+      required: [enabled]
+      additionalProperties: true
+      properties:
+        enabled:
+          type: boolean
+
+    RegistrationToggleResponse:
+      type: object
+      required: [registration_enabled]
+      additionalProperties: false
+      properties:
+        registration_enabled:
+          type: boolean
+
+    SuspendUserRequest:
+      type: object
+      required: [suspend]
+      additionalProperties: true
+      properties:
+        suspend:
+          type: boolean
+
+    SuspendUserResponse:
+      type: object
+      required: [user_id, is_suspended]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+        is_suspended:
+          type: boolean
+
+    RevokeUserSessionsResponse:
+      type: object
+      required: [user_id, revoked_sessions]
+      additionalProperties: false
+      properties:
+        user_id:
+          type: string
+        revoked_sessions:
+          type: integer
+          format: int64
+
+    FeedHealthItem:
+      type: object
+      required:
+        - id
+        - title
+        - feed_url
+        - consecutive_errors
+        - last_error_category
+        - last_http_status
+        - last_fetch_attempt_at
+        - last_successful_fetch_at
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        feed_url:
+          type: string
+        consecutive_errors:
+          type: integer
+        last_error_category:
+          type: string
+        last_http_status:
+          type: integer
+        last_fetch_attempt_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+        last_successful_fetch_at:
+          type: integer
+          format: int64
+          description: Unix milliseconds.
+
+    FeedHealthResponse:
+      type: object
+      required: [feeds]
+      additionalProperties: false
+      properties:
+        feeds:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeedHealthItem'
+
+    AdminStatus:
+      type: object
+      required:
+        - version
+        - database_path
+        - database_size_bytes
+        - user_count
+        - podcast_count
+        - episode_count
+        - worker_running
+        - worker_last_run
+        - worker_success_count
+        - worker_failure_count
+        - registration_enabled_override
+        - registration_enabled
+        - registration_locked
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+        database_path:
+          type: string
+        database_size_bytes:
+          type: integer
+          format: int64
+        user_count:
+          type: integer
+        podcast_count:
+          type: integer
+        episode_count:
+          type: integer
+        worker_running:
+          type: boolean
+        worker_last_run:
+          type: string
+          format: date-time
+        worker_success_count:
+          type: integer
+          format: int64
+        worker_failure_count:
+          type: integer
+          format: int64
+        registration_enabled_override:
+          type: string
+        registration_enabled:
+          type: boolean
+        registration_locked:
+          type: boolean

@@ -23,6 +23,7 @@ import {
 	addLocalFavorite,
 	removeLocalSubscriptionSilent,
 	removeLocalFavoriteSilent,
+	replaceLocalSyncSnapshot,
 	type LocalSubscription,
 	type LocalFavorite,
 	type LocalPlaybackState,
@@ -71,58 +72,60 @@ class SyncStore {
 	#timer: ReturnType<typeof setInterval> | null = null;
 	#onVisible: (() => void) | null = null;
 	#inFlight = false;
+	#generation = 0;
+	#controller: AbortController | null = null;
 
 	get enabled(): boolean {
 		return this.userId !== null;
 	}
 
-	#cursorKey(): string {
-		return `koalacast_sync_cursor_${this.userId}`;
+	#cursorKey(userId: string): string {
+		return `koalacast_sync_cursor_${userId}`;
 	}
-	#getCursor(): number {
+	#getCursor(userId: string): number {
 		try {
-			return Number(localStorage.getItem(this.#cursorKey()) || '0') || 0;
+			return Number(localStorage.getItem(this.#cursorKey(userId)) || '0') || 0;
 		} catch {
 			return 0;
 		}
 	}
-	#setCursor(v: number) {
+	#setCursor(userId: string, v: number) {
 		try {
-			localStorage.setItem(this.#cursorKey(), String(v));
+			localStorage.setItem(this.#cursorKey(userId), String(v));
 		} catch {
 			/* ignore */
 		}
 	}
-	#pushWatermarkKey(): string {
-		return `koalacast_sync_push_watermark_${this.userId}`;
+	#pushWatermarkKey(userId: string): string {
+		return `koalacast_sync_push_watermark_${userId}`;
 	}
-	#getPushWatermark(): number {
+	#getPushWatermark(userId: string): number {
 		try {
-			return Number(localStorage.getItem(this.#pushWatermarkKey()) || '0') || 0;
+			return Number(localStorage.getItem(this.#pushWatermarkKey(userId)) || '0') || 0;
 		} catch {
 			return 0;
 		}
 	}
-	#setPushWatermark(value: number) {
+	#setPushWatermark(userId: string, value: number) {
 		try {
-			localStorage.setItem(this.#pushWatermarkKey(), String(value));
+			localStorage.setItem(this.#pushWatermarkKey(userId), String(value));
 		} catch {
 			/* ignore */
 		}
 	}
-	#sessionWatermarkKey(): string {
-		return `koalacast_synced_listening_sessions_${this.userId}`;
+	#sessionWatermarkKey(userId: string): string {
+		return `koalacast_synced_listening_sessions_${userId}`;
 	}
-	#getSessionWatermarks(): Record<string, number> {
+	#getSessionWatermarks(userId: string): Record<string, number> {
 		try {
-			return JSON.parse(localStorage.getItem(this.#sessionWatermarkKey()) || '{}');
+			return JSON.parse(localStorage.getItem(this.#sessionWatermarkKey(userId)) || '{}');
 		} catch {
 			return {};
 		}
 	}
-	#setSessionWatermarks(value: Record<string, number>) {
+	#setSessionWatermarks(userId: string, value: Record<string, number>) {
 		try {
-			localStorage.setItem(this.#sessionWatermarkKey(), JSON.stringify(value));
+			localStorage.setItem(this.#sessionWatermarkKey(userId), JSON.stringify(value));
 		} catch {
 			/* ignore */
 		}
@@ -131,6 +134,8 @@ class SyncStore {
 	// Begin syncing for a signed-in user. Idempotent.
 	enable(userId: string) {
 		if (this.userId === userId && this.#timer) return;
+		if (this.userId && this.userId !== userId) this.disable();
+		this.#generation++;
 		this.userId = userId;
 		this.status = 'idle';
 		if (!this.#timer) this.#timer = setInterval(() => this.syncNow(), INTERVAL_MS);
@@ -146,6 +151,10 @@ class SyncStore {
 	// Stop syncing (on logout / lost session). Keeps the per-user cursor so a later
 	// login by the same user resumes incrementally.
 	disable() {
+		this.#generation++;
+		this.#controller?.abort();
+		this.#controller = null;
+		this.#inFlight = false;
 		if (this.#timer) {
 			clearInterval(this.#timer);
 			this.#timer = null;
@@ -160,14 +169,23 @@ class SyncStore {
 
 	async syncNow(): Promise<void> {
 		if (!this.enabled || this.#inFlight) return;
+		const userId = this.userId;
+		if (!userId) return;
+		const generation = this.#generation;
+		const controller = new AbortController();
+		this.#controller = controller;
 		this.#inFlight = true;
 		this.status = 'syncing';
 		try {
-			await this.#pull();
-			await this.#push();
+			await this.#pull(userId, generation, controller.signal);
+			this.#assertRun(userId, generation, controller.signal);
+			await this.#push(userId, generation, controller.signal);
+			this.#assertRun(userId, generation, controller.signal);
 			this.status = 'idle';
 			this.lastSyncedAt = Date.now();
 		} catch (err) {
+			if (err instanceof DOMException && err.name === 'AbortError') return;
+			if (generation !== this.#generation || this.userId !== userId) return;
 			// A 401 means the session is gone — stop rather than spin.
 			if (err instanceof SyncAuthError) {
 				this.disable();
@@ -175,46 +193,77 @@ class SyncStore {
 				this.status = 'error';
 			}
 		} finally {
-			this.#inFlight = false;
+			if (this.#controller === controller) this.#controller = null;
+			if (generation === this.#generation) this.#inFlight = false;
 		}
 	}
 
-	async #pull(): Promise<void> {
-		let since = this.#getCursor();
+	#assertRun(userId: string, generation: number, signal: AbortSignal) {
+		if (signal.aborted || generation !== this.#generation || this.userId !== userId) {
+			throw new DOMException('Sync superseded', 'AbortError');
+		}
+	}
+
+	async #pull(userId: string, generation: number, signal: AbortSignal): Promise<void> {
+		let since = this.#getCursor(userId);
+		let recoveredSnapshot = false;
 		while (true) {
-			const res = await fetch(`/api/v1/sync?since_cursor=${since}`);
+			this.#assertRun(userId, generation, signal);
+			const res = await fetch(`/api/v1/sync?since_cursor=${since}&limit=${PAGE_LIMIT}`, { signal });
 			if (res.status === 401) throw new SyncAuthError();
 			if (res.status === 410) {
-				// Server pruned history past our cursor — restart a full pull.
-				since = 0;
-				this.#setCursor(0);
+				if (recoveredSnapshot) throw new Error('sync snapshot recovery repeated');
+				recoveredSnapshot = true;
+				since = await this.#replaceFromSnapshot(userId, generation, signal);
 				continue;
 			}
 			if (!res.ok) throw new Error(`sync pull failed: ${res.status}`);
 			const data = await res.json();
 			const changesets: Changeset[] = data.changesets || [];
 			for (const cs of changesets) {
-				try {
-					await applyChangeset(cs);
-				} catch {
-					/* skip a single bad changeset, keep going */
-				}
+				this.#assertRun(userId, generation, signal);
+				await applyChangeset(cs);
 			}
-			if (changesets.length > 0) {
-				since = changesets[changesets.length - 1].server_cursor;
-				this.#setCursor(since);
-			} else if (typeof data.current_cursor === 'number' && data.current_cursor > since) {
-				since = data.current_cursor;
-				this.#setCursor(since);
+			const lastCursor = changesets.at(-1)?.server_cursor;
+			const nextCursor = Number.isFinite(data.next_cursor)
+				? Number(data.next_cursor)
+				: typeof lastCursor === 'number'
+					? lastCursor
+					: since;
+			if (nextCursor < since || (data.has_more && nextCursor === since)) {
+				throw new Error('sync pull returned a non-advancing cursor');
 			}
-			if (changesets.length < PAGE_LIMIT) break;
+			since = nextCursor;
+			this.#setCursor(userId, since);
+			const hasMore = typeof data.has_more === 'boolean'
+				? data.has_more
+				: changesets.length === PAGE_LIMIT;
+			if (!hasMore) break;
 		}
 	}
 
-	async #push(): Promise<void> {
+	async #replaceFromSnapshot(
+		userId: string,
+		generation: number,
+		signal: AbortSignal
+	): Promise<number> {
+		const res = await fetch('/api/v1/sync/snapshot', { signal });
+		if (res.status === 401) throw new SyncAuthError();
+		if (!res.ok) throw new Error(`sync snapshot failed: ${res.status}`);
+		const snapshot = await res.json();
+		this.#assertRun(userId, generation, signal);
+		if (!Number.isFinite(snapshot.cursor)) throw new Error('sync snapshot missing cursor');
+		await replaceLocalSyncSnapshot(snapshot);
+		this.#assertRun(userId, generation, signal);
+		const cursor = Number(snapshot.cursor);
+		this.#setCursor(userId, cursor);
+		return cursor;
+	}
+
+	async #push(userId: string, generation: number, signal: AbortSignal): Promise<void> {
 		const dev = deviceId();
 		const ops: SyncOperation[] = [];
-		const previousWatermark = this.#getPushWatermark();
+		const previousWatermark = this.#getPushWatermark(userId);
 		const nextWatermark = Date.now();
 
 		const subs = await getLocalSubscriptions();
@@ -272,7 +321,7 @@ class SyncStore {
 		}
 
 		const listeningSessions = await getLocalListeningSessions();
-		const sessionWatermarks = this.#getSessionWatermarks();
+		const sessionWatermarks = this.#getSessionWatermarks(userId);
 		for (const session of listeningSessions) {
 			if (session.ended_at <= previousWatermark) continue;
 			if ((sessionWatermarks[session.id] || 0) >= session.ended_at) continue;
@@ -303,25 +352,27 @@ class SyncStore {
 		}
 
 		if (ops.length === 0) {
-			this.#setPushWatermark(nextWatermark);
+			this.#setPushWatermark(userId, nextWatermark);
 			return;
 		}
 
 		for (let index = 0; index < ops.length; index += 250) {
+			this.#assertRun(userId, generation, signal);
 			const batch = ops.slice(index, index + 250);
 			const res = await fetch('/api/v1/sync', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ operations: batch, client_schema_version: 2 })
+				body: JSON.stringify({ operations: batch, client_schema_version: 2 }),
+				signal
 			});
 			if (res.status === 401) throw new SyncAuthError();
 			if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
 			for (const op of batch) {
 				if (op.entity_type === 'listening_session') sessionWatermarks[op.entity_id] = op.client_timestamp;
 			}
-			this.#setSessionWatermarks(sessionWatermarks);
+			this.#setSessionWatermarks(userId, sessionWatermarks);
 		}
-		this.#setPushWatermark(nextWatermark);
+		this.#setPushWatermark(userId, nextWatermark);
 		// Deliberately do NOT advance the cursor here: letting the next pull re-read
 		// our own ops (idempotent) avoids skipping a concurrent device's ops that
 		// landed at a lower cursor.
@@ -331,6 +382,15 @@ class SyncStore {
 class SyncAuthError extends Error {}
 
 async function applyChangeset(cs: Changeset): Promise<void> {
+	if (
+		!cs ||
+		!Number.isFinite(cs.server_cursor) ||
+		!cs.entity_id ||
+		!['upsert', 'delete'].includes(cs.action) ||
+		!['subscription', 'favorite', 'playback_state', 'listening_session'].includes(cs.entity_type)
+	) {
+		throw new Error('invalid sync changeset');
+	}
 	const isDelete = cs.action === 'delete';
 	if (cs.entity_type === 'subscription') {
 		if (isDelete) {
@@ -345,7 +405,7 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 				added_at: p.added_at || cs.client_timestamp || Date.now(),
 				inbox_mode: p.inbox_mode
 			});
-		}
+		} else throw new Error('invalid subscription changeset payload');
 	} else if (cs.entity_type === 'favorite') {
 		if (isDelete) {
 			await removeLocalFavoriteSilent(cs.entity_id);
@@ -362,9 +422,12 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 				duration_ms: p.duration_ms,
 				categories: p.categories
 			});
-		}
+		} else throw new Error('invalid favorite changeset payload');
 	} else if (cs.entity_type === 'playback_state') {
-		if (isDelete || !cs.payload || typeof cs.payload !== 'object') return;
+		if (isDelete) return;
+		if (!cs.payload || typeof cs.payload !== 'object') {
+			throw new Error('invalid playback changeset payload');
+		}
 		const p = cs.payload as Partial<LocalPlaybackState> & { client_timestamp?: number };
 		const episodeId = p.episode_id || cs.entity_id;
 		const incomingWhen = p.last_played_at || p.client_timestamp || cs.client_timestamp || 0;
@@ -387,7 +450,10 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 			categories: p.categories
 		});
 	} else if (cs.entity_type === 'listening_session') {
-		if (isDelete || !cs.payload || typeof cs.payload !== 'object') return;
+		if (isDelete) return;
+		if (!cs.payload || typeof cs.payload !== 'object') {
+			throw new Error('invalid listening changeset payload');
+		}
 		const p = cs.payload as Partial<LocalListeningSession>;
 		const id = p.id || cs.entity_id;
 		const incomingWhen = p.ended_at || cs.client_timestamp || 0;

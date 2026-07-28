@@ -14,6 +14,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
+	import { activateAccountContext, activateLoggedInAccount } from '$lib/stores/account-context';
 	import { GENRES, genreLabel } from '$lib/genres';
 	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
 	import { LOCALES, t } from '$lib/i18n';
@@ -71,7 +72,7 @@
 					authUser = { username: me.username, role: me.role };
 					loadActiveSessions();
 					loadGlobalStatsPreference();
-					sync.enable(me.user_id);
+					await activateLoggedInAccount(me.user_id);
 				}
 			}
 		} catch (_) {}
@@ -147,7 +148,7 @@
 			loadActiveSessions();
 			loadGlobalStatsPreference();
 			// Kick off cross-device sync now that we're authenticated.
-			if (data.user_id) sync.enable(data.user_id);
+			if (data.user_id) await activateLoggedInAccount(data.user_id);
 		} catch (err: any) {
 			authError = t('settings.loginNetworkError');
 		} finally {
@@ -161,7 +162,7 @@
 		} catch (_) {
 			// Even if the network call fails, drop the client-side session view.
 		}
-		sync.disable();
+		await activateAccountContext(null);
 		authUser = null;
 		globalStatsOptIn = false;
 		sessions = [];

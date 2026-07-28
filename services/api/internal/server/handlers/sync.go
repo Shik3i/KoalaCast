@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -68,6 +71,19 @@ type ListeningSessionPayload struct {
 	SpeedWeightedMS     int64    `json:"speed_weighted_ms"`
 }
 
+type SyncLogEntry struct {
+	ID              int64           `json:"id"`
+	DeviceID        string          `json:"device_id"`
+	ClientOpID      string          `json:"client_op_id"`
+	EntityType      string          `json:"entity_type"`
+	EntityID        string          `json:"entity_id"`
+	Action          string          `json:"action"`
+	Payload         json.RawMessage `json:"payload"`
+	ClientTimestamp int64           `json:"client_timestamp"`
+	ServerTimestamp int64           `json:"server_timestamp"`
+	ServerCursor    int64           `json:"server_cursor"`
+}
+
 func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 	authUser := customMiddleware.GetAuthUser(r.Context())
 	if authUser == nil {
@@ -75,10 +91,23 @@ func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sinceCursorStr := r.URL.Query().Get("since_cursor")
 	sinceCursor := int64(0)
-	if sc, err := strconv.ParseInt(sinceCursorStr, 10, 64); err == nil && sc >= 0 {
+	if raw := r.URL.Query().Get("since_cursor"); raw != "" {
+		sc, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || sc < 0 {
+			http.Error(w, `{"error":"since_cursor must be a non-negative integer"}`, http.StatusBadRequest)
+			return
+		}
 		sinceCursor = sc
+	}
+	limit := 500
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 500 {
+			http.Error(w, `{"error":"limit must be between 1 and 500"}`, http.StatusBadRequest)
+			return
+		}
+		limit = parsed
 	}
 
 	// Check if client cursor is older than min_retained_cursor
@@ -87,10 +116,15 @@ func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 		SELECT current_cursor, min_retained_cursor FROM user_sync_cursors WHERE user_id = ?
 	`, authUser.ID).Scan(&currentCursor, &minRetainedCursor)
 	if err == sql.ErrNoRows {
-		// Initialize cursor for user
-		_, _ = h.DB.SQL.ExecContext(r.Context(), "INSERT INTO user_sync_cursors (user_id, current_cursor, min_retained_cursor, protocol_version, client_schema_version) VALUES (?, 0, 0, 1, 1)", authUser.ID)
+		if _, err := h.DB.SQL.ExecContext(r.Context(), "INSERT OR IGNORE INTO user_sync_cursors (user_id, current_cursor, min_retained_cursor, protocol_version, client_schema_version) VALUES (?, 0, 0, 1, 1)", authUser.ID); err != nil {
+			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+			return
+		}
 		currentCursor = 0
 		minRetainedCursor = 0
+	} else if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
 	}
 
 	if sinceCursor > 0 && sinceCursor < minRetainedCursor {
@@ -111,44 +145,324 @@ func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 		FROM sync_log
 		WHERE user_id = ? AND server_cursor > ?
 		ORDER BY server_cursor ASC
-		LIMIT 500
-	`, authUser.ID, sinceCursor)
+		LIMIT ?
+	`, authUser.ID, sinceCursor, limit)
 	if err != nil {
 		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	type LogEntry struct {
-		ID              int64           `json:"id"`
-		DeviceID        string          `json:"device_id"`
-		ClientOpID      string          `json:"client_op_id"`
-		EntityType      string          `json:"entity_type"`
-		EntityID        string          `json:"entity_id"`
-		Action          string          `json:"action"`
-		Payload         json.RawMessage `json:"payload"`
-		ClientTimestamp int64           `json:"client_timestamp"`
-		ServerTimestamp int64           `json:"server_timestamp"`
-		ServerCursor    int64           `json:"server_cursor"`
-	}
-
-	changesets := make([]LogEntry, 0)
+	changesets := make([]SyncLogEntry, 0)
+	nextCursor := sinceCursor
 	for rows.Next() {
-		var item LogEntry
+		var item SyncLogEntry
 		var payloadStr string
-		if err := rows.Scan(&item.ID, &item.DeviceID, &item.ClientOpID, &item.EntityType, &item.EntityID, &item.Action, &payloadStr, &item.ClientTimestamp, &item.ServerTimestamp, &item.ServerCursor); err == nil {
-			item.Payload = json.RawMessage(payloadStr)
-			changesets = append(changesets, item)
+		if err := rows.Scan(&item.ID, &item.DeviceID, &item.ClientOpID, &item.EntityType, &item.EntityID, &item.Action, &payloadStr, &item.ClientTimestamp, &item.ServerTimestamp, &item.ServerCursor); err != nil {
+			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+			return
 		}
+		item.Payload = json.RawMessage(payloadStr)
+		changesets = append(changesets, item)
+		nextCursor = item.ServerCursor
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"since_cursor":   sinceCursor,
+		"next_cursor":    nextCursor,
 		"current_cursor": currentCursor,
+		"has_more":       nextCursor < currentCursor,
 		"changesets":     changesets,
 	})
+}
+
+func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
+	authUser := customMiddleware.GetAuthUser(r.Context())
+	if authUser == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	tx, err := h.DB.SQL.BeginTx(r.Context(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		http.Error(w, `{"error":"transaction error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	var cursor int64
+	err = tx.QueryRowContext(r.Context(), `SELECT current_cursor FROM user_sync_cursors WHERE user_id = ?`, authUser.ID).Scan(&cursor)
+	if err != nil && err != sql.ErrNoRows {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	subscriptions, err := snapshotRows(tx, r.Context(), `
+		SELECT s.podcast_id, s.created_at, s.updated_at, s.sync_version,
+		       COALESCE((
+		           SELECT COALESCE(NULLIF(json_extract(sl.payload_json, '$.added_at'), 0), NULLIF(sl.client_timestamp, 0))
+		           FROM sync_log sl
+		           WHERE sl.user_id = s.user_id AND sl.entity_type = 'subscription'
+		             AND sl.entity_id = s.podcast_id
+		           ORDER BY sl.server_cursor DESC LIMIT 1
+		       ), s.created_at),
+		       p.feed_url, p.title, p.description, p.author, p.artwork_url,
+		       p.link, p.language, p.explicit, p.copyright
+		FROM subscriptions s
+		JOIN podcasts p ON p.id = s.podcast_id
+		WHERE s.user_id = ? AND s.is_deleted = 0
+		ORDER BY s.podcast_id`, authUser.ID, func(rows *sql.Rows) (any, error) {
+		var podcastID, feedURL, title, description, author, artworkURL, link, language, copyright string
+		var createdAt, updatedAt, syncVersion, addedAt int64
+		var explicit int
+		if err := rows.Scan(
+			&podcastID, &createdAt, &updatedAt, &syncVersion, &addedAt,
+			&feedURL, &title, &description, &author, &artworkURL,
+			&link, &language, &explicit, &copyright,
+		); err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"id": podcastID, "podcast_id": podcastID, "feed_url": feedURL,
+			"title": title, "description": description, "author": author,
+			"artwork_url": artworkURL, "link": link, "language": language,
+			"explicit": explicit == 1, "copyright": copyright,
+			"added_at": addedAt, "created_at": createdAt, "updated_at": updatedAt, "sync_version": syncVersion,
+		}, nil
+	})
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	favorites, err := snapshotRows(tx, r.Context(), `
+		SELECT f.episode_id, f.created_at, f.sync_version,
+		       COALESCE((
+		           SELECT COALESCE(NULLIF(json_extract(sl.payload_json, '$.added_at'), 0), NULLIF(sl.client_timestamp, 0))
+		           FROM sync_log sl
+		           WHERE sl.user_id = f.user_id AND sl.entity_type = 'favorite'
+		             AND sl.entity_id = f.episode_id
+		           ORDER BY sl.server_cursor DESC LIMIT 1
+		       ), f.created_at),
+		       e.podcast_id, e.guid, e.title, e.description, e.content_encoded,
+		       e.pub_date, e.has_pub_date, e.duration_ms, e.enclosure_url,
+		       e.enclosure_type, e.enclosure_length, e.artwork_url, e.episode_number,
+		       e.season_number, e.episode_type, e.explicit, e.link,
+		       p.title, p.artwork_url,
+		       COALESCE(
+		           (SELECT json_extract(sl.payload_json, '$.categories')
+		            FROM sync_log sl
+		            WHERE sl.user_id = f.user_id AND sl.entity_type = 'favorite'
+		              AND sl.entity_id = f.episode_id
+		            ORDER BY sl.server_cursor DESC LIMIT 1),
+		           (SELECT ls.categories_json FROM listening_sessions ls
+		            WHERE ls.user_id = f.user_id
+		              AND (ls.episode_id = e.id OR ls.podcast_id = e.podcast_id)
+		            ORDER BY ls.ended_at DESC LIMIT 1),
+		           '[]')
+		FROM favorites f
+		JOIN episodes e ON e.id = f.episode_id
+		JOIN podcasts p ON p.id = e.podcast_id
+		WHERE f.user_id = ? AND f.is_deleted = 0
+		ORDER BY f.episode_id`, authUser.ID, func(rows *sql.Rows) (any, error) {
+		var episodeID, podcastID, guid, title, description, contentEncoded string
+		var enclosureURL, enclosureType, artworkURL, episodeType, link, podcastTitle, podcastArtworkURL string
+		var categoriesJSON string
+		var createdAt, syncVersion, addedAt int64
+		var pubDate, durationMS, enclosureLength int64
+		var hasPubDate, episodeNumber, seasonNumber, explicit int
+		if err := rows.Scan(
+			&episodeID, &createdAt, &syncVersion, &addedAt,
+			&podcastID, &guid, &title, &description, &contentEncoded,
+			&pubDate, &hasPubDate, &durationMS, &enclosureURL,
+			&enclosureType, &enclosureLength, &artworkURL, &episodeNumber,
+			&seasonNumber, &episodeType, &explicit, &link,
+			&podcastTitle, &podcastArtworkURL, &categoriesJSON,
+		); err != nil {
+			return nil, err
+		}
+		return episodeSnapshotRecord(
+			episodeID, podcastID, guid, title, description, contentEncoded,
+			pubDate, hasPubDate, durationMS, enclosureURL, enclosureType, enclosureLength,
+			artworkURL, episodeNumber, seasonNumber, episodeType, explicit, link,
+			podcastTitle, podcastArtworkURL, decodeSnapshotCategories(categoriesJSON),
+			map[string]any{"added_at": addedAt, "created_at": createdAt, "sync_version": syncVersion},
+		), nil
+	})
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	playbackStates, err := snapshotRows(tx, r.Context(), `
+		SELECT ps.episode_id, ps.position_ms, ps.completed, ps.progress_percent, ps.event_type,
+		       ps.playback_session_id, ps.device_id, ps.per_session_seq, ps.client_timestamp,
+		       ps.server_receive_timestamp, ps.sync_version,
+		       e.podcast_id, e.guid, e.title, e.description, e.content_encoded,
+		       e.pub_date, e.has_pub_date, e.duration_ms, e.enclosure_url,
+		       e.enclosure_type, e.enclosure_length, e.artwork_url, e.episode_number,
+		       e.season_number, e.episode_type, e.explicit, e.link,
+		       p.title, p.artwork_url,
+		       COALESCE(
+		           (SELECT json_extract(sl.payload_json, '$.categories')
+		            FROM sync_log sl
+		            WHERE sl.user_id = ps.user_id AND sl.entity_type = 'playback_state'
+		              AND sl.entity_id = ps.episode_id
+		            ORDER BY sl.server_cursor DESC LIMIT 1),
+		           (SELECT ls.categories_json FROM listening_sessions ls
+		            WHERE ls.user_id = ps.user_id
+		              AND (ls.episode_id = e.id OR ls.podcast_id = e.podcast_id)
+		            ORDER BY ls.ended_at DESC LIMIT 1),
+		           '[]')
+		FROM playback_states ps
+		JOIN episodes e ON e.id = ps.episode_id
+		JOIN podcasts p ON p.id = e.podcast_id
+		WHERE ps.user_id = ?
+		ORDER BY ps.episode_id`, authUser.ID, func(rows *sql.Rows) (any, error) {
+		var episodeID, eventType, playbackSessionID, deviceID string
+		var podcastID, guid, title, description, contentEncoded string
+		var enclosureURL, enclosureType, artworkURL, episodeType, link, podcastTitle, podcastArtworkURL string
+		var categoriesJSON string
+		var positionMS, perSessionSeq, clientTimestamp, serverTimestamp, syncVersion int64
+		var pubDate, durationMS, enclosureLength int64
+		var completed int
+		var hasPubDate, episodeNumber, seasonNumber, explicit int
+		var progress float64
+		if err := rows.Scan(
+			&episodeID, &positionMS, &completed, &progress, &eventType,
+			&playbackSessionID, &deviceID, &perSessionSeq, &clientTimestamp,
+			&serverTimestamp, &syncVersion,
+			&podcastID, &guid, &title, &description, &contentEncoded,
+			&pubDate, &hasPubDate, &durationMS, &enclosureURL,
+			&enclosureType, &enclosureLength, &artworkURL, &episodeNumber,
+			&seasonNumber, &episodeType, &explicit, &link,
+			&podcastTitle, &podcastArtworkURL, &categoriesJSON,
+		); err != nil {
+			return nil, err
+		}
+		return episodeSnapshotRecord(
+			episodeID, podcastID, guid, title, description, contentEncoded,
+			pubDate, hasPubDate, durationMS, enclosureURL, enclosureType, enclosureLength,
+			artworkURL, episodeNumber, seasonNumber, episodeType, explicit, link,
+			podcastTitle, podcastArtworkURL, decodeSnapshotCategories(categoriesJSON),
+			map[string]any{
+				"position_ms": positionMS, "completed": completed == 1,
+				"progress_percent": progress, "event_type": eventType, "playback_session_id": playbackSessionID,
+				"device_id": deviceID, "per_session_seq": perSessionSeq, "client_timestamp": clientTimestamp,
+				"last_played_at": clientTimestamp, "server_receive_timestamp": serverTimestamp, "sync_version": syncVersion,
+			},
+		), nil
+	})
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	listeningSessions, err := snapshotRows(tx, r.Context(), `
+		SELECT id, episode_id, podcast_id, title, podcast_title, categories_json,
+		       started_at, ended_at, wall_clock_ms, audio_listened_ms, speed_saved_ms,
+		       silence_saved_ms, manual_skipped_ms, intro_outro_skipped_ms,
+		       speed_weighted_ms, sync_version
+		FROM listening_sessions WHERE user_id = ?
+		ORDER BY started_at, id`, authUser.ID, func(rows *sql.Rows) (any, error) {
+		var item ListeningSessionPayload
+		var categoriesJSON string
+		var syncVersion int64
+		if err := rows.Scan(
+			&item.ID, &item.EpisodeID, &item.PodcastID, &item.Title, &item.PodcastTitle, &categoriesJSON,
+			&item.StartedAt, &item.EndedAt, &item.WallClockMS, &item.AudioListenedMS, &item.SpeedSavedMS,
+			&item.SilenceSavedMS, &item.ManualSkippedMS, &item.IntroOutroSkippedMS,
+			&item.SpeedWeightedMS, &syncVersion,
+		); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(categoriesJSON), &item.Categories); err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"id": item.ID, "episode_id": item.EpisodeID, "podcast_id": item.PodcastID,
+			"title": item.Title, "podcast_title": item.PodcastTitle, "categories": item.Categories,
+			"started_at": item.StartedAt, "ended_at": item.EndedAt, "wall_clock_ms": item.WallClockMS,
+			"audio_listened_ms": item.AudioListenedMS, "speed_saved_ms": item.SpeedSavedMS,
+			"silence_saved_ms": item.SilenceSavedMS, "manual_skipped_ms": item.ManualSkippedMS,
+			"intro_outro_skipped_ms": item.IntroOutroSkippedMS, "speed_weighted_ms": item.SpeedWeightedMS,
+			"sync_version": syncVersion,
+		}, nil
+	})
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, `{"error":"failed to complete snapshot"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"cursor": cursor, "subscriptions": subscriptions, "favorites": favorites,
+		"playback_states": playbackStates, "listening_sessions": listeningSessions,
+		"podcast_settings": []any{},
+	})
+}
+
+func episodeSnapshotRecord(
+	episodeID, podcastID, guid, title, description, contentEncoded string,
+	pubDate int64, hasPubDate int, durationMS int64,
+	enclosureURL, enclosureType string, enclosureLength int64,
+	artworkURL string, episodeNumber, seasonNumber int,
+	episodeType string, explicit int, link, podcastTitle, podcastArtworkURL string,
+	categories []string,
+	extra map[string]any,
+) map[string]any {
+	record := map[string]any{
+		"id": episodeID, "episode_id": episodeID, "podcast_id": podcastID,
+		"guid": guid, "title": title, "description": description,
+		"content_encoded": contentEncoded, "pub_date": pubDate, "has_pub_date": hasPubDate == 1,
+		"duration_ms": durationMS, "enclosure_url": enclosureURL, "enclosure_type": enclosureType,
+		"enclosure_length": enclosureLength, "artwork_url": artworkURL,
+		"episode_number": episodeNumber, "season_number": seasonNumber,
+		"episode_type": episodeType, "explicit": explicit == 1, "link": link,
+		"podcast_title": podcastTitle, "podcast_artwork_url": podcastArtworkURL,
+	}
+	if len(categories) > 0 {
+		record["categories"] = categories
+	}
+	for key, value := range extra {
+		record[key] = value
+	}
+	return record
+}
+
+func decodeSnapshotCategories(raw string) []string {
+	var categories []string
+	if err := json.Unmarshal([]byte(raw), &categories); err != nil {
+		return nil
+	}
+	return categories
+}
+
+func snapshotRows(tx *sql.Tx, ctx context.Context, query, userID string, scan func(*sql.Rows) (any, error)) ([]any, error) {
+	rows, err := tx.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]any, 0)
+	for rows.Next() {
+		item, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
@@ -159,9 +473,19 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req SyncPushRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4*1024*1024)).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid sync push payload"}`, http.StatusBadRequest)
 		return
+	}
+	if len(req.Operations) > 500 {
+		http.Error(w, `{"error":"at most 500 operations are allowed"}`, http.StatusBadRequest)
+		return
+	}
+	for i := range req.Operations {
+		if err := validateSyncOperation(&req.Operations[i]); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":"invalid operation at index %d: %s"}`, i, err.Error()), http.StatusBadRequest)
+			return
+		}
 	}
 
 	ctx := r.Context()
@@ -176,69 +500,68 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	// happens before the user's first pull would read/update a non-existent row,
 	// leaving user_sync_cursors.current_cursor at 0 while sync_log advances — which
 	// then makes a later push reuse cursor values and drop changesets from pulls.
-	_, _ = tx.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO user_sync_cursors (user_id, current_cursor, min_retained_cursor, protocol_version, client_schema_version)
 		VALUES (?, 0, 0, 1, 1)
-	`, authUser.ID)
+	`, authUser.ID); err != nil {
+		http.Error(w, `{"error":"failed to initialize sync cursor"}`, http.StatusInternalServerError)
+		return
+	}
 
 	// Get current user sync cursor
 	var currentCursor int64
-	_ = tx.QueryRowContext(ctx, "SELECT current_cursor FROM user_sync_cursors WHERE user_id = ?", authUser.ID).Scan(&currentCursor)
+	if err := tx.QueryRowContext(ctx, "SELECT current_cursor FROM user_sync_cursors WHERE user_id = ?", authUser.ID).Scan(&currentCursor); err != nil {
+		http.Error(w, `{"error":"failed to read sync cursor"}`, http.StatusInternalServerError)
+		return
+	}
 
 	appliedOps := 0
 	nowMs := time.Now().UnixMilli()
 
 	for _, op := range req.Operations {
-		if op.ClientOpID == "" || op.EntityType == "" {
+		var existingCursor int64
+		err := tx.QueryRowContext(ctx, `
+			SELECT server_cursor FROM processed_sync_operations
+			WHERE user_id = ? AND device_id = ? AND client_op_id = ?
+		`, authUser.ID, op.DeviceID, op.ClientOpID).Scan(&existingCursor)
+		if err == nil {
 			continue
 		}
-
-		// Deduplication Check via UNIQUE(user_id, device_id, client_op_id)
-		var existingID int64
-		err := tx.QueryRowContext(ctx, "SELECT id FROM sync_log WHERE user_id = ? AND device_id = ? AND client_op_id = ?", authUser.ID, op.DeviceID, op.ClientOpID).Scan(&existingID)
-		if err == nil {
-			// Already processed -> Skip re-execution
-			continue
+		if err != sql.ErrNoRows {
+			http.Error(w, `{"error":"failed to check operation idempotency"}`, http.StatusInternalServerError)
+			return
 		}
 
 		currentCursor++
-
-		// Apply state mutation to materialized tables
-		if op.EntityType == "playback_state" {
-			var p PlaybackStatePayload
-			if err := json.Unmarshal(op.Payload, &p); err == nil {
-				h.applyPlaybackState(ctx, tx, authUser.ID, p, currentCursor, nowMs)
-			}
-		} else if op.EntityType == "listening_session" && op.Action == "upsert" {
-			var p ListeningSessionPayload
-			if err := json.Unmarshal(op.Payload, &p); err == nil {
-				if p.ID == "" {
-					p.ID = op.EntityID
-				}
-				h.applyListeningSession(ctx, tx, authUser.ID, p, currentCursor)
-			}
-		} else if op.EntityType == "subscription" {
-			h.applySubscription(ctx, tx, authUser.ID, op, currentCursor, nowMs)
-		} else if op.EntityType == "favorite" {
-			h.applyFavorite(ctx, tx, authUser.ID, op, currentCursor, nowMs)
+		if err := h.applyOperation(ctx, tx, authUser.ID, op, currentCursor, nowMs); err != nil {
+			http.Error(w, `{"error":"failed to apply sync operation"}`, http.StatusBadRequest)
+			return
 		}
 
-		// Append to sync_log
-		payloadBytes, _ := json.Marshal(op.Payload)
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO sync_log (user_id, device_id, client_op_id, entity_type, entity_id, action, payload_json, client_timestamp, server_timestamp, server_cursor)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, authUser.ID, op.DeviceID, op.ClientOpID, op.EntityType, op.EntityID, op.Action, string(payloadBytes), op.ClientTimestamp, nowMs, currentCursor)
+		`, authUser.ID, op.DeviceID, op.ClientOpID, op.EntityType, op.EntityID, op.Action, string(op.Payload), op.ClientTimestamp, nowMs, currentCursor)
 		if err != nil {
-			// Deduplication collision
-			continue
+			http.Error(w, `{"error":"failed to append sync log"}`, http.StatusInternalServerError)
+			return
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO processed_sync_operations (user_id, device_id, client_op_id, server_cursor, processed_at)
+			VALUES (?, ?, ?, ?, ?)
+		`, authUser.ID, op.DeviceID, op.ClientOpID, currentCursor, nowMs); err != nil {
+			http.Error(w, `{"error":"failed to record operation idempotency"}`, http.StatusInternalServerError)
+			return
 		}
 
 		appliedOps++
 	}
 
 	// Update user's monotonic cursor
-	_, _ = tx.ExecContext(ctx, "UPDATE user_sync_cursors SET current_cursor = ? WHERE user_id = ?", currentCursor, authUser.ID)
+	if _, err := tx.ExecContext(ctx, "UPDATE user_sync_cursors SET current_cursor = ? WHERE user_id = ?", currentCursor, authUser.ID); err != nil {
+		http.Error(w, `{"error":"failed to update sync cursor"}`, http.StatusInternalServerError)
+		return
+	}
 
 	if err := tx.Commit(); err != nil {
 		http.Error(w, `{"error":"failed to commit sync operations"}`, http.StatusInternalServerError)
@@ -253,9 +576,69 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, userID string, p ListeningSessionPayload, syncVer int64) {
+func validateSyncOperation(op *SyncPushOperation) error {
+	op.ClientOpID = strings.TrimSpace(op.ClientOpID)
+	op.DeviceID = strings.TrimSpace(op.DeviceID)
+	op.EntityType = strings.TrimSpace(op.EntityType)
+	op.EntityID = strings.TrimSpace(op.EntityID)
+	op.Action = strings.TrimSpace(op.Action)
+	if op.ClientOpID == "" || op.DeviceID == "" || op.EntityID == "" {
+		return fmt.Errorf("client_op_id, device_id and entity_id are required")
+	}
+	if !json.Valid(op.Payload) {
+		return fmt.Errorf("payload must be valid JSON")
+	}
+	switch op.EntityType {
+	case "subscription", "favorite":
+		if op.Action != "upsert" && op.Action != "delete" {
+			return fmt.Errorf("%s action must be upsert or delete", op.EntityType)
+		}
+	case "playback_state":
+		if op.Action != "upsert" {
+			return fmt.Errorf("playback_state action must be upsert")
+		}
+		var p PlaybackStatePayload
+		if err := json.Unmarshal(op.Payload, &p); err != nil {
+			return fmt.Errorf("invalid playback_state payload")
+		}
+		if p.EpisodeID == "" || p.EpisodeID != op.EntityID || p.PositionMS < 0 ||
+			math.IsNaN(p.ProgressPercent) || math.IsInf(p.ProgressPercent, 0) ||
+			p.ProgressPercent < 0 || p.ProgressPercent > 100 || p.PerSessionSeq < 0 {
+			return fmt.Errorf("invalid playback_state values")
+		}
+		switch p.EventType {
+		case "PROGRESS_TICK", "SEEK", "RESTART", "MARK_PLAYED", "MARK_UNPLAYED":
+		default:
+			return fmt.Errorf("invalid playback_state event_type")
+		}
+	case "listening_session":
+		if op.Action != "upsert" {
+			return fmt.Errorf("listening_session action must be upsert")
+		}
+		var p ListeningSessionPayload
+		if err := json.Unmarshal(op.Payload, &p); err != nil {
+			return fmt.Errorf("invalid listening_session payload")
+		}
+		if p.ID == "" {
+			p.ID = op.EntityID
+			encoded, _ := json.Marshal(p)
+			op.Payload = encoded
+		}
+		if p.ID != op.EntityID {
+			return fmt.Errorf("listening_session id must match entity_id")
+		}
+		if err := validateListeningSession(p); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported entity_type %q", op.EntityType)
+	}
+	return nil
+}
+
+func validateListeningSession(p ListeningSessionPayload) error {
 	if p.ID == "" || p.StartedAt <= 0 || p.EndedAt < p.StartedAt {
-		return
+		return fmt.Errorf("invalid listening_session timestamps")
 	}
 	if p.EndedAt-p.StartedAt > maxListeningSessionSpanMS ||
 		p.WallClockMS < 0 || p.WallClockMS > maxListeningSessionSpanMS ||
@@ -265,10 +648,43 @@ func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, use
 		p.ManualSkippedMS < 0 || p.ManualSkippedMS > maxListeningSessionSpanMS*4 ||
 		p.IntroOutroSkippedMS < 0 || p.IntroOutroSkippedMS > maxListeningSessionSpanMS*4 ||
 		p.SpeedWeightedMS < 0 || p.SpeedWeightedMS > maxListeningSessionSpanMS*4 {
-		return
+		return fmt.Errorf("invalid listening_session duration")
 	}
-	categories, _ := json.Marshal(p.Categories)
-	_, _ = tx.ExecContext(ctx, `
+	return nil
+}
+
+func (h *SyncHandler) applyOperation(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) error {
+	switch op.EntityType {
+	case "playback_state":
+		var p PlaybackStatePayload
+		if err := json.Unmarshal(op.Payload, &p); err != nil {
+			return err
+		}
+		return h.applyPlaybackState(ctx, tx, userID, p, syncVer, nowMs)
+	case "listening_session":
+		var p ListeningSessionPayload
+		if err := json.Unmarshal(op.Payload, &p); err != nil {
+			return err
+		}
+		return h.applyListeningSession(ctx, tx, userID, p, syncVer)
+	case "subscription":
+		return h.applySubscription(ctx, tx, userID, op, syncVer, nowMs)
+	case "favorite":
+		return h.applyFavorite(ctx, tx, userID, op, syncVer, nowMs)
+	default:
+		return fmt.Errorf("unsupported entity type")
+	}
+}
+
+func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, userID string, p ListeningSessionPayload, syncVer int64) error {
+	if err := validateListeningSession(p); err != nil {
+		return err
+	}
+	categories, err := json.Marshal(p.Categories)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO listening_sessions (
 			id, user_id, episode_id, podcast_id, title, podcast_title, categories_json,
 			started_at, ended_at, wall_clock_ms, audio_listened_ms, speed_saved_ms,
@@ -297,12 +713,14 @@ func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, use
 		p.StartedAt, p.EndedAt, max(p.WallClockMS, 0), max(p.AudioListenedMS, 0),
 		max(p.SpeedSavedMS, 0), max(p.SilenceSavedMS, 0), max(p.ManualSkippedMS, 0),
 		max(p.IntroOutroSkippedMS, 0), max(p.SpeedWeightedMS, 0), syncVer)
+	return err
 }
 
-func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID string, p PlaybackStatePayload, syncVer, nowMs int64) {
+func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID string, p PlaybackStatePayload, syncVer, nowMs int64) error {
 	// Conflict resolution rules
 	var existingPos, existingSeq int64
-	var existingCompleted, existingSessionID string
+	var existingCompleted int
+	var existingSessionID string
 	err := tx.QueryRowContext(ctx, `
 		SELECT position_ms, completed, playback_session_id, per_session_seq
 		FROM playback_states
@@ -316,25 +734,28 @@ func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID
 
 	if err == sql.ErrNoRows {
 		// New entry -> Insert immediately
-		_, _ = tx.ExecContext(ctx, `
+		_, err = tx.ExecContext(ctx, `
 			INSERT INTO playback_states (user_id, episode_id, position_ms, completed, progress_percent, event_type, playback_session_id, device_id, per_session_seq, client_timestamp, server_receive_timestamp, sync_version)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, userID, p.EpisodeID, p.PositionMS, completedInt, p.ProgressPercent, p.EventType, p.PlaybackSessionID, p.DeviceID, p.PerSessionSeq, p.ClientTimestamp, nowMs, syncVer)
-		return
+		return err
+	}
+	if err != nil {
+		return err
 	}
 
 	// 1. Passive Ticks (PROGRESS_TICK): Cannot move position backwards or reopen completed episode
 	if p.EventType == "PROGRESS_TICK" {
-		if existingCompleted == "1" {
-			return // Cannot reopen completed episode via passive tick
+		if existingCompleted == 1 {
+			return nil // Cannot reopen completed episode via passive tick
 		}
 		if p.PlaybackSessionID == existingSessionID && p.PositionMS < existingPos {
-			return // Cannot regress position in same session via passive tick
+			return nil // Cannot regress position in same session via passive tick
 		}
 	}
 
 	// 2. Explicit Actions (SEEK, RESTART, MARK_PLAYED, MARK_UNPLAYED) take immediate precedence
-	_, _ = tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		UPDATE playback_states
 		SET position_ms = ?,
 			completed = ?,
@@ -348,15 +769,16 @@ func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID
 			sync_version = ?
 		WHERE user_id = ? AND episode_id = ?
 	`, p.PositionMS, completedInt, p.ProgressPercent, p.EventType, p.PlaybackSessionID, p.DeviceID, p.PerSessionSeq, p.ClientTimestamp, nowMs, syncVer, userID, p.EpisodeID)
+	return err
 }
 
-func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) {
+func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) error {
 	isDeleted := 0
 	if op.Action == "delete" {
 		isDeleted = 1
 	}
 
-	_, _ = tx.ExecContext(ctx, `
+	_, err := tx.ExecContext(ctx, `
 		INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at, is_deleted, sync_version)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, podcast_id) DO UPDATE SET
@@ -364,21 +786,23 @@ func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID 
 			updated_at = excluded.updated_at,
 			sync_version = excluded.sync_version
 	`, userID, op.EntityID, nowMs, nowMs, isDeleted, syncVer)
+	return err
 }
 
-func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) {
+func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) error {
 	isDeleted := 0
 	if op.Action == "delete" {
 		isDeleted = 1
 	}
 
-	_, _ = tx.ExecContext(ctx, `
+	_, err := tx.ExecContext(ctx, `
 		INSERT INTO favorites (user_id, episode_id, created_at, is_deleted, sync_version)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, episode_id) DO UPDATE SET
 			is_deleted = excluded.is_deleted,
 			sync_version = excluded.sync_version
 	`, userID, op.EntityID, nowMs, isDeleted, syncVer)
+	return err
 }
 
 func (h *SyncHandler) MergeLocalData(w http.ResponseWriter, r *http.Request) {

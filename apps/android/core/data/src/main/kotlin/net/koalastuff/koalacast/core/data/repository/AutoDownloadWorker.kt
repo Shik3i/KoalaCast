@@ -113,15 +113,15 @@ class AutoDownloadWorker @AssistedInject constructor(
         if (retention == DownloadRetention.KEEP) return
         val completed = progress.completedEpisodeIds.first()
         val now = clock.nowMs()
-        val maxAge = retention.maxAgeMs
 
         for (row in downloadDao.observeAll().first()) {
             if (row.state != DownloadState.DONE.name) continue
-            val expired = when {
-                retention == DownloadRetention.WHEN_FINISHED -> row.episodeId in completed
-                maxAge != null -> now - row.updatedAt >= maxAge
-                else -> false
-            }
+            val expired = shouldRemoveDownload(
+                retention = retention,
+                completed = row.episodeId in completed,
+                updatedAtMs = row.updatedAt,
+                nowMs = now,
+            )
             if (expired) downloads.remove(row.episodeId)
         }
     }
@@ -152,4 +152,16 @@ class AutoDownloadWorker @AssistedInject constructor(
             )
         }
     }
+}
+
+internal fun shouldRemoveDownload(
+    retention: DownloadRetention,
+    completed: Boolean,
+    updatedAtMs: Long,
+    nowMs: Long,
+): Boolean = when {
+    retention == DownloadRetention.KEEP -> false
+    retention == DownloadRetention.WHEN_FINISHED -> completed
+    retention.maxAgeMs != null -> nowMs - updatedAtMs >= retention.maxAgeMs!!
+    else -> false
 }

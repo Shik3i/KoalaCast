@@ -10,7 +10,7 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { player } from '$lib/stores/player.svelte';
-	import { sync } from '$lib/stores/sync.svelte';
+	import { activateAccountContext, activateLoggedInAccount } from '$lib/stores/account-context';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { shell } from '$lib/stores/shell.svelte';
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
@@ -32,16 +32,19 @@
 		{ href: '/more', icon: 'ph-dots-three-circle', label: t('nav.profileMenu') }
 	]);
 
-	onMount(() => {
-		fetch('/api/v1/auth/status')
-			.then((res) => (res.ok ? res.json() : null))
-			.then((me) => {
-				if (me?.user_id) {
-					currentUser = me;
-					sync.enable(me.user_id);
-				}
-			})
-			.catch(() => {});
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/v1/auth/status');
+			const me = res.ok ? await res.json() : null;
+			if (me?.authenticated && me.user_id) {
+				currentUser = me;
+				await activateLoggedInAccount(me.user_id);
+			} else {
+				await activateAccountContext(null);
+			}
+		} catch {
+			await activateAccountContext(null);
+		}
 	});
 	onMount(() => {
 		const warmPlayer = (event: Event) => {

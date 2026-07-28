@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.util.Clock
@@ -73,6 +74,7 @@ class AccountRepositoryTest {
         repository = AccountRepository(
             api = api,
             store = SecureAccountStore(context),
+            accountData = AccountDataNamespace(database, Json),
             library = library,
             podcasts = PodcastRepository(api, Dispatchers.IO),
             dispatcher = Dispatchers.IO,

@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * Room mirrors the web client's IndexedDB stores field for field
@@ -15,6 +16,7 @@ import androidx.room.PrimaryKey
  */
 
 @Entity(tableName = "subscriptions")
+@Serializable
 data class SubscriptionEntity(
     @PrimaryKey val podcastId: String,
     val feedUrl: String,
@@ -46,6 +48,7 @@ data class SubscriptionEntity(
         Index(value = ["completed", "lastPlayedAt"]),
     ],
 )
+@Serializable
 data class PlaybackStateEntity(
     @PrimaryKey val episodeId: String,
     val podcastId: String,
@@ -62,6 +65,7 @@ data class PlaybackStateEntity(
 )
 
 @Entity(tableName = "queue", indices = [Index("positionOrder"), Index(value = ["episodeId"], unique = true)])
+@Serializable
 data class QueueItemEntity(
     @PrimaryKey val id: String,
     val episodeId: String,
@@ -77,6 +81,7 @@ data class QueueItemEntity(
 )
 
 @Entity(tableName = "favorites", indices = [Index("addedAt")])
+@Serializable
 data class FavoriteEntity(
     @PrimaryKey val episodeId: String,
     val addedAt: Long,
@@ -98,6 +103,7 @@ data class FavoriteEntity(
     tableName = "listening_sessions",
     indices = [Index("startedAt"), Index("podcastId")],
 )
+@Serializable
 data class ListeningSessionEntity(
     @PrimaryKey val id: String,
     val episodeId: String,
@@ -124,6 +130,7 @@ data class ListeningSessionEntity(
  * removed on another device, so unsubscribe and unfavourite leave a tombstone.
  */
 @Entity(tableName = "tombstones")
+@Serializable
 data class TombstoneEntity(
     /** `entityType:entityId`. */
     @PrimaryKey val id: String,
@@ -141,6 +148,7 @@ data class TombstoneEntity(
 
 /** Per-show playback overrides. The web keeps these in localStorage. */
 @Entity(tableName = "podcast_settings")
+@Serializable
 data class PodcastSettingsEntity(
     @PrimaryKey val podcastId: String,
     @ColumnInfo(defaultValue = "0") val skipIntroSeconds: Int = 0,
@@ -149,6 +157,19 @@ data class PodcastSettingsEntity(
     val speed: Float? = null,
     @ColumnInfo(defaultValue = "0") val autoQueueNew: Boolean = false,
     @ColumnInfo(defaultValue = "0") val autoDownload: Boolean = false,
+)
+
+@Entity(tableName = "account_data_archives")
+data class AccountDataArchiveEntity(
+    @PrimaryKey val ownerKey: String,
+    val payloadJson: String,
+)
+
+@Entity(tableName = "account_namespace_state")
+data class AccountNamespaceStateEntity(
+    @PrimaryKey val id: Int = 1,
+    val activeOwnerKey: String,
+    val guestMerged: Boolean = false,
 )
 
 @Entity(tableName = "episode_downloads", indices = [Index("state"), Index("updatedAt")])

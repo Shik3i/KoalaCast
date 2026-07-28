@@ -179,28 +179,28 @@ class Prefs {
 	formatDate(sec?: number | null): string {
 		if (!sec) return '';
 		const date = new Date(sec * 1000);
-		if (this.dateFormat === 'relative') return relative(date);
+		if (this.dateFormat === 'relative') return relative(date, this.uiLanguage);
 		return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 	}
 }
 
-function relative(date: Date): string {
+function relative(date: Date, locale: string): string {
 	const diffMs = Date.now() - date.getTime();
 	const sec = Math.round(diffMs / 1000);
-	if (sec < 45) return 'just now';
+	const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+	if (Math.abs(sec) < 45) return formatter.format(0, 'second');
 	const min = Math.round(sec / 60);
-	if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+	if (Math.abs(min) < 60) return formatter.format(-min, 'minute');
 	const hours = Math.round(min / 60);
-	if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+	if (Math.abs(hours) < 24) return formatter.format(-hours, 'hour');
 	const days = Math.round(hours / 24);
-	if (days === 1) return 'yesterday';
-	if (days < 7) return `${days} days ago`;
+	if (Math.abs(days) < 7) return formatter.format(-days, 'day');
 	const weeks = Math.round(days / 7);
-	if (weeks < 5) return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
+	if (Math.abs(weeks) < 5) return formatter.format(-weeks, 'week');
 	const months = Math.round(days / 30);
-	if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+	if (Math.abs(months) < 12) return formatter.format(-months, 'month');
 	const years = Math.round(days / 365);
-	return `${years} year${years === 1 ? '' : 's'} ago`;
+	return formatter.format(-years, 'year');
 }
 
 export const prefs = new Prefs();

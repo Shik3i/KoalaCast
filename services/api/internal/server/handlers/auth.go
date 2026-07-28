@@ -117,22 +117,35 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	userID := uuid.New().String()
 	nowMs := time.Now().UnixMilli()
 
-	// First-run bootstrap: the very first registrant becomes admin so a fresh
-	// self-hosted instance has an operator. Suppressed when the deployment seeds an
-	// admin out-of-band via ADMIN_USERNAME/ADMIN_PASSWORD, so an env-provisioned
-	// server never silently hands admin to whoever registers first.
+	// Serialize first-user role selection with account creation. OpenDB configures
+	// transactions as BEGIN IMMEDIATE, so concurrent registrations cannot both
+	// observe an empty users table and both become administrators.
+	tx, err := h.DB.SQL.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
 	var userCount int
-	_ = h.DB.SQL.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM users").Scan(&userCount)
+	if err := tx.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM users").Scan(&userCount); err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 	role := "user"
 	if userCount == 0 && strings.TrimSpace(h.Config.AdminUsername) == "" {
 		role = "admin"
 	}
 
-	_, err = h.DB.SQL.ExecContext(r.Context(), `
+	_, err = tx.ExecContext(r.Context(), `
 		INSERT INTO users (id, username, normalized_username, password_hash, recovery_code_hash, role, is_suspended, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
 	`, userID, username, normalizedUsername, pwdHash, recoveryHash, role, nowMs, nowMs)
 	if err != nil {
+		http.Error(w, `{"error":"failed to create user account"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		http.Error(w, `{"error":"failed to create user account"}`, http.StatusInternalServerError)
 		return
 	}
@@ -517,12 +530,27 @@ func (h *AuthHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Password reset approved -> Hash new password & regenerate recovery code
-	newPwdHash, _ := auth.HashPassword(req.NewPassword)
-	newRecoveryCode, newRecoveryHash, _ := auth.GenerateRecoveryCode()
+	newPwdHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		http.Error(w, `{"error":"failed to hash password"}`, http.StatusInternalServerError)
+		return
+	}
+	newRecoveryCode, newRecoveryHash, err := auth.GenerateRecoveryCode()
+	if err != nil {
+		http.Error(w, `{"error":"failed to generate recovery code"}`, http.StatusInternalServerError)
+		return
+	}
 
 	nowMs := time.Now().UnixMilli()
 
-	_, err = h.DB.SQL.ExecContext(r.Context(), `
+	tx, err := h.DB.SQL.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, `{"error":"transaction error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(r.Context(), `
 		UPDATE users
 		SET password_hash = ?,
 			recovery_code_hash = ?,
@@ -534,8 +562,18 @@ func (h *AuthHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Revoke all existing sessions upon recovery reset
-	_, _ = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE user_id = ?", userID)
+	if _, err := tx.ExecContext(r.Context(), "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+		http.Error(w, `{"error":"failed to revoke sessions"}`, http.StatusInternalServerError)
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), "DELETE FROM device_credentials WHERE user_id = ?", userID); err != nil {
+		http.Error(w, `{"error":"failed to revoke device credentials"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, `{"error":"failed to reset password"}`, http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

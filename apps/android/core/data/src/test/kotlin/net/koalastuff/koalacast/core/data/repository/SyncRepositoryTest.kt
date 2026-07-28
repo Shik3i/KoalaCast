@@ -4,11 +4,18 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.put
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.network.KoalaCastApi
+import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
+import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
+import net.koalastuff.koalacast.core.network.dto.SyncSnapshotResponse
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,12 +23,18 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import retrofit2.Response
+import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 
 @RunWith(RobolectricTestRunner::class)
 class SyncRepositoryTest {
     private lateinit var database: KoalaCastDatabase
     private lateinit var repository: SyncRepository
+    private lateinit var store: SecureAccountStore
+    private var apiHandler: (Method, Array<out Any?>?) -> Any? = { method, _ ->
+        error("unexpected API call: ${method.name}")
+    }
 
     @Before
     fun setUp() {
@@ -33,10 +46,12 @@ class SyncRepositoryTest {
         val api = Proxy.newProxyInstance(
             KoalaCastApi::class.java.classLoader,
             arrayOf(KoalaCastApi::class.java),
-        ) { _, method, _ -> error("unexpected API call: ${method.name}") } as KoalaCastApi
+        ) { _, method, args -> apiHandler(method, args) } as KoalaCastApi
+        store = SecureAccountStore(context)
         repository = SyncRepository(
             api = api,
-            store = SecureAccountStore(context),
+            store = store,
+            accountData = AccountDataNamespace(database, Json),
             database = database,
             subscriptions = database.subscriptionDao(),
             favorites = database.favoriteDao(),
@@ -99,5 +114,174 @@ class SyncRepositoryTest {
         )
 
         assertTrue(repository.buildOperations("device").isEmpty())
+    }
+
+    @Test
+    fun `pull follows next cursor while server says more pages exist`() = runTest {
+        val requestedCursors = mutableListOf<Long>()
+        apiHandler = { method, args ->
+            when (method.name) {
+                "pullSync" -> {
+                    val cursor = args!![0] as Long
+                    assertEquals(500, args[1])
+                    requestedCursors += cursor
+                    if (cursor == 0L) {
+                        Response.success(
+                            SyncPullResponse(
+                                sinceCursor = 0,
+                                nextCursor = 20,
+                                currentCursor = 30,
+                                hasMore = true,
+                                changesets = listOf(subscriptionChange("first", 20)),
+                            ),
+                        )
+                    } else {
+                        Response.success(
+                            SyncPullResponse(
+                                sinceCursor = 20,
+                                nextCursor = 30,
+                                currentCursor = 30,
+                                hasMore = false,
+                                changesets = listOf(subscriptionChange("second", 30)),
+                            ),
+                        )
+                    }
+                }
+                else -> error("unexpected API call: ${method.name}")
+            }
+        }
+
+        repository.pull(USER_ID)
+
+        assertEquals(listOf(0L, 20L), requestedCursors)
+        assertEquals(30L, store.cursor(USER_ID))
+        assertEquals(setOf("first", "second"), database.subscriptionDao().getAll().map { it.podcastId }.toSet())
+    }
+
+    @Test
+    fun `410 replaces synced tables from one snapshot and resumes once`() = runTest {
+        database.subscriptionDao().upsert(
+            SubscriptionEntity(
+                podcastId = "stale",
+                feedUrl = "https://old.example/feed.xml",
+                title = "Stale",
+                artworkUrl = "",
+                addedAt = 1,
+            ),
+        )
+        store.setCursor(USER_ID, 12)
+        var pullCalls = 0
+        var snapshotCalls = 0
+        apiHandler = { method, args ->
+            when (method.name) {
+                "pullSync" -> {
+                    pullCalls++
+                    if ((args!![0] as Long) == 12L) {
+                        Response.error<SyncPullResponse>(410, "".toResponseBody())
+                    } else {
+                        assertEquals(90L, args[0])
+                        Response.success(
+                            SyncPullResponse(
+                                sinceCursor = 90,
+                                nextCursor = 90,
+                                currentCursor = 90,
+                                hasMore = false,
+                            ),
+                        )
+                    }
+                }
+                "syncSnapshot" -> {
+                    snapshotCalls++
+                    Response.success(
+                        SyncSnapshotResponse(
+                            cursor = 90,
+                            subscriptions = listOf(
+                                buildJsonObject {
+                                    put("podcast_id", "fresh")
+                                    put("feed_url", "https://new.example/feed.xml")
+                                    put("title", "Fresh")
+                                    put("artwork_url", "https://new.example/art.jpg")
+                                    put("added_at", 10)
+                                },
+                            ),
+                            favorites = listOf(
+                                buildJsonObject {
+                                    put("episode_id", "favorite")
+                                    put("added_at", 11)
+                                },
+                            ),
+                            playbackStates = listOf(
+                                buildJsonObject {
+                                    put("episode_id", "episode")
+                                    put("podcast_id", "fresh")
+                                    put("position_ms", 42_000)
+                                    put("last_played_at", 12)
+                                },
+                            ),
+                            listeningSessions = listOf(
+                                buildJsonObject {
+                                    put("id", "session")
+                                    put("episode_id", "episode")
+                                    put("podcast_id", "fresh")
+                                    put("started_at", 10)
+                                    put("ended_at", 20)
+                                    put("wall_clock_ms", 10)
+                                    put("audio_listened_ms", 10)
+                                },
+                            ),
+                        ),
+                    )
+                }
+                else -> error("unexpected API call: ${method.name}")
+            }
+        }
+
+        repository.pull(USER_ID)
+
+        assertEquals(2, pullCalls)
+        assertEquals(1, snapshotCalls)
+        assertEquals(90L, store.cursor(USER_ID))
+        assertEquals(listOf("fresh"), database.subscriptionDao().getAll().map { it.podcastId })
+        assertEquals(listOf("favorite"), database.favoriteDao().getAll().map { it.episodeId })
+        assertEquals(42_000L, database.playbackStateDao().get("episode")!!.positionMs)
+        assertEquals(20L, database.listeningSessionDao().get("session")!!.endedAt)
+    }
+
+    @Test
+    fun `a second 410 after snapshot fails without loading another snapshot`() = runTest {
+        var snapshotCalls = 0
+        apiHandler = { method, _ ->
+            when (method.name) {
+                "pullSync" -> Response.error<SyncPullResponse>(410, "".toResponseBody())
+                "syncSnapshot" -> {
+                    snapshotCalls++
+                    Response.success(SyncSnapshotResponse(cursor = 50))
+                }
+                else -> error("unexpected API call: ${method.name}")
+            }
+        }
+
+        val failure = runCatching { repository.pull(USER_ID) }.exceptionOrNull()
+
+        assertTrue(failure?.message?.contains("after snapshot recovery") == true)
+        assertEquals(1, snapshotCalls)
+    }
+
+    private fun subscriptionChange(id: String, cursor: Long) = SyncChangesetDto(
+        entityType = "subscription",
+        entityId = id,
+        action = "upsert",
+        payload = buildJsonObject {
+            put("podcast_id", id)
+            put("feed_url", "https://example.com/$id.xml")
+            put("title", id)
+            put("added_at", cursor)
+        },
+        clientTimestamp = cursor,
+        serverCursor = cursor,
+    )
+
+    private companion object {
+        const val USER_ID = "user"
     }
 }

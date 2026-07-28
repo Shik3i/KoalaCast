@@ -143,6 +143,14 @@ func TestFullE2E_UserRegistrationLoginSyncAndAdminFlow(t *testing.T) {
 	// 4. Cross-Device Sync Push Operations
 	// ==========================================
 	nowMs := time.Now().UnixMilli()
+	if _, err := database.SQL.Exec(`
+		INSERT INTO podcasts (id, feed_url, title, created_at, updated_at)
+		VALUES ('pod-100', 'https://example.com/feed.xml', 'Integration Podcast', ?, ?);
+		INSERT INTO episodes (id, podcast_id, stable_identity_key, title, enclosure_url, created_at)
+		VALUES ('ep-100', 'pod-100', 'ep-100', 'Integration Episode', 'https://example.com/episode.mp3', ?)
+	`, nowMs, nowMs, nowMs); err != nil {
+		t.Fatalf("seed sync episode: %v", err)
+	}
 	syncPushPayload := fmt.Sprintf(`{
 		"client_schema_version": 1,
 		"operations": [

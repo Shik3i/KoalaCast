@@ -25,8 +25,11 @@ import net.koalastuff.koalacast.core.data.repository.AppShortcuts
 import net.koalastuff.koalacast.core.data.repository.AutoDownloadWorker
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
+import net.koalastuff.koalacast.core.data.repository.AccountDataNamespace
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import kotlin.math.roundToInt
+import kotlinx.coroutines.runBlocking
 
 @HiltAndroidApp
 class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
@@ -53,6 +56,12 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var accountData: AccountDataNamespace
+
+    @Inject
+    lateinit var accountStore: SecureAccountStore
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -60,6 +69,9 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
 
     override fun onCreate() {
         super.onCreate()
+        runBlocking(Dispatchers.IO) {
+            accountData.initialize(accountStore.account.value?.userId)
+        }
         syncCoordinator.start()
         // Idempotent (KEEP policy), so registering on every start costs nothing
         // and survives a reboot or an app update clearing the schedule.

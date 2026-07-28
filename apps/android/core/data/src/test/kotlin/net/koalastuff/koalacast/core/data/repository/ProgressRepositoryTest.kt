@@ -34,13 +34,6 @@ class ProgressRepositoryTest {
         repository = ProgressRepository(
             playbackStates = db.playbackStateDao(),
             listeningSessions = db.listeningSessionDao(),
-            downloads = {
-                DownloadRepository(
-                    context = ApplicationProvider.getApplicationContext(),
-                    dao = db.episodeDownloadDao(),
-                    clock = object : Clock { override fun nowMs() = now },
-                )
-            },
             clock = object : Clock {
                 override fun nowMs() = now
             },

@@ -24,6 +24,7 @@ class ServerRepository @Inject constructor(
     private val api: KoalaCastApi,
     private val preferences: PreferencesRepository,
     private val accountStore: SecureAccountStore,
+    private val accountData: AccountDataNamespace,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) {
 
@@ -41,10 +42,13 @@ class ServerRepository @Inject constructor(
                             DataError.Malformed("unexpected /healthz payload"),
                         )
                     }
-                    when (val ready = apiCall { api.healthzAt("$normalised/api/v1/readyz") }) {
+                    when (val ready = apiCall { api.readyzAt("$normalised/api/v1/readyz") }) {
                         is DataResult.Failure -> ready
                         is DataResult.Success ->
-                            if (ready.data.status == "ok") {
+                            if (
+                                ready.data.status == "ready" &&
+                                ready.data.database == "connected"
+                            ) {
                                 DataResult.Success(normalised)
                             } else {
                                 DataResult.Failure(
@@ -64,7 +68,10 @@ class ServerRepository @Inject constructor(
             is DataResult.Success -> {
                 val changed = preferences.serverUrl.first() != validated.data
                 preferences.setServerUrl(validated.data)
-                if (changed) accountStore.clear()
+                if (changed) {
+                    accountData.switchTo(null)
+                    accountStore.clear()
+                }
                 validated
             }
         }

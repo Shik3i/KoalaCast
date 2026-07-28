@@ -41,6 +41,18 @@ data class SyncChangesetDto(
 @Serializable
 data class SyncPullResponse(
     @SerialName("since_cursor") val sinceCursor: Long = 0,
+    @SerialName("next_cursor") val nextCursor: Long? = null,
     @SerialName("current_cursor") val currentCursor: Long = 0,
+    @SerialName("has_more") val hasMore: Boolean? = null,
     val changesets: List<SyncChangesetDto> = emptyList(),
+)
+
+@Serializable
+data class SyncSnapshotResponse(
+    val cursor: Long = 0,
+    val subscriptions: List<JsonObject> = emptyList(),
+    val favorites: List<JsonObject> = emptyList(),
+    @SerialName("playback_states") val playbackStates: List<JsonObject> = emptyList(),
+    @SerialName("listening_sessions") val listeningSessions: List<JsonObject> = emptyList(),
+    @SerialName("podcast_settings") val podcastSettings: List<JsonObject> = emptyList(),
 )

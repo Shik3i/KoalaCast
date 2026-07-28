@@ -30,6 +30,7 @@ import javax.inject.Singleton
 class AccountRepository @Inject constructor(
     private val api: KoalaCastApi,
     private val store: SecureAccountStore,
+    private val accountData: AccountDataNamespace,
     private val library: LibraryRepository,
     private val podcasts: PodcastRepository,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
@@ -69,6 +70,7 @@ class AccountRepository @Inject constructor(
                             username = response.username,
                             deviceId = response.deviceId,
                         )
+                        accountData.switchTo(account.userId)
                         store.save(account, response.deviceToken)
                         DataResult.Success(account)
                     }
@@ -94,12 +96,16 @@ class AccountRepository @Inject constructor(
     suspend fun validate(): Boolean = withContext(dispatcher) {
         val response = runCatching { api.authStatus() }.getOrNull() ?: return@withContext false
         val authenticated = response.isSuccessful && response.body()?.authenticated == true
-        if (!authenticated) store.clear()
+        if (!authenticated) {
+            accountData.switchTo(null)
+            store.clear()
+        }
         authenticated
     }
 
     suspend fun logout() = withContext(dispatcher) {
         runCatching { api.logout() }
+        accountData.switchTo(null)
         store.clear()
     }
 

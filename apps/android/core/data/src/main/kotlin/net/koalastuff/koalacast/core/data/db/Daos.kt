@@ -219,6 +219,9 @@ interface TombstoneDao {
 @Dao
 interface PodcastSettingsDao {
 
+    @Query("SELECT * FROM podcast_settings")
+    suspend fun getAll(): List<PodcastSettingsEntity>
+
     @Query("SELECT * FROM podcast_settings WHERE podcastId = :podcastId")
     suspend fun get(podcastId: String): PodcastSettingsEntity?
 
@@ -234,6 +237,24 @@ interface PodcastSettingsDao {
 
     @Query("DELETE FROM podcast_settings")
     suspend fun clear()
+}
+
+@Dao
+interface AccountDataArchiveDao {
+    @Query("SELECT * FROM account_data_archives WHERE ownerKey = :ownerKey")
+    suspend fun get(ownerKey: String): AccountDataArchiveEntity?
+
+    @Upsert
+    suspend fun upsert(archive: AccountDataArchiveEntity)
+
+    @Query("DELETE FROM account_data_archives WHERE ownerKey = :ownerKey")
+    suspend fun delete(ownerKey: String)
+
+    @Query("SELECT * FROM account_namespace_state WHERE id = 1")
+    suspend fun state(): AccountNamespaceStateEntity?
+
+    @Upsert
+    suspend fun setState(state: AccountNamespaceStateEntity)
 }
 
 @Dao

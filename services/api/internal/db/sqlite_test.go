@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"io/ioutil"
 	"log/slog"
 	"os"
@@ -32,5 +33,60 @@ func TestOpenDB_Migrations(t *testing.T) {
 		if err != nil {
 			t.Errorf("expected table %s to exist, error: %v", table, err)
 		}
+	}
+}
+
+func TestOpenDB_RepairsPartialGlobalStatisticsMigration(t *testing.T) {
+	registerDriver()
+	dbPath := filepath.Join(t.TempDir(), "partial.db")
+	raw, err := sql.Open(driverName, "file:"+dbPath+"?_txlock=immediate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(`
+		CREATE TABLE schema_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL);
+		CREATE TABLE users (
+			id TEXT PRIMARY KEY,
+			is_suspended INTEGER NOT NULL DEFAULT 0,
+			global_stats_opt_in INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE TABLE listening_sessions (id TEXT PRIMARY KEY, started_at INTEGER NOT NULL);
+		INSERT INTO schema_migrations(version, applied_at) VALUES
+			('000001_initial_schema.up.sql',0),
+			('000002_device_token_expiry.up.sql',0),
+			('000003_episode_transcripts.up.sql',0),
+			('000004_sync_log_compaction_index.up.sql',0),
+			('000005_listening_sessions.up.sql',0),
+			('000007_episode_chapters.up.sql',0)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	database, err := OpenDB(dbPath, logger)
+	if err != nil {
+		t.Fatalf("OpenDB failed to repair partial migration: %v", err)
+	}
+	defer database.Close()
+
+	var applied int
+	if err := database.SQL.QueryRow(`
+		SELECT COUNT(*) FROM schema_migrations WHERE version='000006_global_statistics_opt_in.up.sql'
+	`).Scan(&applied); err != nil || applied != 1 {
+		t.Fatalf("migration not recorded: applied=%d err=%v", applied, err)
+	}
+	var name string
+	if err := database.SQL.QueryRow(`
+		SELECT name FROM pragma_table_info('users') WHERE name='global_stats_opt_in_at'
+	`).Scan(&name); err != nil {
+		t.Fatalf("missing repaired column: %v", err)
+	}
+	if err := database.SQL.QueryRow(`
+		SELECT name FROM sqlite_master WHERE type='index' AND name='idx_users_global_stats_opt_in'
+	`).Scan(&name); err != nil {
+		t.Fatalf("missing repaired index: %v", err)
 	}
 }

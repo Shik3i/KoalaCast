@@ -13,7 +13,6 @@ import net.koalastuff.koalacast.core.model.ListeningSession
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
-import javax.inject.Provider
 import javax.inject.Singleton
 
 /**
@@ -28,7 +27,6 @@ import javax.inject.Singleton
 class ProgressRepository @Inject constructor(
     private val playbackStates: PlaybackStateDao,
     private val listeningSessions: ListeningSessionDao,
-    private val downloads: Provider<DownloadRepository>,
     private val clock: Clock,
 ) {
 
@@ -92,9 +90,6 @@ class ProgressRepository @Inject constructor(
             ),
         )
 
-        if (isCompleted) {
-            runCatching { downloads.get().remove(track.episodeId) }
-        }
     }
 
     /**

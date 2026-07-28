@@ -7,7 +7,8 @@
 		getLocalPlaybackState,
 		isLocalFavorite,
 		addLocalFavorite,
-		removeLocalFavorite,
+			removeLocalFavorite,
+			saveLocalCurrentPlayback,
 		type LocalListeningSession
 	} from '../idb/db';
 	import { player } from '$lib/stores/player.svelte';
@@ -27,6 +28,8 @@
 	let showShortcutsModal = $state(false);
 	let loadError = $state(false);
 	let expanded = $state(false);
+	let nowPlayingDialog: HTMLElement | null = $state(null);
+	let previousFocus: HTMLElement | null = null;
 	let showAccent = $state<string | null>(null);
 	let isFav = $state(false);
 	let showVolume = $state(false);
@@ -50,41 +53,55 @@
 	let showChaptersDrawer = $state(false);
 
 	let lastFetchedTrack = '';
+	let chaptersGeneration = 0;
 	$effect(() => {
-		const t = track;
-		if (!t) {
+		const currentTrack = track;
+		const generation = ++chaptersGeneration;
+		const controller = new AbortController();
+		if (!currentTrack) {
 			chapters = [];
-			return;
+			return () => controller.abort();
 		}
-		if (t.episode_id === lastFetchedTrack) return;
-		lastFetchedTrack = t.episode_id;
+		if (currentTrack.episode_id === lastFetchedTrack) return () => controller.abort();
+		lastFetchedTrack = currentTrack.episode_id;
 
-		fetch(`/api/v1/episodes/${t.episode_id}`)
+		fetch(`/api/v1/episodes/${currentTrack.episode_id}`, { signal: controller.signal })
 			.then((res) => (res.ok ? res.json() : null))
 			.then((epData) => {
+				if (generation !== chaptersGeneration || track?.episode_id !== currentTrack.episode_id) return;
 				if (epData && epData.chapters_url) {
-					fetchChapters(epData.chapters_url);
+					fetchChapters(epData.chapters_url, currentTrack.episode_id, generation, controller.signal);
 				} else {
 					chapters = [];
 				}
 			})
-			.catch(() => (chapters = []));
+			.catch((error) => {
+				if (error?.name !== 'AbortError' && generation === chaptersGeneration) chapters = [];
+			});
+		return () => controller.abort();
 	});
 
-	async function fetchChapters(url: string) {
+	async function fetchChapters(
+		url: string,
+		episodeId: string,
+		generation: number,
+		signal: AbortSignal
+	) {
 		loadingChapters = true;
 		try {
-			const res = await fetch(`/api/v1/proxy/chapters?url=${encodeURIComponent(url)}`);
+			const res = await fetch(`/api/v1/proxy/chapters?url=${encodeURIComponent(url)}`, { signal });
+			if (generation !== chaptersGeneration || track?.episode_id !== episodeId) return;
 			if (res.ok) {
 				const data = await res.json();
+				if (generation !== chaptersGeneration || track?.episode_id !== episodeId) return;
 				chapters = data.chapters || [];
 			} else {
 				chapters = [];
 			}
-		} catch (_) {
-			chapters = [];
+		} catch (error: any) {
+			if (error?.name !== 'AbortError' && generation === chaptersGeneration) chapters = [];
 		} finally {
-			loadingChapters = false;
+			if (generation === chaptersGeneration) loadingChapters = false;
 		}
 	}
 
@@ -116,7 +133,7 @@
 		volumeBoost = !volumeBoost;
 		if (audioEl) audioEngine.init(audioEl);
 		audioEngine.setVolumeBoost(volumeBoost);
-		toast.success(volumeBoost ? 'Volume Boost Enabled (2.2x)' : 'Volume Boost Off');
+		toast.success(t(volumeBoost ? 'player.boostEnabled' : 'player.boostDisabled'));
 	}
 
 	function toggleSkipSilence() {
@@ -127,7 +144,7 @@
 		}
 		if (audioEl) audioEngine.init(audioEl);
 		audioEngine.resume();
-		toast.success(skipSilence ? 'Skip Silence Enabled' : 'Skip Silence Off');
+		toast.success(t(skipSilence ? 'player.skipSilenceEnabled' : 'player.skipSilenceDisabled'));
 	}
 
 	let autoSaveTimer: any = null;
@@ -358,7 +375,7 @@
 		const pct = hasDuration ? Math.min(100, (currentTimeMs / dur) * 100) : 0;
 		const isCompleted = forceCompleted || (hasDuration && (remMs < 120000 || pct > 95));
 
-		await saveLocalPlaybackState({
+			await saveLocalPlaybackState({
 			episode_id: track.episode_id,
 			podcast_id: track.podcast_id,
 			position_ms: currentTimeMs,
@@ -372,9 +389,10 @@
 			artwork_url: track.artwork_url,
 			enclosure_url: track.enclosure_url,
 			duration_ms: durationMs || track.duration_ms,
-			categories: track.categories
-		});
-	}
+				categories: track.categories
+			});
+			await saveLocalCurrentPlayback({ ...track, position_ms: currentTimeMs });
+		}
 
 	function updateMediaSession() {
 		if (!('mediaSession' in navigator) || !track) return;
@@ -420,6 +438,46 @@
 	$effect(() => {
 		if (!track) expanded = false;
 	});
+
+	$effect(() => {
+		if (!expanded || !nowPlayingDialog) return;
+		previousFocus = document.activeElement as HTMLElement | null;
+		const background = [
+			document.querySelector<HTMLElement>('.quiet-main'),
+			document.querySelector<HTMLElement>('#navigation-rail'),
+			document.querySelector<HTMLElement>('#running-order'),
+			document.querySelector<HTMLElement>('.quiet-mobile-nav'),
+			document.querySelector<HTMLElement>('.player-bar')
+		].filter((element): element is HTMLElement => !!element);
+		for (const element of background) element.inert = true;
+		requestAnimationFrame(() => nowPlayingDialog?.querySelector<HTMLElement>('.np-close')?.focus());
+		return () => {
+			for (const element of background) element.inert = false;
+			previousFocus?.focus();
+			previousFocus = null;
+		};
+	});
+
+	function trapNowPlayingFocus(event: KeyboardEvent) {
+		if (event.key !== 'Tab' || !nowPlayingDialog) return;
+		const focusable = [...nowPlayingDialog.querySelectorAll<HTMLElement>(
+			'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+		)];
+		if (focusable.length === 0) {
+			event.preventDefault();
+			nowPlayingDialog.focus();
+			return;
+		}
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
 
 	// Track favorite state of the current episode.
 	let lastFavEp = '';
@@ -577,7 +635,7 @@
 				<div class="meta">
 					<a class="track-title" href={`/episode/${track.episode_id}`}>{track.title}</a>
 					<a class="podcast-title" href={`/podcast/${track.podcast_id}`}>{track.podcast_title}</a>
-					<span class="mobile-player-meta">-{formatTime(remainingMs)} · {player.playbackSpeed}×{#if player.upNext} · next: {player.upNext.title}{/if}</span>
+						<span class="mobile-player-meta">-{formatTime(remainingMs)} · {player.playbackSpeed}×{#if player.upNext} · {t('player.nextLabel', { title: player.upNext.title })}{/if}</span>
 				</div>
 				<button class="track-icon" class:active={isFav} onclick={toggleFavorite} aria-label={isFav ? t('player.removeFavorite') : t('player.saveEpisode')} title={isFav ? t('player.removeFavorite') : t('player.saveEpisode')}>
 					<i class="{isFav ? 'ph-fill' : 'ph'} ph-bookmark-simple"></i>
@@ -671,8 +729,8 @@
 					<option value="45">45 min</option>
 					<option value="60">60 min</option>
 				</select>
-				<a class="queue-button" href="/library?view=queue" aria-label={t('player.openQueue')}>
-					<i class="ph ph-list-numbers"></i><span>Queue {player.queue.length}</span>
+					<a class="queue-button" href="/library?view=queue" aria-label={t('player.openQueue')}>
+						<i class="ph ph-list-numbers"></i><span>{t('player.queueCount', { count: player.queue.length })}</span>
 				</a>
 				<button class="ctrl close-track" onclick={() => player.stop()} aria-label={t('player.closePlayer')} title={t('player.closePlayer')}>
 					<i class="ph ph-x" aria-hidden="true"></i>
@@ -683,7 +741,7 @@
 
 	<!-- Full-screen Now Playing -->
 	{#if expanded}
-		<div class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label={t('player.nowPlaying')}>
+			<div bind:this={nowPlayingDialog} class="np-overlay" style={accentVars} role="dialog" aria-modal="true" aria-label={t('player.nowPlaying')} tabindex="-1" onkeydown={trapNowPlayingFocus}>
 			<div class="np-bg" style="background-image: url({optimizeArtwork(track.artwork_url, 400)})"></div>
 			<button class="np-close" onclick={() => (expanded = false)} aria-label={t('player.closeFullscreen')} title={t('player.closeFullscreen')}>
 				<i class="ph ph-caret-down" aria-hidden="true"></i>
@@ -767,7 +825,7 @@
 					</div>
 					{#if chapters.length > 0}
 						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')} title={t('player.toggleChapters')}>
-							<i class="ph ph-list-numbers" aria-hidden="true"></i> Chapters ({chapters.length})
+								<i class="ph ph-list-numbers" aria-hidden="true"></i> {t('player.chaptersCount', { count: chapters.length })}
 						</button>
 					{/if}
 					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
@@ -783,7 +841,7 @@
 				{#if showChaptersDrawer && chapters.length > 0}
 					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
 						<div class="drawer-header">
-							<h4><i class="ph ph-list-numbers" aria-hidden="true"></i> Episode Chapters ({chapters.length})</h4>
+								<h4><i class="ph ph-list-numbers" aria-hidden="true"></i> {t('player.episodeChaptersCount', { count: chapters.length })}</h4>
 							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label={t('player.closeChapters')} title={t('player.closeChapters')}>
 								<i class="ph ph-x" aria-hidden="true"></i>
 							</button>

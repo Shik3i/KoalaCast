@@ -388,7 +388,9 @@
 		"browser": "Browser",
 		"currentDevice": "Aktuelles Gerät",
 		"ipSubnet": "IP-Subnetz",
-		"direct": "Direkt"
+		"direct": "Direkt",
+		"unknown": "Unbekannt",
+		"lastActive": "Zuletzt aktiv"
 	},
 	"login": {
 		"pageTitle": "Anmelden — KoalaCast",
@@ -480,7 +482,15 @@
 		"boost": "Verstärken",
 		"trimSilence": "Stille kürzen",
 		"playing": "Läuft",
-		"upNext": "Als Nächstes"
+		"upNext": "Als Nächstes",
+		"nextLabel": "danach: {title}",
+		"queueCount": "Warteschlange {count}",
+		"chaptersCount": "Kapitel ({count})",
+		"episodeChaptersCount": "Kapitel der Folge ({count})",
+		"boostEnabled": "Lautstärke-Boost aktiviert (2,2×)",
+		"boostDisabled": "Lautstärke-Boost deaktiviert",
+		"skipSilenceEnabled": "Stille überspringen aktiviert",
+		"skipSilenceDisabled": "Stille überspringen deaktiviert"
 	},
 	"shortcuts": {
 		"title": "Tastenkürzel",
@@ -573,7 +583,10 @@
 		"addToQueue": "Zur Warteschlange",
 		"chapters": "Kapitel",
 		"episodeChapters": "Kapitel der Folge",
-		"transcript": "Transkript"
+		"transcript": "Transkript",
+		"unknownDuration": "Unbekannte Dauer",
+		"chaptersLoadError": "Kapitel konnten nicht geladen werden.",
+		"transcriptLoadError": "Transkript konnte nicht geladen werden."
 	},
 	"quiet": {
 		"shell": {

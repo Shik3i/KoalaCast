@@ -42,6 +42,7 @@
 
 	async function loadEpisodeDetails(id: string) {
 		const reqId = ++loadReqId;
+		chaptersController?.abort();
 		isLoading = true;
 		// Reset per-episode expandable state so the previous episode's chapters or
 		// transcript never bleed into the newly opened one.
@@ -140,7 +141,7 @@
 	}
 
 	function formatDuration(ms: number) {
-		if (!ms) return 'Unknown duration';
+		if (!ms) return t('episode.unknownDuration');
 		const totalSec = Math.floor(ms / 1000);
 		const h = Math.floor(totalSec / 3600);
 		const m = Math.floor((totalSec % 3600) / 60);
@@ -153,25 +154,38 @@
 	let chaptersError = $state('');
 	let chaptersList = $state<any[]>([]);
 	let chaptersLoaded = $state(false);
+	let chaptersController: AbortController | null = null;
 
 	async function toggleChapters() {
 		showChapters = !showChapters;
 		if (!showChapters || chaptersLoaded || !episode?.chapters_url) return;
 		chaptersLoading = true;
 		chaptersError = '';
+		const reqId = loadReqId;
+		const episodeId = episode.id;
+		chaptersController?.abort();
+		const controller = new AbortController();
+		chaptersController = controller;
 		try {
-			const res = await fetch(`/api/v1/proxy/chapters?url=${encodeURIComponent(episode.chapters_url)}`);
+			const res = await fetch(`/api/v1/proxy/chapters?url=${encodeURIComponent(episode.chapters_url)}`, {
+				signal: controller.signal
+			});
+			if (reqId !== loadReqId || episode?.id !== episodeId) return;
 			if (res.ok) {
 				const data = await res.json();
+				if (reqId !== loadReqId || episode?.id !== episodeId) return;
 				chaptersList = data.chapters || [];
 				chaptersLoaded = true;
 			} else {
-				chaptersError = 'Chapters could not be loaded.';
+				chaptersError = t('episode.chaptersLoadError');
 			}
-		} catch (_) {
-			chaptersError = 'Chapters could not be loaded.';
+		} catch (error: any) {
+			if (error?.name !== 'AbortError') chaptersError = t('episode.chaptersLoadError');
 		} finally {
-			chaptersLoading = false;
+			if (chaptersController === controller) {
+				chaptersController = null;
+				chaptersLoading = false;
+			}
 		}
 	}
 
@@ -203,7 +217,7 @@
 			// Fallback to internal API endpoint if proxy is not used
 			const res = await fetch(`/api/v1/episodes/${episode.id}/transcript?i=0`);
 			if (!res.ok) {
-				transcriptError = 'Transcript could not be loaded.';
+				transcriptError = t('episode.transcriptLoadError');
 				return;
 			}
 			const data = await res.json();
@@ -220,7 +234,7 @@
 			}
 			transcriptLoaded = true;
 		} catch (_) {
-			transcriptError = 'Transcript could not be loaded.';
+			transcriptError = t('episode.transcriptLoadError');
 		} finally {
 			transcriptLoading = false;
 		}

@@ -66,6 +66,18 @@ export interface LocalQueueItem {
 	categories?: string[];
 }
 
+export interface LocalCurrentPlayback {
+	episode_id: string;
+	podcast_id: string;
+	title: string;
+	podcast_title: string;
+	artwork_url: string;
+	enclosure_url: string;
+	duration_ms: number;
+	categories?: string[];
+	position_ms: number;
+}
+
 // Persist a new queue order (drag-to-reorder). Rewrites position_order to match
 // the given episode_id sequence.
 export async function reorderLocalQueue(orderedIds: string[]): Promise<void> {
@@ -93,12 +105,55 @@ export interface LocalFavorite {
 	categories?: string[];
 }
 
-const DB_NAME = 'koalacast_local_db';
+const GUEST_DB_NAME = 'koalacast_local_db';
+const ACTIVE_CONTEXT_KEY = 'koalacast_local_data_context';
+const INITIALIZED_KEY = 'context_initialized';
 // v2 dropped the never-used 'history' store. v3 adds local-only listening
 // sessions for accurate Profile analytics.
 const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
+let activeContext = 'guest';
+
+function contextDBName(context: string): string {
+	return context === 'guest'
+		? GUEST_DB_NAME
+		: `${GUEST_DB_NAME}_user_${encodeURIComponent(context)}`;
+}
+
+function openLocalDB(name: string): Promise<IDBPDatabase> {
+	return openDB(name, DB_VERSION, {
+		upgrade(db) {
+			if (!db.objectStoreNames.contains('subscriptions')) {
+				db.createObjectStore('subscriptions', { keyPath: 'podcast_id' });
+			}
+			if (!db.objectStoreNames.contains('playback_states')) {
+				db.createObjectStore('playback_states', { keyPath: 'episode_id' });
+			}
+			if (!db.objectStoreNames.contains('queue')) {
+				const queueStore = db.createObjectStore('queue', { keyPath: 'id' });
+				queueStore.createIndex('position_order', 'position_order');
+			}
+			if (!db.objectStoreNames.contains('favorites')) {
+				db.createObjectStore('favorites', { keyPath: 'episode_id' });
+			}
+			if (!db.objectStoreNames.contains('settings')) {
+				db.createObjectStore('settings', { keyPath: 'key' });
+			}
+			if (!db.objectStoreNames.contains('tombstones')) {
+				db.createObjectStore('tombstones', { keyPath: 'id' });
+			}
+			if (!db.objectStoreNames.contains('listening_sessions')) {
+				const sessions = db.createObjectStore('listening_sessions', { keyPath: 'id' });
+				sessions.createIndex('started_at', 'started_at');
+				sessions.createIndex('podcast_id', 'podcast_id');
+			}
+			if (db.objectStoreNames.contains('history')) {
+				db.deleteObjectStore('history');
+			}
+		}
+	});
+}
 
 // Svelte state may expose arrays as reactive proxies. IndexedDB's structured
 // clone algorithm rejects those proxies, so normalize denormalized list fields
@@ -109,46 +164,95 @@ function plainCategories(categories?: readonly string[]): string[] | undefined {
 
 export function getLocalDB(): Promise<IDBPDatabase> {
 	if (!dbPromise) {
-		dbPromise = openDB(DB_NAME, DB_VERSION, {
-			upgrade(db) {
-				if (!db.objectStoreNames.contains('subscriptions')) {
-					db.createObjectStore('subscriptions', { keyPath: 'podcast_id' });
-				}
-				if (!db.objectStoreNames.contains('playback_states')) {
-					db.createObjectStore('playback_states', { keyPath: 'episode_id' });
-				}
-				if (!db.objectStoreNames.contains('queue')) {
-					const queueStore = db.createObjectStore('queue', { keyPath: 'id' });
-					queueStore.createIndex('position_order', 'position_order');
-				}
-				if (!db.objectStoreNames.contains('favorites')) {
-					db.createObjectStore('favorites', { keyPath: 'episode_id' });
-				}
-				if (!db.objectStoreNames.contains('settings')) {
-					db.createObjectStore('settings', { keyPath: 'key' });
-				}
-				// Deletion tombstones so unsubscribe/unfavorite can propagate through
-				// cross-device sync (an "upsert-only" sync would resurrect removed items).
-				if (!db.objectStoreNames.contains('tombstones')) {
-					db.createObjectStore('tombstones', { keyPath: 'id' });
-				}
-				if (!db.objectStoreNames.contains('listening_sessions')) {
-					const sessions = db.createObjectStore('listening_sessions', { keyPath: 'id' });
-					sessions.createIndex('started_at', 'started_at');
-					sessions.createIndex('podcast_id', 'podcast_id');
-				}
-				// v1 created a 'history' store that was never read or written; drop it
-				// when upgrading an existing database.
-				if (db.objectStoreNames.contains('history')) {
-					db.deleteObjectStore('history');
-				}
-			}
-		}).catch((err) => {
+		dbPromise = openLocalDB(contextDBName(activeContext)).catch((err) => {
 			dbPromise = null;
 			throw err;
 		});
 	}
 	return dbPromise;
+}
+
+export function getLocalDataContext(): string {
+	return activeContext;
+}
+
+export function wasGuestContextActive(): boolean {
+	try {
+		const stored = localStorage.getItem(ACTIVE_CONTEXT_KEY);
+		return !stored || stored === 'guest';
+	} catch {
+		return true;
+	}
+}
+
+async function closeCurrentDB(): Promise<void> {
+	const pending = dbPromise;
+	dbPromise = null;
+	if (!pending) return;
+	try {
+		(await pending).close();
+	} catch {
+		// A failed open is already reset by getLocalDB.
+	}
+}
+
+async function copyAndClearGuestData(target: IDBPDatabase): Promise<void> {
+	const guest = await openLocalDB(GUEST_DB_NAME);
+	try {
+		const stores = [
+			'subscriptions',
+			'playback_states',
+			'queue',
+			'favorites',
+			'settings',
+			'tombstones',
+			'listening_sessions'
+		] as const;
+		const recordsByStore = new Map<string, any[]>();
+		for (const storeName of stores) recordsByStore.set(storeName, await guest.getAll(storeName));
+		const targetTx = target.transaction([...stores], 'readwrite');
+		for (const storeName of stores) {
+			for (const record of recordsByStore.get(storeName) ?? []) {
+				await targetTx.objectStore(storeName).put(record);
+			}
+		}
+		await targetTx.done;
+
+		const guestTx = guest.transaction([...stores], 'readwrite');
+		for (const storeName of stores) await guestTx.objectStore(storeName).clear();
+		await guestTx.done;
+	} finally {
+		guest.close();
+	}
+}
+
+export async function switchLocalDataContext(
+	userId: string | null,
+	options: { migrateGuest?: boolean } = {}
+): Promise<void> {
+	const nextContext = userId ? `user:${userId}` : 'guest';
+	if (nextContext === activeContext) return;
+
+	await closeCurrentDB();
+	const nextDB = await openLocalDB(contextDBName(nextContext));
+	try {
+		const initialized = await nextDB.get('settings', INITIALIZED_KEY);
+		if (userId && options.migrateGuest && !initialized) {
+			await copyAndClearGuestData(nextDB);
+		}
+		await nextDB.put('settings', { key: INITIALIZED_KEY, value: true });
+	} catch (error) {
+		nextDB.close();
+		throw error;
+	}
+
+	activeContext = nextContext;
+	dbPromise = Promise.resolve(nextDB);
+	try {
+		localStorage.setItem(ACTIVE_CONTEXT_KEY, nextContext);
+	} catch {
+		// IndexedDB isolation remains effective without the convenience marker.
+	}
 }
 
 // Subscriptions
@@ -323,6 +427,19 @@ export async function addToLocalQueue(item: LocalQueueItem): Promise<void> {
 	await db.put('queue', { ...item, categories: plainCategories(item.categories) });
 }
 
+export async function addToLocalQueueIfAbsent(item: LocalQueueItem): Promise<boolean> {
+	const db = await getLocalDB();
+	const tx = db.transaction('queue', 'readwrite');
+	const existing: LocalQueueItem[] = await tx.store.getAll();
+	if (existing.some((entry) => entry.episode_id === item.episode_id)) {
+		await tx.done;
+		return false;
+	}
+	await tx.store.put({ ...item, categories: plainCategories(item.categories) });
+	await tx.done;
+	return true;
+}
+
 export async function addManyToLocalQueue(items: LocalQueueItem[]): Promise<void> {
 	if (items.length === 0) return;
 	const db = await getLocalDB();
@@ -341,6 +458,26 @@ export async function removeFromLocalQueue(id: string): Promise<void> {
 export async function clearLocalQueue(): Promise<void> {
 	const db = await getLocalDB();
 	await db.clear('queue');
+}
+
+const CURRENT_PLAYBACK_KEY = 'current_playback';
+
+export async function getLocalCurrentPlayback(): Promise<LocalCurrentPlayback | null> {
+	const db = await getLocalDB();
+	const record = await db.get('settings', CURRENT_PLAYBACK_KEY);
+	return record?.value ?? null;
+}
+
+export async function saveLocalCurrentPlayback(value: LocalCurrentPlayback | null): Promise<void> {
+	const db = await getLocalDB();
+	if (!value) {
+		await db.delete('settings', CURRENT_PLAYBACK_KEY);
+		return;
+	}
+	await db.put('settings', {
+		key: CURRENT_PLAYBACK_KEY,
+		value: { ...value, categories: plainCategories(value.categories) }
+	});
 }
 
 // Favorites
@@ -429,4 +566,80 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('settings');
 	await db.clear('tombstones');
 	await db.clear('listening_sessions');
+}
+
+export interface LocalSyncSnapshot {
+	subscriptions?: LocalSubscription[];
+	favorites?: LocalFavorite[];
+	playback_states?: LocalPlaybackState[];
+	listening_sessions?: LocalListeningSession[];
+}
+
+function validateLocalSyncSnapshot(snapshot: LocalSyncSnapshot): void {
+	if (!snapshot || typeof snapshot !== 'object') throw new Error('invalid sync snapshot');
+	const arrays = [
+		snapshot.subscriptions,
+		snapshot.favorites,
+		snapshot.playback_states,
+		snapshot.listening_sessions
+	];
+	if (arrays.some((items) => items !== undefined && !Array.isArray(items))) {
+		throw new Error('invalid sync snapshot collections');
+	}
+	for (const item of snapshot.subscriptions ?? []) {
+		if (!item.podcast_id || !Number.isFinite(item.added_at)) {
+			throw new Error('invalid sync snapshot subscription');
+		}
+	}
+	for (const item of snapshot.favorites ?? []) {
+		if (!item.episode_id || !Number.isFinite(item.added_at)) {
+			throw new Error('invalid sync snapshot favorite');
+		}
+	}
+	for (const item of snapshot.playback_states ?? []) {
+		if (!item.episode_id || !Number.isFinite(item.last_played_at)) {
+			throw new Error('invalid sync snapshot playback state');
+		}
+	}
+	for (const item of snapshot.listening_sessions ?? []) {
+		if (!item.id || !Number.isFinite(item.ended_at)) {
+			throw new Error('invalid sync snapshot listening session');
+		}
+	}
+}
+
+export async function replaceLocalSyncSnapshot(snapshot: LocalSyncSnapshot): Promise<void> {
+	validateLocalSyncSnapshot(snapshot);
+	const db = await getLocalDB();
+	const stores = [
+		'subscriptions',
+		'favorites',
+		'playback_states',
+		'listening_sessions',
+		'tombstones'
+	] as const;
+	const tx = db.transaction([...stores], 'readwrite');
+	for (const storeName of stores) await tx.objectStore(storeName).clear();
+	for (const item of snapshot.subscriptions ?? []) {
+		await tx.objectStore('subscriptions').put(item);
+	}
+	for (const item of snapshot.favorites ?? []) {
+		await tx.objectStore('favorites').put({
+			...item,
+			categories: plainCategories(item.categories)
+		});
+	}
+	for (const item of snapshot.playback_states ?? []) {
+		await tx.objectStore('playback_states').put({
+			...item,
+			categories: plainCategories(item.categories)
+		});
+	}
+	for (const item of snapshot.listening_sessions ?? []) {
+		await tx.objectStore('listening_sessions').put({
+			...item,
+			categories: plainCategories(item.categories)
+		});
+	}
+	await tx.done;
 }

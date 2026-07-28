@@ -3,6 +3,17 @@ package net.koalastuff.koalacast.core.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `account_data_archives` (`ownerKey` TEXT NOT NULL, `payloadJson` TEXT NOT NULL, PRIMARY KEY(`ownerKey`))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `account_namespace_state` (`id` INTEGER NOT NULL, `activeOwnerKey` TEXT NOT NULL, `guestMerged` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        )
+    }
+}
+
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(

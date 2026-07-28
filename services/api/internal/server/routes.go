@@ -160,6 +160,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 
 			// Cross-Device Sync Engine
 			r.Get("/sync", syncHandler.Pull)
+			r.Get("/sync/snapshot", syncHandler.Snapshot)
 			r.Post("/sync", syncHandler.Push)
 			r.Post("/sync/merge", syncHandler.MergeLocalData)
 

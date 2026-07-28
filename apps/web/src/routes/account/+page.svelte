@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { sync } from '$lib/stores/sync.svelte';
+	import { activateAccountContext } from '$lib/stores/account-context';
 
 	interface UserSession {
 		id: string;
@@ -72,13 +72,13 @@
 		try {
 			await fetch('/api/v1/auth/logout', { method: 'POST' });
 		} catch (_) {}
-		sync.disable();
+		await activateAccountContext(null);
 		toast.success(t('toast.signedOut'));
 		goto('/login');
 	}
 
 	function formatDate(timestampMs: number): string {
-		if (!timestampMs) return 'Unknown';
+		if (!timestampMs) return t('account.unknown');
 		return new Date(timestampMs).toLocaleString(undefined, {
 			dateStyle: 'medium',
 			timeStyle: 'short'
@@ -161,7 +161,7 @@
 									<div class="session-meta">
 										<span>{t('account.ipSubnet')}: {session.ip_network || t('account.direct')}</span>
 										<span>•</span>
-										<span>Last active: {formatDate(session.last_active_at)}</span>
+										<span>{t('account.lastActive')}: {formatDate(session.last_active_at)}</span>
 									</div>
 								</div>
 								{#if !session.is_current}

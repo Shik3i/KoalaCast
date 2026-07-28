@@ -208,9 +208,10 @@ class EpisodeViewModel @Inject constructor(
         // `resume = false` so a fresh start ignores any stored position — the
         // listener asked for this chapter, not for where they left off.
         if (player.state.value.track?.episodeId != track.episodeId) {
-            player.play(track, resume = false)
+            player.playAt(track, chapter.startMs)
+        } else {
+            player.seekTo(chapter.startMs)
         }
-        player.seekTo(chapter.startMs)
     }
 
     fun toggleTranscript() {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -144,6 +145,61 @@ func TestPodcastHandler_AddFeed_SSRFValidation(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 for loopback RSS feed URL, got %d", rec.Code)
+	}
+}
+
+func TestPodcastHandler_RedirectAliasesResolveToOnePodcast(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	database, err := db.OpenDB(filepath.Join(t.TempDir(), "aliases.db"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	const canonical = "https://feeds.example/canonical.xml"
+	feedClient := &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/alias-a.xml", "/alias-b.xml":
+			return &http.Response{
+				StatusCode: http.StatusFound,
+				Header:     http.Header{"Location": []string{canonical}},
+				Body:       io.NopCloser(strings.NewReader("")),
+				Request:    req,
+			}, nil
+		case "/canonical.xml":
+			body := `<?xml version="1.0"?><rss version="2.0"><channel><title>Canonical</title><item><guid>ep-1</guid><title>Episode</title><enclosure url="https://cdn.example/ep.mp3" type="audio/mpeg"/></item></channel></rss>`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Request:    req,
+			}, nil
+		default:
+			return &http.Response{StatusCode: http.StatusNotFound, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(""))}, nil
+		}
+	})}
+	handler := &PodcastHandler{DB: database, MaxResponseB: 1024 * 1024, FeedHTTPClient: feedClient}
+
+	firstID, err := handler.IngestFeedURL(context.Background(), "https://feeds.example/alias-a.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondID, err := handler.IngestFeedURL(context.Background(), "https://feeds.example/alias-b.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstID != secondID {
+		t.Fatalf("aliases created different podcasts: %s != %s", firstID, secondID)
+	}
+	var podcasts, aliases int
+	if err := database.SQL.QueryRow(`SELECT COUNT(*) FROM podcasts`).Scan(&podcasts); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SQL.QueryRow(`SELECT COUNT(*) FROM podcast_aliases WHERE target_podcast_id=?`, firstID).Scan(&aliases); err != nil {
+		t.Fatal(err)
+	}
+	if podcasts != 1 || aliases != 3 {
+		t.Fatalf("expected one podcast and three aliases, got podcasts=%d aliases=%d", podcasts, aliases)
 	}
 }
 
