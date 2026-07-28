@@ -15,6 +15,7 @@ dependencies {
     api(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.palette)
 
     testImplementation(libs.okhttp.mockwebserver)
 }

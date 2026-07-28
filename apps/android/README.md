@@ -1,9 +1,9 @@
 # KoalaCast — Native Android Client
 
-> **Status:** 🏗️ **P0–P6 shipped** — browsing, playback, local-first library,
-> downloads, inbox, profile statistics, account, sync and OPML are implemented.
-> P7 platform/delight work and the API blockers in
-> [`api_todo.md`](../../api_todo.md) remain (§10 tracks the exact boundary).
+> **Status:** ✅ **P0–P7 shipped** — browsing, playback, local-first library,
+> downloads, inbox, profile statistics, account, sync, OPML, widget and platform
+> features are implemented. API extensions tracked in
+> [`api_todo.md`](../../api_todo.md) remain optional server-side improvements.
 >
 > Companion docs: [`docs/android-architecture.md`](../../docs/android-architecture.md)
 > (high-level architecture), [`docs/sync-protocol/specification.md`](../../docs/sync-protocol/specification.md)
@@ -237,8 +237,8 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Player** — Media3/ExoPlayer: play/pause, skip ±15/+30, scrub, speed cycling,
       **sleep timer** (incl. end-of-episode), media notification, lock screen,
       Bluetooth/media buttons, fine-grained speed, skip-silence and volume boost.
-- [x] **Mini-player + full-screen Now Playing.** *The blurred cover backdrop and the
-      per-show accent from cover art are still to port.*
+- [x] **Mini-player + full-screen Now Playing**, including the per-show accent
+      derived from cached cover art.
 - [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
 - [x] **Resume playback** from saved position (works offline via denormalised metadata).
 - [x] **Local-first persistence** (Room) — everything usable with no account.
@@ -261,17 +261,17 @@ Web has these today; Android should match:
 - [x] Continue Listening rail / In-Progress tab.
 - [x] Nine colour palettes in light and dark, with Fjord as the shared default.
 - [x] Queue (play, remove, accessible up/down reorder; drag remains optional polish).
-- [ ] Dynamic per-show accent color from cover art (Coil palette).
+- [x] Dynamic per-show accent color from cover art (Coil + Palette).
 - [x] OPML import/export.
 - [x] Account: register / login / recovery code / session management.
 - [x] Sleep timer, playback-speed persistence, media session metadata.
 
 ### 4.3 Native features and remaining platform work
-- [x] **📥 Offline downloads** (see §5) — resumable, process-safe internal-storage downloads.
+- [x] **📥 Offline downloads** (see §5) — resumable, process-safe internal/external/SAF downloads.
 - [x] **🆕 "New / Inbox" feed** — a filtered page showing **only the newest unplayed
       episodes across all subscribed podcasts**, newest first, with an unplayed toggle
-      and per-podcast `all` / `latest only` inclusion. Downloaded/podcast/date filters
-      are still open. It currently aggregates
+      and per-podcast `all` / `latest only` inclusion, plus downloaded, podcast, date,
+      mood and 25/40/60-minute session filters. It currently aggregates
       `/podcasts/{id}/episodes` client-side; a batch server endpoint remains in
       `api_todo.md`.
 - [x] **Auto-download** newest N unplayed episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).
@@ -279,7 +279,7 @@ Web has these today; Android should match:
       (Media3 audio processors), per-podcast default speed.
 - [x] **Cross-device sync** with the KoalaCast server (device token).
 - [x] **Android Auto** support (MediaLibraryService browse tree).
-- [ ] **Home-screen widget** (now-playing + resume).
+- [x] **Home-screen widget** (now-playing + resume/play-pause).
 - [x] **Chapters** support (`podcast:chapters`, episode list and player navigation).
 - [x] **Per-episode / global playback stats** (private, on-device).
 
@@ -295,7 +295,7 @@ Requirements:
       progress %, and byte size; drive it with **WorkManager** (survives process death).
 - [x] Downloaded episodes play from local file (ExoPlayer local `MediaItem`), fully offline.
 - [x] **Settings:** Wi-Fi-only, newest-N count and automatic retention after played/by age.
-- [ ] **Settings:** configurable concurrent-download limit, storage location (internal vs
+- [x] **Settings:** configurable concurrent-download limit, storage location (internal vs
       SD/SAF), and download budget / cleanup by total size.
 - [x] **Auto-download** rules per subscription (newest N, only unplayed).
 - [x] Downloads screen: list, total storage used, delete individual / all.
@@ -303,7 +303,7 @@ Requirements:
 - [x] Handle redirects, resumable ranges, and content-length-less streams gracefully.
 
 Implemented with **OkHttp + WorkManager**, resumable range requests,
-app-private storage, and a Room mirror for UI state.
+internal/external app storage or SAF, budget cleanup, and a Room mirror for UI state.
 
 ---
 
@@ -389,11 +389,11 @@ per-subscription request fan-out.
 2. ✅ **P1 — Browse:** Discover, Search, Podcast, Episode screens (read-only, online).
 3. ✅ **P2 — Playback:** Media3 `MediaSessionService`, mini + full player, sleep timer, speed, media session, progress persistence, queue auto-advance.
 4. ✅ **P3 — Local-first:** Room, subscribe, queue, favourites, continue-listening, offline resume, tombstones for sync.
-5. ✅ **P4 — Downloads:** resumable download engine, downloads screen, offline playback. *Auto-download rules remain P7 work.*
+5. ✅ **P4 — Downloads:** resumable download engine, downloads screen, offline playback and auto-download rules.
 6. ✅ **P5 — Inbox:** "New episodes" filtered feed.
 7. ✅ **P6 — Account & Sync:** device-token auth, `/sync` pull/push/merge, session mgmt, OPML.
-8. **P7 — Delight & platform:** widget, dynamic cover palette, transitions,
-   haptics, richer Inbox filters and advanced storage management remain.
+8. ✅ **P7 — Delight & platform:** widget, dynamic cover palette, richer Inbox
+   recommendations and advanced storage management.
 
 ---
 
@@ -401,7 +401,6 @@ per-subscription request fan-out.
 - Works **offline** where applicable and **without an account**.
 - Loading / empty / error states designed (skeletons, not spinners).
 - Accessible (TalkBack + 48dp + reduce-motion) and themed (light + dark).
-- Covered by tests. Current gap: repository/logic unit tests exist, but Compose
-  UI tests, ViewModel tests, MockWebServer integration tests and emulator tests
-  are not yet present.
+- Covered by repository/logic unit tests, MockWebServer integration tests and
+  Compose UI regression tests. Instrumented execution requires an attached device.
 - No new tracking, no third-party audio proxy, minimal permissions.

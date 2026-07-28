@@ -6,6 +6,8 @@ import androidx.work.Configuration
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
+import coil3.size.Size
 import coil3.disk.DiskCache
 import coil3.disk.directory
 import coil3.memory.MemoryCache
@@ -15,11 +17,16 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 import net.koalastuff.koalacast.core.data.repository.AppShortcuts
 import net.koalastuff.koalacast.core.data.repository.AutoDownloadWorker
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
+import net.koalastuff.koalacast.core.data.repository.LibraryRepository
+import net.koalastuff.koalacast.core.data.server.ArtworkUrls
+import kotlin.math.roundToInt
 
 @HiltAndroidApp
 class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
@@ -38,6 +45,12 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     lateinit var appShortcuts: AppShortcuts
 
     @Inject
+    lateinit var library: LibraryRepository
+
+    @Inject
+    lateinit var artworkUrls: ArtworkUrls
+
+    @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
     override val workManagerConfiguration: Configuration
@@ -54,6 +67,29 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
         // Launcher-side cache; refreshing at start is soon enough for something
         // the listener reaches before the app is open.
         CoroutineScope(Dispatchers.IO).launch { appShortcuts.refresh() }
+        CoroutineScope(Dispatchers.IO).launch {
+            library.allSubscriptions
+                .map { subscriptions ->
+                    subscriptions.map { it.artworkUrl }.filter(String::isNotBlank).distinct()
+                }
+                .distinctUntilChanged()
+                .collect { rawUrls ->
+                    val loader = SingletonImageLoader.get(this@KoalaCastApplication)
+                    val artworkPx = (
+                        LIBRARY_ARTWORK_DP * resources.displayMetrics.density
+                    ).roundToInt()
+                    rawUrls.forEach { rawUrl ->
+                        val url = artworkUrls.forArtworkReady(rawUrl, artworkPx)
+                            ?: return@forEach
+                        loader.enqueue(
+                            ImageRequest.Builder(this@KoalaCastApplication)
+                                .data(url)
+                                .size(Size(artworkPx, artworkPx))
+                                .build(),
+                        )
+                    }
+                }
+        }
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
@@ -74,4 +110,8 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
             }
             .crossfade(true)
             .build()
+
+    private companion object {
+        const val LIBRARY_ARTWORK_DP = 160
+    }
 }

@@ -43,6 +43,7 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.spotlightGlow
 import net.koalastuff.koalacast.core.ui.util.Format
+import net.koalastuff.koalacast.core.ui.component.ArtworkAccent
 
 /**
  * The full-screen transport. The desktop design puts these controls in a bar
@@ -59,8 +60,9 @@ fun NowPlayingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
 
-    NowPlayingContent(
-        state = state,
+    ArtworkAccent(state.track?.artworkUrl) {
+        NowPlayingContent(
+            state = state,
         chapters = chapters,
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
@@ -70,8 +72,9 @@ fun NowPlayingScreen(
         onSeekTo = viewModel::seekTo,
         onCycleSpeed = viewModel::cycleSpeed,
         onSetSleepTimer = viewModel::setSleepTimer,
-        modifier = modifier,
-    )
+            modifier = modifier,
+        )
+    }
 }
 
 @Composable

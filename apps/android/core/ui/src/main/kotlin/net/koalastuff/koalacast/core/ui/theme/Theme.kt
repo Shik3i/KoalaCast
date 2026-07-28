@@ -10,6 +10,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 
@@ -76,6 +79,30 @@ fun KoalaCastTheme(
     ) {
         MaterialTheme(colorScheme = materialScheme, content = content)
     }
+}
+
+@Composable
+fun ProvideKoalaAccent(seed: Color?, content: @Composable () -> Unit) {
+    val base = LocalKoalaColors.current
+    val colors = if (seed == null) {
+        base
+    } else {
+        val fill = if (base.isDark) lerp(seed, Color.White, 0.18f) else seed
+        val ink = if (base.isDark) fill else lerp(seed, Color.Black, 0.58f)
+        val on = if (fill.luminance() > 0.48f) Color(0xFF101318) else Color.White
+        base.copy(
+            accentFill = fill,
+            accentInk = ink,
+            accentOn = on,
+            accentWash = fill.copy(alpha = if (base.isDark) 0.16f else 0.12f),
+            dataBar = fill,
+        )
+    }
+    CompositionLocalProvider(
+        LocalKoalaColors provides colors,
+        LocalContentColor provides colors.ink,
+        content = content,
+    )
 }
 
 object KoalaTheme {

@@ -10,9 +10,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.ServerRepository
+import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.server.ServerUrl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
@@ -33,6 +35,7 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
     private val serverRepository: ServerRepository,
+    private val downloads: DownloadRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -103,6 +106,22 @@ class SettingsViewModel @Inject constructor(
 
     fun setDownloadRetention(retention: DownloadRetention) {
         viewModelScope.launch { preferences.setDownloadRetention(retention) }
+    }
+
+    fun setDownloadConcurrency(value: Int) {
+        viewModelScope.launch { preferences.setDownloadConcurrency(value) }
+    }
+
+    fun setDownloadBudgetMb(value: Int) {
+        viewModelScope.launch {
+            val bytes = value.toLong() * 1024 * 1024
+            preferences.setDownloadBudgetBytes(bytes)
+            downloads.cleanupToBudget(bytes)
+        }
+    }
+
+    fun setDownloadStorage(storage: DownloadStorage, treeUri: String = "") {
+        viewModelScope.launch { preferences.setDownloadStorage(storage, treeUri) }
     }
 
     fun setPalette(palette: PaletteId) {

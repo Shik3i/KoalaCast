@@ -152,7 +152,10 @@ class PlayerConnection @Inject constructor(
             // on, so the notification does not leak their IP to a publisher CDN.
             val artwork = artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX)
             val localMediaUri = downloads.completedPath(track.episodeId)
-                ?.let { android.net.Uri.fromFile(java.io.File(it)).toString() }
+                ?.let {
+                    if (it.startsWith("content://")) it
+                    else android.net.Uri.fromFile(java.io.File(it)).toString()
+                }
 
             withContext(Dispatchers.Main) {
                 controller.setMediaItem(

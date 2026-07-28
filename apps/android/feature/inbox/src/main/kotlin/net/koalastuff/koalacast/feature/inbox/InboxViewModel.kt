@@ -19,7 +19,9 @@ import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
+import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.model.DataResult
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.player.PlayerConnection
@@ -31,13 +33,33 @@ data class InboxUiState(
     val rawEpisodes: List<InboxEpisode> = emptyList(),
     val completedIds: Set<String> = emptySet(),
     val unplayedOnly: Boolean = true,
+    val downloadedOnly: Boolean = false,
+    val downloadedIds: Set<String> = emptySet(),
+    val selectedPodcastId: String? = null,
+    val dateRange: InboxDateRange = InboxDateRange.ALL,
+    val mood: InboxMood = InboxMood.ALL,
+    val sessionMinutes: Int? = null,
     val showSettings: Boolean = false,
     val failedFeeds: Int = 0,
     val progressByEpisode: Map<String, Int> = emptyMap(),
     val currentEpisodeId: String? = null,
 ) {
     val feed: List<InboxEpisode>
-        get() = buildInboxFeed(rawEpisodes, completedIds, unplayedOnly)
+        get() {
+            val filtered = buildInboxFeed(
+                rawEpisodes,
+                completedIds,
+                InboxFilter(
+                    unplayedOnly = unplayedOnly,
+                    downloadedOnly = downloadedOnly,
+                    podcastId = selectedPodcastId,
+                    dateRange = dateRange,
+                    mood = mood,
+                ),
+                downloadedIds,
+            )
+            return sessionMinutes?.let { buildSessionPlan(filtered, it * 60_000L) } ?: filtered
+        }
 }
 
 @HiltViewModel
@@ -47,6 +69,7 @@ class InboxViewModel @Inject constructor(
     private val podcasts: PodcastRepository,
     private val progress: ProgressRepository,
     private val queue: QueueRepository,
+    private val downloads: DownloadRepository,
     private val player: PlayerConnection,
 ) : ViewModel() {
 
@@ -55,6 +78,16 @@ class InboxViewModel @Inject constructor(
     private var refreshJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            downloads.downloads.collect { items ->
+                _state.update {
+                    it.copy(
+                        downloadedIds = items.filter { item -> item.state == DownloadState.DONE }
+                            .mapTo(mutableSetOf()) { item -> item.episodeId },
+                    )
+                }
+            }
+        }
         viewModelScope.launch {
             // Same two sources as the podcast screen: stored positions, overlaid
             // with the live player so the running episode's ring keeps moving.
@@ -135,6 +168,26 @@ class InboxViewModel @Inject constructor(
 
     fun setUnplayedOnly(enabled: Boolean) {
         _state.update { it.copy(unplayedOnly = enabled) }
+    }
+
+    fun setDownloadedOnly(enabled: Boolean) =
+        _state.update { it.copy(downloadedOnly = enabled) }
+
+    fun setPodcastFilter(podcastId: String?) =
+        _state.update { it.copy(selectedPodcastId = podcastId) }
+
+    fun setDateRange(range: InboxDateRange) =
+        _state.update { it.copy(dateRange = range) }
+
+    fun setMood(mood: InboxMood) =
+        _state.update { it.copy(mood = mood) }
+
+    fun setSessionMinutes(minutes: Int?) =
+        _state.update { it.copy(sessionMinutes = minutes) }
+
+    fun queueSession() {
+        val items = _state.value.feed
+        viewModelScope.launch { items.forEach { queue.addToEnd(it.track) } }
     }
 
     fun toggleSettings() {

@@ -10,8 +10,8 @@ import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.network.KoalaCastApi
-import net.koalastuff.koalacast.core.network.dto.OpmlImportReport
-import net.koalastuff.koalacast.core.network.dto.OpmlImportedPodcast
+import net.koalastuff.koalacast.core.network.dto.AddFeedRequest
+import net.koalastuff.koalacast.core.network.dto.PodcastDto
 import retrofit2.Response
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -35,13 +35,13 @@ class AccountRepositoryTest {
             .allowMainThreadQueries()
             .build()
         val importedPodcasts = listOf(
-            OpmlImportedPodcast(
+            PodcastDto(
                 id = "first-id",
                 title = "First show",
                 feedUrl = "https://example.com/first.xml",
                 artworkUrl = "https://example.com/first.jpg",
             ),
-            OpmlImportedPodcast(
+            PodcastDto(
                 id = "second-id",
                 title = "Second show",
                 feedUrl = "https://example.com/second.xml",
@@ -51,14 +51,12 @@ class AccountRepositoryTest {
         val api = Proxy.newProxyInstance(
             KoalaCastApi::class.java.classLoader,
             arrayOf(KoalaCastApi::class.java),
-        ) { _, method, _ ->
+        ) { _, method, args ->
             when (method.name) {
-                "importOpml" -> Response.success(
-                    OpmlImportReport(
-                        totalFound = importedPodcasts.size,
-                        imported = importedPodcasts.size,
-                        podcasts = importedPodcasts,
-                    ),
+                "addFeed" -> Response.success(
+                    importedPodcasts.first {
+                        it.feedUrl == (args.first() as AddFeedRequest).feedUrl
+                    },
                 )
                 else -> error("unexpected API call: ${method.name}")
             }
@@ -76,6 +74,7 @@ class AccountRepositoryTest {
             api = api,
             store = SecureAccountStore(context),
             library = library,
+            podcasts = PodcastRepository(api, Dispatchers.IO),
             dispatcher = Dispatchers.IO,
         )
     }

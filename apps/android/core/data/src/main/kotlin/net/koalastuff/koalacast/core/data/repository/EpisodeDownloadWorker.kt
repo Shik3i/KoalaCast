@@ -4,8 +4,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.documentfile.provider.DocumentFile
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -13,12 +15,18 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.io.IOException
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
 import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
+import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
 import net.koalastuff.koalacast.core.model.DownloadState
+import net.koalastuff.koalacast.core.model.DownloadStorage
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -33,13 +41,29 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val episodeId = inputData.getString(KEY_EPISODE_ID) ?: return@withContext Result.failure()
         val row = dao.get(episodeId) ?: return@withContext Result.failure()
-        val partial = DownloadRepository.partialFile(applicationContext, episodeId)
-        val completed = DownloadRepository.completedFile(applicationContext, episodeId)
-        val existing = partial.length()
-        setForeground(createForeground(row.title, 0))
-        update(episodeId, DownloadState.DOWNLOADING, existing, row.totalBytes)
+        val concurrency = inputData.getInt(KEY_CONCURRENCY, 2).coerceIn(1, 4)
+        return@withContext DownloadWorkerLimiter.withLimit(concurrency) {
+            performDownload(episodeId, row)
+        }
+    }
 
-        try {
+    private suspend fun performDownload(
+        episodeId: String,
+        row: EpisodeDownloadEntity,
+    ): Result {
+        val storage = DownloadStorage.fromId(inputData.getString(KEY_STORAGE))
+        val treeUri = inputData.getString(KEY_TREE_URI).orEmpty()
+        val budgetBytes = inputData.getLong(
+            KEY_BUDGET_BYTES,
+            DownloadRepository.DEFAULT_BUDGET_BYTES,
+        )
+        val target = createTarget(episodeId, storage, treeUri)
+            ?: return permanentFailure(episodeId, row.totalBytes, "Storage folder unavailable")
+        val existing = target.length()
+        setForeground(createForeground(row.title, 0))
+        update(episodeId, DownloadState.DOWNLOADING, existing, row.totalBytes, target.location)
+
+        return try {
             val request = Request.Builder()
                 .url(row.enclosureUrl)
                 .apply { if (existing > 0) header("Range", "bytes=$existing-") }
@@ -54,44 +78,48 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                 }
                 val append = existing > 0 && response.code == 206
                 val start = if (append) existing else 0L
-                val total = response.body.contentLength()
-                    .takeIf { it >= 0 }
-                    ?.plus(start)
-                    ?: row.totalBytes
-                if (!append && partial.exists()) partial.delete()
+                val responseLength = response.body.contentLength().takeIf { it >= 0 }
+                val total = responseLength?.plus(start) ?: 0L
+                if (!append) target.truncate()
 
                 var downloaded = start
-                RandomAccessFile(partial, "rw").use { output ->
-                    output.seek(start)
+                target.open(start).use { output ->
                     response.body.byteStream().use { input ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         var lastUpdate = 0L
                         while (true) {
-                            if (isStopped) return@withContext Result.retry()
+                            if (isStopped) return Result.retry()
                             val read = input.read(buffer)
                             if (read < 0) break
                             output.write(buffer, 0, read)
                             downloaded += read
                             if (downloaded - lastUpdate >= UPDATE_BYTES) {
                                 lastUpdate = downloaded
-                                update(episodeId, DownloadState.DOWNLOADING, downloaded, total)
+                                update(
+                                    episodeId,
+                                    DownloadState.DOWNLOADING,
+                                    downloaded,
+                                    total,
+                                    target.location,
+                                )
                                 setForeground(createForeground(row.title, percent(downloaded, total)))
                             }
                         }
                     }
                 }
-                if (total > 0 && downloaded != total) {
+                if (responseLength != null && downloaded != total) {
                     throw IOException("Incomplete response: received $downloaded of $total bytes")
                 }
-                if (completed.exists()) completed.delete()
-                check(partial.renameTo(completed)) { "Could not finalize download" }
+                val completed = target.finalizeDownload()
+                    ?: throw IOException("Could not finalize download")
                 update(
                     episodeId,
                     DownloadState.DONE,
-                    completed.length(),
-                    total.takeIf { it > 0 } ?: completed.length(),
-                    completed.absolutePath,
+                    completed.length,
+                    total.takeIf { it > 0 } ?: completed.length,
+                    completed.location,
                 )
+                enforceBudget(episodeId, budgetBytes)
                 Result.success()
             }
         } catch (error: Exception) {
@@ -100,8 +128,9 @@ class EpisodeDownloadWorker @AssistedInject constructor(
             update(
                 episodeId,
                 if (retry) DownloadState.QUEUED else DownloadState.FAILED,
-                partial.length(),
+                target.length(),
                 row.totalBytes,
+                target.location,
                 error = error.message ?: error::class.java.simpleName,
             )
             if (retry) Result.retry() else Result.failure()
@@ -149,8 +178,68 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     private fun percent(bytes: Long, total: Long) =
         if (total > 0) ((bytes * 100) / total).toInt().coerceIn(0, 100) else 0
 
+    private suspend fun permanentFailure(
+        episodeId: String,
+        total: Long,
+        message: String,
+    ): Result {
+        update(episodeId, DownloadState.FAILED, 0, total, error = message)
+        return Result.failure()
+    }
+
+    private fun createTarget(
+        episodeId: String,
+        storage: DownloadStorage,
+        treeUri: String,
+    ): DownloadTarget? {
+        val key = DownloadRepository.storageKey(episodeId)
+        if (storage == DownloadStorage.SAF) {
+            val tree = treeUri.takeIf(String::isNotBlank)
+                ?.let(Uri::parse)
+                ?.let { DocumentFile.fromTreeUri(applicationContext, it) }
+                ?.takeIf { it.canWrite() }
+                ?: return null
+            val partial = tree.findFile("$key.part")
+                ?: tree.createFile("application/octet-stream", "$key.part")
+                ?: return null
+            return DocumentTarget(applicationContext.contentResolver, tree, partial, "$key.audio")
+        }
+        val directory = if (storage == DownloadStorage.EXTERNAL) {
+            DownloadRepository.externalDownloadDirectory(applicationContext)
+        } else {
+            DownloadRepository.downloadDirectory(applicationContext)
+        }
+        return FileTarget(File(directory, "$key.part"), File(directory, "$key.audio"))
+    }
+
+    private suspend fun enforceBudget(currentEpisodeId: String, budgetBytes: Long) {
+        if (budgetBytes <= 0) return
+        val completed = dao.getAllOldestFirst()
+            .filter { it.state == DownloadState.DONE.name && it.localPath != null }
+        var used = completed.sumOf { it.bytesDownloaded }
+        for (item in completed) {
+            if (used <= budgetBytes) break
+            if (item.episodeId == currentEpisodeId) continue
+            deleteLocation(item.localPath!!)
+            dao.delete(item.episodeId)
+            used -= item.bytesDownloaded
+        }
+    }
+
+    private fun deleteLocation(location: String) {
+        if (location.startsWith("content://")) {
+            runCatching { applicationContext.contentResolver.delete(Uri.parse(location), null, null) }
+        } else {
+            File(location).delete()
+        }
+    }
+
     companion object {
         const val KEY_EPISODE_ID = "episode_id"
+        const val KEY_STORAGE = "storage"
+        const val KEY_TREE_URI = "tree_uri"
+        const val KEY_BUDGET_BYTES = "budget_bytes"
+        const val KEY_CONCURRENCY = "concurrency"
         private const val CHANNEL_ID = "episode_downloads"
         private const val NOTIFICATION_ID_BASE = 20_000
         private const val UPDATE_BYTES = 256L * 1024L
@@ -158,4 +247,88 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     }
 }
 
+private object DownloadWorkerLimiter {
+    private const val PERMITS = 12
+    private val semaphore = Semaphore(PERMITS)
+
+    suspend fun <T> withLimit(concurrency: Int, block: suspend () -> T): T {
+        val needed = PERMITS / concurrency.coerceIn(1, 4)
+        repeat(needed) { semaphore.acquire() }
+        return try {
+            block()
+        } finally {
+            repeat(needed) { semaphore.release() }
+        }
+    }
+}
+
 private class PermanentDownloadException(message: String) : Exception(message)
+
+private data class CompletedTarget(val location: String, val length: Long)
+
+private interface DownloadTarget {
+    val location: String
+    fun length(): Long
+    fun truncate()
+    fun open(position: Long): OutputStream
+    fun finalizeDownload(): CompletedTarget?
+}
+
+private class FileTarget(
+    private val partial: File,
+    private val completed: File,
+) : DownloadTarget {
+    override val location: String get() = partial.absolutePath
+    override fun length(): Long = partial.length()
+    override fun truncate() {
+        RandomAccessFile(partial, "rw").use { it.setLength(0) }
+    }
+    override fun open(position: Long): OutputStream =
+        object : OutputStream() {
+            private val file = RandomAccessFile(partial, "rw").apply { seek(position) }
+            override fun write(value: Int) = file.write(value)
+            override fun write(buffer: ByteArray, offset: Int, length: Int) =
+                file.write(buffer, offset, length)
+            override fun close() = file.close()
+        }
+    override fun finalizeDownload(): CompletedTarget? {
+        if (completed.exists() && !completed.delete()) return null
+        if (!partial.renameTo(completed)) return null
+        return CompletedTarget(completed.absolutePath, completed.length())
+    }
+}
+
+private class DocumentTarget(
+    private val resolver: android.content.ContentResolver,
+    private val directory: DocumentFile,
+    private var partial: DocumentFile,
+    private val completedName: String,
+) : DownloadTarget {
+    override val location: String get() = partial.uri.toString()
+    override fun length(): Long = partial.length()
+    override fun truncate() {
+        // "rwt" truncates the existing document without replacing its stable URI.
+        resolver.openOutputStream(partial.uri, "rwt")?.close()
+            ?: throw IOException("Could not truncate storage document")
+    }
+    override fun open(position: Long): OutputStream {
+        val descriptor = resolver.openFileDescriptor(partial.uri, "rw")
+            ?: throw IOException("Could not open storage document")
+        val output = FileOutputStream(descriptor.fileDescriptor)
+        output.channel.position(position)
+        return object : OutputStream() {
+            override fun write(value: Int) = output.write(value)
+            override fun write(buffer: ByteArray, offset: Int, length: Int) =
+                output.write(buffer, offset, length)
+            override fun close() {
+                output.close()
+                descriptor.close()
+            }
+        }
+    }
+    override fun finalizeDownload(): CompletedTarget? {
+        directory.findFile(completedName)?.delete()
+        if (!partial.renameTo(completedName)) return null
+        return CompletedTarget(partial.uri.toString(), partial.length())
+    }
+}

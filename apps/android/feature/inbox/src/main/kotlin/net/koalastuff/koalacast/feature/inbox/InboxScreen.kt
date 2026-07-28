@@ -2,6 +2,7 @@ package net.koalastuff.koalacast.feature.inbox
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
@@ -37,6 +39,7 @@ import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
+import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
@@ -63,6 +66,12 @@ fun InboxScreen(
         onRefresh = viewModel::refresh,
         onToggleSettings = viewModel::toggleSettings,
         onSetUnplayedOnly = viewModel::setUnplayedOnly,
+        onSetDownloadedOnly = viewModel::setDownloadedOnly,
+        onSetPodcastFilter = viewModel::setPodcastFilter,
+        onSetDateRange = viewModel::setDateRange,
+        onSetMood = viewModel::setMood,
+        onSetSessionMinutes = viewModel::setSessionMinutes,
+        onQueueSession = viewModel::queueSession,
         onSetMode = viewModel::setInboxMode,
         onOpenEpisode = onOpenEpisode,
         onOpenDiscover = onOpenDiscover,
@@ -82,6 +91,12 @@ internal fun InboxContent(
     onRefresh: () -> Unit,
     onToggleSettings: () -> Unit,
     onSetUnplayedOnly: (Boolean) -> Unit,
+    onSetDownloadedOnly: (Boolean) -> Unit,
+    onSetPodcastFilter: (String?) -> Unit,
+    onSetDateRange: (InboxDateRange) -> Unit,
+    onSetMood: (InboxMood) -> Unit,
+    onSetSessionMinutes: (Int?) -> Unit,
+    onQueueSession: () -> Unit,
     onSetMode: (String, InboxMode) -> Unit,
     onOpenEpisode: (String) -> Unit,
     onOpenDiscover: () -> Unit,
@@ -155,6 +170,15 @@ internal fun InboxContent(
                             ),
                         )
                     }
+                    InboxFilters(
+                        state = state,
+                        onSetDownloadedOnly = onSetDownloadedOnly,
+                        onSetPodcastFilter = onSetPodcastFilter,
+                        onSetDateRange = onSetDateRange,
+                        onSetMood = onSetMood,
+                        onSetSessionMinutes = onSetSessionMinutes,
+                        onQueueSession = onQueueSession,
+                    )
                 }
             }
         }
@@ -223,6 +247,116 @@ internal fun InboxContent(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun InboxFilters(
+    state: InboxUiState,
+    onSetDownloadedOnly: (Boolean) -> Unit,
+    onSetPodcastFilter: (String?) -> Unit,
+    onSetDateRange: (InboxDateRange) -> Unit,
+    onSetMood: (InboxMood) -> Unit,
+    onSetSessionMinutes: (Int?) -> Unit,
+    onQueueSession: () -> Unit,
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+    ) {
+        KoalaChip(
+            label = stringResource(R.string.inbox_downloaded),
+            selected = state.downloadedOnly,
+            onClick = { onSetDownloadedOnly(!state.downloadedOnly) },
+        )
+        Column {
+            KoalaChip(
+                label = state.subscriptions.firstOrNull {
+                    it.podcastId == state.selectedPodcastId
+                }?.title ?: stringResource(R.string.inbox_all_shows),
+                selected = state.selectedPodcastId != null,
+                onClick = { showMenu = true },
+            )
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.inbox_all_shows)) },
+                    onClick = {
+                        showMenu = false
+                        onSetPodcastFilter(null)
+                    },
+                )
+                state.subscriptions.forEach { subscription ->
+                    DropdownMenuItem(
+                        text = { Text(subscription.title, maxLines = 1) },
+                        onClick = {
+                            showMenu = false
+                            onSetPodcastFilter(subscription.podcastId)
+                        },
+                    )
+                }
+            }
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+    ) {
+        InboxDateRange.entries.forEach { range ->
+            KoalaChip(
+                label = stringResource(
+                    when (range) {
+                        InboxDateRange.ALL -> R.string.inbox_date_all
+                        InboxDateRange.TODAY -> R.string.inbox_date_today
+                        InboxDateRange.WEEK -> R.string.inbox_date_week
+                        InboxDateRange.MONTH -> R.string.inbox_date_month
+                    },
+                ),
+                selected = state.dateRange == range,
+                onClick = { onSetDateRange(range) },
+            )
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+    ) {
+        InboxMood.entries.forEach { mood ->
+            KoalaChip(
+                label = stringResource(
+                    when (mood) {
+                        InboxMood.ALL -> R.string.inbox_mood_all
+                        InboxMood.FOCUS -> R.string.inbox_mood_focus
+                        InboxMood.LEARN -> R.string.inbox_mood_learn
+                        InboxMood.UNWIND -> R.string.inbox_mood_unwind
+                        InboxMood.ENERGIZE -> R.string.inbox_mood_energize
+                    },
+                ),
+                selected = state.mood == mood,
+                onClick = { onSetMood(mood) },
+            )
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(null, 25, 40, 60).forEach { minutes ->
+            KoalaChip(
+                label = minutes?.let { stringResource(R.string.inbox_minutes, it) }
+                    ?: stringResource(R.string.inbox_session_off),
+                selected = state.sessionMinutes == minutes,
+                onClick = { onSetSessionMinutes(minutes) },
+            )
+        }
+        if (state.sessionMinutes != null) {
+            OutlineButton(
+                text = stringResource(R.string.inbox_queue_session),
+                onClick = onQueueSession,
+                enabled = state.feed.isNotEmpty(),
+            )
         }
     }
 }

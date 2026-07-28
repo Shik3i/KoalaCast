@@ -51,11 +51,49 @@ class InboxFeedTest {
         )
     }
 
+    @Test
+    fun `download podcast and date filters compose`() {
+        val now = 10L * 24 * 60 * 60 * 1_000
+        val feed = buildInboxFeed(
+            episodes = listOf(
+                item("wanted", "a", now - 1_000),
+                item("other-show", "b", now - 1_000),
+                item("too-old", "a", now - 9L * 24 * 60 * 60 * 1_000),
+            ),
+            completedIds = emptySet(),
+            filter = InboxFilter(
+                unplayedOnly = false,
+                downloadedOnly = true,
+                podcastId = "a",
+                dateRange = InboxDateRange.WEEK,
+                nowMs = now,
+            ),
+            downloadedIds = setOf("wanted", "too-old"),
+        )
+
+        assertEquals(listOf("wanted"), feed.map { it.episode.id })
+    }
+
+    @Test
+    fun `session plan stays inside budget when episodes fit`() {
+        val feed = listOf(
+            item("twenty", "a", 300, durationMs = 20 * 60_000L),
+            item("fifteen", "b", 200, durationMs = 15 * 60_000L),
+            item("ten", "c", 100, durationMs = 10 * 60_000L),
+        )
+
+        assertEquals(
+            listOf("twenty", "ten"),
+            buildSessionPlan(feed, 30 * 60_000L).map { it.episode.id },
+        )
+    }
+
     private fun item(
         id: String,
         podcastId: String,
         publishedAt: Long,
         mode: InboxMode = InboxMode.ALL,
+        durationMs: Long = 1_000,
     ) = InboxEpisode(
         episode = Episode(
             id = id,
@@ -66,7 +104,7 @@ class InboxFeedTest {
             contentEncoded = "",
             pubDateMs = publishedAt,
             hasPubDate = true,
-            durationMs = 1_000,
+            durationMs = durationMs,
             enclosureUrl = "https://example.com/$id.mp3",
             enclosureType = "audio/mpeg",
             enclosureLengthBytes = 1,

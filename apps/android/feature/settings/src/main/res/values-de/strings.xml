@@ -33,6 +33,14 @@
     <string name="settings_downloads_title">Downloads</string>
     <string name="settings_download_wifi">Nur über WLAN laden</string>
     <string name="settings_download_wifi_note">Ausschalten, um Folgen auch über mobile Daten zu laden.</string>
+    <string name="settings_download_concurrency">Parallele Downloads</string>
+    <string name="settings_download_budget">Speicherbudget</string>
+    <string name="settings_download_budget_unlimited">Unbegrenzt</string>
+    <string name="settings_download_budget_mb">%1$d MB</string>
+    <string name="settings_download_storage">Speicherort</string>
+    <string name="settings_download_storage_internal">Intern</string>
+    <string name="settings_download_storage_external">App-Speicher / SD-Karte</string>
+    <string name="settings_download_storage_folder">Ordner wählen …</string>
     <string name="settings_palette_title">Farbpalette</string>
     <string name="settings_palette_note">Neun Paletten, dieselben neun wie in der Web-App. Jede gibt es hell und dunkel.</string>
     <string name="settings_palette_eucalyptus">Eukalyptus</string>

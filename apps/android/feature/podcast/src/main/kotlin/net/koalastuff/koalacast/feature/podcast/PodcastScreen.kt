@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.ui.component.CoverArt
+import net.koalastuff.koalacast.core.ui.component.ArtworkAccent
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
 import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.AccentButton
@@ -80,8 +81,9 @@ fun PodcastScreen(
         snapshotFlow { shouldLoadMore }.collect { if (it) viewModel.loadMore() }
     }
 
-    PodcastContent(
-        state = state,
+    ArtworkAccent(state.podcast?.artworkUrl) {
+        PodcastContent(
+            state = state,
         listState = listState,
         onBack = onBack,
         onOpenEpisode = onOpenEpisode,
@@ -99,8 +101,9 @@ fun PodcastScreen(
         onMarkAllPlayed = { viewModel.markAllPlayed(true) },
         onMarkAllUnplayed = { viewModel.markAllPlayed(false) },
         modifier = modifier,
-        contentPadding = contentPadding,
-    )
+            contentPadding = contentPadding,
+        )
+    }
 }
 
 @Composable

@@ -2,6 +2,9 @@
 
 package net.koalastuff.koalacast.feature.settings
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.ui.component.AccentButton
@@ -63,6 +68,18 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val storageTreeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+            viewModel.setDownloadStorage(DownloadStorage.SAF, uri.toString())
+        }
+    }
 
     SettingsContent(
         state = state,
@@ -79,6 +96,15 @@ fun SettingsScreen(
         onVolumeBoostChange = viewModel::setVolumeBoost,
         onAutoDownloadCountChange = viewModel::setAutoDownloadCount,
         onRetentionChange = viewModel::setDownloadRetention,
+        onDownloadConcurrencyChange = viewModel::setDownloadConcurrency,
+        onDownloadBudgetMbChange = viewModel::setDownloadBudgetMb,
+        onDownloadStorageChange = { storage ->
+            if (storage == DownloadStorage.SAF) {
+                storageTreeLauncher.launch(null)
+            } else {
+                viewModel.setDownloadStorage(storage)
+            }
+        },
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -100,6 +126,9 @@ internal fun SettingsContent(
     onVolumeBoostChange: (Boolean) -> Unit,
     onAutoDownloadCountChange: (Int) -> Unit,
     onRetentionChange: (DownloadRetention) -> Unit,
+    onDownloadConcurrencyChange: (Int) -> Unit,
+    onDownloadBudgetMbChange: (Int) -> Unit,
+    onDownloadStorageChange: (DownloadStorage) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -301,6 +330,57 @@ internal fun SettingsContent(
                     onCheckedChange = onDownloadWifiOnlyChange,
                 )
             }
+            Text(
+                text = stringResource(R.string.settings_download_concurrency),
+                style = KoalaTheme.type.label,
+                color = colors.ink2,
+            )
+            val concurrency = listOf(1, 2, 3, 4)
+            SegmentedControl(
+                options = concurrency.map(Int::toString),
+                selectedIndex = concurrency.indexOf(prefs?.downloadConcurrency ?: 2),
+                onSelect = { onDownloadConcurrencyChange(concurrency[it]) },
+            )
+            Text(
+                text = stringResource(R.string.settings_download_budget),
+                style = KoalaTheme.type.label,
+                color = colors.ink2,
+            )
+            val budgets = listOf(512, 1_024, 2_048, 5_120, 0)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                budgets.forEach { budgetMb ->
+                    KoalaChip(
+                        label = if (budgetMb == 0) {
+                            stringResource(R.string.settings_download_budget_unlimited)
+                        } else {
+                            stringResource(R.string.settings_download_budget_mb, budgetMb)
+                        },
+                        selected = prefs?.downloadBudgetBytes == budgetMb.toLong() * 1024 * 1024,
+                        onClick = { onDownloadBudgetMbChange(budgetMb) },
+                    )
+                }
+            }
+            Text(
+                text = stringResource(R.string.settings_download_storage),
+                style = KoalaTheme.type.label,
+                color = colors.ink2,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                DownloadStorage.entries.forEach { storage ->
+                    KoalaChip(
+                        label = stringResource(storage.labelRes()),
+                        selected = prefs?.downloadStorage == storage,
+                        onClick = { onDownloadStorageChange(storage) },
+                    )
+                }
+            }
+            if (prefs?.downloadStorage == DownloadStorage.SAF && prefs.downloadTreeUri.isNotBlank()) {
+                MonoText(
+                    text = prefs.downloadTreeUri,
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                )
+            }
         }
 
         Hairline()
@@ -469,6 +549,13 @@ private fun DownloadRetention.labelRes(): Int = when (this) {
     DownloadRetention.AFTER_7_DAYS -> R.string.settings_retention_7
     DownloadRetention.AFTER_14_DAYS -> R.string.settings_retention_14
     DownloadRetention.AFTER_30_DAYS -> R.string.settings_retention_30
+}
+
+@StringRes
+private fun DownloadStorage.labelRes(): Int = when (this) {
+    DownloadStorage.INTERNAL -> R.string.settings_download_storage_internal
+    DownloadStorage.EXTERNAL -> R.string.settings_download_storage_external
+    DownloadStorage.SAF -> R.string.settings_download_storage_folder
 }
 
 @StringRes

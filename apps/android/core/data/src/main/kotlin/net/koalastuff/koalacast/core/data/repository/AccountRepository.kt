@@ -2,8 +2,13 @@ package net.koalastuff.koalacast.core.data.repository
 
 import android.os.Build
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
 import net.koalastuff.koalacast.core.data.util.OpmlParser
@@ -18,8 +23,6 @@ import net.koalastuff.koalacast.core.network.dto.DeviceLoginRequest
 import net.koalastuff.koalacast.core.network.dto.GlobalStatsPreference
 import net.koalastuff.koalacast.core.network.dto.RecoveryRequest
 import net.koalastuff.koalacast.core.network.dto.RegisterRequest
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +31,7 @@ class AccountRepository @Inject constructor(
     private val api: KoalaCastApi,
     private val store: SecureAccountStore,
     private val library: LibraryRepository,
+    private val podcasts: PodcastRepository,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) {
     val account: Flow<Account?> = store.account
@@ -153,17 +157,14 @@ class AccountRepository @Inject constructor(
                 DataError.Malformed("OPML: no feed outlines found"),
             )
         }
-        importResolvedOpml(
-            xml = buildOpml(parsedFeeds.map { it.feedUrl to it.title }),
-            totalFound = parsedFeeds.size,
-        )
+        resolveImports(parsedFeeds.map { it.feedUrl to it.title })
     }
 
     suspend fun resolvePendingSubscriptions(): DataResult<OpmlReport?> = withContext(dispatcher) {
         val pending = library.subscriptionsSnapshot()
             .filter { it.podcastId == it.feedUrl }
         if (pending.isEmpty()) return@withContext DataResult.Success(null)
-        when (val result = importResolvedOpml(buildOpml(pending.map { it.feedUrl to it.title }), pending.size)) {
+        when (val result = resolveImports(pending.map { it.feedUrl to it.title })) {
             is DataResult.Success -> DataResult.Success(result.data)
             is DataResult.Failure -> result
         }
@@ -205,43 +206,45 @@ class AccountRepository @Inject constructor(
         }
     }
 
-    private suspend fun importResolvedOpml(xml: String, totalFound: Int): DataResult<OpmlReport> {
-        val existingByFeed = library.subscriptionsSnapshot().associateBy { it.feedUrl }
-        val body = xml.toRequestBody("application/xml".toMediaType())
-        return when (val result = apiCall { api.importOpml(body) }) {
-            is DataResult.Failure -> result
-            is DataResult.Success -> {
-                library.subscribeResolvedImports(result.data.podcasts)
-                val imported = result.data.podcasts.count { podcast ->
-                    (
-                        existingByFeed[podcast.sourceUrl.ifBlank { podcast.feedUrl }]
-                            ?: existingByFeed[podcast.feedUrl]
-                    )
-                        ?.let { it.podcastId != it.feedUrl } != true
+    /**
+     * OPML is local-first: rows appear immediately, then each feed is resolved through
+     * the normal feed endpoint. This avoids one multi-minute server request and lets
+     * Room replace provisional feed-URL ids with canonical ids, artwork and titles as
+     * soon as each response arrives. Inbox observers then refresh from canonical ids.
+     */
+    private suspend fun resolveImports(
+        feeds: List<Pair<String, String>>,
+    ): DataResult<OpmlReport> = coroutineScope {
+        val existingFeeds = library.subscriptionsSnapshot().mapTo(mutableSetOf()) { it.feedUrl }
+        library.subscribeImported(feeds)
+        val semaphore = Semaphore(OPML_RESOLVE_CONCURRENCY)
+        val results = feeds.map { (feedUrl, _) ->
+            async {
+                semaphore.withPermit {
+                    when (val result = podcasts.resolveFeed(feedUrl)) {
+                        is DataResult.Success -> {
+                            library.canonicalizeImportedSubscription(feedUrl, result.data)
+                            null
+                        }
+                        is DataResult.Failure -> "$feedUrl: ${result.error}"
+                    }
                 }
-                DataResult.Success(
-                    OpmlReport(
-                        totalFound = totalFound,
-                        imported = imported,
-                        skipped = result.data.skipped + result.data.podcasts.size - imported,
-                        failures = result.data.failures.map { "${it.url}: ${it.reason}" },
-                    ),
-                )
             }
-        }
+        }.awaitAll()
+        val failures = results.filterNotNull()
+        DataResult.Success(
+            OpmlReport(
+                totalFound = feeds.size,
+                imported = (
+                    feeds.count { (url, _) -> url !in existingFeeds } - failures.size
+                ).coerceAtLeast(0),
+                skipped = feeds.count { (url, _) -> url in existingFeeds },
+                failures = failures,
+            ),
+        )
     }
 
-    private fun buildOpml(feeds: List<Pair<String, String>>): String {
-        val outlines = feeds.joinToString("\n") { (feedUrl, title) ->
-            val escapedTitle = escapeXml(title)
-            """    <outline type="rss" text="$escapedTitle" title="$escapedTitle" xmlUrl="${escapeXml(feedUrl)}" />"""
-        }
-        return """<?xml version="1.0" encoding="UTF-8"?>
-            |<opml version="2.0">
-            |  <body>
-            |$outlines
-            |  </body>
-            |</opml>
-            |""".trimMargin()
+    private companion object {
+        const val OPML_RESOLVE_CONCURRENCY = 6
     }
 }

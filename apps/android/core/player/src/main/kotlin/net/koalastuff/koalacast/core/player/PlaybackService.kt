@@ -382,6 +382,7 @@ class PlaybackService : MediaLibraryService() {
     private inner class PlayerListener(private val player: ExoPlayer) : Player.Listener {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            publishWidgetState(player)
             if (isPlaying) {
                 // The session id is unset until the audio track is created, so the
                 // preference collector above may have run too early to attach.
@@ -440,6 +441,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            publishWidgetState(player)
             // The player's current item is already the new one here. Persisting
             // through persistNow() would write the old segment against the new
             // episode, so close only the recorder and start the new segment.
@@ -461,6 +463,20 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
         }
+    }
+
+    private fun publishWidgetState(player: Player) {
+        val track = TrackMediaItem.toTrack(player.currentMediaItem)
+        getSharedPreferences(WIDGET_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putString(WIDGET_TITLE, track?.title)
+            .putString(WIDGET_PODCAST, track?.podcastTitle)
+            .putBoolean(WIDGET_PLAYING, player.isPlaying)
+            .apply()
+        sendBroadcast(
+            Intent(WIDGET_STATE_CHANGED)
+                .setPackage(packageName),
+        )
     }
 
     private fun startPositionTicker() {
@@ -559,7 +575,10 @@ class PlaybackService : MediaLibraryService() {
         val speed = settings.speed ?: preferences.preferences.first().playbackSpeed
         val artwork = artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX)
         val localMediaUri = downloads.completedPath(track.episodeId)
-            ?.let { android.net.Uri.fromFile(java.io.File(it)).toString() }
+            ?.let {
+                if (it.startsWith("content://")) it
+                else android.net.Uri.fromFile(java.io.File(it)).toString()
+            }
 
         player.setMediaItem(
             TrackMediaItem.from(track, artwork, localMediaUri),
@@ -581,6 +600,11 @@ class PlaybackService : MediaLibraryService() {
         const val CONTINUE_ID = "continue"
         const val DOWNLOADS_ID = "downloads"
         const val ACTION_CYCLE_SPEED = "net.koalastuff.koalacast.CYCLE_SPEED"
+        const val WIDGET_STATE_CHANGED = "net.koalastuff.koalacast.WIDGET_STATE_CHANGED"
+        const val WIDGET_PREFERENCES = "playback_widget"
+        const val WIDGET_TITLE = "title"
+        const val WIDGET_PODCAST = "podcast"
+        const val WIDGET_PLAYING = "playing"
         val SPEED_STEPS = floatArrayOf(1f, 1.25f, 1.5f, 1.75f, 2f, 0.75f).toList()
         /** Below unity headroom, so a loud episode cannot be pushed into clipping. */
         /** +10 dB, the usual lift for speech that was mastered too quietly. */

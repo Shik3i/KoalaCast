@@ -161,10 +161,17 @@ class EpisodeViewModel @Inject constructor(
         val track = track() ?: return
         viewModelScope.launch {
             when (_state.value.downloadState) {
-                null, DownloadState.PAUSED, DownloadState.FAILED -> downloads.enqueue(
-                    track,
-                    wifiOnly = preferences.preferences.first().downloadWifiOnly,
-                )
+                null, DownloadState.PAUSED, DownloadState.FAILED -> {
+                    val prefs = preferences.preferences.first()
+                    downloads.enqueue(
+                        track,
+                        wifiOnly = prefs.downloadWifiOnly,
+                        concurrency = prefs.downloadConcurrency,
+                        storage = prefs.downloadStorage,
+                        treeUri = prefs.downloadTreeUri,
+                        budgetBytes = prefs.downloadBudgetBytes,
+                    )
+                }
                 DownloadState.QUEUED, DownloadState.DOWNLOADING -> downloads.pause(track.episodeId)
                 DownloadState.DONE -> downloads.remove(track.episodeId)
             }

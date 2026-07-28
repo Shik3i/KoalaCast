@@ -35,12 +35,13 @@ interface SubscriptionDao {
     @Query("DELETE FROM subscriptions WHERE podcastId = :podcastId")
     suspend fun delete(podcastId: String)
 
+    @Query("DELETE FROM subscriptions WHERE feedUrl = :feedUrl AND podcastId != :canonicalPodcastId")
+    suspend fun deleteAliases(feedUrl: String, canonicalPodcastId: String)
+
     @Transaction
     suspend fun upsertResolvedImport(sourceFeedUrl: String, subscription: SubscriptionEntity) {
         val existing = getByFeedUrl(sourceFeedUrl)
-        if (existing != null && existing.podcastId != subscription.podcastId) {
-            delete(existing.podcastId)
-        }
+        deleteAliases(sourceFeedUrl, subscription.podcastId)
         upsert(
             subscription.copy(
                 addedAt = existing?.addedAt ?: subscription.addedAt,
@@ -245,6 +246,9 @@ interface EpisodeDownloadDao {
 
     @Query("SELECT * FROM episode_downloads WHERE episodeId = :episodeId")
     suspend fun get(episodeId: String): EpisodeDownloadEntity?
+
+    @Query("SELECT * FROM episode_downloads ORDER BY updatedAt ASC")
+    suspend fun getAllOldestFirst(): List<EpisodeDownloadEntity>
 
     @Upsert
     suspend fun upsert(download: EpisodeDownloadEntity)

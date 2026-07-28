@@ -14,6 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
 import net.koalastuff.koalacast.core.data.util.Clock
@@ -32,7 +33,14 @@ class DownloadRepository @Inject constructor(
     fun download(episodeId: String): Flow<EpisodeDownload?> =
         dao.observe(episodeId).map { it?.toModel() }
 
-    suspend fun enqueue(track: Track, wifiOnly: Boolean = true) {
+    suspend fun enqueue(
+        track: Track,
+        wifiOnly: Boolean = true,
+        concurrency: Int = 2,
+        storage: DownloadStorage = DownloadStorage.INTERNAL,
+        treeUri: String = "",
+        budgetBytes: Long = DEFAULT_BUDGET_BYTES,
+    ) {
         val now = clock.nowMs()
         val old = dao.get(track.episodeId)
         dao.upsert(
@@ -58,8 +66,17 @@ class DownloadRepository @Inject constructor(
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
         val request = OneTimeWorkRequestBuilder<EpisodeDownloadWorker>()
-            .setInputData(workDataOf(EpisodeDownloadWorker.KEY_EPISODE_ID to track.episodeId))
+            .setInputData(
+                workDataOf(
+                    EpisodeDownloadWorker.KEY_EPISODE_ID to track.episodeId,
+                    EpisodeDownloadWorker.KEY_STORAGE to storage.id,
+                    EpisodeDownloadWorker.KEY_TREE_URI to treeUri,
+                    EpisodeDownloadWorker.KEY_BUDGET_BYTES to budgetBytes,
+                    EpisodeDownloadWorker.KEY_CONCURRENCY to concurrency.coerceIn(1, 4),
+                ),
+            )
             .setConstraints(constraints)
+            .addTag(workName(track.episodeId))
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             workName(track.episodeId),
@@ -69,7 +86,7 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun pause(episodeId: String) {
-        WorkManager.getInstance(context).cancelUniqueWork(workName(episodeId))
+        WorkManager.getInstance(context).cancelAllWorkByTag(workName(episodeId))
         val row = dao.get(episodeId) ?: return
         dao.updateProgress(
             episodeId,
@@ -83,8 +100,14 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun remove(episodeId: String) {
-        WorkManager.getInstance(context).cancelUniqueWork(workName(episodeId))
-        dao.get(episodeId)?.localPath?.let(::File)?.takeIf(File::exists)?.delete()
+        WorkManager.getInstance(context).cancelAllWorkByTag(workName(episodeId))
+        dao.get(episodeId)?.localPath?.let { location ->
+            if (location.startsWith("content://")) {
+                context.contentResolver.delete(android.net.Uri.parse(location), null, null)
+            } else {
+                File(location).takeIf(File::exists)?.delete()
+            }
+        }
         partialFile(context, episodeId).takeIf(File::exists)?.delete()
         dao.delete(episodeId)
     }
@@ -93,7 +116,37 @@ class DownloadRepository @Inject constructor(
         dao.get(episodeId)
             ?.takeIf { it.state == DownloadState.DONE.name }
             ?.localPath
-            ?.takeIf { File(it).exists() }
+            ?.takeIf {
+                if (it.startsWith("content://")) {
+                    runCatching {
+                        context.contentResolver.openFileDescriptor(android.net.Uri.parse(it), "r")
+                            ?.use { descriptor -> descriptor.statSize >= 0 } == true
+                    }.getOrDefault(false)
+                } else {
+                    File(it).exists()
+                }
+            }
+
+    suspend fun cleanupToBudget(budgetBytes: Long) {
+        if (budgetBytes <= 0) return
+        val completed = dao.getAllOldestFirst()
+            .filter { it.state == DownloadState.DONE.name && it.localPath != null }
+        var used = completed.sumOf { it.bytesDownloaded }
+        for (item in completed) {
+            if (used <= budgetBytes) break
+            item.localPath?.let { location ->
+                if (location.startsWith("content://")) {
+                    runCatching {
+                        context.contentResolver.delete(android.net.Uri.parse(location), null, null)
+                    }
+                } else {
+                    File(location).delete()
+                }
+            }
+            dao.delete(item.episodeId)
+            used -= item.bytesDownloaded
+        }
+    }
 
     private fun EpisodeDownloadEntity.toModel() = EpisodeDownload(
         episodeId = episodeId,
@@ -129,5 +182,8 @@ class DownloadRepository @Inject constructor(
             File(downloadDirectory(context), "${storageKey(episodeId)}.part")
         internal fun completedFile(context: Context, episodeId: String) =
             File(downloadDirectory(context), "${storageKey(episodeId)}.audio")
+        internal fun externalDownloadDirectory(context: Context) =
+            File(context.getExternalFilesDir(null) ?: context.filesDir, "episodes").apply { mkdirs() }
+        const val DEFAULT_BUDGET_BYTES = 2L * 1024 * 1024 * 1024
     }
 }

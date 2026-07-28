@@ -37,4 +37,23 @@ data class UserPreferences(
     val autoDownloadCount: Int,
     /** When automatically downloaded episodes may be removed again. */
     val downloadRetention: DownloadRetention,
+    /** Number of parallel download lanes. Each lane remains strictly ordered. */
+    val downloadConcurrency: Int,
+    /** Hard budget for completed episode files; zero means unlimited. */
+    val downloadBudgetBytes: Long,
+    /** App-private internal/external storage or a persisted Storage Access Framework tree. */
+    val downloadStorage: DownloadStorage,
+    val downloadTreeUri: String,
 )
+
+enum class DownloadStorage(val id: String) {
+    INTERNAL("internal"),
+    EXTERNAL("external"),
+    SAF("saf"),
+    ;
+
+    companion object {
+        fun fromId(value: String?): DownloadStorage =
+            entries.firstOrNull { it.id == value } ?: INTERNAL
+    }
+}

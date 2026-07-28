@@ -90,6 +90,10 @@ class AutoDownloadWorker @AssistedInject constructor(
                                     downloads.enqueue(
                                         episode.toTrack(subscription.title, subscription.artworkUrl),
                                         wifiOnly = prefs.downloadWifiOnly,
+                                        concurrency = prefs.downloadConcurrency,
+                                        storage = prefs.downloadStorage,
+                                        treeUri = prefs.downloadTreeUri,
+                                        budgetBytes = prefs.downloadBudgetBytes,
                                     )
                                 }
                                 false

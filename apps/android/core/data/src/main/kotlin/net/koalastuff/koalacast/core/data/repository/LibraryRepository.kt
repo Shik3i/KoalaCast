@@ -76,17 +76,19 @@ class LibraryRepository @Inject constructor(
     suspend fun subscribeImported(feeds: List<Pair<String, String>>) {
         if (feeds.isEmpty()) return
         val now = clock.nowMs()
-        subscriptions.upsertAll(
-            feeds.mapIndexed { index, (feedUrl, title) ->
-                SubscriptionEntity(
-                    podcastId = feedUrl,
-                    feedUrl = feedUrl,
-                    title = title.ifBlank { "Podcast" },
-                    artworkUrl = "",
-                    addedAt = now + index,
+        feeds.forEachIndexed { index, (feedUrl, title) ->
+            if (subscriptions.getByFeedUrl(feedUrl) == null) {
+                subscriptions.upsert(
+                    SubscriptionEntity(
+                        podcastId = feedUrl,
+                        feedUrl = feedUrl,
+                        title = title.ifBlank { "Podcast" },
+                        artworkUrl = "",
+                        addedAt = now + index,
+                    ),
                 )
-            },
-        )
+            }
+        }
         tombstones.deleteAll(
             feeds.map { (feedUrl, _) ->
                 TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, feedUrl)

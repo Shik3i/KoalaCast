@@ -33,6 +33,14 @@
     <string name="settings_downloads_title">Downloads</string>
     <string name="settings_download_wifi">Download on Wi-Fi only</string>
     <string name="settings_download_wifi_note">Disable to allow episode downloads over metered mobile data.</string>
+    <string name="settings_download_concurrency">Parallel downloads</string>
+    <string name="settings_download_budget">Storage budget</string>
+    <string name="settings_download_budget_unlimited">Unlimited</string>
+    <string name="settings_download_budget_mb">%1$d MB</string>
+    <string name="settings_download_storage">Storage location</string>
+    <string name="settings_download_storage_internal">Internal</string>
+    <string name="settings_download_storage_external">App storage / SD card</string>
+    <string name="settings_download_storage_folder">Choose folder…</string>
     <string name="settings_palette_title">Color palette</string>
     <string name="settings_palette_note">Nine palettes, the same nine the web app has. Each one has a light and a dark version.</string>
     <string name="settings_palette_eucalyptus">Eucalyptus</string>

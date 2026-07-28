@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
@@ -81,6 +82,21 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.DOWNLOAD_RETENTION] = retention.id }
     }
 
+    suspend fun setDownloadConcurrency(value: Int) {
+        dataStore.edit { it[Keys.DOWNLOAD_CONCURRENCY] = value.coerceIn(1, 4) }
+    }
+
+    suspend fun setDownloadBudgetBytes(value: Long) {
+        dataStore.edit { it[Keys.DOWNLOAD_BUDGET_MB] = (value / MB).toInt().coerceAtLeast(0) }
+    }
+
+    suspend fun setDownloadStorage(storage: DownloadStorage, treeUri: String = "") {
+        dataStore.edit {
+            it[Keys.DOWNLOAD_STORAGE] = storage.id
+            if (treeUri.isNotBlank()) it[Keys.DOWNLOAD_TREE_URI] = treeUri
+        }
+    }
+
     private fun Preferences.toUserPreferences() = UserPreferences(
         serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,
         onboardingComplete = this[Keys.ONBOARDING_COMPLETE] ?: false,
@@ -97,6 +113,10 @@ class PreferencesRepository @Inject constructor(
         volumeBoost = this[Keys.VOLUME_BOOST] ?: false,
         autoDownloadCount = this[Keys.AUTO_DOWNLOAD_COUNT] ?: 3,
         downloadRetention = DownloadRetention.fromId(this[Keys.DOWNLOAD_RETENTION]),
+        downloadConcurrency = (this[Keys.DOWNLOAD_CONCURRENCY] ?: 2).coerceIn(1, 4),
+        downloadBudgetBytes = (this[Keys.DOWNLOAD_BUDGET_MB] ?: 2_048).toLong() * MB,
+        downloadStorage = DownloadStorage.fromId(this[Keys.DOWNLOAD_STORAGE]),
+        downloadTreeUri = this[Keys.DOWNLOAD_TREE_URI].orEmpty(),
     )
 
     private object Keys {
@@ -113,6 +133,14 @@ class PreferencesRepository @Inject constructor(
         val VOLUME_BOOST = booleanPreferencesKey("volume_boost")
         val AUTO_DOWNLOAD_COUNT = intPreferencesKey("auto_download_count")
         val DOWNLOAD_RETENTION = stringPreferencesKey("download_retention")
+        val DOWNLOAD_CONCURRENCY = intPreferencesKey("download_concurrency")
+        val DOWNLOAD_BUDGET_MB = intPreferencesKey("download_budget_mb")
+        val DOWNLOAD_STORAGE = stringPreferencesKey("download_storage")
+        val DOWNLOAD_TREE_URI = stringPreferencesKey("download_tree_uri")
+    }
+
+    private companion object {
+        const val MB = 1024L * 1024L
     }
 }
 

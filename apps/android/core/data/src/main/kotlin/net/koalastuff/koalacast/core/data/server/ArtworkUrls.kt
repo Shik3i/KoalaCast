@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.core.data.server
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.di.ApplicationScope
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
@@ -19,7 +20,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ArtworkUrls @Inject constructor(
-    preferences: PreferencesRepository,
+    private val preferences: PreferencesRepository,
     @ApplicationScope scope: CoroutineScope,
 ) {
     @Volatile
@@ -42,6 +43,20 @@ class ArtworkUrls @Inject constructor(
      *   instead of shipping a 3000px original to a 56dp tile.
      */
     fun forArtwork(rawUrl: String?, widthPx: Int? = null): String? {
+        return buildUrl(rawUrl, widthPx, serverUrl, proxyEnabled)
+    }
+
+    suspend fun forArtworkReady(rawUrl: String?, widthPx: Int? = null): String? {
+        val prefs = preferences.preferences.first()
+        return buildUrl(rawUrl, widthPx, prefs.serverUrl.trimEnd('/'), prefs.proxyImages)
+    }
+
+    private fun buildUrl(
+        rawUrl: String?,
+        widthPx: Int?,
+        serverUrl: String,
+        proxyEnabled: Boolean,
+    ): String? {
         val source = rawUrl?.trim().orEmpty()
         if (source.isEmpty()) return null
         if (!proxyEnabled) return source
