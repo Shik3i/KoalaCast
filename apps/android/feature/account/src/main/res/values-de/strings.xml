@@ -30,6 +30,7 @@
     <string name="account_opml_body">Import funktioniert ohne Konto. Der Export wird aus den lokalen Abos dieses Geräts erzeugt.</string>
     <string name="account_opml_import">OPML importieren</string>
     <string name="account_opml_export">OPML exportieren</string>
+    <string name="account_opml_importing">OPML wird importiert…</string>
     <plurals name="account_opml_imported">
         <item quantity="one">%d importiert</item>
         <item quantity="other">%d importiert</item>
@@ -45,6 +46,7 @@
     <string name="account_error_http">Der Server hat die Anfrage abgelehnt (HTTP %d).</string>
     <string name="account_error_network">Der Server ist nicht erreichbar.</string>
     <string name="account_error_data">Der Server hat ungültige oder unvollständige Daten geliefert.</string>
+    <string name="account_error_opml">Die ausgewählte Datei enthält keine gültigen OPML-Abonnements.</string>
     <string name="account_error_server">Wähle zuerst einen Server in den Einstellungen.</string>
     <string name="account_notice_created">Konto erstellt, angemeldet und Sync aktiv.</string>
     <string name="account_notice_signed_in">Angemeldet. Sync ist aktiv.</string>

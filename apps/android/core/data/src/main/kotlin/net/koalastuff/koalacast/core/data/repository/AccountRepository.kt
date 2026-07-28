@@ -18,8 +18,6 @@ import net.koalastuff.koalacast.core.network.dto.DeviceLoginRequest
 import net.koalastuff.koalacast.core.network.dto.GlobalStatsPreference
 import net.koalastuff.koalacast.core.network.dto.RecoveryRequest
 import net.koalastuff.koalacast.core.network.dto.RegisterRequest
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -147,42 +145,27 @@ class AccountRepository @Inject constructor(
         }
 
     suspend fun importOpml(xml: String): DataResult<OpmlReport> = withContext(dispatcher) {
-        val body = xml.toRequestBody("application/xml".toMediaType())
-        when (val result = apiCall { api.importOpml(body) }) {
-            is DataResult.Success -> {
-                result.data.podcasts.forEach {
-                    if (it.id.isNotBlank()) {
-                        library.subscribeImported(it.id, it.feedUrl, it.title, it.artworkUrl)
-                    }
-                }
-                DataResult.Success(
-                    OpmlReport(
-                        totalFound = result.data.totalFound,
-                        imported = result.data.imported,
-                        skipped = result.data.skipped,
-                        failures = result.data.failures.map { "${it.url}: ${it.reason}" },
-                    ),
-                )
-            }
-            is DataResult.Failure -> {
-                val localFeeds = OpmlParser.parse(xml)
-                if (localFeeds.isNotEmpty()) {
-                    localFeeds.forEach { feed ->
-                        library.subscribeImported(feed.feedUrl, feed.feedUrl, feed.title, artworkUrl = "")
-                    }
-                    DataResult.Success(
-                        OpmlReport(
-                            totalFound = localFeeds.size,
-                            imported = localFeeds.size,
-                            skipped = 0,
-                            failures = emptyList(),
-                        ),
-                    )
-                } else {
-                    result
-                }
-            }
+        val parsedFeeds = OpmlParser.parse(xml).distinctBy { it.feedUrl }
+        if (parsedFeeds.isEmpty()) {
+            return@withContext DataResult.Failure(
+                DataError.Malformed("OPML: no feed outlines found"),
+            )
         }
+        val feeds = parsedFeeds.take(MAX_LOCAL_OPML_FEEDS)
+
+        val existingFeedUrls = library.subscriptionsSnapshot()
+            .mapTo(mutableSetOf()) { it.feedUrl }
+        val newFeeds = feeds.filterNot { it.feedUrl in existingFeedUrls }
+        library.subscribeImported(newFeeds.map { it.feedUrl to it.title })
+
+        DataResult.Success(
+            OpmlReport(
+                totalFound = parsedFeeds.size,
+                imported = newFeeds.size,
+                skipped = parsedFeeds.size - newFeeds.size,
+                failures = emptyList(),
+            ),
+        )
     }
 
     suspend fun exportOpml(): DataResult<String> = withContext(dispatcher) {
@@ -219,5 +202,9 @@ class AccountRepository @Inject constructor(
                 },
             )
         }
+    }
+
+    private companion object {
+        const val MAX_LOCAL_OPML_FEEDS = 5_000
     }
 }

@@ -36,6 +36,7 @@ data class AccountUiState(
     val globalStatsOptIn: Boolean = false,
     val opmlReport: OpmlReport? = null,
     val opmlExport: String? = null,
+    val opmlImporting: Boolean = false,
 )
 
 @HiltViewModel
@@ -138,15 +139,32 @@ class AccountViewModel @Inject constructor(
         }
     }
 
-    fun importOpml(xml: String) = launchAction {
-        when (val result = accounts.importOpml(xml)) {
-            is DataResult.Failure -> fail(result.error)
-            is DataResult.Success -> form.update { it.copy(opmlReport = result.data) }
+    fun beginOpmlImport() {
+        form.update {
+            it.copy(
+                busy = true,
+                error = null,
+                notice = null,
+                opmlReport = null,
+                opmlImporting = true,
+            )
+        }
+    }
+
+    fun importOpml(xml: String) = viewModelScope.launch {
+        try {
+            when (val result = accounts.importOpml(xml)) {
+                is DataResult.Failure -> fail(result.error)
+                is DataResult.Success -> form.update { it.copy(opmlReport = result.data) }
+            }
+        } finally {
+            finishOpmlImport()
         }
     }
 
     fun importFailed(throwable: Throwable) {
-        fail(DataError.Malformed(throwable.message ?: "Failed to read OPML file"))
+        fail(DataError.Malformed("OPML: ${throwable.message ?: "failed to read file"}"))
+        finishOpmlImport()
     }
 
     fun prepareOpmlExport() = launchAction {
@@ -186,5 +204,9 @@ class AccountViewModel @Inject constructor(
 
     private fun notice(value: String) {
         form.update { it.copy(notice = value) }
+    }
+
+    private fun finishOpmlImport() {
+        form.update { it.copy(busy = false, opmlImporting = false) }
     }
 }

@@ -72,6 +72,40 @@ class LibraryRepository @Inject constructor(
         tombstones.delete(TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, podcastId))
     }
 
+    suspend fun subscribeImported(feeds: List<Pair<String, String>>) {
+        if (feeds.isEmpty()) return
+        val now = clock.nowMs()
+        subscriptions.upsertAll(
+            feeds.mapIndexed { index, (feedUrl, title) ->
+                SubscriptionEntity(
+                    podcastId = feedUrl,
+                    feedUrl = feedUrl,
+                    title = title.ifBlank { "Podcast" },
+                    artworkUrl = "",
+                    addedAt = now + index,
+                )
+            },
+        )
+        tombstones.deleteAll(
+            feeds.map { (feedUrl, _) ->
+                TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, feedUrl)
+            },
+        )
+    }
+
+    suspend fun canonicalizeImportedSubscription(podcast: Podcast) {
+        subscriptions.canonicalizeImported(
+            feedUrl = podcast.feedUrl,
+            subscription = SubscriptionEntity(
+                podcastId = podcast.id,
+                feedUrl = podcast.feedUrl,
+                title = podcast.title,
+                artworkUrl = podcast.artworkUrl,
+                addedAt = clock.nowMs(),
+            ),
+        )
+    }
+
     suspend fun unsubscribe(podcastId: String) {
         subscriptions.delete(podcastId)
         tombstones.upsert(
@@ -134,7 +168,7 @@ class LibraryRepository @Inject constructor(
     }
 
     suspend fun toggleFavorite(track: Track): Boolean {
-        val nowFavorite = favorites.getAll().none { it.episodeId == track.episodeId }
+        val nowFavorite = !favorites.contains(track.episodeId)
         if (nowFavorite) addFavorite(track) else removeFavorite(track.episodeId)
         return nowFavorite
     }

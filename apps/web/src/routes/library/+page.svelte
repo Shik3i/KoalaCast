@@ -18,6 +18,7 @@
 	import { goto } from '$app/navigation';
 	import { reveal } from '$lib/actions/reveal';
 	import { optimizeArtwork } from '$lib/artwork';
+	import { podcastHref } from '$lib/podcast-link';
 	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
@@ -240,15 +241,15 @@
 			<div class="podcast-grid">
 				{#each visibleSubscriptions as sub, i (sub.podcast_id)}
 					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 40, 320) }} use:longPress={sub.podcast_id}>
-						<a class="cover-link" href={`/podcast/${sub.podcast_id}`} aria-label={t('library.openShow', { title: sub.title })} title={sub.title}>
+						<a class="cover-link" href={podcastHref(sub)} aria-label={t('library.openShow', { title: sub.title })} title={sub.title}>
 							<img src={optimizeArtwork(sub.artwork_url, 220)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						</a>
 						<div class="details cover-overlay">
 							<h3 title={sub.title}>{sub.title}</h3>
 							<p>{t('library.subscribedHint')}</p>
 							<div class="actions">
-								<a href={`/podcast/${sub.podcast_id}`} class="round-action primary" aria-label={t('common.viewEpisodes')} title={t('common.viewEpisodes')}><i class="ph-fill ph-play" aria-hidden="true"></i></a>
-								<button class="round-action" onclick={() => goto(`/podcast/${sub.podcast_id}`)} aria-label={t('library.openShow', { title: sub.title })} title={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
+								<a href={podcastHref(sub)} class="round-action primary" aria-label={t('common.viewEpisodes')} title={t('common.viewEpisodes')}><i class="ph-fill ph-play" aria-hidden="true"></i></a>
+								<button class="round-action" onclick={() => goto(podcastHref(sub))} aria-label={t('library.openShow', { title: sub.title })} title={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
 								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')} title={t('common.unsubscribe')}><i class="ph ph-dots-three" aria-hidden="true"></i></button>
 							</div>
 						</div>

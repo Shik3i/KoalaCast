@@ -8,6 +8,7 @@
 import {
 	getLocalQueue,
 	addToLocalQueue,
+	addManyToLocalQueue,
 	removeFromLocalQueue,
 	clearLocalQueue,
 	type LocalQueueItem
@@ -120,6 +121,22 @@ class PlayerStore {
 			position_order: Date.now(),
 			added_at: Date.now()
 		});
+		await this.loadQueue();
+	}
+
+	async addManyToQueue(tracks: CurrentTrack[]) {
+		const existing = new Set((await getLocalQueue()).map((item) => item.episode_id));
+		const now = Date.now();
+		await addManyToLocalQueue(
+			tracks
+				.filter((track) => !existing.has(track.episode_id))
+				.map((track, index) => ({
+					id: crypto.randomUUID(),
+					...track,
+					position_order: now + index,
+					added_at: now + index
+				}))
+		);
 		await this.loadQueue();
 	}
 

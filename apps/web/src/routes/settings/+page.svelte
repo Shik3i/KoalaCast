@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { clearAllLocalData, saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
+	import { clearAllLocalData, saveLocalSubscriptions, getLocalSubscriptions } from '$lib/idb/db';
 	import {
 		COLOR_PALETTES,
 		DEFAULT_PALETTE,
@@ -235,39 +235,30 @@
 
 		try {
 			const xmlText = await file.text();
-			const res = await fetch('/api/v1/opml/import', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/xml' },
-				body: xmlText
-			});
+			if (xmlText.length > MAX_OPML_CHARS) throw new Error('OPML file exceeds 5 MB');
+			const feeds = parseOpmlFeeds(xmlText);
+			if (feeds.length === 0) throw new Error('OPML contains no feeds');
+			const processableFeeds = feeds.slice(0, MAX_LOCAL_OPML_FEEDS);
+			const existing = new Set((await getLocalSubscriptions()).map((sub) => sub.feed_url));
+			const imported = processableFeeds.filter((feed) => !existing.has(feed.feed_url));
+			const now = Date.now();
+			await saveLocalSubscriptions(
+				imported.map((feed, index) => ({
+					podcast_id: feed.feed_url,
+					feed_url: feed.feed_url,
+					title: feed.title,
+					artwork_url: '',
+					added_at: now + index
+				}))
+			);
+			opmlReport = {
+				total_found: feeds.length,
+				imported: imported.length,
+				skipped: feeds.length - imported.length,
+				failures: []
+			};
 
-			const report = await res.json();
-			if (!res.ok) {
-				opmlError = report.error || t('settings.opmlImportFailed');
-				return;
-			}
-
-			opmlReport = report;
-
-			// Local-first: the server ingested the feeds and returned the resolved
-			// podcasts; persist them as on-device subscriptions so they appear in the
-			// (account-less) Library.
-			if (Array.isArray(report.podcasts)) {
-				for (const p of report.podcasts) {
-					if (!p?.id) continue;
-					try {
-						await saveLocalSubscription({
-							podcast_id: p.id,
-							feed_url: p.feed_url || '',
-							title: p.title || 'Podcast',
-							artwork_url: p.artwork_url || '',
-							added_at: Date.now()
-						});
-					} catch (_) {}
-				}
-			}
-
-			toast.success(t('settings.opmlImported', { imported: report.imported, skipped: report.skipped }));
+			toast.success(t('settings.opmlImported', { imported: imported.length, skipped: feeds.length - imported.length }));
 		} catch (err: any) {
 			opmlError = t('settings.opmlReadError');
 		} finally {
@@ -275,6 +266,29 @@
 			target.value = '';
 		}
 	}
+
+	function parseOpmlFeeds(xmlText: string): Array<{ feed_url: string; title: string }> {
+		const document = new DOMParser().parseFromString(xmlText.replace(/^\uFEFF/, ''), 'application/xml');
+		if (document.querySelector('parsererror') || document.documentElement.localName !== 'opml') return [];
+		const seen = new Set<string>();
+		const feeds = [];
+		for (const outline of document.querySelectorAll('outline')) {
+			const attributes = Object.fromEntries(
+				Array.from(outline.attributes).map((attribute) => [attribute.name.toLowerCase(), attribute.value])
+			);
+			const feedUrl = (attributes.xmlurl || attributes.url || '').trim();
+			if (!feedUrl || seen.has(feedUrl)) continue;
+			seen.add(feedUrl);
+			feeds.push({
+				feed_url: feedUrl,
+				title: (attributes.title || attributes.text || feedUrl).trim() || feedUrl
+			});
+		}
+		return feeds;
+	}
+
+	const MAX_OPML_CHARS = 5 * 1024 * 1024;
+	const MAX_LOCAL_OPML_FEEDS = 5_000;
 
 	// Export is generated on-device from local subscriptions so it works without an
 	// account (the server export endpoint only sees account-synced subscriptions).

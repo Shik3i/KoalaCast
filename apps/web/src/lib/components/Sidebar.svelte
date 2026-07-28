@@ -7,6 +7,7 @@
 		type LocalSubscription
 	} from '$lib/idb/db';
 	import { t } from '$lib/i18n';
+	import { podcastHref } from '$lib/podcast-link';
 	import { sync } from '$lib/stores/sync.svelte';
 
 	let { isAdmin = false }: { isAdmin?: boolean } = $props();
@@ -70,7 +71,7 @@
 	<section class="rail-context subscriptions">
 		<p class="rail-eyebrow">{t('quiet.nav.subscriptions')}</p>
 		{#each subscriptions.slice(0, 6) as sub}
-			<a href={`/podcast/${sub.podcast_id}`} title={sub.title}>
+			<a href={podcastHref(sub)} title={sub.title}>
 				<span class="rail-dot" aria-hidden="true"></span>
 				<span class="truncate">{sub.title}</span>
 			</a>

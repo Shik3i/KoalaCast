@@ -157,6 +157,17 @@ export async function saveLocalSubscription(sub: LocalSubscription): Promise<voi
 	await db.delete('tombstones', tombstoneId('subscription', sub.podcast_id));
 }
 
+export async function saveLocalSubscriptions(subscriptions: LocalSubscription[]): Promise<void> {
+	if (subscriptions.length === 0) return;
+	const db = await getLocalDB();
+	const tx = db.transaction(['subscriptions', 'tombstones'], 'readwrite');
+	for (const sub of subscriptions) {
+		tx.objectStore('subscriptions').put(sub);
+		tx.objectStore('tombstones').delete(tombstoneId('subscription', sub.podcast_id));
+	}
+	await tx.done;
+}
+
 export async function removeLocalSubscription(podcast_id: string): Promise<void> {
 	const db = await getLocalDB();
 	await db.delete('subscriptions', podcast_id);
@@ -230,6 +241,35 @@ export async function setEpisodePlayed(
 	});
 }
 
+export async function setEpisodesPlayed(
+	episodes: Parameters<typeof setEpisodePlayed>[0][],
+	played: boolean
+): Promise<void> {
+	if (episodes.length === 0) return;
+	const db = await getLocalDB();
+	const tx = db.transaction('playback_states', 'readwrite');
+	const now = Date.now();
+	for (const meta of episodes) {
+		const existing = (await tx.store.get(meta.episode_id)) as LocalPlaybackState | undefined;
+		await tx.store.put({
+			...existing,
+			episode_id: meta.episode_id,
+			podcast_id: meta.podcast_id,
+			position_ms: played ? existing?.position_ms ?? 0 : 0,
+			completed: played,
+			progress_percent: played ? 100 : 0,
+			last_played_at: now,
+			title: meta.title ?? existing?.title,
+			podcast_title: meta.podcast_title ?? existing?.podcast_title,
+			artwork_url: meta.artwork_url ?? existing?.artwork_url,
+			enclosure_url: meta.enclosure_url ?? existing?.enclosure_url,
+			duration_ms: meta.duration_ms ?? existing?.duration_ms,
+			categories: meta.categories ?? existing?.categories
+		});
+	}
+	await tx.done;
+}
+
 // All playback states (used by the sync engine to push local progress).
 export async function getAllLocalPlaybackStates(): Promise<LocalPlaybackState[]> {
 	const db = await getLocalDB();
@@ -274,6 +314,14 @@ export async function getLocalQueue(): Promise<LocalQueueItem[]> {
 export async function addToLocalQueue(item: LocalQueueItem): Promise<void> {
 	const db = await getLocalDB();
 	await db.put('queue', item);
+}
+
+export async function addManyToLocalQueue(items: LocalQueueItem[]): Promise<void> {
+	if (items.length === 0) return;
+	const db = await getLocalDB();
+	const tx = db.transaction('queue', 'readwrite');
+	for (const item of items) await tx.store.put(item);
+	await tx.done;
 }
 
 export async function removeFromLocalQueue(id: string): Promise<void> {

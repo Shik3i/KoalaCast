@@ -64,7 +64,7 @@ class QueueRepository @Inject constructor(
     suspend fun reorder(orderedEpisodeIds: List<String>) = queue.reorder(orderedEpisodeIds)
 
     /** The next thing to play, or null when the queue has run dry. */
-    suspend fun head(): QueueEntry? = queue.getAll().firstOrNull()?.toModel()
+    suspend fun head(): QueueEntry? = queue.first()?.toModel()
 
     /**
      * Drops items from the end until the queue fits the budget at the given
@@ -83,7 +83,7 @@ class QueueRepository @Inject constructor(
             keep += item
         }
         val dropped = items.drop(keep.size)
-        dropped.forEach { queue.deleteByEpisode(it.episodeId) }
+        if (dropped.isNotEmpty()) queue.deleteByEpisodeIds(dropped.map { it.episodeId })
         return dropped.map { it.episodeId }
     }
 }

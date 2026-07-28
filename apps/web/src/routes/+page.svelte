@@ -39,6 +39,8 @@
 	}
 
 	const PAGE_SIZE = 60;
+	const DISCOVER_CONCURRENCY = 4;
+	const METADATA_CONCURRENCY = 4;
 	const moods = [
 		{ id: 'calm' as const, labelKey: 'quiet.discover.moodCalm' as const, effectKey: 'quiet.discover.moodEffectCalm' as const, icon: 'ph-waves' },
 		{ id: 'curious' as const, labelKey: 'quiet.discover.moodCurious' as const, effectKey: 'quiet.discover.moodEffectCurious' as const, icon: 'ph-lightbulb' },
@@ -90,6 +92,23 @@
 	const hasMoreResults = $derived(chart.length < Math.max(0, supporting.length - 3) || !reachedEnd);
 	const selectedMoodLabel = $derived(t(moods.find((mood) => mood.id === selectedMood)?.labelKey ?? 'quiet.discover.moodCalm'));
 
+	async function mapWithConcurrency<T, R>(
+		items: T[],
+		limit: number,
+		mapper: (item: T) => Promise<R>
+	): Promise<R[]> {
+		const results = new Array<R>(items.length);
+		let cursor = 0;
+		const worker = async () => {
+			while (cursor < items.length) {
+				const index = cursor++;
+				results[index] = await mapper(items[index]);
+			}
+		};
+		await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+		return results;
+	}
+
 	onMount(async () => {
 		mounted = true;
 		listeningSession.load();
@@ -104,8 +123,10 @@
 		if (!background) isLoading = true;
 		const languages = prefs.languages.length ? prefs.languages : detectBrowserLanguages();
 		try {
-			const responses = await Promise.allSettled(
-				languages.map(async (language) => {
+			const lists = await mapWithConcurrency(
+				languages,
+				DISCOVER_CONCURRENCY,
+				async (language) => {
 					const controller = new AbortController();
 					const timeout = background ? window.setTimeout(() => controller.abort(), 2500) : 0;
 					const params = new URLSearchParams({
@@ -116,16 +137,16 @@
 					if (selectedCategory !== 'All') params.set('category', selectedCategory);
 					try {
 						const response = await fetch(`/api/v1/podcasts/discover?${params}`, { signal: controller.signal });
-						return response.ok ? response.json() : { results: [] };
+						const data = response.ok ? await response.json() : { results: [] };
+						return data.results ?? [];
+					} catch {
+						return [];
 					} finally {
 						if (timeout) window.clearTimeout(timeout);
 					}
-				})
+				}
 			);
 			if (id !== requestId) return;
-			const lists = responses
-				.filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
-				.map((result) => result.value?.results ?? []);
 			const merged: PodcastItem[] = [];
 			const seen = new Set<string>();
 			const longest = Math.max(0, ...lists.map((list) => list.length));
@@ -228,7 +249,7 @@
 		const id = await resolvePodcastId(podcast);
 		if (!id) return null;
 		try {
-			const response = await fetch(`/api/v1/podcasts/${id}/episodes`);
+			const response = await fetch(`/api/v1/podcasts/${id}/episodes?limit=1`);
 			if (!response.ok) return null;
 			const data = await response.json();
 			const episode = (data.episodes || []).find((item: any) => item.enclosure_url);
@@ -283,7 +304,11 @@
 		if (isHydratingMetadata) return;
 		isHydratingMetadata = true;
 		try {
-			await Promise.all(filtered.slice(0, 4 + visibleChartCount).map(hydrateMetadata));
+			await mapWithConcurrency(
+				filtered.slice(0, 4 + visibleChartCount),
+				METADATA_CONCURRENCY,
+				hydrateMetadata
+			);
 		} finally {
 			isHydratingMetadata = false;
 		}

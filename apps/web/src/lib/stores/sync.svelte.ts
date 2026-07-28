@@ -93,6 +93,23 @@ class SyncStore {
 			/* ignore */
 		}
 	}
+	#pushWatermarkKey(): string {
+		return `koalacast_sync_push_watermark_${this.userId}`;
+	}
+	#getPushWatermark(): number {
+		try {
+			return Number(localStorage.getItem(this.#pushWatermarkKey()) || '0') || 0;
+		} catch {
+			return 0;
+		}
+	}
+	#setPushWatermark(value: number) {
+		try {
+			localStorage.setItem(this.#pushWatermarkKey(), String(value));
+		} catch {
+			/* ignore */
+		}
+	}
 	#sessionWatermarkKey(): string {
 		return `koalacast_synced_listening_sessions_${this.userId}`;
 	}
@@ -197,9 +214,15 @@ class SyncStore {
 	async #push(): Promise<void> {
 		const dev = deviceId();
 		const ops: SyncOperation[] = [];
+		const previousWatermark = this.#getPushWatermark();
+		const nextWatermark = Date.now();
 
 		const subs = await getLocalSubscriptions();
 		for (const s of subs) {
+			// OPML imports are resolved lazily on first open. Their feed URL is
+			// only a local placeholder, not a valid server-side podcast id.
+			if (s.podcast_id === s.feed_url) continue;
+			if (s.added_at <= previousWatermark) continue;
 			ops.push({
 				client_op_id: `s:${s.podcast_id}:${s.added_at}`,
 				device_id: dev,
@@ -213,6 +236,7 @@ class SyncStore {
 
 		const favs = await getLocalFavorites();
 		for (const f of favs) {
+			if (f.added_at <= previousWatermark) continue;
 			ops.push({
 				client_op_id: `f:${f.episode_id}:${f.added_at}`,
 				device_id: dev,
@@ -226,6 +250,7 @@ class SyncStore {
 
 		const states = await getAllLocalPlaybackStates();
 		for (const p of states) {
+			if (p.last_played_at <= previousWatermark) continue;
 			ops.push({
 				client_op_id: `p:${p.episode_id}:${p.last_played_at}`,
 				device_id: dev,
@@ -249,6 +274,7 @@ class SyncStore {
 		const listeningSessions = await getLocalListeningSessions();
 		const sessionWatermarks = this.#getSessionWatermarks();
 		for (const session of listeningSessions) {
+			if (session.ended_at <= previousWatermark) continue;
 			if ((sessionWatermarks[session.id] || 0) >= session.ended_at) continue;
 			ops.push({
 				client_op_id: `l:${session.id}:${session.ended_at}`,
@@ -264,6 +290,7 @@ class SyncStore {
 		const tombstones = await getTombstones();
 		for (const t of tombstones) {
 			if (t.entity_type !== 'subscription' && t.entity_type !== 'favorite') continue;
+			if (t.deleted_at <= previousWatermark) continue;
 			ops.push({
 				client_op_id: `d:${t.entity_type}:${t.entity_id}:${t.deleted_at}`,
 				device_id: dev,
@@ -275,7 +302,10 @@ class SyncStore {
 			});
 		}
 
-		if (ops.length === 0) return;
+		if (ops.length === 0) {
+			this.#setPushWatermark(nextWatermark);
+			return;
+		}
 
 		for (let index = 0; index < ops.length; index += 250) {
 			const batch = ops.slice(index, index + 250);
@@ -291,6 +321,7 @@ class SyncStore {
 			}
 			this.#setSessionWatermarks(sessionWatermarks);
 		}
+		this.#setPushWatermark(nextWatermark);
 		// Deliberately do NOT advance the cursor here: letting the next pull re-read
 		// our own ops (idempotent) avoids skipping a concurrent device's ops that
 		// landed at a lower cursor.

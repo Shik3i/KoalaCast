@@ -20,14 +20,28 @@ interface SubscriptionDao {
     @Query("SELECT * FROM subscriptions WHERE podcastId = :podcastId")
     suspend fun get(podcastId: String): SubscriptionEntity?
 
+    @Query("SELECT * FROM subscriptions WHERE feedUrl = :feedUrl LIMIT 1")
+    suspend fun getByFeedUrl(feedUrl: String): SubscriptionEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM subscriptions WHERE podcastId = :podcastId)")
     fun observeIsSubscribed(podcastId: String): Flow<Boolean>
 
     @Upsert
     suspend fun upsert(subscription: SubscriptionEntity)
 
+    @Upsert
+    suspend fun upsertAll(subscriptions: List<SubscriptionEntity>)
+
     @Query("DELETE FROM subscriptions WHERE podcastId = :podcastId")
     suspend fun delete(podcastId: String)
+
+    @Transaction
+    suspend fun canonicalizeImported(feedUrl: String, subscription: SubscriptionEntity) {
+        val imported = getByFeedUrl(feedUrl) ?: return
+        if (imported.podcastId == subscription.podcastId) return
+        delete(imported.podcastId)
+        upsert(subscription)
+    }
 
     @Query("UPDATE subscriptions SET inboxMode = :mode WHERE podcastId = :podcastId")
     suspend fun setInboxMode(podcastId: String, mode: String)
@@ -87,6 +101,9 @@ interface QueueDao {
     @Query("SELECT * FROM queue ORDER BY positionOrder ASC")
     suspend fun getAll(): List<QueueItemEntity>
 
+    @Query("SELECT * FROM queue ORDER BY positionOrder ASC LIMIT 1")
+    suspend fun first(): QueueItemEntity?
+
     @Query("SELECT * FROM queue WHERE episodeId = :episodeId")
     suspend fun getByEpisode(episodeId: String): QueueItemEntity?
 
@@ -101,6 +118,9 @@ interface QueueDao {
 
     @Query("DELETE FROM queue")
     suspend fun clear()
+
+    @Query("DELETE FROM queue WHERE episodeId IN (:episodeIds)")
+    suspend fun deleteByEpisodeIds(episodeIds: List<String>)
 
     @Query("UPDATE queue SET positionOrder = :order WHERE episodeId = :episodeId")
     suspend fun setOrder(episodeId: String, order: Long)
@@ -131,6 +151,9 @@ interface FavoriteDao {
 
     @Query("SELECT * FROM favorites WHERE episodeId = :episodeId")
     suspend fun get(episodeId: String): FavoriteEntity?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE episodeId = :episodeId)")
+    suspend fun contains(episodeId: String): Boolean
 
     @Query("SELECT episodeId FROM favorites")
     fun observeEpisodeIds(): Flow<List<String>>
@@ -178,6 +201,9 @@ interface TombstoneDao {
 
     @Query("DELETE FROM tombstones WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("DELETE FROM tombstones WHERE id IN (:ids)")
+    suspend fun deleteAll(ids: List<String>)
 
     @Query("DELETE FROM tombstones")
     suspend fun clear()

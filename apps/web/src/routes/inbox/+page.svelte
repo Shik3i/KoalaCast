@@ -6,6 +6,7 @@
 		getAllLocalPlaybackStates,
 		setSubscriptionInboxMode,
 		setEpisodePlayed,
+		setEpisodesPlayed,
 		type LocalSubscription,
 		type LocalPlaybackState,
 		type InboxMode
@@ -150,11 +151,11 @@
 	async function queueAllThatFit() {
 		if (listeningSession.minutes === null) return;
 		let elapsed = 0;
-		let count = 0;
+		const tracks = [];
 		for (const episode of feed) {
 			const adjusted = (episode.duration_ms || 0) / player.playbackSpeed;
 			if (!adjusted || elapsed + adjusted > listeningSession.minutes * 60_000) continue;
-			await player.addToQueue({
+			tracks.push({
 				episode_id: episode.id,
 				podcast_id: episode.podcast_id,
 				title: episode.title,
@@ -164,13 +165,14 @@
 				duration_ms: episode.duration_ms || 0
 			});
 			elapsed += adjusted;
-			count += 1;
 		}
+		await player.addManyToQueue(tracks);
+		const count = tracks.length;
 		toast.success(t('inbox.queuedForSession', { count, minutes: listeningSession.minutes }));
 	}
 
 	async function markAllPlayed() {
-		await Promise.all(feed.map((episode) => setEpisodePlayed(epMeta(episode), true)));
+		await setEpisodesPlayed(feed.map(epMeta), true);
 		completed = new Set([...completed, ...feed.map((episode) => episode.id)]);
 		playbackStates = Object.fromEntries(
 			Object.entries(playbackStates).map(([id, state]) => [
@@ -217,7 +219,7 @@
 		const idx = feed.findIndex((e) => e.id === ep.id);
 		if (idx < 0) return;
 		const list = feed.slice(idx);
-		await Promise.all(list.map((e) => setEpisodePlayed(epMeta(e), played)));
+		await setEpisodesPlayed(list.map(epMeta), played);
 		const next = new Set(completed);
 		for (const e of list) {
 			if (played) next.add(e.id);

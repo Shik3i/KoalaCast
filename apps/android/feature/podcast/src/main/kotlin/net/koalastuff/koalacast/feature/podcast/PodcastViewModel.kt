@@ -103,6 +103,7 @@ class PodcastViewModel @Inject constructor(
                 }
 
                 is DataResult.Success -> {
+                    library.canonicalizeImportedSubscription(resolved.data)
                     _state.update { it.copy(podcast = resolved.data) }
                     observeLocalState(resolved.data.id)
                     observeProgress()

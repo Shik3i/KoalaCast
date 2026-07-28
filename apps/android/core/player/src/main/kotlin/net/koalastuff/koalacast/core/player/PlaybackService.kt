@@ -74,6 +74,8 @@ class PlaybackService : MediaLibraryService() {
     private var mediaSession: MediaLibrarySession? = null
     private var positionTicker: Job? = null
     private var outroHandledEpisodeId: String? = null
+    private var outroSettingsPodcastId: String? = null
+    private var cachedSkipOutroMs = 0L
     private var automaticSeekTargetMs: Long? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
@@ -482,7 +484,12 @@ class PlaybackService : MediaLibraryService() {
         val track = TrackMediaItem.toTrack(player.currentMediaItem) ?: return
         if (outroHandledEpisodeId == track.episodeId) return
         val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: return
-        val skipMs = library.podcastSettingsSnapshot(track.podcastId).skipOutroSeconds * 1_000L
+        if (outroSettingsPodcastId != track.podcastId) {
+            cachedSkipOutroMs =
+                library.podcastSettingsSnapshot(track.podcastId).skipOutroSeconds * 1_000L
+            outroSettingsPodcastId = track.podcastId
+        }
+        val skipMs = cachedSkipOutroMs
         if (skipMs <= 0) return
         val remaining = (duration - player.currentPosition).coerceAtLeast(0)
         if (remaining == 0L || remaining > skipMs) return
@@ -567,7 +574,7 @@ class PlaybackService : MediaLibraryService() {
         const val SEEK_BACK_MS = 15_000L
         const val SEEK_FORWARD_MS = 30_000L
         const val OUTRO_CHECK_INTERVAL_MS = 1_000L
-        const val POSITION_SAVE_INTERVAL_SECONDS = 5
+        const val POSITION_SAVE_INTERVAL_SECONDS = 30
         const val AUTOMATIC_SEEK_TOLERANCE_MS = 1_000L
         const val ARTWORK_PX = 512
         const val ROOT_ID = "root"

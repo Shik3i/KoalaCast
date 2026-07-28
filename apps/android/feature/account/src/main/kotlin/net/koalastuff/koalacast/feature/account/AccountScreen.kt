@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import net.koalastuff.koalacast.core.model.AccountSession
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.SyncStatus
@@ -65,22 +69,35 @@ fun AccountScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
-            runCatching { readLimitedText(context, it) }
-                .onSuccess(viewModel::importOpml)
-                .onFailure(viewModel::importFailed)
+            viewModel.beginOpmlImport()
+            coroutineScope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) { readLimitedText(context, it) }
+                }
+                    .onSuccess(viewModel::importOpml)
+                    .onFailure(viewModel::importFailed)
+            }
         }
     }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/xml"),
     ) { uri ->
-        if (uri != null) {
-            state.opmlExport?.let { xml ->
-                context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(xml) }
+        val xml = state.opmlExport
+        if (uri != null && xml != null) {
+            coroutineScope.launch {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
+                        it.write(xml)
+                    }
+                }
+                viewModel.consumeOpmlExport()
             }
+        } else {
+            viewModel.consumeOpmlExport()
         }
-        viewModel.consumeOpmlExport()
     }
     LaunchedEffect(state.opmlExport) {
         if (state.opmlExport != null) exportLauncher.launch("koalacast_subscriptions.opml")
@@ -154,7 +171,7 @@ internal fun AccountContent(
             )
         }
 
-        state.error?.let {
+        state.error?.takeUnless { it.isOpmlError() }?.let {
             Text(
                 text = errorMessage(it),
                 style = KoalaTheme.type.bodySmall,
@@ -207,6 +224,20 @@ internal fun AccountContent(
                     text = stringResource(R.string.account_opml_export),
                     onClick = onExport,
                     enabled = !state.busy,
+                )
+            }
+            if (state.opmlImporting) {
+                MonoText(
+                    text = stringResource(R.string.account_opml_importing),
+                    color = KoalaTheme.colors.accentInk,
+                    style = KoalaTheme.type.monoSmall,
+                )
+            }
+            state.error?.takeIf { it.isOpmlError() }?.let {
+                Text(
+                    text = errorMessage(it),
+                    style = KoalaTheme.type.bodySmall,
+                    color = KoalaTheme.colors.ink2,
                 )
             }
             state.opmlReport?.let { report ->
@@ -462,9 +493,18 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 private fun errorMessage(error: DataError): String = when (error) {
     is DataError.Http -> stringResource(R.string.account_error_http, error.code)
     is DataError.Network -> stringResource(R.string.account_error_network)
-    is DataError.Malformed -> stringResource(R.string.account_error_data)
+    is DataError.Malformed -> stringResource(
+        if (error.cause.startsWith("OPML:")) {
+            R.string.account_error_opml
+        } else {
+            R.string.account_error_data
+        },
+    )
     DataError.NoServerConfigured -> stringResource(R.string.account_error_server)
 }
+
+private fun DataError.isOpmlError(): Boolean =
+    this is DataError.Malformed && cause.startsWith("OPML:")
 
 @Composable
 private fun noticeMessage(notice: String): String = stringResource(

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -64,10 +65,10 @@ class SearchViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state
-                .map { it.query.trim() }
+                .map { SearchRequest(it.query.trim(), it.languages, it.category) }
                 .distinctUntilChanged()
                 .debounce(DEBOUNCE_MS)
-                .collect { query -> runSearch(query) }
+                .collectLatest(::runSearch)
         }
     }
 
@@ -93,18 +94,15 @@ class SearchViewModel @Inject constructor(
             }
             current.copy(languages = next, filtersFromSettings = false)
         }
-        rerun()
     }
 
     fun selectCategory(wireName: String) {
         _state.update { it.copy(category = wireName, filtersFromSettings = false) }
-        rerun()
     }
 
     /** Drops both filters so the search covers everything the server can see. */
     fun clearFilters() {
         _state.update { it.copy(languages = emptySet(), category = "", filtersFromSettings = false) }
-        rerun()
     }
 
     /** Puts the listener's saved defaults back. */
@@ -118,7 +116,6 @@ class SearchViewModel @Inject constructor(
                     filtersFromSettings = true,
                 )
             }
-            runSearch(_state.value.query.trim())
         }
     }
 
@@ -146,23 +143,25 @@ class SearchViewModel @Inject constructor(
     fun retry() = rerun()
 
     private fun rerun() {
-        viewModelScope.launch { runSearch(_state.value.query.trim()) }
+        viewModelScope.launch {
+            val state = _state.value
+            runSearch(SearchRequest(state.query.trim(), state.languages, state.category))
+        }
     }
 
-    private suspend fun runSearch(query: String) {
+    private suspend fun runSearch(request: SearchRequest) {
+        val query = request.query
         if (query.length < MIN_QUERY_LENGTH) {
             _state.update { it.copy(results = emptyList(), searching = false, error = null) }
             return
         }
 
         _state.update { it.copy(searching = true, error = null) }
-        val current = _state.value
-
         when (
             val result = podcasts.search(
                 query = query,
-                languages = current.languages,
-                category = current.category,
+                languages = request.languages,
+                category = request.category,
             )
         ) {
             is DataResult.Success -> _state.update {
@@ -179,6 +178,12 @@ class SearchViewModel @Inject constructor(
     private fun looksLikeFeedUrl(value: String): Boolean =
         value.startsWith("http://", ignoreCase = true) ||
             value.startsWith("https://", ignoreCase = true)
+
+    private data class SearchRequest(
+        val query: String,
+        val languages: Set<String>,
+        val category: String,
+    )
 
     private companion object {
         const val DEBOUNCE_MS = 300L

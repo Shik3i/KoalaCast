@@ -20,15 +20,11 @@ data class ProfileUiState(
     val sessions: List<ListeningSession> = emptyList(),
     val history: List<PlaybackProgress> = emptyList(),
     val subscriptionCount: Int = 0,
+    val stats: ListeningAnalytics = ListeningAnalytics(),
+    val touchedShows: Int = 0,
+    val averagePerActiveDayMs: Long = 0,
 ) {
-    private val floor get() = rangeFloor(range, ZonedDateTime.now())
-    val filteredSessions get() = sessions.filter { it.startedAtMs >= floor }
-    val filteredHistory get() = history.filter { it.lastPlayedAtMs >= floor }
-    val stats get() = summarizeListening(filteredSessions, filteredHistory)
     val firstListeningAtMs get() = sessions.firstOrNull()?.startedAtMs
-    val touchedShows get() = sessions.map(ListeningSession::podcastId).toSet().size
-    val averagePerActiveDayMs
-        get() = if (stats.activeDays > 0) stats.totalWallMs / stats.activeDays else 0
 }
 
 @HiltViewModel
@@ -45,11 +41,20 @@ class ProfileViewModel @Inject constructor(
         library.allSubscriptions,
         range,
     ) { sessions, history, subscriptions, selectedRange ->
+        val floor = rangeFloor(selectedRange, ZonedDateTime.now())
+        val stats = summarizeListening(
+            sessions.filter { it.startedAtMs >= floor },
+            history.filter { it.lastPlayedAtMs >= floor },
+        )
         ProfileUiState(
             range = selectedRange,
             sessions = sessions,
             history = history,
             subscriptionCount = subscriptions.size,
+            stats = stats,
+            touchedShows = sessions.mapTo(mutableSetOf(), ListeningSession::podcastId).size,
+            averagePerActiveDayMs =
+                if (stats.activeDays > 0) stats.totalWallMs / stats.activeDays else 0,
         )
     }.stateIn(
         scope = viewModelScope,

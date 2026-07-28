@@ -63,7 +63,7 @@ class SyncRepository @Inject constructor(
         _status.value = SyncStatus.SYNCING
         try {
             pull(account.userId)
-            push(account.deviceId)
+            push(account.userId, account.deviceId)
             _lastSyncedAt.value = System.currentTimeMillis()
             _status.value = SyncStatus.IDLE
             true
@@ -103,13 +103,17 @@ class SyncRepository @Inject constructor(
         }
     }
 
-    private suspend fun push(deviceId: String) {
+    private suspend fun push(userId: String, deviceId: String) {
+        val previousWatermark = store.pushWatermark(userId)
+        val nextWatermark = System.currentTimeMillis()
         val operations = buildOperations(deviceId)
+            .filter { it.clientTimestamp > previousWatermark }
         operations.chunked(PUSH_BATCH).forEach { batch ->
             val response = api.pushSync(SyncPushRequest(batch))
             if (response.code() == 401) throw AuthExpired()
             if (!response.isSuccessful) throw IOException("sync push failed: ${response.code()}")
         }
+        store.setPushWatermark(userId, nextWatermark)
         // Cursor deliberately stays unchanged. The next pull re-reads our own
         // idempotent operations so a concurrent device cannot be skipped.
     }
@@ -117,6 +121,7 @@ class SyncRepository @Inject constructor(
     internal suspend fun buildOperations(deviceId: String): List<SyncOperationDto> {
         val operations = mutableListOf<SyncOperationDto>()
         subscriptions.getAll().forEach { item ->
+            if (item.podcastId == item.feedUrl) return@forEach
             operations += operation(
                 id = "s:${item.podcastId}:${item.addedAt}",
                 deviceId = deviceId,

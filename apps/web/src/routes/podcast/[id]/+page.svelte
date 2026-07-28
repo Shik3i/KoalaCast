@@ -4,11 +4,13 @@
 	import {
 		saveLocalSubscription,
 		removeLocalSubscription,
+		removeLocalSubscriptionSilent,
 		getLocalSubscriptions,
 		getCompletedEpisodeIds,
 		getAllLocalPlaybackStates,
 		getLocalListeningSessions,
 		setEpisodePlayed,
+		setEpisodesPlayed,
 		type LocalPlaybackState
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
@@ -152,7 +154,20 @@
 				}
 				const subs = await getLocalSubscriptions();
 				if (reqId !== loadReqId) return;
-				isSubscribed = subs.some((s) => s.podcast_id === podcast.id);
+				const imported = subs.find(
+					(s) => s.podcast_id === s.feed_url && s.feed_url === podcast.feed_url
+				);
+				if (imported) {
+					await removeLocalSubscriptionSilent(imported.podcast_id);
+					await saveLocalSubscription({
+						podcast_id: podcast.id,
+						feed_url: podcast.feed_url,
+						title: podcast.title,
+						artwork_url: podcast.artwork_url || '',
+						added_at: Date.now()
+					});
+				}
+				isSubscribed = Boolean(imported) || subs.some((s) => s.podcast_id === podcast.id);
 				playedIds = await getCompletedEpisodeIds();
 				await loadShowControls(podcast.id);
 				const newest = episodes.find((episode) => episode.enclosure_url && !playedIds.has(episode.id));
@@ -296,7 +311,7 @@
 
 	// Mark a batch (a tier, or all episodes) played/unplayed at once.
 	async function markManyPlayed(list: any[], played: boolean) {
-		await Promise.all(list.map((ep) => setEpisodePlayed(epMeta(ep), played)));
+		await setEpisodesPlayed(list.map(epMeta), played);
 		const next = new Set(playedIds);
 		for (const ep of list) {
 			if (played) next.add(ep.id);

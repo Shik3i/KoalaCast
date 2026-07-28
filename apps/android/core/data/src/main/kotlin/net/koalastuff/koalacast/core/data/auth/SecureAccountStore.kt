@@ -87,6 +87,12 @@ class SecureAccountStore @Inject constructor(
         prefs.edit { putLong("cursor_$userId", cursor.coerceAtLeast(0)) }
     }
 
+    fun pushWatermark(userId: String): Long = prefs.getLong("push_watermark_$userId", 0)
+
+    fun setPushWatermark(userId: String, timestamp: Long) {
+        prefs.edit { putLong("push_watermark_$userId", timestamp.coerceAtLeast(0)) }
+    }
+
     private fun readAccount(): Account? {
         val userId = prefs.getString(KEY_USER_ID, null) ?: return null
         return Account(

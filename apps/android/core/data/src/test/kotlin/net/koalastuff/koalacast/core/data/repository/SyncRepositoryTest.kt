@@ -84,4 +84,20 @@ class SyncRepositoryTest {
         assertEquals("gone", deletion.entityId)
         assertTrue(deletion.payload.toString() == "{}")
     }
+
+    @Test
+    fun `push skips unresolved OPML subscriptions`() = runTest {
+        val feedUrl = "https://example.com/imported.xml"
+        database.subscriptionDao().upsert(
+            SubscriptionEntity(
+                podcastId = feedUrl,
+                feedUrl = feedUrl,
+                title = "Imported",
+                artworkUrl = "",
+                addedAt = 123,
+            ),
+        )
+
+        assertTrue(repository.buildOperations("device").isEmpty())
+    }
 }

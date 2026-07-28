@@ -30,6 +30,7 @@
     <string name="account_opml_body">Import works without an account. Export is generated from this device’s local subscriptions.</string>
     <string name="account_opml_import">Import OPML</string>
     <string name="account_opml_export">Export OPML</string>
+    <string name="account_opml_importing">Importing OPML…</string>
     <plurals name="account_opml_imported">
         <item quantity="one">%d imported</item>
         <item quantity="other">%d imported</item>
@@ -45,6 +46,7 @@
     <string name="account_error_http">The server rejected the request (HTTP %d).</string>
     <string name="account_error_network">The server could not be reached.</string>
     <string name="account_error_data">The server returned invalid or incomplete data.</string>
+    <string name="account_error_opml">The selected file contains no valid OPML subscriptions.</string>
     <string name="account_error_server">Choose a server in Settings first.</string>
     <string name="account_notice_created">Account created, signed in and syncing.</string>
     <string name="account_notice_signed_in">Signed in. Sync is active.</string>

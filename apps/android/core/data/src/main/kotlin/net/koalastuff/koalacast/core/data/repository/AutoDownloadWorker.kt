@@ -12,7 +12,12 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
 import net.koalastuff.koalacast.core.data.db.PodcastSettingsDao
@@ -62,30 +67,42 @@ class AutoDownloadWorker @AssistedInject constructor(
         // Read once: this is a Room-backed flow, and collecting it per episode
         // would re-query the table for every candidate.
         val completed = progress.completedEpisodeIds.first()
-        var anyFeedFailed = false
-        for (settings in enabled) {
-            val subscription = subscriptionDao.get(settings.podcastId)?.toModel() ?: continue
-            when (val result = podcasts.episodes(settings.podcastId, limit = prefs.autoDownloadCount)) {
-                is DataResult.Failure -> anyFeedFailed = true
-                is DataResult.Success -> {
-                    for (episode in result.data.take(prefs.autoDownloadCount)) {
-                        if (episode.enclosureUrl.isBlank()) continue
-                        // Never resurrect something the listener already deleted or
-                        // already finished — that would fight them every cycle.
-                        if (downloadDao.get(episode.id) != null) continue
-                        if (episode.id in completed) continue
-                        downloads.enqueue(
-                            episode.toTrack(subscription.title, subscription.artworkUrl),
-                            wifiOnly = prefs.downloadWifiOnly,
-                        )
+        val semaphore = Semaphore(MAX_CONCURRENT_FEEDS)
+        coroutineScope {
+            enabled.map { settings ->
+                async {
+                    semaphore.withPermit {
+                        val subscription =
+                            subscriptionDao.get(settings.podcastId)?.toModel()
+                                ?: return@withPermit false
+                        when (
+                            val result = podcasts.episodes(
+                                settings.podcastId,
+                                limit = prefs.autoDownloadCount,
+                            )
+                        ) {
+                            is DataResult.Failure -> true
+                            is DataResult.Success -> {
+                                for (episode in result.data.take(prefs.autoDownloadCount)) {
+                                    if (episode.enclosureUrl.isBlank()) continue
+                                    if (downloadDao.get(episode.id) != null) continue
+                                    if (episode.id in completed) continue
+                                    downloads.enqueue(
+                                        episode.toTrack(subscription.title, subscription.artworkUrl),
+                                        wifiOnly = prefs.downloadWifiOnly,
+                                    )
+                                }
+                                false
+                            }
+                        }
                     }
                 }
-            }
+            }.awaitAll()
         }
 
-        // A feed that was unreachable is worth another attempt; everything else
-        // has already been done and should not repeat the whole sweep.
-        if (anyFeedFailed) Result.retry() else Result.success()
+        // A failed feed is retried by the next periodic run. Retrying this worker
+        // immediately would download every successful feed again as collateral work.
+        Result.success()
     }
 
     private suspend fun applyRetention(retention: DownloadRetention) {
@@ -107,6 +124,7 @@ class AutoDownloadWorker @AssistedInject constructor(
 
     companion object {
         private const val WORK_NAME = "auto-download"
+        private const val MAX_CONCURRENT_FEEDS = 4
 
         /**
          * Every six hours, on unmetered network. WorkManager will not run a periodic

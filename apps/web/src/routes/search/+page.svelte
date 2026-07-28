@@ -26,6 +26,7 @@
 	let searchTimeout: any = null;
 	// Monotonic id so a slow earlier query can't overwrite the results of a newer one.
 	let searchReqId = 0;
+	let searchController: AbortController | null = null;
 
 	// Search filters. Languages start pre-selected from the listener's settings —
 	// the same default as Discover — but unlike Discover they can be cleared here,
@@ -133,6 +134,9 @@
 	}
 
 	function clearSearch() {
+		searchController?.abort();
+		searchController = null;
+		searchReqId++;
 		searchQuery = '';
 		searchResults = [];
 		lastExecutedQuery = '';
@@ -156,6 +160,9 @@
 
 	async function executeSearch(query: string) {
 		if (!query.trim()) return;
+		searchController?.abort();
+		const controller = new AbortController();
+		searchController = controller;
 		const reqId = ++searchReqId;
 		lastExecutedQuery = query.trim();
 		isSearching = true;
@@ -174,7 +181,7 @@
 		replaceState(`/search?${visibleParams}`, {});
 
 		try {
-			const res = await fetch(`/api/v1/podcasts/search?${params}`);
+			const res = await fetch(`/api/v1/podcasts/search?${params}`, { signal: controller.signal });
 			const data = await res.json();
 			if (reqId !== searchReqId) return; // superseded by a newer query
 			searchResults = data.results ?? [];
@@ -184,6 +191,7 @@
 			errorMessage = t('search.searchError');
 		} finally {
 			if (reqId === searchReqId) isSearching = false;
+			if (searchController === controller) searchController = null;
 		}
 	}
 
