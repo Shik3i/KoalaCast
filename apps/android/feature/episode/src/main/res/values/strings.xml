@@ -2,10 +2,6 @@
 <resources>
     <string name="episode_show_notes">Show notes</string>
     <string name="episode_no_notes">This episode has no show notes.</string>
-    <plurals name="episode_transcripts">
-        <item quantity="one">%1$d transcript published with this episode</item>
-        <item quantity="other">%1$d transcripts published with this episode</item>
-    </plurals>
 
     <string name="episode_queue">Add to queue</string>
     <string name="episode_queued">In your queue</string>

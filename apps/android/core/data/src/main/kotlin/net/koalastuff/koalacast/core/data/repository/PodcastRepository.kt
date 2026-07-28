@@ -28,12 +28,14 @@ class PodcastRepository @Inject constructor(
 
     suspend fun discover(
         category: String? = null,
+        region: String? = null,
         languages: Set<String> = emptySet(),
         limit: Int? = null,
     ): DataResult<List<PodcastSummary>> = withContext(dispatcher) {
         apiCall {
             api.discover(
                 category = category?.takeIf { it.isNotBlank() },
+                region = region?.takeIf { it.isNotBlank() },
                 languages = languages.joinToString(",").takeIf { it.isNotBlank() },
                 limit = limit,
             )

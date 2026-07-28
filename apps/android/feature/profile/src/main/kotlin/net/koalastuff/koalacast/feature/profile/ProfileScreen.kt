@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -182,7 +183,11 @@ internal fun ProfileContent(
         Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
             StatCard(
                 stringResource(R.string.profile_streak),
-                stringResource(R.string.profile_days, stats.longestStreak),
+                pluralStringResource(
+                    R.plurals.profile_days,
+                    stats.longestStreak,
+                    stats.longestStreak,
+                ),
                 Modifier.weight(1f),
             )
             StatCard(
@@ -195,7 +200,11 @@ internal fun ProfileContent(
         Hairline()
         SectionTitle(
             stringResource(R.string.profile_activity),
-            stringResource(R.string.profile_active_days, stats.activeDays),
+            pluralStringResource(
+                R.plurals.profile_active_days,
+                stats.activeDays,
+                stats.activeDays,
+            ),
         )
         Heatmap(stats)
 
@@ -455,12 +464,19 @@ private fun profileSummary(state: ProfileUiState): String {
             Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()),
         )
     } ?: stringResource(R.string.profile_tracking_starts)
-    return stringResource(
-        R.string.profile_summary,
+    return listOf(
         since,
-        state.subscriptionCount,
-        state.touchedShows,
-    )
+        pluralStringResource(
+            R.plurals.profile_subscriptions,
+            state.subscriptionCount,
+            state.subscriptionCount,
+        ),
+        pluralStringResource(
+            R.plurals.profile_shows_heard,
+            state.touchedShows,
+            state.touchedShows,
+        ),
+    ).joinToString(" · ")
 }
 
 private fun weekdayLabels(): List<String> {

@@ -2,10 +2,6 @@
 <resources>
     <string name="episode_show_notes">Shownotes</string>
     <string name="episode_no_notes">Zu dieser Folge gibt es keine Shownotes.</string>
-    <plurals name="episode_transcripts">
-        <item quantity="one">%1$d Transkript zu dieser Folge veröffentlicht</item>
-        <item quantity="other">%1$d Transkripte zu dieser Folge veröffentlicht</item>
-    </plurals>
 
     <string name="episode_queue">Zur Warteschlange</string>
     <string name="episode_queued">In der Warteschlange</string>

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="nav_discover">Entdecken</string>
-    <string name="nav_search">Suche</string>
-    <string name="nav_settings">Einstellungen</string>
     <string name="nav_library">Bibliothek</string>
     <string name="nav_inbox">Neu</string>
     <string name="nav_profile">Profil</string>
     <string name="profile_scope_me">Ich</string>
     <string name="profile_scope_community">Community</string>
+    <string name="widget_ready">Bereit zum Hören</string>
+    <string name="widget_play_pause">Abspielen oder pausieren</string>
 </resources>

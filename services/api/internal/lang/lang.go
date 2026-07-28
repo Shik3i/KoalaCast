@@ -18,6 +18,23 @@ import (
 // ever returns one of these (or "" when it cannot tell).
 var Supported = []string{"en", "de", "fr", "es", "it", "pt", "nl"}
 
+var storefrontRegions = map[string]string{
+	"de": "de",
+	"en": "us",
+	"fr": "fr",
+	"es": "es",
+	"it": "it",
+	"pt": "pt",
+	"nl": "nl",
+}
+
+// StorefrontRegion returns the iTunes storefront that best matches a content
+// language. The storefront chooses the chart; callers must still filter the
+// results by spoken language because storefront and language are independent.
+func StorefrontRegion(code string) string {
+	return storefrontRegions[Normalize(code)]
+}
+
 // Normalize reduces an RSS/BCP-47 language tag to a bare lowercase primary
 // subtag: "de-DE" -> "de", "en_US" -> "en", "PT-BR" -> "pt". Tags that are not
 // two-letter primary subtags (or are unrecognized) return "".

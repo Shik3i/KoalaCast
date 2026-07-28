@@ -30,7 +30,18 @@
     <string name="account_opml_body">Import works without an account. Export is generated from this device’s local subscriptions.</string>
     <string name="account_opml_import">Import OPML</string>
     <string name="account_opml_export">Export OPML</string>
-    <string name="account_opml_report">%1$d imported · %2$d skipped · %3$d found</string>
+    <plurals name="account_opml_imported">
+        <item quantity="one">%d imported</item>
+        <item quantity="other">%d imported</item>
+    </plurals>
+    <plurals name="account_opml_skipped">
+        <item quantity="one">%d skipped</item>
+        <item quantity="other">%d skipped</item>
+    </plurals>
+    <plurals name="account_opml_found">
+        <item quantity="one">%d found</item>
+        <item quantity="other">%d found</item>
+    </plurals>
     <string name="account_error_http">The server rejected the request (HTTP %d).</string>
     <string name="account_error_network">The server could not be reached.</string>
     <string name="account_error_data">The server returned invalid or incomplete data.</string>

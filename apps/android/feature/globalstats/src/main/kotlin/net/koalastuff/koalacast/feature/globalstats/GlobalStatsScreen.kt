@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -153,12 +154,23 @@ private fun Stats(stats: GlobalStats, onOpenPodcast: (String) -> Unit) {
         Kpi(stringResource(R.string.global_speed), "%.2f×".format(stats.averageSpeed), Modifier.weight(1f))
     }
     MonoText(
-        text = stringResource(
-            R.string.global_summary,
-            stats.listeningSessions,
-            stats.episodes,
-            stats.activeDays,
-        ),
+        text = listOf(
+            pluralStringResource(
+                R.plurals.global_sessions,
+                stats.listeningSessions,
+                stats.listeningSessions,
+            ),
+            pluralStringResource(
+                R.plurals.global_episodes,
+                stats.episodes,
+                stats.episodes,
+            ),
+            pluralStringResource(
+                R.plurals.global_active_days,
+                stats.activeDays,
+                stats.activeDays,
+            ),
+        ).joinToString(" · "),
         color = KoalaTheme.colors.ink4,
         style = KoalaTheme.type.monoSmall,
     )

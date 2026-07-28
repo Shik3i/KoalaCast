@@ -59,7 +59,11 @@ class PodcastRepositoryTest {
             ).build(),
         )
 
-        val result = repository.discover(languages = setOf("en", "de"), limit = 60)
+        val result = repository.discover(
+            region = "de",
+            languages = setOf("en", "de"),
+            limit = 60,
+        )
 
         assertTrue(result is DataResult.Success)
         val show = (result as DataResult.Success).data.single()
@@ -71,6 +75,7 @@ class PodcastRepositoryTest {
         assertEquals("/api/v1/podcasts/discover", request.url.encodedPath)
         // Language filtering is a comma list, and the blank category is omitted.
         assertEquals(setOf("en", "de"), request.url.queryParameter("languages")!!.split(",").toSet())
+        assertEquals("de", request.url.queryParameter("region"))
         assertEquals(null, request.url.queryParameter("category"))
     }
 

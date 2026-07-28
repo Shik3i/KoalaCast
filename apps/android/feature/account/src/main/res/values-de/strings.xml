@@ -30,7 +30,18 @@
     <string name="account_opml_body">Import funktioniert ohne Konto. Der Export wird aus den lokalen Abos dieses Geräts erzeugt.</string>
     <string name="account_opml_import">OPML importieren</string>
     <string name="account_opml_export">OPML exportieren</string>
-    <string name="account_opml_report">%1$d importiert · %2$d übersprungen · %3$d gefunden</string>
+    <plurals name="account_opml_imported">
+        <item quantity="one">%d importiert</item>
+        <item quantity="other">%d importiert</item>
+    </plurals>
+    <plurals name="account_opml_skipped">
+        <item quantity="one">%d übersprungen</item>
+        <item quantity="other">%d übersprungen</item>
+    </plurals>
+    <plurals name="account_opml_found">
+        <item quantity="one">%d gefunden</item>
+        <item quantity="other">%d gefunden</item>
+    </plurals>
     <string name="account_error_http">Der Server hat die Anfrage abgelehnt (HTTP %d).</string>
     <string name="account_error_network">Der Server ist nicht erreichbar.</string>
     <string name="account_error_data">Der Server hat ungültige oder unvollständige Daten geliefert.</string>

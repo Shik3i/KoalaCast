@@ -5,17 +5,30 @@
     <string name="profile_account">Account</string>
     <string name="profile_downloads">Downloads</string>
     <string name="profile_tracking_starts">Tracking starts with your first play</string>
-    <string name="profile_summary">%1$s · %2$d subscriptions · %3$d shows heard</string>
+    <plurals name="profile_subscriptions">
+        <item quantity="one">%d subscription</item>
+        <item quantity="other">%d subscriptions</item>
+    </plurals>
+    <plurals name="profile_shows_heard">
+        <item quantity="one">%d show heard</item>
+        <item quantity="other">%d shows heard</item>
+    </plurals>
     <string name="profile_year">This year</string>
     <string name="profile_90_days">90 days</string>
     <string name="profile_all">All time</string>
     <string name="profile_listened">Listened</string>
     <string name="profile_finished">Episodes finished</string>
     <string name="profile_streak">Longest streak</string>
-    <string name="profile_days">%d days</string>
+    <plurals name="profile_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
     <string name="profile_daily">Average per active day</string>
     <string name="profile_activity">Activity</string>
-    <string name="profile_active_days">%d active days</string>
+    <plurals name="profile_active_days">
+        <item quantity="one">%d active day</item>
+        <item quantity="other">%d active days</item>
+    </plurals>
     <string name="profile_most_played">Most played</string>
     <string name="profile_by_time">By listening time</string>
     <string name="profile_no_rankings">Listening time will reveal your top shows.</string>

@@ -183,6 +183,13 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	// storefront carries plenty of English shows, so region alone never yields
 	// a German-only chart.
 	languages := lang.ParseList(r.URL.Query().Get("languages"))
+	// Older clients sent a single content language without its matching
+	// storefront. Falling back to the US chart and then filtering it could
+	// legitimately produce zero results (notably for German). Infer the chart
+	// only when the request is unambiguous; current clients send region.
+	if region == "" && len(languages) == 1 {
+		region = lang.StorefrontRegion(languages[0])
+	}
 	limit := 60
 	if l, convErr := strconv.Atoi(r.URL.Query().Get("limit")); convErr == nil && l > 0 {
 		// Cap the upper bound so a client can't request an unbounded chart size

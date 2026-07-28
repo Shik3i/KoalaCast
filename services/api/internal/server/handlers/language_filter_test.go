@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
@@ -135,6 +137,33 @@ func TestDiscover_RegionalLanguageTagMatchesBareCode(t *testing.T) {
 	}
 	if got["Lage der Nation"] {
 		t.Error("expected the German show to be filtered out of an English-only request")
+	}
+}
+
+func TestDiscover_InfersStorefrontForSingleLanguage(t *testing.T) {
+	var requestedPath string
+	httpClient := &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			requestedPath = req.URL.Path
+			body := `{"feed":{"entry":[{"id":{"attributes":{"im:id":"1"}},"im:name":{"label":"Lage der Nation"},"im:artist":{"label":"Ulf und Philip"},"summary":{"label":"Der Politik-Podcast aus Berlin und die Welt"},"im:image":[],"category":{"attributes":{"label":"Nachrichten"}}}]}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	handler := &PodcastHandler{ITunes: itunes.NewITunesClientWithHTTPClient(httpClient)}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/podcasts/discover?languages=de&limit=1", nil)
+	rec := httptest.NewRecorder()
+	handler.Discover(rec, req)
+
+	if requestedPath != "/de/rss/toppodcasts/limit=3/json" {
+		t.Fatalf("expected inferred German storefront, got %q", requestedPath)
+	}
+	if got := decodeResults(t, rec); len(got) != 1 || got[0].Language != "de" {
+		t.Fatalf("expected one German result, got %#v", got)
 	}
 }
 

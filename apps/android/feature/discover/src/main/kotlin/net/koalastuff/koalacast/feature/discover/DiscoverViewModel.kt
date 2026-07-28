@@ -16,6 +16,7 @@ import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.PodcastSummary
+import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
 import javax.inject.Inject
 
 /**
@@ -82,6 +83,9 @@ class DiscoverViewModel @Inject constructor(
             when (
                 val result = podcasts.discover(
                     category = _state.value.category,
+                    region = CONTENT_LANGUAGES
+                        .firstOrNull { it.code in prefs.languages }
+                        ?.region,
                     languages = prefs.languages,
                     limit = CHART_SIZE,
                 )

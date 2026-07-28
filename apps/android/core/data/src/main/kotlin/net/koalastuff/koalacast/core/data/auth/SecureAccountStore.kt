@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,19 +48,19 @@ class SecureAccountStore @Inject constructor(
     fun installationId(): String {
         prefs.getString(KEY_INSTALLATION_ID, null)?.let { return it }
         val value = UUID.randomUUID().toString()
-        prefs.edit().putString(KEY_INSTALLATION_ID, value).apply()
+        prefs.edit { putString(KEY_INSTALLATION_ID, value) }
         return value
     }
 
     fun save(account: Account, token: String) {
         val encrypted = encrypt(token)
-        prefs.edit()
-            .putString(KEY_USER_ID, account.userId)
-            .putString(KEY_USERNAME, account.username)
-            .putString(KEY_ROLE, account.role)
-            .putString(KEY_DEVICE_ID, account.deviceId)
-            .putString(KEY_TOKEN, encrypted)
-            .apply()
+        prefs.edit {
+            putString(KEY_USER_ID, account.userId)
+            putString(KEY_USERNAME, account.username)
+            putString(KEY_ROLE, account.role)
+            putString(KEY_DEVICE_ID, account.deviceId)
+            putString(KEY_TOKEN, encrypted)
+        }
         cachedToken = token
         _account.value = account
     }
@@ -71,19 +72,19 @@ class SecureAccountStore @Inject constructor(
     }
 
     private fun clearStoredAccount() {
-        prefs.edit()
-            .remove(KEY_USER_ID)
-            .remove(KEY_USERNAME)
-            .remove(KEY_ROLE)
-            .remove(KEY_DEVICE_ID)
-            .remove(KEY_TOKEN)
-            .apply()
+        prefs.edit {
+            remove(KEY_USER_ID)
+            remove(KEY_USERNAME)
+            remove(KEY_ROLE)
+            remove(KEY_DEVICE_ID)
+            remove(KEY_TOKEN)
+        }
     }
 
     fun cursor(userId: String): Long = prefs.getLong("cursor_$userId", 0)
 
     fun setCursor(userId: String, cursor: Long) {
-        prefs.edit().putLong("cursor_$userId", cursor.coerceAtLeast(0)).apply()
+        prefs.edit { putLong("cursor_$userId", cursor.coerceAtLeast(0)) }
     }
 
     private fun readAccount(): Account? {

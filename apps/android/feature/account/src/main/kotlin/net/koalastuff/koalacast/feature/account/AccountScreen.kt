@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -210,12 +211,23 @@ internal fun AccountContent(
             }
             state.opmlReport?.let { report ->
                 MonoText(
-                    text = stringResource(
-                        R.string.account_opml_report,
-                        report.imported,
-                        report.skipped,
-                        report.totalFound,
-                    ),
+                    text = listOf(
+                        pluralStringResource(
+                            R.plurals.account_opml_imported,
+                            report.imported,
+                            report.imported,
+                        ),
+                        pluralStringResource(
+                            R.plurals.account_opml_skipped,
+                            report.skipped,
+                            report.skipped,
+                        ),
+                        pluralStringResource(
+                            R.plurals.account_opml_found,
+                            report.totalFound,
+                            report.totalFound,
+                        ),
+                    ).joinToString(" · "),
                     color = KoalaTheme.colors.accentInk,
                     style = KoalaTheme.type.monoSmall,
                 )

@@ -12,7 +12,18 @@
     <string name="global_participants">Teilnehmende</string>
     <string name="global_podcasts">Podcasts</string>
     <string name="global_speed">Ø Geschwindigkeit</string>
-    <string name="global_summary">%1$d Sitzungen · %2$d Folgen · %3$d aktive Tage</string>
+    <plurals name="global_sessions">
+        <item quantity="one">%d Sitzung</item>
+        <item quantity="other">%d Sitzungen</item>
+    </plurals>
+    <plurals name="global_episodes">
+        <item quantity="one">%d Folge</item>
+        <item quantity="other">%d Folgen</item>
+    </plurals>
+    <plurals name="global_active_days">
+        <item quantity="one">%d aktiver Tag</item>
+        <item quantity="other">%d aktive Tage</item>
+    </plurals>
     <string name="global_activity">Aktivität über 26 Wochen</string>
     <string name="global_weekday">Nach Wochentag</string>
     <string name="global_hour">Nach Uhrzeit (UTC)</string>

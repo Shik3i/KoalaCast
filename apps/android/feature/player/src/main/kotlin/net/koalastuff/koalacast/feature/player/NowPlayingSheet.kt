@@ -77,6 +77,7 @@ fun NowPlayingScreen(
 @Composable
 internal fun NowPlayingContent(
     state: PlaybackUiState,
+    modifier: Modifier = Modifier,
     chapters: List<Chapter> = emptyList(),
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
@@ -86,7 +87,6 @@ internal fun NowPlayingContent(
     onSeekTo: (Long) -> Unit,
     onCycleSpeed: () -> Unit,
     onSetSleepTimer: (Int?, Boolean, Boolean) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val colors = KoalaTheme.colors
     val context = LocalContext.current
