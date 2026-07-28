@@ -9,6 +9,9 @@ import mockwebserver3.MockWebServer
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.network.KoalaCastApi
+import net.koalastuff.koalacast.core.data.db.ContentCacheDao
+import net.koalastuff.koalacast.core.data.db.ContentCacheEntity
+import net.koalastuff.koalacast.core.data.util.Clock
 import okhttp3.MediaType.Companion.toMediaType
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -21,6 +24,7 @@ class PodcastRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repository: PodcastRepository
+    private lateinit var cacheDao: InMemoryContentCacheDao
 
     @Before
     fun setUp() {
@@ -36,7 +40,15 @@ class PodcastRepositoryTest {
 
         // A real dispatcher: the repository's job here is the network round trip,
         // and runTest awaits the suspend call either way.
-        repository = PodcastRepository(api, Dispatchers.IO)
+        cacheDao = InMemoryContentCacheDao()
+        val cache = ContentCache(
+            cacheDao,
+            json,
+            object : Clock {
+                override fun nowMs() = 1_800_000L
+            },
+        )
+        repository = PodcastRepository(api, Dispatchers.IO, cache)
     }
 
     @After
@@ -105,6 +117,46 @@ class PodcastRepositoryTest {
     }
 
     @Test
+    fun `incremental episode refresh keeps cached rows and requests only the boundary`() = runTest {
+        server.enqueue(
+            MockResponse.Builder().code(200).body(
+                """
+                {"count":2,"limit":15,"offset":0,"episodes":[
+                  {"id":"e2","podcast_id":"p1","title":"Second","pub_date":200,"has_pub_date":true,
+                   "enclosure_url":"https://cdn.example/e2.mp3"},
+                  {"id":"e1","podcast_id":"p1","title":"First","pub_date":100,"has_pub_date":true,
+                   "enclosure_url":"https://cdn.example/e1.mp3"}
+                ]}
+                """.trimIndent(),
+            ).build(),
+        )
+        repository.episodes("p1", limit = 15)
+
+        server.enqueue(
+            MockResponse.Builder().code(200).body(
+                """
+                {"count":2,"limit":15,"offset":0,"since":200,"episodes":[
+                  {"id":"e3","podcast_id":"p1","title":"Third","pub_date":300,"has_pub_date":true,
+                   "enclosure_url":"https://cdn.example/e3.mp3"},
+                  {"id":"e2","podcast_id":"p1","title":"Second updated","pub_date":200,"has_pub_date":true,
+                   "enclosure_url":"https://cdn.example/e2.mp3"}
+                ]}
+                """.trimIndent(),
+            ).build(),
+        )
+
+        val result = repository.refreshEpisodesIncrementally("p1", limit = 15)
+
+        assertEquals(
+            listOf("e3", "e2", "e1"),
+            (result as DataResult.Success).data.map { it.id },
+        )
+        server.takeRequest()
+        val incremental = server.takeRequest()
+        assertEquals("200", incremental.url.queryParameter("since"))
+    }
+
+    @Test
     fun `a rate-limited discovery surfaces as an Http failure, not an exception`() = runTest {
         server.enqueue(MockResponse.Builder().code(429).body("""{"error":"slow down"}""").build())
 
@@ -143,4 +195,15 @@ class PodcastRepositoryTest {
         assertEquals("/api/v1/podcasts/feed", request.url.encodedPath)
         assertTrue(request.body!!.utf8().contains("https://example.org/feed.xml"))
     }
+}
+
+private class InMemoryContentCacheDao : ContentCacheDao {
+    private val rows = mutableMapOf<String, ContentCacheEntity>()
+
+    override suspend fun get(key: String): ContentCacheEntity? = rows[key]
+
+    override suspend fun upsert(entry: ContentCacheEntity) {
+        rows[entry.cacheKey] = entry
+    }
+
 }

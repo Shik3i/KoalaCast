@@ -292,3 +292,12 @@ interface EpisodeDownloadDao {
     @Query("DELETE FROM episode_downloads WHERE episodeId = :episodeId")
     suspend fun delete(episodeId: String)
 }
+
+@Dao
+interface ContentCacheDao {
+    @Query("SELECT * FROM content_cache WHERE cacheKey = :key")
+    suspend fun get(key: String): ContentCacheEntity?
+
+    @Upsert
+    suspend fun upsert(entry: ContentCacheEntity)
+}

@@ -3,14 +3,16 @@
 
 // App-shell service worker: precaches the built assets so the UI loads offline,
 // and serves navigations network-first (fresh when online, cached shell when not).
-// Dynamic/authenticated API calls and cross-origin audio are passed straight
-// through. Public artwork responses are the sole API exception.
+// Authenticated API calls and cross-origin audio are passed straight through.
+// Public catalogue JSON uses stale-while-revalidate so a returning listener gets
+// the last useful screen immediately while the next snapshot is fetched.
 
 import { build, files, version } from '$service-worker';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
 const CACHE = `koalacast-cache-${version}`;
+const PUBLIC_API_CACHE = `koalacast-public-api-${version}`;
 // Vite emits legacy font fallbacks alongside WOFF2, while `files` contains every
 // generated icon rendition. Precaching all of them downloaded roughly 9 MB on a
 // first visit even though the browser uses only a small subset. Keep the complete
@@ -54,7 +56,13 @@ sw.addEventListener('activate', (event) => {
 	event.waitUntil(
 		caches
 			.keys()
-			.then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+			.then((keys) =>
+				Promise.all(
+					keys
+						.filter((k) => k !== CACHE && k !== PUBLIC_API_CACHE)
+						.map((k) => caches.delete(k))
+				)
+			)
 			.then(() => sw.clients.claim())
 	);
 });
@@ -86,7 +94,43 @@ sw.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// Never cache the API — it's dynamic and often auth-scoped.
+	const isPublicContentAPI =
+		url.pathname === '/api/v1/podcasts/discover' ||
+		url.pathname === '/api/v1/podcasts/search' ||
+		/^\/api\/v1\/podcasts\/[^/]+(?:\/episodes)?$/.test(url.pathname) ||
+		/^\/api\/v1\/episodes\/[^/]+$/.test(url.pathname) ||
+		url.pathname === '/api/v1/proxy/chapters' ||
+		url.pathname === '/api/v1/proxy/transcript' ||
+		/^\/api\/v1\/episodes\/[^/]+\/transcript$/.test(url.pathname);
+
+	if (isPublicContentAPI) {
+		event.respondWith(
+			caches.open(PUBLIC_API_CACHE).then(async (cache) => {
+				// Explicit revalidation requests come from the app after it has
+				// already painted its IndexedDB snapshot.
+				if (request.cache === 'reload' || request.cache === 'no-cache') {
+					const fresh = await fetch(request);
+					if (fresh.ok) await cache.put(request, fresh.clone());
+					return fresh;
+				}
+				const cached = await cache.match(request);
+				const update = fetch(request)
+					.then(async (fresh) => {
+						if (fresh.ok) await cache.put(request, fresh.clone());
+						return fresh;
+					})
+					.catch(() => cached);
+				if (cached) {
+					event.waitUntil(update.then(() => undefined));
+					return cached;
+				}
+				return (await update) ?? Response.error();
+			})
+		);
+		return;
+	}
+
+	// Everything else below /api may be account-scoped.
 	if (url.pathname.startsWith('/api/')) return;
 
 	// Cache-first for immutable build assets and static files.

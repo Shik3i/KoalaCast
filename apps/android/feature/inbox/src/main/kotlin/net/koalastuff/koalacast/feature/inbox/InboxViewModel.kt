@@ -20,6 +20,7 @@ import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
+import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.InboxMode
@@ -118,30 +119,63 @@ class InboxViewModel @Inject constructor(
                     _state.update { it.copy(subscriptions = subscriptions, completedIds = completed) }
                     if (idsChanged || !seeded) {
                         seeded = true
-                        refresh()
+                        refreshFromCache()
                     }
                 }
         }
     }
 
-    fun refresh() {
-        _state.update { it.copy(loading = true, failedFeeds = 0) }
+    fun refresh() = refresh(force = true)
+
+    private fun refreshFromCache() = refresh(force = false)
+
+    private fun refresh(force: Boolean) {
+        _state.update { it.copy(loading = it.rawEpisodes.isEmpty(), failedFeeds = 0) }
 
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
+            var subscriptions = _state.value.subscriptions
+            val semaphore = Semaphore(MAX_CONCURRENT_FEEDS)
+            val cachedByPodcast = subscriptions.associate { subscription ->
+                subscription.podcastId to podcasts.cachedEpisodes(
+                    podcastId = subscription.podcastId,
+                    limit = PER_FEED,
+                )
+            }
+            val cachedResults = subscriptions.map { subscription ->
+                async {
+                    semaphore.withPermit {
+                        cachedByPodcast[subscription.podcastId]
+                            ?.value.orEmpty()
+                            .map { InboxEpisode(it, subscription) }
+                    }
+                }
+            }.awaitAll()
+            val cachedEpisodes = cachedResults.flatten()
+            if (cachedByPodcast.values.any { it != null } || subscriptions.isEmpty()) {
+                _state.update {
+                    it.copy(loading = false, rawEpisodes = cachedEpisodes)
+                }
+            }
+
             account.resolvePendingSubscriptions()
-            val subscriptions = library.subscriptionsSnapshot()
+            subscriptions = library.subscriptionsSnapshot()
             _state.update { it.copy(subscriptions = subscriptions) }
             if (subscriptions.isEmpty()) {
                 _state.update { it.copy(loading = false, rawEpisodes = emptyList()) }
                 return@launch
             }
-            val semaphore = Semaphore(MAX_CONCURRENT_FEEDS)
             val results = subscriptions.map { subscription ->
                 async {
                     semaphore.withPermit {
+                        val cached = cachedByPodcast[subscription.podcastId]
+                        if (!force && cached != null && podcasts.isFresh(cached, ContentTtl.INBOX)) {
+                            return@withPermit FeedResult(
+                                episodes = cached.value.map { InboxEpisode(it, subscription) },
+                            )
+                        }
                         when (
-                            val result = podcasts.episodes(
+                            val result = podcasts.refreshEpisodesIncrementally(
                                 podcastId = subscription.podcastId,
                                 limit = PER_FEED,
                             )
@@ -151,7 +185,13 @@ class InboxViewModel @Inject constructor(
                                     episodes = result.data.take(PER_FEED)
                                         .map { InboxEpisode(it, subscription) },
                                 )
-                            is DataResult.Failure -> FeedResult(failed = true)
+                            is DataResult.Failure -> FeedResult(
+                                episodes = podcasts.cachedEpisodes(
+                                    podcastId = subscription.podcastId,
+                                    limit = PER_FEED,
+                                )?.value.orEmpty().map { InboxEpisode(it, subscription) },
+                                failed = true,
+                            )
                         }
                     }
                 }

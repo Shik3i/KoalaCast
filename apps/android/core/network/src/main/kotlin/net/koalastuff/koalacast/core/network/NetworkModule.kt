@@ -5,9 +5,12 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Cache
+import android.content.Context
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 import javax.inject.Qualifier
@@ -41,8 +44,12 @@ object NetworkModule {
      */
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient =
+    fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient =
         OkHttpClient.Builder()
+            // Public GETs carry ETags. Keep their bodies on disk so a
+            // Cache-Control: no-cache request becomes a tiny conditional probe
+            // and OkHttp can combine a 304 with the last body.
+            .cache(Cache(context.cacheDir.resolve("koalacast-http"), 50L * 1024 * 1024))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(45, TimeUnit.SECONDS)

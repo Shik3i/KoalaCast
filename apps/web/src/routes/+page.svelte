@@ -19,6 +19,7 @@
 		type DiscoverMood,
 		type DiscoverSort
 	} from '$lib/discover/home';
+	import { cacheContent, CONTENT_TTL, contentCacheKey, readCachedContent } from '$lib/cache/content';
 
 	interface PodcastItem {
 		id: string;
@@ -120,61 +121,62 @@
 
 	async function loadDiscover(background = false) {
 		const id = ++requestId;
-		if (!background) isLoading = true;
+		if (!background && podcasts.length === 0) isLoading = true;
 		const languages = prefs.languages.length ? prefs.languages : detectBrowserLanguages();
 		try {
+			const requests = languages.map((language) => {
+				const params = new URLSearchParams({
+					limit: String(limit),
+					region: regionForLanguage(language),
+					languages: language
+				});
+				if (selectedCategory !== 'All') params.set('category', selectedCategory);
+				const path = `/api/v1/podcasts/discover?${params}`;
+				return { language, path, key: contentCacheKey(path) };
+			});
+			const cached = await Promise.all(
+				requests.map(async (request) => ({
+					request,
+					entry: await readCachedContent<{ results?: any[] }>(
+						request.key,
+						CONTENT_TTL.discover
+					)
+				}))
+			);
+			const cachedLists = cached.map(({ entry }) => entry?.value.results ?? []);
+			if (cachedLists.some((list) => list.length > 0)) {
+				if (id !== requestId) return;
+				applyDiscoverLists(cachedLists, languages);
+				isLoading = false;
+				void hydrateVisibleMetadata();
+			}
+			if (cached.every(({ entry }) => entry?.fresh)) return;
 			const lists = await mapWithConcurrency(
-				languages,
+				cached,
 				DISCOVER_CONCURRENCY,
-				async (language) => {
+				async ({ request, entry }) => {
+					if (entry?.fresh) return entry.value.results ?? [];
 					const controller = new AbortController();
 					const timeout = background ? window.setTimeout(() => controller.abort(), 2500) : 0;
-					const params = new URLSearchParams({
-						limit: String(limit),
-						region: regionForLanguage(language),
-						languages: language
-					});
-					if (selectedCategory !== 'All') params.set('category', selectedCategory);
 					try {
-						const response = await fetch(`/api/v1/podcasts/discover?${params}`, { signal: controller.signal });
+						const response = await fetch(request.path, {
+							signal: controller.signal,
+							cache: 'no-cache'
+						});
 						const data = response.ok ? await response.json() : { results: [] };
+						if (response.ok) await cacheContent(request.key, data);
 						return data.results ?? [];
 					} catch {
-						return [];
+						return entry?.value.results ?? [];
 					} finally {
 						if (timeout) window.clearTimeout(timeout);
 					}
 				}
 			);
 			if (id !== requestId) return;
-			const merged: PodcastItem[] = [];
-			const seen = new Set<string>();
-			const longest = Math.max(0, ...lists.map((list) => list.length));
-			for (let index = 0; index < longest; index += 1) {
-				for (const list of lists) {
-					const item = list[index];
-					const key = item?.feed_url || item?.id;
-					if (item && key && !seen.has(key)) {
-						seen.add(key);
-						const latestDurationMs = Number(item.latest_duration_ms || 0);
-						const latestPublishedAt = Number(item.latest_published_at || 0);
-						merged.push({
-							...item,
-							latestDurationMs: latestDurationMs > 0 ? latestDurationMs : undefined,
-							latestPublishedAt: latestPublishedAt > 0 ? latestPublishedAt : undefined
-						});
-					}
-				}
-			}
-			const safeFallback = languages.includes('en') ? FEATURED_PODCASTS : [];
-			if (!languages.includes('en')) pinnedSpotlight = null;
-			podcasts = (merged.length ? merged : safeFallback).map((podcast, index) => ({
-				...podcast,
-				sourceRank: index
-			}));
-			reachedEnd = merged.length < limit;
+			applyDiscoverLists(lists, languages);
 		} catch {
-			podcasts = languages.includes('en') ? FEATURED_PODCASTS : [];
+			if (podcasts.length === 0) podcasts = languages.includes('en') ? FEATURED_PODCASTS : [];
 			reachedEnd = true;
 		} finally {
 			if (id === requestId) {
@@ -183,6 +185,35 @@
 				void hydrateVisibleMetadata();
 			}
 		}
+	}
+
+	function applyDiscoverLists(lists: any[][], languages: string[]) {
+		const merged: PodcastItem[] = [];
+		const seen = new Set<string>();
+		const longest = Math.max(0, ...lists.map((list) => list.length));
+		for (let index = 0; index < longest; index += 1) {
+			for (const list of lists) {
+				const item = list[index];
+				const key = item?.feed_url || item?.id;
+				if (item && key && !seen.has(key)) {
+					seen.add(key);
+					const latestDurationMs = Number(item.latest_duration_ms || 0);
+					const latestPublishedAt = Number(item.latest_published_at || 0);
+					merged.push({
+						...item,
+						latestDurationMs: latestDurationMs > 0 ? latestDurationMs : undefined,
+						latestPublishedAt: latestPublishedAt > 0 ? latestPublishedAt : undefined
+					});
+				}
+			}
+		}
+		const safeFallback = languages.includes('en') ? FEATURED_PODCASTS : [];
+		if (!languages.includes('en')) pinnedSpotlight = null;
+		podcasts = (merged.length ? merged : safeFallback).map((podcast, index) => ({
+			...podcast,
+			sourceRank: index
+		}));
+		reachedEnd = merged.length < limit;
 	}
 
 	async function selectCategory(category: string) {

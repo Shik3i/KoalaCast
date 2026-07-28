@@ -15,6 +15,7 @@ import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
+import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
@@ -62,18 +63,51 @@ class PodcastViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(PodcastUiState())
     val state: StateFlow<PodcastUiState> = _state.asStateFlow()
+    private var observedPodcastId: String? = null
+    private var progressObserved = false
 
     init {
-        load()
+        load(force = false)
     }
 
-    fun retry() = load()
+    fun retry() = load(force = true)
 
-    private fun load() {
+    private fun load(force: Boolean) {
         viewModelScope.launch {
+            val cachedPodcast = when {
+                feedUrl.isNotBlank() -> podcasts.cachedResolvedFeed(feedUrl)
+                podcastId.isNotBlank() -> podcasts.cachedPodcast(podcastId)
+                else -> null
+            }
+            if (cachedPodcast != null) {
+                val cachedEpisodes = podcasts.cachedEpisodes(
+                    cachedPodcast.value.id,
+                    limit = PAGE_SIZE,
+                )
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        error = null,
+                        serverUrl = preferences.serverUrl.first(),
+                        podcast = cachedPodcast.value,
+                        episodes = cachedEpisodes?.value.orEmpty(),
+                        endReached = (cachedEpisodes?.value?.size ?: 0) < PAGE_SIZE,
+                    )
+                }
+                observeLocalState(cachedPodcast.value.id)
+                observeProgress()
+                if (
+                    !force &&
+                    podcasts.isFresh(cachedPodcast, ContentTtl.PODCAST) &&
+                    cachedEpisodes != null &&
+                    podcasts.isFresh(cachedEpisodes, ContentTtl.EPISODE_LIST)
+                ) {
+                    return@launch
+                }
+            }
             _state.update {
                 it.copy(
-                    loading = true,
+                    loading = it.podcast == null,
                     error = null,
                     serverUrl = preferences.serverUrl.first(),
                 )
@@ -98,7 +132,12 @@ class PodcastViewModel @Inject constructor(
 
             when (resolved) {
                 is DataResult.Failure -> {
-                    _state.update { it.copy(loading = false, error = resolved.error) }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            error = if (it.podcast == null) resolved.error else null,
+                        )
+                    }
                     return@launch
                 }
 
@@ -110,7 +149,7 @@ class PodcastViewModel @Inject constructor(
                     _state.update { it.copy(podcast = resolved.data) }
                     observeLocalState(resolved.data.id)
                     observeProgress()
-                    loadEpisodes(resolved.data.id, offset = 0)
+                    refreshFirstPage(resolved.data.id)
                 }
             }
         }
@@ -121,6 +160,8 @@ class PodcastViewModel @Inject constructor(
      * telling the truth after a change made on another screen — or offline.
      */
     private fun observeLocalState(id: String) {
+        if (observedPodcastId == id) return
+        observedPodcastId = id
         viewModelScope.launch {
             combine(
                 library.isSubscribed(id),
@@ -150,6 +191,8 @@ class PodcastViewModel @Inject constructor(
      * plays instead of freezing at the last checkpoint.
      */
     private fun observeProgress() {
+        if (progressObserved) return
+        progressObserved = true
         viewModelScope.launch {
             combine(progress.allProgress, player.state) { stored, playback ->
                 val map = stored.associate { it.episodeId to it.progressPercent }.toMutableMap()
@@ -296,6 +339,34 @@ class PodcastViewModel @Inject constructor(
                 } else {
                     current.copy(loadingMore = false, paginationError = true)
                 }
+            }
+        }
+    }
+
+    private suspend fun refreshFirstPage(id: String) {
+        when (val result = podcasts.refreshEpisodesIncrementally(id, limit = PAGE_SIZE)) {
+            is DataResult.Success -> {
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        loadingMore = false,
+                        episodes = result.data,
+                        endReached = result.data.size < PAGE_SIZE,
+                    )
+                }
+                if (library.podcastSettingsSnapshot(id).autoQueueNew) {
+                    result.data.firstOrNull { it.id !in _state.value.completedIds }
+                        ?.let(::trackFor)
+                        ?.let { queue.addToEnd(it) }
+                }
+            }
+
+            is DataResult.Failure -> _state.update {
+                it.copy(
+                    loading = false,
+                    loadingMore = false,
+                    error = if (it.episodes.isEmpty()) result.error else null,
+                )
             }
         }
     }

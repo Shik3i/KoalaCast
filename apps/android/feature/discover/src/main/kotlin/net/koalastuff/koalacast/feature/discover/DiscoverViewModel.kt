@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
+import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
@@ -54,23 +55,50 @@ class DiscoverViewModel @Inject constructor(
     private var spotlightJob: Job? = null
 
     init {
-        load()
+        load(force = false)
     }
 
     fun selectCategory(wireName: String) {
         if (wireName == _state.value.category) return
         _state.update { it.copy(category = wireName) }
-        load()
+        load(force = false)
     }
 
-    fun retry() = load()
+    fun retry() = load(force = true)
 
-    private fun load() {
+    private fun load(force: Boolean) {
         loadJob?.cancel()
         spotlightJob?.cancel()
 
         loadJob = viewModelScope.launch {
             val prefs = preferences.preferences.first()
+            val category = _state.value.category
+            val region = CONTENT_LANGUAGES
+                .firstOrNull { it.code in prefs.languages }
+                ?.region
+            val cached = podcasts.cachedDiscover(
+                category = category,
+                region = region,
+                languages = prefs.languages,
+                limit = CHART_SIZE,
+            )
+            if (cached != null && category == _state.value.category) {
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        refreshing = true,
+                        error = null,
+                        serverUrl = prefs.serverUrl,
+                        chart = cached.value,
+                        spotlight = cached.value.firstOrNull()?.let(::Spotlight),
+                    )
+                }
+                cached.value.firstOrNull()?.let(::loadSpotlightEpisode)
+                if (!force && podcasts.isFresh(cached, ContentTtl.DISCOVER)) {
+                    _state.update { it.copy(refreshing = false) }
+                    return@launch
+                }
+            }
             _state.update {
                 it.copy(
                     loading = it.chart.isEmpty(),
@@ -82,15 +110,14 @@ class DiscoverViewModel @Inject constructor(
 
             when (
                 val result = podcasts.discover(
-                    category = _state.value.category,
-                    region = CONTENT_LANGUAGES
-                        .firstOrNull { it.code in prefs.languages }
-                        ?.region,
+                    category = category,
+                    region = region,
                     languages = prefs.languages,
                     limit = CHART_SIZE,
                 )
             ) {
                 is DataResult.Success -> {
+                    if (category != _state.value.category) return@launch
                     _state.update {
                         it.copy(
                             loading = false,
@@ -103,7 +130,11 @@ class DiscoverViewModel @Inject constructor(
                 }
 
                 is DataResult.Failure -> _state.update {
-                    it.copy(loading = false, refreshing = false, error = result.error)
+                    it.copy(
+                        loading = false,
+                        refreshing = false,
+                        error = if (it.chart.isEmpty()) result.error else null,
+                    )
                 }
             }
         }

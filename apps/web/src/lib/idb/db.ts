@@ -78,6 +78,12 @@ export interface LocalCurrentPlayback {
 	position_ms: number;
 }
 
+export interface LocalContentCacheEntry<T = unknown> {
+	key: string;
+	value: T;
+	stored_at: number;
+}
+
 // Persist a new queue order (drag-to-reorder). Rewrites position_order to match
 // the given episode_id sequence.
 export async function reorderLocalQueue(orderedIds: string[]): Promise<void> {
@@ -110,7 +116,7 @@ const ACTIVE_CONTEXT_KEY = 'koalacast_local_data_context';
 const INITIALIZED_KEY = 'context_initialized';
 // v2 dropped the never-used 'history' store. v3 adds local-only listening
 // sessions for accurate Profile analytics.
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 let activeContext = 'guest';
@@ -147,6 +153,10 @@ function openLocalDB(name: string): Promise<IDBPDatabase> {
 				const sessions = db.createObjectStore('listening_sessions', { keyPath: 'id' });
 				sessions.createIndex('started_at', 'started_at');
 				sessions.createIndex('podcast_id', 'podcast_id');
+			}
+			if (!db.objectStoreNames.contains('content_cache')) {
+				const contentCache = db.createObjectStore('content_cache', { keyPath: 'key' });
+				contentCache.createIndex('stored_at', 'stored_at');
 			}
 			if (db.objectStoreNames.contains('history')) {
 				db.deleteObjectStore('history');
@@ -206,7 +216,8 @@ async function copyAndClearGuestData(target: IDBPDatabase): Promise<void> {
 			'favorites',
 			'settings',
 			'tombstones',
-			'listening_sessions'
+			'listening_sessions',
+			'content_cache'
 		] as const;
 		const recordsByStore = new Map<string, any[]>();
 		for (const storeName of stores) recordsByStore.set(storeName, await guest.getAll(storeName));
@@ -259,6 +270,22 @@ export async function switchLocalDataContext(
 export async function getLocalSubscriptions(): Promise<LocalSubscription[]> {
 	const db = await getLocalDB();
 	return db.getAll('subscriptions');
+}
+
+export async function getCachedContent<T>(
+	key: string
+): Promise<LocalContentCacheEntry<T> | undefined> {
+	const db = await getLocalDB();
+	return db.get('content_cache', key);
+}
+
+export async function putCachedContent<T>(key: string, value: T): Promise<void> {
+	const db = await getLocalDB();
+	await db.put('content_cache', {
+		key,
+		value: structuredClone(value),
+		stored_at: Date.now()
+	} satisfies LocalContentCacheEntry<T>);
 }
 
 export async function saveLocalSubscription(sub: LocalSubscription): Promise<void> {
@@ -566,6 +593,7 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('settings');
 	await db.clear('tombstones');
 	await db.clear('listening_sessions');
+	await db.clear('content_cache');
 }
 
 export interface LocalSyncSnapshot {

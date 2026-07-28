@@ -60,6 +60,7 @@ interface KoalaCastApi {
     @GET
     suspend fun readyzAt(@Url absoluteUrl: String): Response<ReadinessResponse>
 
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/podcasts/discover")
     suspend fun discover(
         @Query("category") category: String? = null,
@@ -68,6 +69,7 @@ interface KoalaCastApi {
         @Query("limit") limit: Int? = null,
     ): Response<DiscoverResponse>
 
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/podcasts/search")
     suspend fun search(
         @Query("q") query: String,
@@ -80,16 +82,20 @@ interface KoalaCastApi {
     @POST("api/v1/podcasts/feed")
     suspend fun addFeed(@Body body: AddFeedRequest): Response<PodcastDto>
 
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/podcasts/{id}")
     suspend fun podcast(@Path("id") id: String): Response<PodcastDto>
 
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/podcasts/{id}/episodes")
     suspend fun episodes(
         @Path("id") id: String,
         @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0,
+        @Query("since") since: Long? = null,
     ): Response<EpisodesResponse>
 
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/episodes/{id}")
     suspend fun episode(@Path("id") id: String): Response<EpisodeDto>
 
@@ -98,9 +104,11 @@ interface KoalaCastApi {
      * proxy: that keeps the listener's address off a third-party origin, exactly as
      * artwork proxying does.
      */
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/proxy/chapters")
     suspend fun chapters(@Query("url") url: String): Response<ChaptersResponse>
 
+    @Headers("Cache-Control: no-cache")
     @GET("api/v1/episodes/{id}/transcript")
     suspend fun transcript(
         @Path("id") id: String,

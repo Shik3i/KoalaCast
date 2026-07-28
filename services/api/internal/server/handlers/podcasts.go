@@ -163,13 +163,11 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		results = []itunes.PodcastResult{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writePublicJSON(w, r, map[string]interface{}{
 		"search_available": true,
 		"provider":         provider,
 		"results":          results,
-	})
+	}, "public, max-age=1800, stale-while-revalidate=3600")
 }
 
 func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
@@ -314,17 +312,11 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		topPodcasts = []itunes.PodcastResult{}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	// Discover is public and query-addressed. Let browsers and reverse proxies
-	// reuse the normalized chart while the server-side Apple metadata cache
-	// absorbs cold misses after that window.
-	w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=900")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writePublicJSON(w, r, map[string]interface{}{
 		"status":  "ok",
 		"results": topPodcasts,
 		"total":   len(topPodcasts),
-	})
+	}, "public, max-age=14400, stale-while-revalidate=18000")
 }
 
 // ingestError carries an HTTP status code alongside a message so callers can
@@ -637,9 +629,7 @@ func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Requ
 
 	pod.Explicit = (explicitInt == 1)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(pod)
+	writePublicJSON(w, r, pod, "public, max-age=18000, stale-while-revalidate=86400")
 }
 
 func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -672,16 +662,35 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 		offset = o
 	}
 
-	rows, err := h.DB.SQL.QueryContext(r.Context(), `
+	since := int64(0)
+	if value := r.URL.Query().Get("since"); value != "" {
+		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil && parsed > 0 {
+			since = parsed
+			offset = 0
+		}
+	}
+
+	query := `
 		SELECT id, podcast_id, guid, title, description, content_encoded, pub_date,
 		       has_pub_date, duration_ms, enclosure_url, enclosure_type, enclosure_length,
 		       artwork_url, episode_number, season_number, episode_type, explicit, link,
 		       chapters_url
 		FROM episodes
 		WHERE podcast_id = ?
+	`
+	args := []any{podcastID}
+	if since > 0 {
+		// Inclusive by design: clients de-duplicate by episode id, so two episodes
+		// published in the same second cannot make one another invisible.
+		query += " AND pub_date >= ?"
+		args = append(args, since)
+	}
+	query += `
 		ORDER BY pub_date DESC
 		LIMIT ? OFFSET ?
-	`, podcastID, limit, offset)
+	`
+	args = append(args, limit, offset)
+	rows, err := h.DB.SQL.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		http.Error(w, `{"error":"failed to query episodes"}`, http.StatusInternalServerError)
 		return
@@ -709,14 +718,13 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	writePublicJSON(w, r, map[string]interface{}{
 		"episodes": episodes,
 		"count":    len(episodes),
 		"limit":    limit,
 		"offset":   offset,
-	})
+		"since":    since,
+	}, "public, max-age=300, stale-while-revalidate=600")
 }
 
 func (h *PodcastHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
@@ -755,9 +763,7 @@ func (h *PodcastHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal([]byte(transcriptsJSON.String), &ep.Transcripts)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(ep)
+	writePublicJSON(w, r, ep, "public, max-age=86400, stale-while-revalidate=86400")
 }
 
 // GetEpisodeTranscript fetches a publisher-provided transcript on demand and

@@ -3,6 +3,17 @@ package net.koalastuff.koalacast.core.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `content_cache` (`cacheKey` TEXT NOT NULL, `payloadJson` TEXT NOT NULL, `storedAt` INTEGER NOT NULL, PRIMARY KEY(`cacheKey`))",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_content_cache_storedAt` ON `content_cache` (`storedAt`)",
+        )
+    }
+}
+
 val MIGRATION_4_5 = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(

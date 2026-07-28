@@ -18,12 +18,83 @@ import (
 	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
+	"github.com/go-chi/chi/v5"
 )
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
+}
+
+func TestPodcastHandler_GetEpisodesIncrementalAndConditional(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	database, err := db.OpenDB(filepath.Join(t.TempDir(), "episodes-cache.db"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	if _, err := database.SQL.Exec(`
+		INSERT INTO podcasts (id, feed_url, title, created_at, updated_at)
+		VALUES ('p1', 'https://example.com/feed.xml', 'Cached show', 1, 1)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	for _, episode := range []struct {
+		id      string
+		pubDate int64
+	}{
+		{"e1", 100},
+		{"e2", 200},
+		{"e3", 300},
+	} {
+		if _, err := database.SQL.Exec(`
+			INSERT INTO episodes
+				(id, podcast_id, stable_identity_key, title, pub_date, has_pub_date, enclosure_url, created_at)
+			VALUES (?, 'p1', ?, ?, ?, 1, ?, ?)
+		`, episode.id, episode.id, episode.id, episode.pubDate, "https://cdn.example/"+episode.id+".mp3", episode.pubDate); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	handler := &PodcastHandler{DB: database}
+	request := func(target, etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		route := chi.NewRouteContext()
+		route.URLParams.Add("id", "p1")
+		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, route))
+		rec := httptest.NewRecorder()
+		handler.GetEpisodes(rec, req)
+		return rec
+	}
+
+	first := request("/api/v1/podcasts/p1/episodes?since=200", "")
+	if first.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", first.Code, first.Body.String())
+	}
+	var body struct {
+		Episodes []EpisodeResponse `json:"episodes"`
+		Since    int64             `json:"since"`
+	}
+	if err := json.NewDecoder(first.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Since != 200 || len(body.Episodes) != 2 ||
+		body.Episodes[0].ID != "e3" || body.Episodes[1].ID != "e2" {
+		t.Fatalf("unexpected incremental response: %#v", body)
+	}
+	etag := first.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("missing ETag")
+	}
+	second := request("/api/v1/podcasts/p1/episodes?since=200", etag)
+	if second.Code != http.StatusNotModified || second.Body.Len() != 0 {
+		t.Fatalf("expected empty 304, got %d: %q", second.Code, second.Body.String())
+	}
 }
 
 func TestPodcastHandler_SearchUnconfigured(t *testing.T) {

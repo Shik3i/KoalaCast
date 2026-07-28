@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
+import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.PodcastSummary
@@ -68,7 +69,7 @@ class SearchViewModel @Inject constructor(
                 .map { SearchRequest(it.query.trim(), it.languages, it.category) }
                 .distinctUntilChanged()
                 .debounce(DEBOUNCE_MS)
-                .collectLatest(::runSearch)
+                .collectLatest { runSearch(it, force = false) }
         }
     }
 
@@ -145,18 +146,40 @@ class SearchViewModel @Inject constructor(
     private fun rerun() {
         viewModelScope.launch {
             val state = _state.value
-            runSearch(SearchRequest(state.query.trim(), state.languages, state.category))
+            runSearch(
+                SearchRequest(state.query.trim(), state.languages, state.category),
+                force = true,
+            )
         }
     }
 
-    private suspend fun runSearch(request: SearchRequest) {
+    private suspend fun runSearch(request: SearchRequest, force: Boolean) {
         val query = request.query
         if (query.length < MIN_QUERY_LENGTH) {
             _state.update { it.copy(results = emptyList(), searching = false, error = null) }
             return
         }
 
-        _state.update { it.copy(searching = true, error = null) }
+        val cached = podcasts.cachedSearch(
+            query = query,
+            languages = request.languages,
+            category = request.category,
+        )
+        _state.update {
+            if (it.query.trim() != query) {
+                it
+            } else {
+                it.copy(
+                    searching = true,
+                    results = cached?.value ?: it.results,
+                    error = null,
+                )
+            }
+        }
+        if (cached != null && !force && podcasts.isFresh(cached, ContentTtl.SEARCH)) {
+            _state.update { it.copy(searching = false) }
+            return
+        }
         when (
             val result = podcasts.search(
                 query = query,
@@ -170,7 +193,14 @@ class SearchViewModel @Inject constructor(
             }
 
             is DataResult.Failure -> _state.update {
-                if (it.query.trim() != query) it else it.copy(searching = false, error = result.error)
+                if (it.query.trim() != query) {
+                    it
+                } else {
+                    it.copy(
+                        searching = false,
+                        error = if (it.results.isEmpty()) result.error else null,
+                    )
+                }
             }
         }
     }

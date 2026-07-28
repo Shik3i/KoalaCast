@@ -16,6 +16,7 @@ import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
+import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
@@ -67,7 +68,7 @@ class EpisodeViewModel @Inject constructor(
     val state: StateFlow<EpisodeUiState> = _state.asStateFlow()
 
     init {
-        load()
+        load(force = false)
         observeLocalState()
     }
 
@@ -104,12 +105,38 @@ class EpisodeViewModel @Inject constructor(
         val downloadState: DownloadState?,
     )
 
-    fun retry() = load()
+    fun retry() = load(force = true)
 
-    private fun load() {
+    private fun load(force: Boolean) {
         viewModelScope.launch {
+            val cachedEpisode = podcasts.cachedEpisode(episodeId)
+            if (cachedEpisode != null) {
+                val cachedPodcast = cachedEpisode.value.podcastId
+                    .takeIf(String::isNotBlank)
+                    ?.let { podcasts.cachedPodcast(it) }
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        error = null,
+                        serverUrl = preferences.serverUrl.first(),
+                        episode = cachedEpisode.value,
+                        podcast = cachedPodcast?.value,
+                    )
+                }
+                if (
+                    !force &&
+                    podcasts.isFresh(cachedEpisode, ContentTtl.EPISODE) &&
+                    (cachedPodcast == null || podcasts.isFresh(cachedPodcast, ContentTtl.PODCAST))
+                ) {
+                    return@launch
+                }
+            }
             _state.update {
-                it.copy(loading = true, error = null, serverUrl = preferences.serverUrl.first())
+                it.copy(
+                    loading = it.episode == null,
+                    error = null,
+                    serverUrl = preferences.serverUrl.first(),
+                )
             }
 
             when (val result = podcasts.episode(episodeId)) {
@@ -119,7 +146,12 @@ class EpisodeViewModel @Inject constructor(
                 }
 
                 is DataResult.Failure ->
-                    _state.update { it.copy(loading = false, error = result.error) }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            error = if (it.episode == null) result.error else null,
+                        )
+                    }
             }
         }
     }
@@ -190,13 +222,27 @@ class EpisodeViewModel @Inject constructor(
         val url = _state.value.episode?.chaptersUrl.orEmpty()
         if (url.isBlank()) return
         viewModelScope.launch {
-            _state.update { it.copy(chaptersLoading = true, chaptersError = false) }
+            val cached = podcasts.cachedChapters(url)
+            if (cached != null) {
+                _state.update {
+                    it.copy(chaptersLoading = true, chaptersError = false, chapters = cached.value)
+                }
+                if (podcasts.isFresh(cached, ContentTtl.AUXILIARY)) {
+                    _state.update { it.copy(chaptersLoading = false) }
+                    return@launch
+                }
+            } else {
+                _state.update { it.copy(chaptersLoading = true, chaptersError = false) }
+            }
             when (val result = podcasts.chapters(url)) {
                 is DataResult.Success -> _state.update {
                     it.copy(chaptersLoading = false, chapters = result.data)
                 }
                 is DataResult.Failure -> _state.update {
-                    it.copy(chaptersLoading = false, chaptersError = true)
+                    it.copy(
+                        chaptersLoading = false,
+                        chaptersError = it.chapters.isEmpty(),
+                    )
                 }
             }
         }
@@ -224,7 +270,25 @@ class EpisodeViewModel @Inject constructor(
 
     private fun loadTranscript() {
         viewModelScope.launch {
-            _state.update { it.copy(transcriptLoading = true, transcriptError = false) }
+            val cached = podcasts.cachedTranscript(episodeId)
+            if (cached != null) {
+                _state.update {
+                    it.copy(
+                        transcriptLoading = true,
+                        transcriptError = false,
+                        transcript = TranscriptFormatter.format(
+                            type = cached.value.first,
+                            content = cached.value.second,
+                        ),
+                    )
+                }
+                if (podcasts.isFresh(cached, ContentTtl.AUXILIARY)) {
+                    _state.update { it.copy(transcriptLoading = false) }
+                    return@launch
+                }
+            } else {
+                _state.update { it.copy(transcriptLoading = true, transcriptError = false) }
+            }
             when (val result = podcasts.transcript(episodeId)) {
                 is DataResult.Success -> _state.update {
                     it.copy(
@@ -236,7 +300,10 @@ class EpisodeViewModel @Inject constructor(
                     )
                 }
                 is DataResult.Failure -> _state.update {
-                    it.copy(transcriptLoading = false, transcriptError = true)
+                    it.copy(
+                        transcriptLoading = false,
+                        transcriptError = it.transcript.isBlank(),
+                    )
                 }
             }
         }

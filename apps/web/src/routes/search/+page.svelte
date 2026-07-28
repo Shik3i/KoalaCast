@@ -12,6 +12,7 @@
 	import { SUPPORTED_LANGUAGES, regionForLanguage } from '$lib/data/languages';
 	import { GENRES, genreLabel } from '$lib/genres';
 	import { t } from '$lib/i18n';
+	import { cacheContent, CONTENT_TTL, contentCacheKey, readCachedContent } from '$lib/cache/content';
 
 	let searchQuery = $state('');
 	let rssUrlInput = $state('');
@@ -165,7 +166,7 @@
 		searchController = controller;
 		const reqId = ++searchReqId;
 		lastExecutedQuery = query.trim();
-		isSearching = true;
+		isSearching = searchResults.length === 0;
 		errorMessage = '';
 
 		// The storefront follows the first selected language; the language filter
@@ -180,15 +181,33 @@
 		if (filterGenre) visibleParams.set('genre', filterGenre);
 		replaceState(`/search?${visibleParams}`, {});
 
+		const path = `/api/v1/podcasts/search?${params}`;
+		const cacheKey = contentCacheKey(path);
+		const cached = await readCachedContent<{ results?: any[]; provider?: string }>(
+			cacheKey,
+			CONTENT_TTL.search
+		);
+		if (reqId !== searchReqId) return;
+		if (cached) {
+			searchResults = cached.value.results ?? [];
+			provider = cached.value.provider ?? '';
+			isSearching = false;
+			if (cached.fresh) {
+				if (searchController === controller) searchController = null;
+				return;
+			}
+		}
+
 		try {
-			const res = await fetch(`/api/v1/podcasts/search?${params}`, { signal: controller.signal });
+			const res = await fetch(path, { signal: controller.signal, cache: 'no-cache' });
 			const data = await res.json();
 			if (reqId !== searchReqId) return; // superseded by a newer query
 			searchResults = data.results ?? [];
 			if (data.provider) provider = data.provider;
+			if (res.ok) await cacheContent(cacheKey, data);
 		} catch (err) {
 			if (reqId !== searchReqId) return;
-			errorMessage = t('search.searchError');
+			if (!cached) errorMessage = t('search.searchError');
 		} finally {
 			if (reqId === searchReqId) isSearching = false;
 			if (searchController === controller) searchController = null;

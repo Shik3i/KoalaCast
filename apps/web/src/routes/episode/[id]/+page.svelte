@@ -16,6 +16,7 @@
 	import { dominantColor } from '$lib/color';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
+	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -57,17 +58,49 @@
 		chaptersError = '';
 		transcriptError = '';
 		try {
-			const res = await fetch(`/api/v1/episodes/${id}`);
+			const cachedEpisode = await readCachedContent<any>(
+				`episode:${id}`,
+				CONTENT_TTL.episode
+			);
+			if (reqId !== loadReqId) return;
+			if (cachedEpisode) {
+				episode = cachedEpisode.value;
+				const cachedPodcast = episode.podcast_id
+					? await readCachedContent<any>(
+							`podcast:id:${episode.podcast_id}`,
+							CONTENT_TTL.podcast
+						)
+					: null;
+				if (reqId !== loadReqId) return;
+				podcast = cachedPodcast?.value ?? null;
+				isLoading = false;
+				const art = episode?.artwork_url || podcast?.artwork_url;
+				if (art) dominantColor(art).then((c) => (reqId === loadReqId ? (showAccent = c) : null));
+				const [state, favorite] = await Promise.all([
+					getLocalPlaybackState(id),
+					isLocalFavorite(id)
+				]);
+				if (reqId !== loadReqId) return;
+				if (state) playbackState = state;
+				isFavorite = favorite;
+				if (cachedEpisode.fresh && (!episode.podcast_id || cachedPodcast?.fresh)) return;
+			}
+
+			const res = await fetch(`/api/v1/episodes/${id}`, { cache: 'no-cache' });
 			if (res.ok) {
 				const epData = await res.json();
 				if (reqId !== loadReqId) return; // superseded by a newer navigation
 				episode = epData;
+				await cacheContent(`episode:${id}`, epData);
 				if (episode.podcast_id) {
-					const podRes = await fetch(`/api/v1/podcasts/${episode.podcast_id}`);
+					const podRes = await fetch(`/api/v1/podcasts/${episode.podcast_id}`, {
+						cache: 'no-cache'
+					});
 					if (podRes.ok) {
 						const podData = await podRes.json();
 						if (reqId !== loadReqId) return;
 						podcast = podData;
+						await cacheContent(`podcast:id:${episode.podcast_id}`, podData);
 					}
 				}
 			}

@@ -190,3 +190,15 @@ data class EpisodeDownloadEntity(
     val createdAt: Long,
     val updatedAt: Long,
 )
+
+/**
+ * Public catalogue payloads. These are deliberately separate from synced user
+ * state: stale rows are always safe to show and can be replaced in the
+ * background without participating in account conflict resolution.
+ */
+@Entity(tableName = "content_cache", indices = [Index("storedAt")])
+data class ContentCacheEntity(
+    @PrimaryKey val cacheKey: String,
+    val payloadJson: String,
+    val storedAt: Long,
+)

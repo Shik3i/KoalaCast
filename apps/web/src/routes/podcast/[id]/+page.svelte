@@ -26,6 +26,7 @@
 		savePodcastPlaybackSettings,
 		type PodcastPlaybackSettings
 	} from '$lib/stores/podcast-settings';
+	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);
@@ -118,6 +119,42 @@
 			const feedUrlParam = urlParams.get('feed_url');
 
 			let targetId = id;
+			const podcastCacheKey = feedUrlParam
+				? `podcast:feed:${feedUrlParam}`
+				: `podcast:id:${targetId}`;
+			const cachedPodcast = await readCachedContent<any>(
+				podcastCacheKey,
+				CONTENT_TTL.podcast
+			);
+			if (reqId !== loadReqId) return;
+			if (cachedPodcast) {
+				podcast = cachedPodcast.value;
+				targetId = podcast.id || targetId;
+				const cachedEpisodes = await readCachedContent<any[]>(
+					`episodes:${targetId}:all`,
+					CONTENT_TTL.episodeList
+				);
+				if (reqId !== loadReqId) return;
+				episodes = cachedEpisodes?.value ?? [];
+				isLoading = false;
+				showAccent = null;
+				if (podcast.artwork_url) {
+					dominantColor(podcast.artwork_url).then((c) => {
+						if (reqId === loadReqId && podcast?.artwork_url) showAccent = c;
+					});
+				}
+				const [subs, completedIds] = await Promise.all([
+					getLocalSubscriptions(),
+					getCompletedEpisodeIds()
+				]);
+				if (reqId !== loadReqId) return;
+				isSubscribed = subs.some(
+					(s) => s.podcast_id === podcast.id || s.feed_url === podcast.feed_url
+				);
+				playedIds = completedIds;
+				await loadShowControls(podcast.id);
+				if (cachedPodcast.fresh && cachedEpisodes?.fresh) return;
+			}
 
 			if (feedUrlParam) {
 				const addRes = await fetch('/api/v1/podcasts/feed', {
@@ -127,7 +164,13 @@
 				});
 				if (addRes.ok) {
 					const addData = await addRes.json();
-					if (addData.id) targetId = addData.id;
+					if (addData.id) {
+						targetId = addData.id;
+						await Promise.all([
+							cacheContent(podcastCacheKey, addData),
+							cacheContent(`podcast:id:${targetId}`, addData)
+						]);
+					}
 				}
 			}
 
@@ -135,22 +178,37 @@
 			// server-side and comes back with its canonical (UUID) id. Episodes are
 			// stored under that id, so they must be fetched with podcast.id — not the
 			// original numeric id, which would return zero rows.
-			const podRes = await fetch(`/api/v1/podcasts/${targetId}`);
+			const podRes = await fetch(`/api/v1/podcasts/${targetId}`, { cache: 'no-cache' });
 			if (podRes.ok) {
 				const podData = await podRes.json();
 				if (reqId !== loadReqId) return; // superseded by a newer navigation
 				podcast = podData;
+				await Promise.all([
+					cacheContent(podcastCacheKey, podData),
+					cacheContent(`podcast:id:${podData.id}`, podData)
+				]);
 				showAccent = null;
 				if (podcast.artwork_url) {
 					dominantColor(podcast.artwork_url).then((c) => {
 						if (reqId === loadReqId && podcast?.artwork_url) showAccent = c;
 					});
 				}
-				const epRes = await fetch(`/api/v1/podcasts/${podcast.id}/episodes`);
+				const newestKnown = Math.max(0, ...episodes.map((episode) => episode.pub_date ?? 0));
+				const episodeParams = new URLSearchParams();
+				if (newestKnown > 0) episodeParams.set('since', String(newestKnown));
+				const episodeSuffix = episodeParams.size ? `?${episodeParams}` : '';
+				const epRes = await fetch(`/api/v1/podcasts/${podcast.id}/episodes${episodeSuffix}`, {
+					cache: 'no-cache'
+				});
 				if (epRes.ok) {
 					const epData = await epRes.json();
 					if (reqId !== loadReqId) return;
-					episodes = epData.episodes || [];
+					const byId = new Map(episodes.map((episode) => [episode.id, episode]));
+					for (const episode of epData.episodes || []) byId.set(episode.id, episode);
+					episodes = [...byId.values()].sort(
+						(a, b) => (b.pub_date ?? 0) - (a.pub_date ?? 0)
+					);
+					await cacheContent(`episodes:${podcast.id}:all`, episodes);
 				}
 				const subs = await getLocalSubscriptions();
 				if (reqId !== loadReqId) return;

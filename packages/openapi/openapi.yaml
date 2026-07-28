@@ -364,6 +364,16 @@ paths:
             type: integer
             minimum: 0
             default: 0
+        - name: since
+          in: query
+          description: >
+            Return only episodes whose publication timestamp is greater than or
+            equal to this Unix-second value. Clients merge by episode id; the
+            inclusive boundary prevents same-second publications from being lost.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
       responses:
         '200':
           description: Episode page

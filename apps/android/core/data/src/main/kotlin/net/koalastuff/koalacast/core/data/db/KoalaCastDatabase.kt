@@ -39,8 +39,9 @@ class Converters {
         EpisodeDownloadEntity::class,
         AccountDataArchiveEntity::class,
         AccountNamespaceStateEntity::class,
+        ContentCacheEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -54,6 +55,7 @@ abstract class KoalaCastDatabase : RoomDatabase() {
     abstract fun podcastSettingsDao(): PodcastSettingsDao
     abstract fun episodeDownloadDao(): EpisodeDownloadDao
     abstract fun accountDataArchiveDao(): AccountDataArchiveDao
+    abstract fun contentCacheDao(): ContentCacheDao
 
     companion object {
         const val NAME = "koalacast.db"

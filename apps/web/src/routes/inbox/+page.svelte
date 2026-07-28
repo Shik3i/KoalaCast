@@ -21,6 +21,7 @@
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
 	import { listeningSession } from '$lib/stores/session.svelte';
+	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
 
 	interface InboxEpisode {
 		id: string;
@@ -78,12 +79,34 @@
 		playbackStates = Object.fromEntries(states.map((state) => [state.episode_id, state]));
 		completed = new Set(states.filter((state) => state.completed).map((state) => state.episode_id));
 
-		const results = await mapWithConcurrency(subs, 6, async (sub) => {
+		const cached = await Promise.all(
+			subs.map(async (sub) => ({
+				sub,
+				entry: await readCachedContent<InboxEpisode[]>(
+					`inbox:${sub.podcast_id}`,
+					CONTENT_TTL.inbox
+				)
+			}))
+		);
+		const cachedEpisodes = cached.flatMap(({ entry }) => entry?.value ?? []);
+		if (cached.some(({ entry }) => entry !== null) || subs.length === 0) {
+			rawEpisodes = cachedEpisodes;
+			isLoading = false;
+		}
+
+		const results = await mapWithConcurrency(cached, 6, async ({ sub, entry }) => {
+			if (entry?.fresh) return entry.value;
 			try {
-				const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes`);
-				if (!res.ok) return [] as InboxEpisode[];
+				const newestKnown = Math.max(0, ...(entry?.value ?? []).map((episode) => episode.pub_date ?? 0));
+				const params = new URLSearchParams();
+				if (newestKnown > 0) params.set('since', String(newestKnown));
+				const suffix = params.size ? `?${params}` : '';
+				const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes${suffix}`, {
+					cache: 'no-cache'
+				});
+				if (!res.ok) return entry?.value ?? [];
 				const data = await res.json();
-				return ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
+				const episodes = ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
 					id: ep.id,
 					podcast_id: sub.podcast_id,
 					podcast_title: sub.title,
@@ -94,13 +117,27 @@
 					enclosure_url: ep.enclosure_url,
 					artwork_url: ep.artwork_url || sub.artwork_url
 				})) as InboxEpisode[];
+				const merged = mergeInboxEpisodes(episodes, entry?.value ?? []);
+				await cacheContent(`inbox:${sub.podcast_id}`, merged);
+				return merged;
 			} catch {
-				return [] as InboxEpisode[];
+				return entry?.value ?? [];
 			}
 		});
 		rawEpisodes = results.flat();
 		isLoading = false;
 	});
+
+	function mergeInboxEpisodes(
+		newEpisodes: InboxEpisode[],
+		knownEpisodes: InboxEpisode[]
+	): InboxEpisode[] {
+		const byId = new Map(knownEpisodes.map((episode) => [episode.id, episode]));
+		for (const episode of newEpisodes) byId.set(episode.id, episode);
+		return [...byId.values()]
+			.sort((a, b) => (b.pub_date ?? 0) - (a.pub_date ?? 0))
+			.slice(0, PER_FEED);
+	}
 
 	// Apply per-podcast mode ('latest' keeps only the newest episode of that show),
 	// the unplayed filter, then sort the whole feed newest-first.
