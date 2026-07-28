@@ -1,7 +1,9 @@
 package net.koalastuff.koalacast.core.data.repository
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ServerUrl
@@ -21,6 +23,7 @@ import javax.inject.Singleton
 class ServerRepository @Inject constructor(
     private val api: KoalaCastApi,
     private val preferences: PreferencesRepository,
+    private val accountStore: SecureAccountStore,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) {
 
@@ -32,12 +35,24 @@ class ServerRepository @Inject constructor(
         apiCall { api.healthzAt("$normalised/api/v1/healthz") }.let { result ->
             when (result) {
                 is DataResult.Failure -> result
-                is DataResult.Success ->
-                    if (result.data.status == "ok") {
-                        DataResult.Success(normalised)
-                    } else {
-                        DataResult.Failure(DataError.Malformed("unexpected /healthz payload"))
+                is DataResult.Success -> {
+                    if (result.data.status != "ok") {
+                        return@withContext DataResult.Failure(
+                            DataError.Malformed("unexpected /healthz payload"),
+                        )
                     }
+                    when (val ready = apiCall { api.healthzAt("$normalised/api/v1/readyz") }) {
+                        is DataResult.Failure -> ready
+                        is DataResult.Success ->
+                            if (ready.data.status == "ok") {
+                                DataResult.Success(normalised)
+                            } else {
+                                DataResult.Failure(
+                                    DataError.Malformed("unexpected /readyz payload"),
+                                )
+                            }
+                    }
+                }
             }
         }
     }
@@ -47,7 +62,9 @@ class ServerRepository @Inject constructor(
         when (val validated = validate(rawUrl)) {
             is DataResult.Failure -> validated
             is DataResult.Success -> {
+                val changed = preferences.serverUrl.first() != validated.data
                 preferences.setServerUrl(validated.data)
+                if (changed) accountStore.clear()
                 validated
             }
         }

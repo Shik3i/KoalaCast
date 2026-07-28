@@ -19,6 +19,7 @@ import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.PodcastSettings
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.network.dto.OpmlImportedPodcast
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -93,9 +94,37 @@ class LibraryRepository @Inject constructor(
         )
     }
 
-    suspend fun canonicalizeImportedSubscription(podcast: Podcast) {
-        subscriptions.canonicalizeImported(
-            feedUrl = podcast.feedUrl,
+    suspend fun subscribeResolvedImports(podcasts: List<OpmlImportedPodcast>) {
+        if (podcasts.isEmpty()) return
+        val now = clock.nowMs()
+        podcasts.forEachIndexed { index, podcast ->
+            subscriptions.upsertResolvedImport(
+                sourceFeedUrl = podcast.sourceUrl.ifBlank { podcast.feedUrl },
+                subscription = SubscriptionEntity(
+                    podcastId = podcast.id,
+                    feedUrl = podcast.feedUrl,
+                    title = podcast.title.ifBlank { "Podcast" },
+                    artworkUrl = podcast.artworkUrl,
+                    addedAt = now + index,
+                ),
+            )
+        }
+        tombstones.deleteAll(
+            podcasts.flatMap {
+                listOf(
+                    TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, it.id),
+                    TombstoneEntity.idFor(
+                        TombstoneEntity.TYPE_SUBSCRIPTION,
+                        it.sourceUrl.ifBlank { it.feedUrl },
+                    ),
+                )
+            }.distinct(),
+        )
+    }
+
+    suspend fun canonicalizeImportedSubscription(sourceFeedUrl: String, podcast: Podcast) {
+        subscriptions.upsertResolvedImport(
+            sourceFeedUrl = sourceFeedUrl,
             subscription = SubscriptionEntity(
                 podcastId = podcast.id,
                 feedUrl = podcast.feedUrl,

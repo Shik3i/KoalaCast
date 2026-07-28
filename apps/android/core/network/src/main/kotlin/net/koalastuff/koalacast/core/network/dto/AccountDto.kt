@@ -79,6 +79,7 @@ data class GlobalStatsPreference(
 data class OpmlImportedPodcast(
     val id: String = "",
     val title: String = "",
+    @SerialName("source_url") val sourceUrl: String = "",
     @SerialName("feed_url") val feedUrl: String = "",
     @SerialName("artwork_url") val artworkUrl: String = "",
 )

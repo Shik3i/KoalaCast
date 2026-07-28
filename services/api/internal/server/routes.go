@@ -55,8 +55,8 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	}
 
 	opmlHandler := &handlers.OPMLHandler{
-		DB:           database,
-		MaxResponseB: cfg.FeedMaxResponseBytes,
+		DB:         database,
+		IngestFeed: podcastHandler.IngestFeedURL,
 	}
 
 	adminHandler := &handlers.AdminHandler{

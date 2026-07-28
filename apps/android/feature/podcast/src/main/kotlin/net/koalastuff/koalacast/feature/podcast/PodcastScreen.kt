@@ -308,7 +308,9 @@ private fun PodcastHeader(
                 url = podcast.artworkUrl,
                 contentDescription = null,
                 modifier = Modifier.size(140.dp),
-                sizeHint = 140.dp,
+                // Match the library grid's proxy width so both screens share one
+                // Coil disk-cache key instead of downloading two near-identical files.
+                sizeHint = 160.dp,
             )
             MonoText(
                 text = listOf(

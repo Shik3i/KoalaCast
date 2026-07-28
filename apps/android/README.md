@@ -119,7 +119,7 @@ the project's principles:
 | UI | **Jetpack Compose** + Material 3 | Dynamic color (Material You) + our own show-accent theming. |
 | Architecture | **MVVM / MVI**, unidirectional data flow | `ViewModel` + immutable UI state + `StateFlow`. |
 | DI | **Hilt** | |
-| Audio | **AndroidX Media3** (`ExoPlayer` + `MediaSessionService`) | Background playback, notification, lockscreen, Bluetooth and media buttons. Android Auto remains P7. |
+| Audio | **AndroidX Media3** (`ExoPlayer` + `MediaLibraryService`) | Background playback, notification, lockscreen, Bluetooth/media buttons, playback resumption and an Android Auto browse tree. |
 | Local DB | **Room** | Millisecond precision (`Long`). Mirrors web IndexedDB stores. |
 | Preferences | **DataStore** | Server URL, theme, playback speed, and client preferences. |
 | Networking | **Retrofit + OkHttp** + **kotlinx.serialization** | Talks to `/api/v1/*`. |
@@ -236,7 +236,7 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Episode screen** — sanitized show notes, play, queue, save, mark-played.
 - [x] **Player** — Media3/ExoPlayer: play/pause, skip ±15/+30, scrub, speed cycling,
       **sleep timer** (incl. end-of-episode), media notification, lock screen,
-      Bluetooth/media buttons. *Fine-grained speed steps and skip-silence are still open.*
+      Bluetooth/media buttons, fine-grained speed, skip-silence and volume boost.
 - [x] **Mini-player + full-screen Now Playing.** *The blurred cover backdrop and the
       per-show accent from cover art are still to port.*
 - [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
@@ -269,17 +269,18 @@ Web has these today; Android should match:
 ### 4.3 Native features and remaining platform work
 - [x] **📥 Offline downloads** (see §5) — resumable, process-safe internal-storage downloads.
 - [x] **🆕 "New / Inbox" feed** — a filtered page showing **only the newest unplayed
-      episodes across all subscribed podcasts**, newest first, with filters
-      (unplayed / downloaded / podcast / date). It currently aggregates
+      episodes across all subscribed podcasts**, newest first, with an unplayed toggle
+      and per-podcast `all` / `latest only` inclusion. Downloaded/podcast/date filters
+      are still open. It currently aggregates
       `/podcasts/{id}/episodes` client-side; a batch server endpoint remains in
       `api_todo.md`.
-- [ ] **Auto-download** newest N episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).
-- [ ] **Playback tuning** — variable speed with fine steps, skip-silence / volume boost
+- [x] **Auto-download** newest N unplayed episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).
+- [x] **Playback tuning** — variable speed with fine steps, skip-silence / volume boost
       (Media3 audio processors), per-podcast default speed.
 - [x] **Cross-device sync** with the KoalaCast server (device token).
-- [ ] **Android Auto** support (MediaLibraryService browse tree).
+- [x] **Android Auto** support (MediaLibraryService browse tree).
 - [ ] **Home-screen widget** (now-playing + resume).
-- [ ] **Chapters** support (from ID3/`podcast:chapters` when present).
+- [x] **Chapters** support (`podcast:chapters`, episode list and player navigation).
 - [x] **Per-episode / global playback stats** (private, on-device).
 
 ---
@@ -293,9 +294,10 @@ Requirements:
 - [x] **Download queue** with states: queued / downloading / paused / done / failed,
       progress %, and byte size; drive it with **WorkManager** (survives process death).
 - [x] Downloaded episodes play from local file (ExoPlayer local `MediaItem`), fully offline.
-- [ ] **Settings:** Wi-Fi-only, max concurrent downloads, storage location (internal vs
-      SD/SAF), auto-delete after played, download budget / auto-cleanup by age or size.
-- [ ] **Auto-download** rules per subscription (newest N, only unplayed).
+- [x] **Settings:** Wi-Fi-only, newest-N count and automatic retention after played/by age.
+- [ ] **Settings:** configurable concurrent-download limit, storage location (internal vs
+      SD/SAF), and download budget / cleanup by total size.
+- [x] **Auto-download** rules per subscription (newest N, only unplayed).
 - [x] Downloads screen: list, total storage used, delete individual / all.
 - [x] Respect battery + Doze; foreground service notification while downloading.
 - [x] Handle redirects, resumable ranges, and content-length-less streams gracefully.
@@ -390,9 +392,8 @@ per-subscription request fan-out.
 5. ✅ **P4 — Downloads:** resumable download engine, downloads screen, offline playback. *Auto-download rules remain P7 work.*
 6. ✅ **P5 — Inbox:** "New episodes" filtered feed.
 7. ✅ **P6 — Account & Sync:** device-token auth, `/sync` pull/push/merge, session mgmt, OPML.
-8. **P7 — Delight & platform:** Android Auto browse tree, widget, chapters,
-   dynamic cover palette, transitions, haptics, auto-download rules and storage
-   management remain.
+8. **P7 — Delight & platform:** widget, dynamic cover palette, transitions,
+   haptics, richer Inbox filters and advanced storage management remain.
 
 ---
 

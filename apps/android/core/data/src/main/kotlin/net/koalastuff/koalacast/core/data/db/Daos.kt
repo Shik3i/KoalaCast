@@ -36,11 +36,17 @@ interface SubscriptionDao {
     suspend fun delete(podcastId: String)
 
     @Transaction
-    suspend fun canonicalizeImported(feedUrl: String, subscription: SubscriptionEntity) {
-        val imported = getByFeedUrl(feedUrl) ?: return
-        if (imported.podcastId == subscription.podcastId) return
-        delete(imported.podcastId)
-        upsert(subscription)
+    suspend fun upsertResolvedImport(sourceFeedUrl: String, subscription: SubscriptionEntity) {
+        val existing = getByFeedUrl(sourceFeedUrl)
+        if (existing != null && existing.podcastId != subscription.podcastId) {
+            delete(existing.podcastId)
+        }
+        upsert(
+            subscription.copy(
+                addedAt = existing?.addedAt ?: subscription.addedAt,
+                inboxMode = existing?.inboxMode ?: subscription.inboxMode,
+            ),
+        )
     }
 
     @Query("UPDATE subscriptions SET inboxMode = :mode WHERE podcastId = :podcastId")

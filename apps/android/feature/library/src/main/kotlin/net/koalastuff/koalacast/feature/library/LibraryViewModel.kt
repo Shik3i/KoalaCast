@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
+import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
@@ -39,11 +40,16 @@ data class LibraryUiState(
  */
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
+    private val account: AccountRepository,
     private val library: LibraryRepository,
     private val queue: QueueRepository,
     private val progress: ProgressRepository,
     private val player: PlayerConnection,
 ) : ViewModel() {
+
+    init {
+        viewModelScope.launch { account.resolvePendingSubscriptions() }
+    }
 
     private val _tab = MutableStateFlow(LibraryTab.SUBSCRIPTIONS)
     val tab: StateFlow<LibraryTab> = _tab

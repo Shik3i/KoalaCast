@@ -1,23 +1,24 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 	customMiddleware "github.com/Shik3i/KoalaCast/services/api/internal/server/middleware"
-	"github.com/google/uuid"
 )
 
 type OPMLHandler struct {
-	DB           *db.DB
-	MaxResponseB int64
+	DB         *db.DB
+	IngestFeed func(context.Context, string) (string, error)
 }
 
 type opmlDocument struct {
@@ -59,6 +60,7 @@ type OPMLImportError struct {
 type OPMLImportedPodcast struct {
 	ID         string `json:"id"`
 	Title      string `json:"title"`
+	SourceURL  string `json:"source_url"`
 	FeedURL    string `json:"feed_url"`
 	ArtworkURL string `json:"artwork_url"`
 }
@@ -79,7 +81,7 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feedURLs := extractOutlines(doc.Body.Outlines)
+	feedURLs := uniqueFeedURLs(extractOutlines(doc.Body.Outlines))
 
 	// Importing fetches each feed server-side and can legitimately take much longer
 	// than the server's default 15s WriteTimeout. Extend the write deadline for this
@@ -95,10 +97,7 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 		Podcasts:   make([]OPMLImportedPodcast, 0),
 	}
 
-	// Bound the fan-out: each URL triggers a server-side fetch (up to
-	// MaxResponseB bytes) plus DB writes, all sequentially within one request.
-	// Without a cap a single OPML upload could pin the server on outbound I/O for
-	// minutes and blow the server write timeout.
+	// Bound the fan-out: each URL triggers a server-side fetch plus DB writes.
 	const maxImportFeeds = 500
 	if len(feedURLs) > maxImportFeeds {
 		report.Failures = append(report.Failures, OPMLImportError{
@@ -109,93 +108,74 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 		feedURLs = feedURLs[:maxImportFeeds]
 	}
 
-	client := rss.NewSafeHTTPClient(rss.SafeTransportConfig{ConnectTimeout: 10 * time.Second})
+	type result struct {
+		podcast OPMLImportedPodcast
+		err     error
+	}
+	results := make([]result, len(feedURLs))
+	semaphore := make(chan struct{}, 4)
+	var wait sync.WaitGroup
 
-	for _, rawURL := range feedURLs {
-		feedURL := strings.TrimSpace(rawURL)
+	for index, rawURL := range feedURLs {
+		index, feedURL := index, strings.TrimSpace(rawURL)
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-		// 1. SSRF Check
-		if err := rss.ValidateURL(feedURL); err != nil {
-			report.Failures = append(report.Failures, OPMLImportError{URL: feedURL, Reason: "SSRF validation failed: " + err.Error()})
-			report.Skipped++
-			continue
-		}
-
-		// 2. Fetch & Parse Feed
-		httpReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, feedURL, nil)
-		httpReq.Header.Set("User-Agent", "KoalaCast/1.0 (+https://github.com/Shik3i/KoalaCast)")
-
-		resp, err := client.Do(httpReq)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			reason := "HTTP request failed"
-			if resp != nil {
-				reason = fmt.Sprintf("HTTP status %d", resp.StatusCode)
-				resp.Body.Close()
+			if err := rss.ValidateURL(feedURL); err != nil {
+				results[index].err = fmt.Errorf("SSRF validation failed: %w", err)
+				return
 			}
-			report.Failures = append(report.Failures, OPMLImportError{URL: feedURL, Reason: reason})
-			report.Skipped++
-			continue
-		}
-
-		limitReader := rss.LimitResponseBody(resp.Body, h.MaxResponseB)
-		parsedFeed, err := rss.ParseFeedXML(limitReader)
-		resp.Body.Close()
-
-		if err != nil {
-			report.Failures = append(report.Failures, OPMLImportError{URL: feedURL, Reason: "XML parse error: " + err.Error()})
-			report.Skipped++
-			continue
-		}
-
-		// 3. Persist Podcast & Subscription
-		podcastID := uuid.New().String()
-		nowMs := time.Now().UnixMilli()
-
-		explicitInt := 0
-		if parsedFeed.Explicit {
-			explicitInt = 1
-		}
-
-		tx, err := h.DB.SQL.BeginTx(r.Context(), nil)
-		if err != nil {
-			continue
-		}
-
-		var existingID string
-		err = tx.QueryRowContext(r.Context(), "SELECT id FROM podcasts WHERE feed_url = ?", feedURL).Scan(&existingID)
-		if err == nil {
-			podcastID = existingID
-		} else {
-			_, err = tx.ExecContext(r.Context(), `
-				INSERT INTO podcasts (id, feed_url, title, description, author, artwork_url, link, language, explicit, copyright, update_frequency_ms, last_fetch_attempt_at, last_successful_fetch_at, next_scheduled_fetch_at, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 86400000, ?, ?, ?, ?, ?)
-			`, podcastID, feedURL, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author, parsedFeed.ArtworkURL, parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright, nowMs, nowMs, nowMs+86400000, nowMs, nowMs)
+			results[index].podcast.SourceURL = feedURL
+			if h.IngestFeed == nil {
+				results[index].err = fmt.Errorf("feed ingestion unavailable")
+				return
+			}
+			podcastID, err := h.IngestFeed(r.Context(), feedURL)
 			if err != nil {
-				tx.Rollback()
+				results[index].err = err
+				return
+			}
+			results[index].err = h.DB.SQL.QueryRowContext(
+				r.Context(),
+				"SELECT id, title, feed_url, artwork_url FROM podcasts WHERE id = ?",
+				podcastID,
+			).Scan(
+				&results[index].podcast.ID,
+				&results[index].podcast.Title,
+				&results[index].podcast.FeedURL,
+				&results[index].podcast.ArtworkURL,
+			)
+		}()
+	}
+	wait.Wait()
+
+	for index, item := range results {
+		feedURL := strings.TrimSpace(feedURLs[index])
+		if item.err != nil {
+			report.Failures = append(report.Failures, OPMLImportError{URL: feedURL, Reason: item.err.Error()})
+			report.Skipped++
+			continue
+		}
+		if authUser != nil {
+			nowMs := time.Now().UnixMilli()
+			if _, err := h.DB.SQL.ExecContext(r.Context(), `
+				INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at, is_deleted, sync_version)
+				VALUES (?, ?, ?, ?, 0, 1)
+				ON CONFLICT(user_id, podcast_id) DO UPDATE SET is_deleted = 0, updated_at = excluded.updated_at
+			`, authUser.ID, item.podcast.ID, nowMs, nowMs); err != nil {
+				report.Failures = append(report.Failures, OPMLImportError{
+					URL:    feedURL,
+					Reason: "failed to persist subscription",
+				})
+				report.Skipped++
 				continue
 			}
 		}
-
-		if authUser != nil {
-			_, _ = tx.ExecContext(r.Context(), `
-				INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at, is_deleted, sync_version)
-				VALUES (?, ?, ?, ?, 0, 1)
-				ON CONFLICT(user_id, podcast_id) DO UPDATE SET is_deleted = 0
-			`, authUser.ID, podcastID, nowMs, nowMs)
-		}
-
-		if err := tx.Commit(); err != nil {
-			report.Failures = append(report.Failures, OPMLImportError{URL: feedURL, Reason: "failed to persist feed"})
-			report.Skipped++
-			continue
-		}
 		report.Imported++
-		report.Podcasts = append(report.Podcasts, OPMLImportedPodcast{
-			ID:         podcastID,
-			Title:      parsedFeed.Title,
-			FeedURL:    feedURL,
-			ArtworkURL: parsedFeed.ArtworkURL,
-		})
+		report.Podcasts = append(report.Podcasts, item.podcast)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -224,6 +204,23 @@ func extractOutlines(outlines []opmlOutline) []string {
 		}
 	}
 	return urls
+}
+
+func uniqueFeedURLs(urls []string) []string {
+	seen := make(map[string]struct{}, len(urls))
+	unique := make([]string, 0, len(urls))
+	for _, rawURL := range urls {
+		feedURL := strings.TrimSpace(rawURL)
+		if feedURL == "" {
+			continue
+		}
+		if _, exists := seen[feedURL]; exists {
+			continue
+		}
+		seen[feedURL] = struct{}{}
+		unique = append(unique, feedURL)
+	}
+	return unique
 }
 
 func (h *OPMLHandler) Export(w http.ResponseWriter, r *http.Request) {

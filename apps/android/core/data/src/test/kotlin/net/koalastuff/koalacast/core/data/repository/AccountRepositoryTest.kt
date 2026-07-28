@@ -10,6 +10,9 @@ import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.network.KoalaCastApi
+import net.koalastuff.koalacast.core.network.dto.OpmlImportReport
+import net.koalastuff.koalacast.core.network.dto.OpmlImportedPodcast
+import retrofit2.Response
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -31,10 +34,35 @@ class AccountRepositoryTest {
         database = Room.inMemoryDatabaseBuilder(context, KoalaCastDatabase::class.java)
             .allowMainThreadQueries()
             .build()
+        val importedPodcasts = listOf(
+            OpmlImportedPodcast(
+                id = "first-id",
+                title = "First show",
+                feedUrl = "https://example.com/first.xml",
+                artworkUrl = "https://example.com/first.jpg",
+            ),
+            OpmlImportedPodcast(
+                id = "second-id",
+                title = "Second show",
+                feedUrl = "https://example.com/second.xml",
+                artworkUrl = "https://example.com/second.jpg",
+            ),
+        )
         val api = Proxy.newProxyInstance(
             KoalaCastApi::class.java.classLoader,
             arrayOf(KoalaCastApi::class.java),
-        ) { _, method, _ -> error("unexpected API call: ${method.name}") } as KoalaCastApi
+        ) { _, method, _ ->
+            when (method.name) {
+                "importOpml" -> Response.success(
+                    OpmlImportReport(
+                        totalFound = importedPodcasts.size,
+                        imported = importedPodcasts.size,
+                        podcasts = importedPodcasts,
+                    ),
+                )
+                else -> error("unexpected API call: ${method.name}")
+            }
+        } as KoalaCastApi
         val library = LibraryRepository(
             subscriptions = database.subscriptionDao(),
             favorites = database.favoriteDao(),
@@ -58,7 +86,7 @@ class AccountRepositoryTest {
     }
 
     @Test
-    fun `OPML import stores subscriptions locally without contacting the server`() = runTest {
+    fun `OPML import stores canonical subscriptions with artwork`() = runTest {
         val xml = """
             <opml version="2.0">
               <body>
@@ -77,9 +105,10 @@ class AccountRepositoryTest {
         assertEquals(0, (second as DataResult.Success).data.imported)
         assertEquals(2, second.data.skipped)
         assertEquals(
-            setOf("https://example.com/first.xml", "https://example.com/second.xml"),
-            database.subscriptionDao().getAll().map { it.feedUrl }.toSet(),
+            setOf("first-id", "second-id"),
+            database.subscriptionDao().getAll().map { it.podcastId }.toSet(),
         )
+        assertTrue(database.subscriptionDao().getAll().all { it.artworkUrl.isNotBlank() })
     }
 
     @Test

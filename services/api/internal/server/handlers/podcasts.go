@@ -351,6 +351,12 @@ func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 	h.getAndReturnPodcast(w, r, podcastID)
 }
 
+// IngestFeedURL exposes the same complete ingestion used by POST /podcasts/feed
+// to bounded server-side batch workflows such as OPML import.
+func (h *PodcastHandler) IngestFeedURL(ctx context.Context, feedURL string) (string, error) {
+	return h.ingestFeedURL(ctx, feedURL)
+}
+
 // ingestFeedURL validates, fetches, parses and persists a feed (with its
 // episodes), returning the stored podcast ID. A feed that is already stored
 // *with* episodes is returned as-is without a re-fetch; one that exists but has

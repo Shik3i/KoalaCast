@@ -10,6 +10,7 @@ import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.network.dto.OpmlImportedPodcast
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -112,6 +113,34 @@ class LibraryRepositoryTest {
         repository.setInboxMode("p1", InboxMode.LATEST)
 
         assertEquals(InboxMode.LATEST, repository.subscriptionsSnapshot().single().inboxMode)
+    }
+
+    @Test
+    fun `resolved OPML metadata replaces placeholder and preserves local settings`() = runTest {
+        val sourceUrl = "https://example.org/imported.xml"
+        repository.subscribeImported(listOf(sourceUrl to "Imported title"))
+        repository.setInboxMode(sourceUrl, InboxMode.LATEST)
+        val addedAt = repository.subscriptionsSnapshot().single().addedAtMs
+
+        repository.subscribeResolvedImports(
+            listOf(
+                OpmlImportedPodcast(
+                    id = "canonical-id",
+                    title = "Resolved title",
+                    sourceUrl = sourceUrl,
+                    feedUrl = "https://cdn.example.org/canonical.xml",
+                    artworkUrl = "https://cdn.example/resolved.jpg",
+                ),
+            ),
+        )
+
+        val stored = repository.subscriptionsSnapshot().single()
+        assertEquals("canonical-id", stored.podcastId)
+        assertEquals("https://cdn.example.org/canonical.xml", stored.feedUrl)
+        assertEquals("Resolved title", stored.title)
+        assertEquals("https://cdn.example/resolved.jpg", stored.artworkUrl)
+        assertEquals(addedAt, stored.addedAtMs)
+        assertEquals(InboxMode.LATEST, stored.inboxMode)
     }
 
     @Test

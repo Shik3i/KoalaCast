@@ -18,6 +18,8 @@ import net.koalastuff.koalacast.core.network.dto.DeviceLoginRequest
 import net.koalastuff.koalacast.core.network.dto.GlobalStatsPreference
 import net.koalastuff.koalacast.core.network.dto.RecoveryRequest
 import net.koalastuff.koalacast.core.network.dto.RegisterRequest
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -151,21 +153,20 @@ class AccountRepository @Inject constructor(
                 DataError.Malformed("OPML: no feed outlines found"),
             )
         }
-        val feeds = parsedFeeds.take(MAX_LOCAL_OPML_FEEDS)
-
-        val existingFeedUrls = library.subscriptionsSnapshot()
-            .mapTo(mutableSetOf()) { it.feedUrl }
-        val newFeeds = feeds.filterNot { it.feedUrl in existingFeedUrls }
-        library.subscribeImported(newFeeds.map { it.feedUrl to it.title })
-
-        DataResult.Success(
-            OpmlReport(
-                totalFound = parsedFeeds.size,
-                imported = newFeeds.size,
-                skipped = parsedFeeds.size - newFeeds.size,
-                failures = emptyList(),
-            ),
+        importResolvedOpml(
+            xml = buildOpml(parsedFeeds.map { it.feedUrl to it.title }),
+            totalFound = parsedFeeds.size,
         )
+    }
+
+    suspend fun resolvePendingSubscriptions(): DataResult<OpmlReport?> = withContext(dispatcher) {
+        val pending = library.subscriptionsSnapshot()
+            .filter { it.podcastId == it.feedUrl }
+        if (pending.isEmpty()) return@withContext DataResult.Success(null)
+        when (val result = importResolvedOpml(buildOpml(pending.map { it.feedUrl to it.title }), pending.size)) {
+            is DataResult.Success -> DataResult.Success(result.data)
+            is DataResult.Failure -> result
+        }
     }
 
     suspend fun exportOpml(): DataResult<String> = withContext(dispatcher) {
@@ -204,7 +205,43 @@ class AccountRepository @Inject constructor(
         }
     }
 
-    private companion object {
-        const val MAX_LOCAL_OPML_FEEDS = 5_000
+    private suspend fun importResolvedOpml(xml: String, totalFound: Int): DataResult<OpmlReport> {
+        val existingByFeed = library.subscriptionsSnapshot().associateBy { it.feedUrl }
+        val body = xml.toRequestBody("application/xml".toMediaType())
+        return when (val result = apiCall { api.importOpml(body) }) {
+            is DataResult.Failure -> result
+            is DataResult.Success -> {
+                library.subscribeResolvedImports(result.data.podcasts)
+                val imported = result.data.podcasts.count { podcast ->
+                    (
+                        existingByFeed[podcast.sourceUrl.ifBlank { podcast.feedUrl }]
+                            ?: existingByFeed[podcast.feedUrl]
+                    )
+                        ?.let { it.podcastId != it.feedUrl } != true
+                }
+                DataResult.Success(
+                    OpmlReport(
+                        totalFound = totalFound,
+                        imported = imported,
+                        skipped = result.data.skipped + result.data.podcasts.size - imported,
+                        failures = result.data.failures.map { "${it.url}: ${it.reason}" },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun buildOpml(feeds: List<Pair<String, String>>): String {
+        val outlines = feeds.joinToString("\n") { (feedUrl, title) ->
+            val escapedTitle = escapeXml(title)
+            """    <outline type="rss" text="$escapedTitle" title="$escapedTitle" xmlUrl="${escapeXml(feedUrl)}" />"""
+        }
+        return """<?xml version="1.0" encoding="UTF-8"?>
+            |<opml version="2.0">
+            |  <body>
+            |$outlines
+            |  </body>
+            |</opml>
+            |""".trimMargin()
     }
 }

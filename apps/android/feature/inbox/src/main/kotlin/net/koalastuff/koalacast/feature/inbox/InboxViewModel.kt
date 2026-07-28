@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
+import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
@@ -40,6 +42,7 @@ data class InboxUiState(
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(
+    private val account: AccountRepository,
     private val library: LibraryRepository,
     private val podcasts: PodcastRepository,
     private val progress: ProgressRepository,
@@ -49,6 +52,7 @@ class InboxViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(InboxUiState())
     val state: StateFlow<InboxUiState> = _state.asStateFlow()
+    private var refreshJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -88,14 +92,17 @@ class InboxViewModel @Inject constructor(
     }
 
     fun refresh() {
-        val subscriptions = _state.value.subscriptions
         _state.update { it.copy(loading = true, failedFeeds = 0) }
-        if (subscriptions.isEmpty()) {
-            _state.update { it.copy(loading = false, rawEpisodes = emptyList()) }
-            return
-        }
 
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            account.resolvePendingSubscriptions()
+            val subscriptions = library.subscriptionsSnapshot()
+            _state.update { it.copy(subscriptions = subscriptions) }
+            if (subscriptions.isEmpty()) {
+                _state.update { it.copy(loading = false, rawEpisodes = emptyList()) }
+                return@launch
+            }
             val semaphore = Semaphore(MAX_CONCURRENT_FEEDS)
             val results = subscriptions.map { subscription ->
                 async {
