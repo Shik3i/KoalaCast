@@ -26,6 +26,8 @@
     <string name="settings_interests_note">Tap once to prefer a genre, again to hide it from Discover and Search, and a third time to reset it.</string>
     <string name="settings_interests_preferred">Preferred</string>
     <string name="settings_interests_hidden">Hidden</string>
+    <string name="settings_hidden_podcasts_title">Hidden podcasts</string>
+    <string name="settings_hidden_podcasts_show">Show again</string>
 
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_proxy_images">Load cover art through your server</string>

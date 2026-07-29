@@ -105,6 +105,9 @@
 		"openPodcast": "{title} öffnen",
 		"subscribeSuccess": "{title} abonniert",
 		"subscribeError": "Abonnieren fehlgeschlagen. Bitte versuche es erneut.",
+		"hide": "Ausblenden",
+		"hidePodcast": "{title} ausblenden",
+		"podcastHidden": "{title} wird in Discover und Suche nicht mehr angezeigt.",
 		"openError": "Dieser Podcast-Feed konnte nicht geöffnet werden. Suche nach einer anderen Quelle."
 	},
 	"search": {
@@ -302,6 +305,10 @@
 		"contentLanguagesHint": "Entdecken und Suche zeigen nur Podcasts in diesen Sprachen. Mindestens eine muss ausgewählt bleiben.",
 		"interests": "Deine Interessen",
 		"interestsHint": "Einmal tippen, um ein Genre zu bevorzugen (erscheint unter „Für dich“), erneut tippen, um es überall auszublenden, ein drittes Mal zum Zurücksetzen. Bleibt auf deinem Gerät.",
+		"hiddenPodcasts": "Ausgeblendete Podcasts",
+		"hiddenPodcastsHint": "Ausgeblendete Sendungen erscheinen nicht mehr in Discover und Suche.",
+		"hiddenPodcastsEmpty": "Keine Podcasts sind ausgeblendet.",
+		"showAgain": "Wieder anzeigen",
 		"helpTranslate": "KoalaCast wird von seiner Community übersetzt. Fehlt deine Sprache oder ist ein Wort falsch?",
 		"helpTranslateLink": "Auf GitHub beim Übersetzen helfen",
 		"subtitle": "Darstellung, Datenschutz, Import/Export und dein optionales Sync-Konto.",

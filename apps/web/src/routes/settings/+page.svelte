@@ -612,6 +612,34 @@
 		</div>
 	</details>
 
+	<details class="card" id="hidden-podcasts" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-eye-slash" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.hiddenPodcasts')}</strong>
+				<small>{t('settings.hiddenPodcastsHint')}</small>
+			</span>
+			<span class="summary-value">{prefs.hiddenPodcasts.length}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			{#if prefs.hiddenPodcasts.length === 0}
+				<p class="settings-empty">{t('settings.hiddenPodcastsEmpty')}</p>
+			{:else}
+				<div class="hidden-podcast-list">
+					{#each prefs.hiddenPodcasts as podcast (podcast.key)}
+						<div>
+							<strong>{podcast.title}</strong>
+							<button type="button" onclick={() => prefs.unhidePodcast(podcast.key)}>
+								{t('settings.showAgain')}
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</details>
+
 	<details class="card" id="privacy" name="settings-section">
 		<summary>
 			<span class="summary-icon"><i class="ph ph-shield-check" aria-hidden="true"></i></span>
@@ -1086,6 +1114,11 @@
 	.genre-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
 	.genre-legend .dot.like { background: var(--accent-green); }
 	.genre-legend .dot.hide { background: var(--color-danger); }
+	.settings-empty { margin: 0; color: var(--ink-4); font-size: 13px; }
+	.hidden-podcast-list { display: grid; gap: 8px; }
+	.hidden-podcast-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--border-row); }
+	.hidden-podcast-list strong { min-width: 0; overflow: hidden; color: var(--ink-2); text-overflow: ellipsis; white-space: nowrap; }
+	.hidden-podcast-list button { flex: 0 0 auto; min-height: 40px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-3); }
 
 	.language-grid {
 		display: grid;

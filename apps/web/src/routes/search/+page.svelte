@@ -93,7 +93,13 @@
 	}
 
 	// Hide vetoed genres from results.
-	const visibleResults = $derived(searchResults.filter((pod) => !prefs.isHidden(podCategories(pod))));
+	const visibleResults = $derived(
+		searchResults.filter(
+			(pod) =>
+				!prefs.isHidden(podCategories(pod)) &&
+				!prefs.isPodcastHidden(pod.feed_url || pod.feedUrl, pod.id)
+		)
+	);
 
 	let recentSearches = $state<string[]>([]);
 	const HISTORY_KEY = 'koalacast_search_history';
@@ -292,6 +298,16 @@
 		} finally {
 			subscriptionRequests.delete(requestKey);
 		}
+	}
+
+	function hidePodcast(pod: any) {
+		const title = pod.title || pod.trackName || '';
+		prefs.hidePodcast({
+			feedUrl: pod.feed_url || pod.feedUrl,
+			id: pod.id,
+			title
+		});
+		toast.success(t('discover.podcastHidden', { title }));
 	}
 
 	async function handleAddDirectRss(e: Event) {
@@ -528,6 +544,14 @@
 								{:else}
 									<i class="ph ph-plus" aria-hidden="true"></i> {t('common.subscribe')}
 								{/if}
+							</button>
+							<button
+								class="btn-hide"
+								onclick={() => hidePodcast(pod)}
+								aria-label={t('discover.hidePodcast', { title: pod.title || pod.trackName })}
+								title={t('discover.hidePodcast', { title: pod.title || pod.trackName })}
+							>
+								<i class="ph ph-eye-slash" aria-hidden="true"></i> {t('discover.hide')}
 							</button>
 						</div>
 					</article>
@@ -832,6 +856,15 @@
 		background: var(--bg-elevated);
 		color: var(--text-primary);
 		border: 1px solid var(--border-subtle);
+	}
+	.btn-hide {
+		min-height: 40px;
+		padding: 0 12px;
+		border: 1px solid var(--border-ui);
+		border-radius: 5px;
+		background: transparent;
+		color: var(--ink-3);
+		font: 650 12px/1 var(--font-ui);
 	}
 
 	/* Search filters (language + genre) */

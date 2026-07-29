@@ -76,18 +76,39 @@
 	const filtered = $derived(
 		podcasts.filter((pod) => {
 			if (prefs.isHidden(pod.categories)) return false;
+			if (prefs.isPodcastHidden(pod.feed_url, pod.id)) return false;
 			return true;
 		})
 	);
-	const arranged = $derived(
-		arrangeDiscover(filtered, {
+	const arranged = $derived.by(() => {
+		const items = arrangeDiscover(filtered, {
 			mood: selectedMood,
 			sort,
 			sessionMinutes: listeningSession.minutes,
 			fitsSession
-		}) as PodcastItem[]
+		}) as PodcastItem[];
+		if (selectedCategory !== 'All' || sort !== 'momentum' || prefs.interests.length === 0) {
+			return items;
+		}
+		const preferred = new Set(prefs.interests.map((genre) => genre.toLowerCase()));
+		return items
+			.map((podcast, index) => ({
+				podcast,
+				index,
+				preferred: (podcast.categories || [podcast.category || '']).some((category) =>
+					preferred.has(category.toLowerCase())
+				)
+			}))
+			.sort((a, b) => Number(b.preferred) - Number(a.preferred) || a.index - b.index)
+			.map(({ podcast }) => podcast);
+	});
+	const spotlight = $derived(
+		pinnedSpotlight &&
+			!prefs.isHidden(pinnedSpotlight.categories) &&
+			!prefs.isPodcastHidden(pinnedSpotlight.feed_url, pinnedSpotlight.id)
+			? pinnedSpotlight
+			: arranged[0] ?? null
 	);
-	const spotlight = $derived(pinnedSpotlight ?? arranged[0] ?? null);
 	const supporting = $derived(arranged.filter((podcast) => podcastKey(podcast) !== (spotlight ? podcastKey(spotlight) : '')));
 	const picks = $derived(supporting.slice(0, 3));
 	const chart = $derived(supporting.slice(3, 3 + visibleChartCount));
@@ -444,6 +465,18 @@
 			subscriptionRequests.delete(requestKey);
 		}
 	}
+
+	function hidePodcast(podcast: PodcastItem) {
+		prefs.hidePodcast({
+			feedUrl: podcast.feed_url,
+			id: podcast.id,
+			title: podcast.title
+		});
+		if (pinnedSpotlight && podcastKey(pinnedSpotlight) === podcastKey(podcast)) {
+			pinnedSpotlight = null;
+		}
+		toast.success(t('discover.podcastHidden', { title: podcast.title }));
+	}
 </script>
 
 {#if mounted && !prefs.onboarded}<Onboarding />{/if}
@@ -482,6 +515,7 @@
 					<button class="primary" onclick={() => playLatest(spotlight)}><i class="ph-fill ph-play"></i> {t('quiet.discover.playNow')}</button>
 					<button onclick={() => queueLatest(spotlight)}><i class="ph ph-list-plus"></i> {t('quiet.discover.queueNext')}</button>
 					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> {t('quiet.discover.save')}</button>
+					<button onclick={() => hidePodcast(spotlight)} title={t('discover.hidePodcast', { title: spotlight.title })}><i class="ph ph-eye-slash"></i> {t('discover.hide')}</button>
 				</div>
 			</div>
 			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} onpointerenter={() => warmPodcastArtwork(spotlight)} onfocus={() => warmPodcastArtwork(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
@@ -526,19 +560,22 @@
 			<header><h2>{t('quiet.discover.becauseMood', { mood: selectedMoodLabel })}</h2><span>{t('quiet.discover.picksIncluded', { count: picks.length })}</span></header>
 			<div>
 				{#each picks as podcast}
-					<button onclick={() => openPodcast(podcast)} onpointerenter={() => warmPodcastArtwork(podcast)} onfocus={() => warmPodcastArtwork(podcast)} title={podcast.title}>
-						<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
-						<span>
-							<strong>{podcast.title}</strong>
-							<small>{t('quiet.discover.moodReason', { mood: selectedMoodLabel })}</small>
-							<em>
-								{podcast.category || podcast.author}
-								{#if fitsSession && listeningSession.minutes !== null && podcast.latestDurationMs && podcast.latestDurationMs <= listeningSession.minutes * 60_000}
-									· {t('quiet.discover.selectedFor', { count: listeningSession.minutes })}
-								{/if}
-							</em>
-						</span>
-					</button>
+					<article>
+						<button class="pick-main" onclick={() => openPodcast(podcast)} onpointerenter={() => warmPodcastArtwork(podcast)} onfocus={() => warmPodcastArtwork(podcast)} title={podcast.title}>
+							<img src={optimizeArtwork(podcast.artwork_url, 120)} alt="" loading="lazy" decoding="async" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
+							<span>
+								<strong>{podcast.title}</strong>
+								<small>{t('quiet.discover.moodReason', { mood: selectedMoodLabel })}</small>
+								<em>
+									{podcast.category || podcast.author}
+									{#if fitsSession && listeningSession.minutes !== null && podcast.latestDurationMs && podcast.latestDurationMs <= listeningSession.minutes * 60_000}
+										· {t('quiet.discover.selectedFor', { count: listeningSession.minutes })}
+									{/if}
+								</em>
+							</span>
+						</button>
+						<button class="pick-hide" onclick={() => hidePodcast(podcast)} aria-label={t('discover.hidePodcast', { title: podcast.title })} title={t('discover.hidePodcast', { title: podcast.title })}><i class="ph ph-eye-slash" aria-hidden="true"></i></button>
+					</article>
 				{/each}
 			</div>
 		</section>
@@ -590,6 +627,7 @@
 					<div class="row-actions">
 						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })} title={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play" aria-hidden="true"></i></button>
 						<button onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })} title={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
+						<button onclick={() => hidePodcast(podcast)} aria-label={t('discover.hidePodcast', { title: podcast.title })} title={t('discover.hidePodcast', { title: podcast.title })}><i class="ph ph-eye-slash" aria-hidden="true"></i></button>
 					</div>
 				</article>
 			{/each}
@@ -674,7 +712,9 @@
 	.reasoned-picks h2, .chart-head h2 { font-size: 20px; letter-spacing: -.02em; }
 	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); letter-spacing: .01em; }
 	.reasoned-picks > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-	.reasoned-picks button { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
+	.reasoned-picks article { position: relative; min-width: 0; }
+	.reasoned-picks .pick-main { display: grid; width: 100%; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px 42px 8px 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
+	.reasoned-picks .pick-hide { position: absolute; top: 4px; right: 4px; width: 36px; min-height: 36px; border: 0; background: transparent; color: var(--ink-4); }
 	.reasoned-picks img { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background: var(--bg-tile); }
 	.reasoned-picks button > span { display: flex; flex-direction: column; min-width: 0; }
 	.reasoned-picks strong { overflow: hidden; font: 700 14px/1.25 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
@@ -688,7 +728,7 @@
 	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
 	.chart-filters select { min-height: 44px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
-	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 52px 66px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
+	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 52px 140px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
 	.rank, .fit { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 	.chart-art, .chart-title, .row-actions button { border: 0; background: transparent; color: inherit; }
 	.chart-art { min-width: 44px; min-height: 44px; }
@@ -747,7 +787,7 @@
 		.mood-grid { grid-template-columns: repeat(2, 1fr); }
 		.chart-head { align-items: flex-start; flex-direction: column; }
 		.sort-tabs { width: 100%; overflow-x: auto; }
-		.chart-row { grid-template-columns: 24px 44px minmax(0, 1fr) 92px; min-height: 60px; }
+		.chart-row { grid-template-columns: 24px 44px minmax(0, 1fr) 140px; min-height: 60px; }
 		.fit { display: none; }
 		.chart-filters span { display: none; }
 		.chart-footer { justify-content: end; }

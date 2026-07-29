@@ -37,6 +37,7 @@ import net.koalastuff.koalacast.core.ui.component.AccentBadge
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
+import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
@@ -69,6 +70,7 @@ fun DiscoverScreen(
         onSelectCategory = viewModel::selectCategory,
         onOpenPodcast = onOpenPodcast,
         onOpenEpisode = onOpenEpisode,
+        onHidePodcast = viewModel::hidePodcast,
         onRetry = viewModel::retry,
         modifier = modifier,
         contentPadding = contentPadding,
@@ -82,6 +84,7 @@ internal fun DiscoverContent(
     onSelectCategory: (String) -> Unit,
     onOpenPodcast: (String, String?) -> Unit,
     onOpenEpisode: (String) -> Unit,
+    onHidePodcast: (PodcastSummary) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -121,6 +124,7 @@ internal fun DiscoverContent(
                     spotlight = state.spotlight,
                     onOpenShow = { onOpenPodcast(state.spotlight.show.feedUrl, state.spotlight.podcastId) },
                     onOpenEpisode = { state.spotlight.episode?.let { onOpenEpisode(it.id) } },
+                    onHide = { onHidePodcast(state.spotlight.show) },
                 )
             }
         }
@@ -170,6 +174,7 @@ internal fun DiscoverContent(
                     // iTunes Top Charts entries carry no feed URL, so the provider id
                     // has to travel too — the server resolves it via iTunes Lookup.
                     onClick = { onOpenPodcast(show.feedUrl, show.id) },
+                    onHide = { onHidePodcast(show) },
                 )
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
@@ -182,6 +187,7 @@ private fun SpotlightCard(
     spotlight: Spotlight,
     onOpenShow: () -> Unit,
     onOpenEpisode: () -> Unit,
+    onHide: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     val context = LocalContext.current
@@ -258,6 +264,10 @@ private fun SpotlightCard(
                     onClick = onOpenEpisode,
                 )
             }
+            OutlineButton(
+                text = stringResource(R.string.discover_hide_podcast),
+                onClick = onHide,
+            )
         }
     }
 }
@@ -291,6 +301,7 @@ private fun ChartRow(
     rank: Int,
     show: PodcastSummary,
     onClick: () -> Unit,
+    onHide: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     Row(
@@ -333,6 +344,13 @@ private fun ChartRow(
                 style = KoalaTheme.type.monoSmall,
             )
         }
+        IconButtonSquare(
+            icon = PhosphorIcons.X,
+            contentDescription = stringResource(R.string.discover_hide_podcast_named, show.title),
+            onClick = onHide,
+            boxSize = 36.dp,
+            iconSize = 16.dp,
+        )
     }
 }
 

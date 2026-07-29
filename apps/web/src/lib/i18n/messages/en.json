@@ -105,6 +105,9 @@
 		"openPodcast": "Open {title}",
 		"subscribeSuccess": "Subscribed to {title}",
 		"subscribeError": "Could not subscribe. Please try again.",
+		"hide": "Hide",
+		"hidePodcast": "Hide {title}",
+		"podcastHidden": "{title} is hidden from Discover and Search.",
 		"openError": "This podcast feed could not be opened. Try searching for another source."
 	},
 	"search": {
@@ -302,6 +305,10 @@
 		"contentLanguagesHint": "Discover and Search only show podcasts spoken in these languages. At least one must stay selected.",
 		"interests": "Your interests",
 		"interestsHint": "Tap once to prefer a genre (shown in \"For You\"), tap again to hide it everywhere, tap a third time to reset. Stays on your device.",
+		"hiddenPodcasts": "Hidden podcasts",
+		"hiddenPodcastsHint": "Shows you hid are removed from Discover and Search.",
+		"hiddenPodcastsEmpty": "No podcasts are hidden.",
+		"showAgain": "Show again",
 		"helpTranslate": "KoalaCast is translated by its community. Missing your language, or spotted a wrong word?",
 		"helpTranslateLink": "Help translate on GitHub",
 		"subtitle": "Appearance, privacy, import/export and your optional sync account.",

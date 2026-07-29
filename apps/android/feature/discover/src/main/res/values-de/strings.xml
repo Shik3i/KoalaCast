@@ -4,6 +4,8 @@
     <string name="discover_cover_story">Titelgeschichte</string>
     <string name="discover_open_show">Sendung öffnen</string>
     <string name="discover_open_episode">Neueste Folge</string>
+    <string name="discover_hide_podcast">Podcast ausblenden</string>
+    <string name="discover_hide_podcast_named">%1$s ausblenden</string>
     <string name="discover_chart_title">Top &amp; im Trend</string>
     <plurals name="discover_chart_count">
         <item quantity="one">%1$d Sendung</item>

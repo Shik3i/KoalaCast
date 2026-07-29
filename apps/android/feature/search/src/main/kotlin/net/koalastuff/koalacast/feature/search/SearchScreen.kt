@@ -76,6 +76,7 @@ fun SearchScreen(
         onAddFeed = viewModel::addFeed,
         onRetry = viewModel::retry,
         onOpenPodcast = onOpenPodcast,
+        onHidePodcast = viewModel::hidePodcast,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -94,6 +95,7 @@ internal fun SearchContent(
     onAddFeed: () -> Unit,
     onRetry: () -> Unit,
     onOpenPodcast: (String, String?) -> Unit,
+    onHidePodcast: (PodcastSummary) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -234,7 +236,11 @@ internal fun SearchContent(
                 items = state.results,
                 key = { it.feedUrl.ifBlank { it.id } },
             ) { show ->
-                ResultRow(show = show, onClick = { onOpenPodcast(show.feedUrl, show.id) })
+                ResultRow(
+                    show = show,
+                    onClick = { onOpenPodcast(show.feedUrl, show.id) },
+                    onHide = { onHidePodcast(show) },
+                )
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
         }
@@ -357,7 +363,7 @@ private fun FilterBlock(
 }
 
 @Composable
-private fun ResultRow(show: PodcastSummary, onClick: () -> Unit) {
+private fun ResultRow(show: PodcastSummary, onClick: () -> Unit, onHide: () -> Unit) {
     val colors = KoalaTheme.colors
     Row(
         modifier = Modifier
@@ -392,5 +398,12 @@ private fun ResultRow(show: PodcastSummary, onClick: () -> Unit) {
                 style = KoalaTheme.type.monoSmall,
             )
         }
+        IconButtonSquare(
+            icon = PhosphorIcons.X,
+            contentDescription = stringResource(R.string.search_hide_podcast_named, show.title),
+            onClick = onHide,
+            boxSize = 36.dp,
+            iconSize = 16.dp,
+        )
     }
 }

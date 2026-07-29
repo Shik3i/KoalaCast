@@ -153,6 +153,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setGenrePreferences(interests, hidden) }
     }
 
+    fun unhidePodcast(key: String) {
+        viewModelScope.launch { preferences.unhidePodcast(key) }
+    }
+
     fun setProxyImages(enabled: Boolean) {
         viewModelScope.launch { preferences.setProxyImages(enabled) }
     }

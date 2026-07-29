@@ -16,8 +16,12 @@ import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
+import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.PodcastSummary
 import net.koalastuff.koalacast.core.model.isHiddenBy
+import net.koalastuff.koalacast.core.model.isHiddenByPodcast
+import net.koalastuff.koalacast.core.model.matchesGenres
+import net.koalastuff.koalacast.core.model.preferenceKey
 import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
 import javax.inject.Inject
 
@@ -67,6 +71,21 @@ class DiscoverViewModel @Inject constructor(
 
     fun retry() = load(force = true)
 
+    fun hidePodcast(show: PodcastSummary) {
+        val key = show.preferenceKey()
+        val visible = _state.value.chart.filterNot { it.preferenceKey() == key }
+        _state.update {
+            it.copy(
+                chart = visible,
+                spotlight = visible.firstOrNull()?.let(::Spotlight),
+            )
+        }
+        visible.firstOrNull()?.let(::loadSpotlightEpisode)
+        viewModelScope.launch {
+            preferences.hidePodcast(HiddenPodcast(key = key, title = show.title))
+        }
+    }
+
     private fun load(force: Boolean) {
         loadJob?.cancel()
         spotlightJob?.cancel()
@@ -84,7 +103,9 @@ class DiscoverViewModel @Inject constructor(
                 limit = CHART_SIZE,
             )
             if (cached != null && category == _state.value.category) {
-                val visible = cached.value.filterNot { it.isHiddenBy(prefs.hiddenGenres) }
+                val visible = cached.value.filterNot {
+                    it.isHiddenBy(prefs.hiddenGenres) || it.isHiddenByPodcast(prefs.hiddenPodcasts)
+                }.prioritize(prefs.interests, category)
                 _state.update {
                     it.copy(
                         loading = false,
@@ -120,7 +141,9 @@ class DiscoverViewModel @Inject constructor(
             ) {
                 is DataResult.Success -> {
                     if (category != _state.value.category) return@launch
-                    val visible = result.data.filterNot { it.isHiddenBy(prefs.hiddenGenres) }
+                    val visible = result.data.filterNot {
+                        it.isHiddenBy(prefs.hiddenGenres) || it.isHiddenByPodcast(prefs.hiddenPodcasts)
+                    }.prioritize(prefs.interests, category)
                     _state.update {
                         it.copy(
                             loading = false,
@@ -177,3 +200,13 @@ class DiscoverViewModel @Inject constructor(
         const val CHART_SIZE = 60
     }
 }
+
+private fun List<PodcastSummary>.prioritize(
+    interests: Set<String>,
+    selectedCategory: String,
+): List<PodcastSummary> =
+    if (selectedCategory.isBlank() && interests.isNotEmpty()) {
+        sortedByDescending { it.matchesGenres(interests) }
+    } else {
+        this
+    }

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
+import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
@@ -63,6 +64,30 @@ class PreferencesRepository @Inject constructor(
             val owner = owner()
             it[Keys.interests(owner)] = interests
             it[Keys.hiddenGenres(owner)] = hiddenGenres - interests
+            it.touch(owner)
+        }
+    }
+
+    suspend fun hidePodcast(podcast: HiddenPodcast) {
+        if (podcast.key.isBlank()) return
+        dataStore.edit {
+            val owner = owner()
+            val current = it[Keys.hiddenPodcasts(owner)].orEmpty()
+                .mapNotNull(::decodeHiddenPodcast)
+                .filterNot { hidden -> hidden.key == podcast.key }
+            it[Keys.hiddenPodcasts(owner)] =
+                (current + podcast).mapTo(mutableSetOf(), ::encodeHiddenPodcast)
+            it.touch(owner)
+        }
+    }
+
+    suspend fun unhidePodcast(key: String) {
+        dataStore.edit {
+            val owner = owner()
+            it[Keys.hiddenPodcasts(owner)] = it[Keys.hiddenPodcasts(owner)].orEmpty()
+                .mapNotNull(::decodeHiddenPodcast)
+                .filterNot { hidden -> hidden.key == key }
+                .mapTo(mutableSetOf(), ::encodeHiddenPodcast)
             it.touch(owner)
         }
     }
@@ -128,6 +153,8 @@ class PreferencesRepository @Inject constructor(
             it[Keys.languages(owner)] = preferences.languages
             it[Keys.interests(owner)] = preferences.interests
             it[Keys.hiddenGenres(owner)] = preferences.hiddenGenres - preferences.interests
+            it[Keys.hiddenPodcasts(owner)] =
+                preferences.hiddenPodcasts.mapTo(mutableSetOf(), ::encodeHiddenPodcast)
             it[Keys.proxyImages(owner)] = preferences.proxyImages
             it[Keys.playbackSpeed(owner)] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
             it[Keys.downloadWifiOnly(owner)] = preferences.downloadWifiOnly
@@ -149,6 +176,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.languages(owner))
             it.remove(Keys.interests(owner))
             it.remove(Keys.hiddenGenres(owner))
+            it.remove(Keys.hiddenPodcasts(owner))
             it.remove(Keys.proxyImages(owner))
             it.remove(Keys.playbackSpeed(owner))
             it.remove(Keys.downloadWifiOnly(owner))
@@ -171,6 +199,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.languages(owner), Keys.LEGACY_LANGUAGES)
             it.copyIfAbsent(Keys.interests(owner), Keys.LEGACY_INTERESTS)
             it.copyIfAbsent(Keys.hiddenGenres(owner), Keys.LEGACY_HIDDEN_GENRES)
+            it.copyIfAbsent(Keys.hiddenPodcasts(owner), Keys.LEGACY_HIDDEN_PODCASTS)
             it.remove(Keys.LEGACY_CATEGORY)
             it.copyIfAbsent(Keys.proxyImages(owner), Keys.LEGACY_PROXY_IMAGES)
             it.copyIfAbsent(Keys.playbackSpeed(owner), Keys.LEGACY_PLAYBACK_SPEED)
@@ -197,6 +226,11 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(
                 Keys.hiddenGenres(ownerId),
                 Keys.hiddenGenres(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.hiddenPodcasts(ownerId),
+                Keys.hiddenPodcasts(null),
                 removeSource = false,
             )
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(null), removeSource = false)
@@ -245,6 +279,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.languages(ownerId), Keys.languages(userId))
             it.copyIfAbsent(Keys.interests(ownerId), Keys.interests(userId))
             it.copyIfAbsent(Keys.hiddenGenres(ownerId), Keys.hiddenGenres(userId))
+            it.copyIfAbsent(Keys.hiddenPodcasts(ownerId), Keys.hiddenPodcasts(userId))
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(userId))
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(userId))
             it.copyIfAbsent(Keys.downloadWifiOnly(ownerId), Keys.downloadWifiOnly(userId))
@@ -271,6 +306,8 @@ class PreferencesRepository @Inject constructor(
         languages = this[Keys.languages(owner)] ?: emptySet(),
         interests = this[Keys.interests(owner)] ?: emptySet(),
         hiddenGenres = this[Keys.hiddenGenres(owner)] ?: emptySet(),
+        hiddenPodcasts = this[Keys.hiddenPodcasts(owner)].orEmpty()
+            .mapNotNullTo(mutableSetOf(), ::decodeHiddenPodcast),
         proxyImages = this[Keys.proxyImages(owner)] ?: true,
         playbackSpeed = this[Keys.playbackSpeed(owner)] ?: 1f,
         downloadWifiOnly = this[Keys.downloadWifiOnly(owner)] ?: true,
@@ -293,6 +330,7 @@ class PreferencesRepository @Inject constructor(
         fun languages(owner: String?) = stringSetPreferencesKey(scoped("languages", owner))
         fun interests(owner: String?) = stringSetPreferencesKey(scoped("interests", owner))
         fun hiddenGenres(owner: String?) = stringSetPreferencesKey(scoped("hidden_genres", owner))
+        fun hiddenPodcasts(owner: String?) = stringSetPreferencesKey(scoped("hidden_podcasts", owner))
         fun proxyImages(owner: String?) = booleanPreferencesKey(scoped("proxy_images", owner))
         fun playbackSpeed(owner: String?) = floatPreferencesKey(scoped("playback_speed", owner))
         fun downloadWifiOnly(owner: String?) = booleanPreferencesKey(scoped("download_wifi_only", owner))
@@ -311,6 +349,7 @@ class PreferencesRepository @Inject constructor(
         val LEGACY_LANGUAGES = stringSetPreferencesKey("languages")
         val LEGACY_INTERESTS = stringSetPreferencesKey("interests")
         val LEGACY_HIDDEN_GENRES = stringSetPreferencesKey("hidden_genres")
+        val LEGACY_HIDDEN_PODCASTS = stringSetPreferencesKey("hidden_podcasts")
         val LEGACY_CATEGORY = stringPreferencesKey("category")
         val LEGACY_PROXY_IMAGES = booleanPreferencesKey("proxy_images")
         val LEGACY_PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
@@ -338,8 +377,23 @@ class PreferencesRepository @Inject constructor(
         this[Keys.settingsUpdatedAt(owner)] = System.currentTimeMillis()
     }
 
+    private fun encodeHiddenPodcast(podcast: HiddenPodcast): String =
+        podcast.key + HIDDEN_PODCAST_SEPARATOR +
+            podcast.title.replace(HIDDEN_PODCAST_SEPARATOR, " ")
+
+    private fun decodeHiddenPodcast(value: String): HiddenPodcast? {
+        val parts = value.split(HIDDEN_PODCAST_SEPARATOR, limit = 2)
+        val key = parts.firstOrNull()?.trim().orEmpty()
+        if (key.isBlank()) return null
+        return HiddenPodcast(
+            key = key,
+            title = parts.getOrElse(1) { key }.trim().ifBlank { key },
+        )
+    }
+
     private companion object {
         const val MB = 1024L * 1024L
+        const val HIDDEN_PODCAST_SEPARATOR = "\u001F"
     }
 }
 

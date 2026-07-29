@@ -20,8 +20,11 @@ import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
+import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.PodcastSummary
 import net.koalastuff.koalacast.core.model.isHiddenBy
+import net.koalastuff.koalacast.core.model.isHiddenByPodcast
+import net.koalastuff.koalacast.core.model.preferenceKey
 import javax.inject.Inject
 
 data class SearchUiState(
@@ -37,6 +40,7 @@ data class SearchUiState(
     val languages: Set<String> = emptySet(),
     val category: String = "",
     val hiddenGenres: Set<String> = emptySet(),
+    val hiddenPodcasts: Set<HiddenPodcast> = emptySet(),
     val filtersFromSettings: Boolean = true,
     /** Set when the query is a feed URL; adding it resolves and opens the show. */
     val feedUrlCandidate: String? = null,
@@ -75,6 +79,7 @@ class SearchViewModel @Inject constructor(
                         languages = prefs.languages,
                         category = "",
                         hiddenGenres = prefs.hiddenGenres,
+                        hiddenPodcasts = prefs.hiddenPodcasts,
                     )
                 } else {
                     it.copy(serverUrl = prefs.serverUrl)
@@ -119,6 +124,19 @@ class SearchViewModel @Inject constructor(
         _state.update { it.copy(category = wireName, filtersFromSettings = false) }
     }
 
+    fun hidePodcast(show: PodcastSummary) {
+        val key = show.preferenceKey()
+        _state.update {
+            it.copy(
+                results = it.results.filterNot { result -> result.preferenceKey() == key },
+                hiddenPodcasts = it.hiddenPodcasts + HiddenPodcast(key, show.title),
+            )
+        }
+        viewModelScope.launch {
+            preferences.hidePodcast(HiddenPodcast(key = key, title = show.title))
+        }
+    }
+
     /** Drops both filters so the search covers everything the server can see. */
     fun clearFilters() {
         _state.update { it.copy(languages = emptySet(), category = "", filtersFromSettings = false) }
@@ -133,6 +151,7 @@ class SearchViewModel @Inject constructor(
                     languages = prefs.languages,
                     category = "",
                     hiddenGenres = prefs.hiddenGenres,
+                    hiddenPodcasts = prefs.hiddenPodcasts,
                     filtersFromSettings = true,
                 )
             }
@@ -191,7 +210,10 @@ class SearchViewModel @Inject constructor(
                 it.copy(
                     searching = true,
                     results = cached?.value
-                        ?.filterNot { show -> show.isHiddenBy(it.hiddenGenres) }
+                        ?.filterNot { show ->
+                            show.isHiddenBy(it.hiddenGenres) ||
+                                show.isHiddenByPodcast(it.hiddenPodcasts)
+                        }
                         ?: it.results,
                     error = null,
                 )
@@ -216,7 +238,10 @@ class SearchViewModel @Inject constructor(
                 } else {
                     it.copy(
                         searching = false,
-                        results = result.data.filterNot { show -> show.isHiddenBy(it.hiddenGenres) },
+                        results = result.data.filterNot { show ->
+                            show.isHiddenBy(it.hiddenGenres) ||
+                                show.isHiddenByPodcast(it.hiddenPodcasts)
+                        },
                     )
                 }
             }

@@ -19,6 +19,8 @@ data class UserPreferences(
     val interests: Set<String>,
     /** Genres vetoed by the listener and removed from Discover and Search. */
     val hiddenGenres: Set<String>,
+    /** Individual shows removed from recommendation and search surfaces. */
+    val hiddenPodcasts: Set<HiddenPodcast>,
     /**
      * Route cover art through the configured KoalaCast server instead of fetching it
      * straight from the publisher's CDN. Costs a hop, hides the listener's IP.
@@ -46,6 +48,11 @@ data class UserPreferences(
     /** App-private internal/external storage or a persisted Storage Access Framework tree. */
     val downloadStorage: DownloadStorage,
     val downloadTreeUri: String,
+)
+
+data class HiddenPodcast(
+    val key: String,
+    val title: String,
 )
 
 enum class DownloadStorage(val id: String) {

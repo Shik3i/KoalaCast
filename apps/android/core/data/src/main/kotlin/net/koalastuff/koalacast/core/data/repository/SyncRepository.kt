@@ -35,6 +35,7 @@ import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneDao
 import net.koalastuff.koalacast.core.model.SyncStatus
 import net.koalastuff.koalacast.core.model.DownloadRetention
+import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
@@ -519,6 +520,11 @@ class SyncRepository @Inject constructor(
                 } else {
                     current.hiddenGenres
                 },
+                hiddenPodcasts = if ("hidden_podcasts" in payload) {
+                    payload.hiddenPodcasts()
+                } else {
+                    current.hiddenPodcasts
+                },
                 proxyImages = payload.booleanOr("proxy_images", current.proxyImages),
                 playbackSpeed = payload.floatOr("playback_speed", current.playbackSpeed),
                 downloadWifiOnly = payload.booleanOr(
@@ -700,6 +706,17 @@ class SyncRepository @Inject constructor(
         put("languages", JsonArray(item.languages.map(::JsonPrimitive)))
         put("interests", JsonArray(item.interests.map(::JsonPrimitive)))
         put("hidden_genres", JsonArray(item.hiddenGenres.map(::JsonPrimitive)))
+        put(
+            "hidden_podcasts",
+            JsonArray(
+                item.hiddenPodcasts.map { podcast ->
+                    buildJsonObject {
+                        put("key", podcast.key)
+                        put("title", podcast.title)
+                    }
+                },
+            ),
+        )
         put("proxy_images", item.proxyImages)
         put("playback_speed", item.playbackSpeed)
         put("download_wifi_only", item.downloadWifiOnly)
@@ -741,6 +758,16 @@ class SyncRepository @Inject constructor(
         get(key)?.jsonPrimitive?.floatOrNull ?: fallback
     private fun JsonObject.strings(key: String) =
         (get(key) as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList()
+    private fun JsonObject.hiddenPodcasts(): Set<HiddenPodcast> =
+        (get("hidden_podcasts") as? JsonArray)
+            ?.mapNotNull { element ->
+                val value = element as? JsonObject ?: return@mapNotNull null
+                value.string("key").takeIf(String::isNotBlank)?.let { key ->
+                    HiddenPodcast(key = key, title = value.string("title").ifBlank { key })
+                }
+            }
+            ?.toSet()
+            .orEmpty()
     private fun kotlinx.serialization.json.JsonObjectBuilder.nullable(key: String, value: String?) {
         if (value != null) put(key, value)
     }

@@ -52,6 +52,7 @@ import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.genre.GENRES
@@ -91,6 +92,7 @@ fun SettingsScreen(
         onPaletteChange = viewModel::setPalette,
         onToggleLanguage = viewModel::toggleLanguage,
         onCycleGenre = viewModel::cycleGenre,
+        onUnhidePodcast = viewModel::unhidePodcast,
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
@@ -121,6 +123,7 @@ internal fun SettingsContent(
     onPaletteChange: (PaletteId) -> Unit,
     onToggleLanguage: (String) -> Unit,
     onCycleGenre: (String) -> Unit,
+    onUnhidePodcast: (String) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
@@ -297,6 +300,33 @@ internal fun SettingsContent(
                     color = colors.ink3,
                     style = KoalaTheme.type.monoSmall,
                 )
+            }
+            if (!prefs?.hiddenPodcasts.isNullOrEmpty()) {
+                Text(
+                    text = stringResource(R.string.settings_hidden_podcasts_title),
+                    style = KoalaTheme.type.label,
+                    color = colors.ink2,
+                )
+                prefs.hiddenPodcasts
+                    ?.sortedBy { it.title.lowercase() }
+                    ?.forEach { podcast ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = podcast.title,
+                                style = KoalaTheme.type.bodySmall,
+                                color = colors.ink2,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlineButton(
+                                text = stringResource(R.string.settings_hidden_podcasts_show),
+                                onClick = { onUnhidePodcast(podcast.key) },
+                            )
+                        }
+                    }
             }
         }
 

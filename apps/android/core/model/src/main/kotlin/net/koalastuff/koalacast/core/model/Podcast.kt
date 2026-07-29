@@ -42,3 +42,18 @@ fun PodcastSummary.isHiddenBy(hiddenGenres: Set<String>): Boolean {
     val showCategories = categories.ifEmpty { listOf(category) }
     return showCategories.any { it.trim().lowercase() in hidden }
 }
+
+fun PodcastSummary.matchesGenres(genres: Set<String>): Boolean {
+    if (genres.isEmpty()) return false
+    val normalized = genres.mapTo(mutableSetOf()) { it.trim().lowercase() }
+    val showCategories = categories.ifEmpty { listOf(category) }
+    return showCategories.any { it.trim().lowercase() in normalized }
+}
+
+fun PodcastSummary.preferenceKey(): String = when {
+    feedUrl.isNotBlank() -> "feed:${feedUrl.trim().lowercase()}"
+    else -> "id:${id.trim().lowercase()}"
+}
+
+fun PodcastSummary.isHiddenByPodcast(hiddenPodcasts: Set<HiddenPodcast>): Boolean =
+    hiddenPodcasts.any { it.key == preferenceKey() }

@@ -13,10 +13,15 @@ import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
 import { storedPlaybackSpeed } from '$lib/player/playback-speed';
 
 export type DateFormat = 'absolute' | 'relative';
+export interface HiddenPodcastPreference {
+	key: string;
+	title: string;
+}
 
 const KEY = 'koalacast_date_format';
 const INTERESTS_KEY = 'koalacast_interests';
 const HIDDEN_KEY = 'koalacast_hidden_genres';
+const HIDDEN_PODCASTS_KEY = 'koalacast_hidden_podcasts';
 const LANGUAGES_KEY = 'koalacast_preferred_languages';
 const UI_LANGUAGE_KEY = 'koalacast_ui_language';
 const ONBOARDED_KEY = 'koalacast_onboarded';
@@ -29,6 +34,7 @@ const ACCOUNT_SCOPED_KEYS = [
 	KEY,
 	INTERESTS_KEY,
 	HIDDEN_KEY,
+	HIDDEN_PODCASTS_KEY,
 	LANGUAGES_KEY,
 	UI_LANGUAGE_KEY,
 	VOLUME_BOOST_KEY,
@@ -107,6 +113,28 @@ function initialHidden(): string[] {
 	}
 }
 
+function initialHiddenPodcasts(): HiddenPodcastPreference[] {
+	if (typeof localStorage === 'undefined') return [];
+	try {
+		const value = JSON.parse(localStorage.getItem(scopedKey(HIDDEN_PODCASTS_KEY)) || '[]');
+		if (!Array.isArray(value)) return [];
+		return value.filter(
+			(item): item is HiddenPodcastPreference =>
+				typeof item?.key === 'string' &&
+				item.key.length > 0 &&
+				typeof item?.title === 'string'
+		);
+	} catch (_) {
+		return [];
+	}
+}
+
+export function podcastPreferenceKey(feedUrl?: string, id?: string): string {
+	const feed = feedUrl?.trim().toLowerCase();
+	if (feed) return `feed:${feed}`;
+	return `id:${(id || '').trim().toLowerCase()}`;
+}
+
 function initialOnboarded(): boolean {
 	if (typeof localStorage === 'undefined') return true; // never block SSR
 	return localStorage.getItem(ONBOARDED_KEY) === '1';
@@ -119,6 +147,7 @@ class Prefs {
 	interests = $state<string[]>(initialInterests());
 	// Vetoed genres — podcasts in these are hidden from discover and search.
 	hiddenGenres = $state<string[]>(initialHidden());
+	hiddenPodcasts = $state<HiddenPodcastPreference[]>(initialHiddenPodcasts());
 	// Spoken languages Discover and Search are filtered to (ISO 639-1 codes).
 	languages = $state<string[]>(initialLanguages());
 	// Interface language, independent of the content languages above. The active
@@ -155,6 +184,7 @@ class Prefs {
 		this.dateFormat = initialFormat();
 		this.interests = initialInterests();
 		this.hiddenGenres = initialHidden();
+		this.hiddenPodcasts = initialHiddenPodcasts();
 		this.languages = initialLanguages();
 		this.uiLanguage = initialUILanguage(this.languages);
 		this.volumeBoost = initialBoolean(VOLUME_BOOST_KEY);
@@ -272,11 +302,35 @@ class Prefs {
 		this.#touch();
 	}
 
+	#persistHiddenPodcasts() {
+		try {
+			localStorage.setItem(scopedKey(HIDDEN_PODCASTS_KEY), JSON.stringify(this.hiddenPodcasts));
+		} catch (_) {}
+	}
+
+	hidePodcast(podcast: { feedUrl?: string; id?: string; title: string }) {
+		const key = podcastPreferenceKey(podcast.feedUrl, podcast.id);
+		if (key === 'id:') return;
+		this.hiddenPodcasts = [
+			...this.hiddenPodcasts.filter((item) => item.key !== key),
+			{ key, title: podcast.title.trim() || key }
+		];
+		this.#persistHiddenPodcasts();
+		this.#touch();
+	}
+
+	unhidePodcast(key: string) {
+		this.hiddenPodcasts = this.hiddenPodcasts.filter((item) => item.key !== key);
+		this.#persistHiddenPodcasts();
+		this.#touch();
+	}
+
 	syncPayload() {
 		return {
 			date_format: this.dateFormat,
 			interests: [...this.interests],
 			hidden_genres: [...this.hiddenGenres],
+			hidden_podcasts: this.hiddenPodcasts.map((podcast) => ({ ...podcast })),
 			languages: [...this.languages],
 			ui_language: this.uiLanguage,
 			volume_boost: this.volumeBoost,
@@ -290,6 +344,7 @@ class Prefs {
 		this.dateFormat = 'absolute';
 		this.interests = [];
 		this.hiddenGenres = [];
+		this.hiddenPodcasts = [];
 		this.languages = detectBrowserLanguages();
 		this.uiLanguage = initialUILanguage(this.languages);
 		this.volumeBoost = false;
@@ -321,6 +376,15 @@ class Prefs {
 				(value): value is string => typeof value === 'string'
 			);
 		}
+		if (Array.isArray(payload.hidden_podcasts)) {
+			this.hiddenPodcasts = payload.hidden_podcasts.filter(
+				(item): item is HiddenPodcastPreference =>
+					typeof item === 'object' &&
+					item !== null &&
+					typeof (item as Record<string, unknown>).key === 'string' &&
+					typeof (item as Record<string, unknown>).title === 'string'
+			);
+		}
 		if (typeof payload.ui_language === 'string' && isSupportedLocale(payload.ui_language)) {
 			this.uiLanguage = payload.ui_language;
 		}
@@ -339,6 +403,10 @@ class Prefs {
 			localStorage.setItem(scopedKey(LANGUAGES_KEY), JSON.stringify(this.languages));
 			localStorage.setItem(scopedKey(INTERESTS_KEY), JSON.stringify(this.interests));
 			localStorage.setItem(scopedKey(HIDDEN_KEY), JSON.stringify(this.hiddenGenres));
+			localStorage.setItem(
+				scopedKey(HIDDEN_PODCASTS_KEY),
+				JSON.stringify(this.hiddenPodcasts)
+			);
 			localStorage.setItem(scopedKey(UI_LANGUAGE_KEY), this.uiLanguage);
 			localStorage.setItem(scopedKey(VOLUME_BOOST_KEY), this.volumeBoost ? '1' : '0');
 			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), this.skipSilence ? '1' : '0');
@@ -352,6 +420,11 @@ class Prefs {
 		if (!categories || this.hiddenGenres.length === 0) return false;
 		const lower = this.hiddenGenres.map((g) => g.toLowerCase());
 		return categories.some((c) => lower.includes((c || '').toLowerCase()));
+	}
+
+	isPodcastHidden(feedUrl?: string, id?: string): boolean {
+		const key = podcastPreferenceKey(feedUrl, id);
+		return this.hiddenPodcasts.some((podcast) => podcast.key === key);
 	}
 
 	completeOnboarding() {

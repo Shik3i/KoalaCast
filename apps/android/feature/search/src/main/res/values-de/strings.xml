@@ -17,4 +17,5 @@
     <string name="search_idle_body">Suche nach Sendung, Host oder Thema – oder füge eine Feed-URL ein, um einen Podcast hinzuzufügen, den die Verzeichnisse nicht führen.</string>
     <string name="search_empty_title">Nichts gefunden</string>
     <string name="search_empty_body">Versuche weniger Wörter oder lockere die Sprach- und Kategoriefilter.</string>
+    <string name="search_hide_podcast_named">%1$s ausblenden</string>
 </resources>
