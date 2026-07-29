@@ -509,7 +509,16 @@ class SyncRepository @Inject constructor(
                 palette = payload.string("palette").takeIf { it.isNotBlank() }
                     ?.let(PaletteId::fromId) ?: current.palette,
                 languages = payload.strings("languages").toSet().ifEmpty { current.languages },
-                category = payload.string("category").ifBlank { current.category },
+                interests = if ("interests" in payload) {
+                    payload.strings("interests").toSet()
+                } else {
+                    current.interests
+                },
+                hiddenGenres = if ("hidden_genres" in payload) {
+                    payload.strings("hidden_genres").toSet()
+                } else {
+                    current.hiddenGenres
+                },
                 proxyImages = payload.booleanOr("proxy_images", current.proxyImages),
                 playbackSpeed = payload.floatOr("playback_speed", current.playbackSpeed),
                 downloadWifiOnly = payload.booleanOr(
@@ -689,7 +698,8 @@ class SyncRepository @Inject constructor(
         put("theme_mode", item.themeMode.name.lowercase())
         put("palette", item.palette.id)
         put("languages", JsonArray(item.languages.map(::JsonPrimitive)))
-        put("category", item.category)
+        put("interests", JsonArray(item.interests.map(::JsonPrimitive)))
+        put("hidden_genres", JsonArray(item.hiddenGenres.map(::JsonPrimitive)))
         put("proxy_images", item.proxyImages)
         put("playback_speed", item.playbackSpeed)
         put("download_wifi_only", item.downloadWifiOnly)

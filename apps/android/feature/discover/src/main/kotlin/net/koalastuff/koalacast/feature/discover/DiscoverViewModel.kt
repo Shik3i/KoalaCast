@@ -17,6 +17,7 @@ import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.PodcastSummary
+import net.koalastuff.koalacast.core.model.isHiddenBy
 import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
 import javax.inject.Inject
 
@@ -83,17 +84,18 @@ class DiscoverViewModel @Inject constructor(
                 limit = CHART_SIZE,
             )
             if (cached != null && category == _state.value.category) {
+                val visible = cached.value.filterNot { it.isHiddenBy(prefs.hiddenGenres) }
                 _state.update {
                     it.copy(
                         loading = false,
                         refreshing = true,
                         error = null,
                         serverUrl = prefs.serverUrl,
-                        chart = cached.value,
-                        spotlight = cached.value.firstOrNull()?.let(::Spotlight),
+                        chart = visible,
+                        spotlight = visible.firstOrNull()?.let(::Spotlight),
                     )
                 }
-                cached.value.firstOrNull()?.let(::loadSpotlightEpisode)
+                visible.firstOrNull()?.let(::loadSpotlightEpisode)
                 if (!force && podcasts.isFresh(cached, ContentTtl.DISCOVER)) {
                     _state.update { it.copy(refreshing = false) }
                     return@launch
@@ -118,15 +120,16 @@ class DiscoverViewModel @Inject constructor(
             ) {
                 is DataResult.Success -> {
                     if (category != _state.value.category) return@launch
+                    val visible = result.data.filterNot { it.isHiddenBy(prefs.hiddenGenres) }
                     _state.update {
                         it.copy(
                             loading = false,
                             refreshing = false,
-                            chart = result.data,
-                            spotlight = result.data.firstOrNull()?.let(::Spotlight),
+                            chart = visible,
+                            spotlight = visible.firstOrNull()?.let(::Spotlight),
                         )
                     }
-                    result.data.firstOrNull()?.let(::loadSpotlightEpisode)
+                    visible.firstOrNull()?.let(::loadSpotlightEpisode)
                 }
 
                 is DataResult.Failure -> _state.update {

@@ -58,8 +58,13 @@ class PreferencesRepository @Inject constructor(
         dataStore.edit { it[Keys.languages(owner())] = languages; it.touch(owner()) }
     }
 
-    suspend fun setCategory(category: String) {
-        dataStore.edit { it[Keys.category(owner())] = category; it.touch(owner()) }
+    suspend fun setGenrePreferences(interests: Set<String>, hiddenGenres: Set<String>) {
+        dataStore.edit {
+            val owner = owner()
+            it[Keys.interests(owner)] = interests
+            it[Keys.hiddenGenres(owner)] = hiddenGenres - interests
+            it.touch(owner)
+        }
     }
 
     suspend fun setProxyImages(enabled: Boolean) {
@@ -121,7 +126,8 @@ class PreferencesRepository @Inject constructor(
             it[Keys.themeMode(owner)] = preferences.themeMode.name
             it[Keys.palette(owner)] = preferences.palette.id
             it[Keys.languages(owner)] = preferences.languages
-            it[Keys.category(owner)] = preferences.category
+            it[Keys.interests(owner)] = preferences.interests
+            it[Keys.hiddenGenres(owner)] = preferences.hiddenGenres - preferences.interests
             it[Keys.proxyImages(owner)] = preferences.proxyImages
             it[Keys.playbackSpeed(owner)] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
             it[Keys.downloadWifiOnly(owner)] = preferences.downloadWifiOnly
@@ -141,7 +147,8 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.themeMode(owner))
             it.remove(Keys.palette(owner))
             it.remove(Keys.languages(owner))
-            it.remove(Keys.category(owner))
+            it.remove(Keys.interests(owner))
+            it.remove(Keys.hiddenGenres(owner))
             it.remove(Keys.proxyImages(owner))
             it.remove(Keys.playbackSpeed(owner))
             it.remove(Keys.downloadWifiOnly(owner))
@@ -162,7 +169,9 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.themeMode(owner), Keys.LEGACY_THEME_MODE)
             it.copyIfAbsent(Keys.palette(owner), Keys.LEGACY_PALETTE)
             it.copyIfAbsent(Keys.languages(owner), Keys.LEGACY_LANGUAGES)
-            it.copyIfAbsent(Keys.category(owner), Keys.LEGACY_CATEGORY)
+            it.copyIfAbsent(Keys.interests(owner), Keys.LEGACY_INTERESTS)
+            it.copyIfAbsent(Keys.hiddenGenres(owner), Keys.LEGACY_HIDDEN_GENRES)
+            it.remove(Keys.LEGACY_CATEGORY)
             it.copyIfAbsent(Keys.proxyImages(owner), Keys.LEGACY_PROXY_IMAGES)
             it.copyIfAbsent(Keys.playbackSpeed(owner), Keys.LEGACY_PLAYBACK_SPEED)
             it.copyIfAbsent(Keys.downloadWifiOnly(owner), Keys.LEGACY_DOWNLOAD_WIFI_ONLY)
@@ -184,7 +193,12 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.themeMode(ownerId), Keys.themeMode(null), removeSource = false)
             it.copyIfAbsent(Keys.palette(ownerId), Keys.palette(null), removeSource = false)
             it.copyIfAbsent(Keys.languages(ownerId), Keys.languages(null), removeSource = false)
-            it.copyIfAbsent(Keys.category(ownerId), Keys.category(null), removeSource = false)
+            it.copyIfAbsent(Keys.interests(ownerId), Keys.interests(null), removeSource = false)
+            it.copyIfAbsent(
+                Keys.hiddenGenres(ownerId),
+                Keys.hiddenGenres(null),
+                removeSource = false,
+            )
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(null), removeSource = false)
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(null), removeSource = false)
             it.copyIfAbsent(
@@ -229,7 +243,8 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.themeMode(ownerId), Keys.themeMode(userId))
             it.copyIfAbsent(Keys.palette(ownerId), Keys.palette(userId))
             it.copyIfAbsent(Keys.languages(ownerId), Keys.languages(userId))
-            it.copyIfAbsent(Keys.category(ownerId), Keys.category(userId))
+            it.copyIfAbsent(Keys.interests(ownerId), Keys.interests(userId))
+            it.copyIfAbsent(Keys.hiddenGenres(ownerId), Keys.hiddenGenres(userId))
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(userId))
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(userId))
             it.copyIfAbsent(Keys.downloadWifiOnly(ownerId), Keys.downloadWifiOnly(userId))
@@ -254,7 +269,8 @@ class PreferencesRepository @Inject constructor(
             ?: ThemeMode.SYSTEM,
         palette = PaletteId.fromId(this[Keys.palette(owner)]),
         languages = this[Keys.languages(owner)] ?: emptySet(),
-        category = this[Keys.category(owner)].orEmpty(),
+        interests = this[Keys.interests(owner)] ?: emptySet(),
+        hiddenGenres = this[Keys.hiddenGenres(owner)] ?: emptySet(),
         proxyImages = this[Keys.proxyImages(owner)] ?: true,
         playbackSpeed = this[Keys.playbackSpeed(owner)] ?: 1f,
         downloadWifiOnly = this[Keys.downloadWifiOnly(owner)] ?: true,
@@ -275,7 +291,8 @@ class PreferencesRepository @Inject constructor(
         fun themeMode(owner: String?) = stringPreferencesKey(scoped("theme_mode", owner))
         fun palette(owner: String?) = stringPreferencesKey(scoped("palette", owner))
         fun languages(owner: String?) = stringSetPreferencesKey(scoped("languages", owner))
-        fun category(owner: String?) = stringPreferencesKey(scoped("category", owner))
+        fun interests(owner: String?) = stringSetPreferencesKey(scoped("interests", owner))
+        fun hiddenGenres(owner: String?) = stringSetPreferencesKey(scoped("hidden_genres", owner))
         fun proxyImages(owner: String?) = booleanPreferencesKey(scoped("proxy_images", owner))
         fun playbackSpeed(owner: String?) = floatPreferencesKey(scoped("playback_speed", owner))
         fun downloadWifiOnly(owner: String?) = booleanPreferencesKey(scoped("download_wifi_only", owner))
@@ -292,6 +309,8 @@ class PreferencesRepository @Inject constructor(
         val LEGACY_THEME_MODE = stringPreferencesKey("theme_mode")
         val LEGACY_PALETTE = stringPreferencesKey("palette")
         val LEGACY_LANGUAGES = stringSetPreferencesKey("languages")
+        val LEGACY_INTERESTS = stringSetPreferencesKey("interests")
+        val LEGACY_HIDDEN_GENRES = stringSetPreferencesKey("hidden_genres")
         val LEGACY_CATEGORY = stringPreferencesKey("category")
         val LEGACY_PROXY_IMAGES = booleanPreferencesKey("proxy_images")
         val LEGACY_PLAYBACK_SPEED = floatPreferencesKey("playback_speed")

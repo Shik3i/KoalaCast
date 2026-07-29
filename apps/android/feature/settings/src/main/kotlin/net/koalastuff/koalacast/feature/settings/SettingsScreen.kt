@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -58,7 +61,6 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.koalaColors
-import net.koalastuff.koalacast.core.ui.R as CoreR
 
 @Composable
 fun SettingsScreen(
@@ -88,7 +90,7 @@ fun SettingsScreen(
         onThemeModeChange = viewModel::setThemeMode,
         onPaletteChange = viewModel::setPalette,
         onToggleLanguage = viewModel::toggleLanguage,
-        onSelectCategory = viewModel::setCategory,
+        onCycleGenre = viewModel::cycleGenre,
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
@@ -118,7 +120,7 @@ internal fun SettingsContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     onPaletteChange: (PaletteId) -> Unit,
     onToggleLanguage: (String) -> Unit,
-    onSelectCategory: (String) -> Unit,
+    onCycleGenre: (String) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
@@ -259,9 +261,9 @@ internal fun SettingsContent(
 
         Hairline()
 
-        Section(title = stringResource(R.string.settings_category_title)) {
+        Section(title = stringResource(R.string.settings_interests_title)) {
             Text(
-                text = stringResource(R.string.settings_category_note),
+                text = stringResource(R.string.settings_interests_note),
                 style = KoalaTheme.type.bodySmall,
                 color = colors.ink3,
             )
@@ -269,18 +271,32 @@ internal fun SettingsContent(
                 horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                KoalaChip(
-                    label = stringResource(CoreR.string.genre_all),
-                    selected = prefs?.category.isNullOrBlank(),
-                    onClick = { onSelectCategory("") },
-                )
                 GENRES.forEach { genre ->
-                    KoalaChip(
+                    GenrePreferenceChip(
                         label = stringResource(genre.labelRes),
-                        selected = prefs?.category == genre.wireName,
-                        onClick = { onSelectCategory(genre.wireName) },
+                        state = when (genre.wireName) {
+                            in (prefs?.interests ?: emptySet()) -> GenrePreferenceState.PREFERRED
+                            in (prefs?.hiddenGenres ?: emptySet()) -> GenrePreferenceState.HIDDEN
+                            else -> GenrePreferenceState.NEUTRAL
+                        },
+                        onClick = { onCycleGenre(genre.wireName) },
                     )
                 }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MonoText(
+                    text = "♥ ${stringResource(R.string.settings_interests_preferred)}",
+                    color = colors.accentInk,
+                    style = KoalaTheme.type.monoSmall,
+                )
+                MonoText(
+                    text = "⊘ ${stringResource(R.string.settings_interests_hidden)}",
+                    color = colors.ink3,
+                    style = KoalaTheme.type.monoSmall,
+                )
             }
         }
 
@@ -582,6 +598,56 @@ private fun PaletteId.descriptionRes(): Int = when (this) {
     PaletteId.OBSIDIAN -> R.string.settings_palette_obsidian_desc
     PaletteId.PAPER -> R.string.settings_palette_paper_desc
     PaletteId.ULTRAVIOLET -> R.string.settings_palette_ultraviolet_desc
+}
+
+private enum class GenrePreferenceState { NEUTRAL, PREFERRED, HIDDEN }
+
+@Composable
+private fun GenrePreferenceChip(
+    label: String,
+    state: GenrePreferenceState,
+    onClick: () -> Unit,
+) {
+    val colors = KoalaTheme.colors
+    val ground = when (state) {
+        GenrePreferenceState.NEUTRAL -> colors.bgSunken
+        GenrePreferenceState.PREFERRED -> if (colors.isDark) colors.accentFill else colors.accentInk
+        GenrePreferenceState.HIDDEN -> colors.bgTransport
+    }
+    val ink = when (state) {
+        GenrePreferenceState.NEUTRAL -> colors.ink3
+        GenrePreferenceState.PREFERRED -> if (colors.isDark) colors.accentOn else colors.bgPanel
+        GenrePreferenceState.HIDDEN -> colors.ink2
+    }
+    val prefix = when (state) {
+        GenrePreferenceState.NEUTRAL -> ""
+        GenrePreferenceState.PREFERRED -> "♥ "
+        GenrePreferenceState.HIDDEN -> "⊘ "
+    }
+
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+            .padding(vertical = 5.dp)
+            .clip(KoalaShapes.chip)
+            .background(ground)
+            .border(
+                BorderStroke(
+                    1.dp,
+                    if (state == GenrePreferenceState.HIDDEN) colors.ink4 else colors.borderUi,
+                ),
+                KoalaShapes.chip,
+            )
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        MonoText(
+            text = prefix + label,
+            color = ink,
+            style = KoalaTheme.type.monoSmall,
+        )
+    }
 }
 
 @Composable

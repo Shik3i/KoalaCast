@@ -15,8 +15,10 @@ data class UserPreferences(
     val palette: PaletteId,
     /** BCP-47-ish language codes ("en", "de") used to filter Discover and Search. */
     val languages: Set<String>,
-    /** iTunes genre used as the default Search filter; blank means "everything". */
-    val category: String,
+    /** Genres explicitly preferred by the listener. */
+    val interests: Set<String>,
+    /** Genres vetoed by the listener and removed from Discover and Search. */
+    val hiddenGenres: Set<String>,
     /**
      * Route cover art through the configured KoalaCast server instead of fetching it
      * straight from the publisher's CDN. Costs a hop, hides the listener's IP.

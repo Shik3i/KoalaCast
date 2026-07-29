@@ -138,8 +138,19 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setLanguages(next) }
     }
 
-    fun setCategory(wireName: String) {
-        viewModelScope.launch { preferences.setCategory(wireName) }
+    fun cycleGenre(wireName: String) {
+        val prefs = _state.value.preferences ?: return
+        val interests = prefs.interests.toMutableSet()
+        val hidden = prefs.hiddenGenres.toMutableSet()
+        when (wireName) {
+            in interests -> {
+                interests -= wireName
+                hidden += wireName
+            }
+            in hidden -> hidden -= wireName
+            else -> interests += wireName
+        }
+        viewModelScope.launch { preferences.setGenrePreferences(interests, hidden) }
     }
 
     fun setProxyImages(enabled: Boolean) {

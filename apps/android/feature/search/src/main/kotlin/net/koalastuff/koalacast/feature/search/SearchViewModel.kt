@@ -21,6 +21,7 @@ import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.PodcastSummary
+import net.koalastuff.koalacast.core.model.isHiddenBy
 import javax.inject.Inject
 
 data class SearchUiState(
@@ -30,11 +31,12 @@ data class SearchUiState(
     val error: DataError? = null,
     val serverUrl: String = "",
     /**
-     * Languages and genre start from the listener's settings — the same behaviour as
-     * the web client — and can be cleared to search everything.
+     * Languages start from the listener's settings. Genre remains a temporary
+     * search-only filter, matching the web client.
      */
     val languages: Set<String> = emptySet(),
     val category: String = "",
+    val hiddenGenres: Set<String> = emptySet(),
     val filtersFromSettings: Boolean = true,
     /** Set when the query is a feed URL; adding it resolves and opens the show. */
     val feedUrlCandidate: String? = null,
@@ -71,7 +73,8 @@ class SearchViewModel @Inject constructor(
                     it.copy(
                         serverUrl = prefs.serverUrl,
                         languages = prefs.languages,
-                        category = prefs.category,
+                        category = "",
+                        hiddenGenres = prefs.hiddenGenres,
                     )
                 } else {
                     it.copy(serverUrl = prefs.serverUrl)
@@ -121,14 +124,15 @@ class SearchViewModel @Inject constructor(
         _state.update { it.copy(languages = emptySet(), category = "", filtersFromSettings = false) }
     }
 
-    /** Puts the listener's saved defaults back. */
+    /** Restores saved languages and clears the temporary genre filter. */
     fun resetFiltersToSettings() {
         viewModelScope.launch {
             val prefs = preferences.preferences.first()
             _state.update {
                 it.copy(
                     languages = prefs.languages,
-                    category = prefs.category,
+                    category = "",
+                    hiddenGenres = prefs.hiddenGenres,
                     filtersFromSettings = true,
                 )
             }
@@ -186,7 +190,9 @@ class SearchViewModel @Inject constructor(
             } else {
                 it.copy(
                     searching = true,
-                    results = cached?.value ?: it.results,
+                    results = cached?.value
+                        ?.filterNot { show -> show.isHiddenBy(it.hiddenGenres) }
+                        ?: it.results,
                     error = null,
                 )
             }
@@ -205,7 +211,14 @@ class SearchViewModel @Inject constructor(
             is DataResult.Success -> _state.update {
                 // A slower request must not overwrite the same query after its
                 // language or category filters changed.
-                if (!it.matches(request)) it else it.copy(searching = false, results = result.data)
+                if (!it.matches(request)) {
+                    it
+                } else {
+                    it.copy(
+                        searching = false,
+                        results = result.data.filterNot { show -> show.isHiddenBy(it.hiddenGenres) },
+                    )
+                }
             }
 
             is DataResult.Failure -> _state.update {

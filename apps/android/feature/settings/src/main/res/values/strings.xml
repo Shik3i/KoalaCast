@@ -22,8 +22,10 @@
     <string name="settings_languages_title">Spoken languages</string>
     <string name="settings_languages_note">Filters Discover and Search by the language a show is actually in, not by store region. Pick none to see everything.</string>
 
-    <string name="settings_category_title">Default category</string>
-    <string name="settings_category_note">Pre-selected when you open Search. You can always widen it from there.</string>
+    <string name="settings_interests_title">Topics</string>
+    <string name="settings_interests_note">Tap once to prefer a genre, again to hide it from Discover and Search, and a third time to reset it.</string>
+    <string name="settings_interests_preferred">Preferred</string>
+    <string name="settings_interests_hidden">Hidden</string>
 
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_proxy_images">Load cover art through your server</string>

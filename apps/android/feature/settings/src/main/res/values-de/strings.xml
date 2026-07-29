@@ -22,8 +22,10 @@
     <string name="settings_languages_title">Gesprochene Sprachen</string>
     <string name="settings_languages_note">Filtert Entdecken und Suche nach der Sprache, in der eine Sendung tatsächlich läuft – nicht nach Store-Region. Keine Auswahl heißt: alles.</string>
 
-    <string name="settings_category_title">Standard-Kategorie</string>
-    <string name="settings_category_note">Wird in der Suche vorausgewählt. Dort lässt sie sich jederzeit erweitern.</string>
+    <string name="settings_interests_title">Themen</string>
+    <string name="settings_interests_note">Einmal tippen: bevorzugen. Erneut tippen: in Discover und Suche ausblenden. Ein drittes Mal setzt das Thema zurück.</string>
+    <string name="settings_interests_preferred">Bevorzugt</string>
+    <string name="settings_interests_hidden">Ausgeblendet</string>
 
     <string name="settings_privacy_title">Privatsphäre</string>
     <string name="settings_proxy_images">Cover über deinen Server laden</string>

@@ -35,3 +35,10 @@ data class PodcastSummary(
     val description: String,
     val language: String,
 )
+
+fun PodcastSummary.isHiddenBy(hiddenGenres: Set<String>): Boolean {
+    if (hiddenGenres.isEmpty()) return false
+    val hidden = hiddenGenres.mapTo(mutableSetOf()) { it.trim().lowercase() }
+    val showCategories = categories.ifEmpty { listOf(category) }
+    return showCategories.any { it.trim().lowercase() in hidden }
+}

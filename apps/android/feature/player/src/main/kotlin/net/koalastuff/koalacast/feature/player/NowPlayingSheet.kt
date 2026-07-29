@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -19,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,7 +48,6 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.spotlightGlow
 import net.koalastuff.koalacast.core.ui.util.Format
-import net.koalastuff.koalacast.core.ui.component.ArtworkAccent
 
 /**
  * The full-screen transport. The desktop design puts these controls in a bar
@@ -63,9 +64,8 @@ fun NowPlayingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
 
-    ArtworkAccent(state.track?.artworkUrl) {
-        NowPlayingContent(
-            state = state,
+    NowPlayingContent(
+        state = state,
         chapters = chapters,
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
@@ -76,9 +76,8 @@ fun NowPlayingScreen(
         onSeekTo = viewModel::seekTo,
         onCycleSpeed = viewModel::cycleSpeed,
         onSetSleepTimer = viewModel::setSleepTimer,
-            modifier = modifier,
-        )
-    }
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -261,6 +260,7 @@ internal fun NowPlayingContent(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun Scrubber(
     positionMs: Long,
     durationMs: Long,
@@ -292,6 +292,18 @@ private fun Scrubber(
                 activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
                 inactiveTrackColor = colors.track,
             ),
+            track = { sliderState ->
+                SliderDefaults.Track(
+                    sliderState = sliderState,
+                    modifier = Modifier.height(4.dp),
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
+                        inactiveTrackColor = colors.track,
+                    ),
+                    drawStopIndicator = null,
+                    thumbTrackGapSize = 0.dp,
+                )
+            },
         )
             // Drawn over the slider rather than inside it: Material's Slider has
             // no hook for tick marks at arbitrary positions, only evenly spaced
