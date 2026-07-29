@@ -33,7 +33,7 @@ class PreferencesRepository @Inject constructor(
     private val accountStore: SecureAccountStore,
 ) {
     val preferences: Flow<UserPreferences> = combine(dataStore.data, accountStore.account) { values, account ->
-        values.toUserPreferences(account?.userId)
+        values.toUserPreferences(account?.let { accountStore.activeOwnerId() })
     }
 
     val serverUrl: Flow<String> = preferences.map { it.serverUrl }
@@ -177,45 +177,45 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun migrateGuestToAccount(userId: String) {
-        if (userId.isBlank()) return
+    suspend fun migrateGuestToAccount(ownerId: String) {
+        if (ownerId.isBlank()) return
         dataStore.edit {
             if (it[Keys.GUEST_PREFS_MERGED] == true) return@edit
-            it.copyIfAbsent(Keys.themeMode(userId), Keys.themeMode(null), removeSource = false)
-            it.copyIfAbsent(Keys.palette(userId), Keys.palette(null), removeSource = false)
-            it.copyIfAbsent(Keys.languages(userId), Keys.languages(null), removeSource = false)
-            it.copyIfAbsent(Keys.category(userId), Keys.category(null), removeSource = false)
-            it.copyIfAbsent(Keys.proxyImages(userId), Keys.proxyImages(null), removeSource = false)
-            it.copyIfAbsent(Keys.playbackSpeed(userId), Keys.playbackSpeed(null), removeSource = false)
+            it.copyIfAbsent(Keys.themeMode(ownerId), Keys.themeMode(null), removeSource = false)
+            it.copyIfAbsent(Keys.palette(ownerId), Keys.palette(null), removeSource = false)
+            it.copyIfAbsent(Keys.languages(ownerId), Keys.languages(null), removeSource = false)
+            it.copyIfAbsent(Keys.category(ownerId), Keys.category(null), removeSource = false)
+            it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(null), removeSource = false)
+            it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(null), removeSource = false)
             it.copyIfAbsent(
-                Keys.downloadWifiOnly(userId),
+                Keys.downloadWifiOnly(ownerId),
                 Keys.downloadWifiOnly(null),
                 removeSource = false,
             )
-            it.copyIfAbsent(Keys.skipSilence(userId), Keys.skipSilence(null), removeSource = false)
-            it.copyIfAbsent(Keys.volumeBoost(userId), Keys.volumeBoost(null), removeSource = false)
+            it.copyIfAbsent(Keys.skipSilence(ownerId), Keys.skipSilence(null), removeSource = false)
+            it.copyIfAbsent(Keys.volumeBoost(ownerId), Keys.volumeBoost(null), removeSource = false)
             it.copyIfAbsent(
-                Keys.autoDownloadCount(userId),
+                Keys.autoDownloadCount(ownerId),
                 Keys.autoDownloadCount(null),
                 removeSource = false,
             )
             it.copyIfAbsent(
-                Keys.downloadRetention(userId),
+                Keys.downloadRetention(ownerId),
                 Keys.downloadRetention(null),
                 removeSource = false,
             )
             it.copyIfAbsent(
-                Keys.downloadConcurrency(userId),
+                Keys.downloadConcurrency(ownerId),
                 Keys.downloadConcurrency(null),
                 removeSource = false,
             )
             it.copyIfAbsent(
-                Keys.downloadBudgetMb(userId),
+                Keys.downloadBudgetMb(ownerId),
                 Keys.downloadBudgetMb(null),
                 removeSource = false,
             )
             it.copyIfAbsent(
-                Keys.settingsUpdatedAt(userId),
+                Keys.settingsUpdatedAt(ownerId),
                 Keys.settingsUpdatedAt(null),
                 removeSource = false,
             )
@@ -223,7 +223,28 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
-    private fun owner(): String? = accountStore.account.value?.userId
+    suspend fun migrateUserScope(userId: String, ownerId: String) {
+        if (userId.isBlank() || ownerId.isBlank() || userId == ownerId) return
+        dataStore.edit {
+            it.copyIfAbsent(Keys.themeMode(ownerId), Keys.themeMode(userId))
+            it.copyIfAbsent(Keys.palette(ownerId), Keys.palette(userId))
+            it.copyIfAbsent(Keys.languages(ownerId), Keys.languages(userId))
+            it.copyIfAbsent(Keys.category(ownerId), Keys.category(userId))
+            it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(userId))
+            it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(userId))
+            it.copyIfAbsent(Keys.downloadWifiOnly(ownerId), Keys.downloadWifiOnly(userId))
+            it.copyIfAbsent(Keys.skipSilence(ownerId), Keys.skipSilence(userId))
+            it.copyIfAbsent(Keys.volumeBoost(ownerId), Keys.volumeBoost(userId))
+            it.copyIfAbsent(Keys.autoDownloadCount(ownerId), Keys.autoDownloadCount(userId))
+            it.copyIfAbsent(Keys.downloadRetention(ownerId), Keys.downloadRetention(userId))
+            it.copyIfAbsent(Keys.downloadConcurrency(ownerId), Keys.downloadConcurrency(userId))
+            it.copyIfAbsent(Keys.downloadBudgetMb(ownerId), Keys.downloadBudgetMb(userId))
+            it.copyIfAbsent(Keys.settingsUpdatedAt(ownerId), Keys.settingsUpdatedAt(userId))
+        }
+    }
+
+    private fun owner(): String? =
+        accountStore.account.value?.let { accountStore.activeOwnerId() }
 
     private fun Preferences.toUserPreferences(owner: String?) = UserPreferences(
         serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,

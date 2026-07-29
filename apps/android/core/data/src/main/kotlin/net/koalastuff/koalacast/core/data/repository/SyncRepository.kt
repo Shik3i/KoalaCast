@@ -84,7 +84,7 @@ class SyncRepository @Inject constructor(
             true
         } catch (error: AuthExpired) {
             store.beginAccountTransition()
-            accountData.switchTo(null)
+            accountData.switchTo(AccountDataNamespace.GUEST_OWNER)
             store.clear()
             _status.value = SyncStatus.OFF
             false

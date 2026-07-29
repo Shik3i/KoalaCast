@@ -72,11 +72,14 @@ class AccountRepository @Inject constructor(
                             username = response.username,
                             deviceId = response.deviceId,
                         )
+                        val ownerId = store.ownerIdFor(account.userId)
+                        store.migrateLegacySyncState(account.userId)
+                        preferences.migrateUserScope(account.userId, ownerId)
                         if (store.account.value == null) {
-                            preferences.migrateGuestToAccount(account.userId)
+                            preferences.migrateGuestToAccount(ownerId)
                         }
                         store.beginAccountTransition()
-                        accountData.switchTo(account.userId)
+                        accountData.switchTo(ownerId)
                         store.save(account, response.deviceToken)
                         DataResult.Success(account)
                     }
@@ -104,7 +107,7 @@ class AccountRepository @Inject constructor(
         val authenticated = response.isSuccessful && response.body()?.authenticated == true
         if (!authenticated) {
             store.beginAccountTransition()
-            accountData.switchTo(null)
+            accountData.switchTo(AccountDataNamespace.GUEST_OWNER)
             store.clear()
         }
         authenticated
@@ -113,7 +116,7 @@ class AccountRepository @Inject constructor(
     suspend fun logout() = withContext(dispatcher) {
         runCatching { api.logout() }
         store.beginAccountTransition()
-        accountData.switchTo(null)
+        accountData.switchTo(AccountDataNamespace.GUEST_OWNER)
         store.clear()
     }
 

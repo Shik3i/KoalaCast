@@ -8,6 +8,7 @@ import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.security.MessageDigest
 import net.koalastuff.koalacast.core.model.Account
 import net.koalastuff.koalacast.core.network.AuthTokenProvider
 import java.security.KeyStore
@@ -31,9 +32,13 @@ class SecureAccountStore @Inject constructor(
     private val initialToken = decryptToken()
     private val _account = MutableStateFlow(initialToken?.let { readAccount() })
     val account: StateFlow<Account?> = _account
+    private val _generation = MutableStateFlow(prefs.getLong(KEY_ACCOUNT_GENERATION, 0))
+    val generation: StateFlow<Long> = _generation
 
     @Volatile
     private var cachedToken: String? = initialToken
+    @Volatile
+    private var serverOrigin: String = prefs.getString(KEY_SERVER_ORIGIN, "").orEmpty()
 
     init {
         // A restored/corrupted ciphertext without its non-exportable Keystore key
@@ -66,6 +71,36 @@ class SecureAccountStore @Inject constructor(
         _account.value = account
     }
 
+    fun setServerOrigin(origin: String) {
+        serverOrigin = origin.trimEnd('/')
+        prefs.edit(commit = true) { putString(KEY_SERVER_ORIGIN, serverOrigin) }
+    }
+
+    fun migrateLegacySyncState(userId: String) {
+        if (userId.isBlank()) return
+        val legacyValues = listOf("cursor", "push_watermark").mapNotNull { prefix ->
+            val legacy = "${prefix}_$userId"
+            val target = scopedKey(prefix, userId)
+            if (!prefs.contains(target) && prefs.contains(legacy)) {
+                target to prefs.getLong(legacy, 0)
+            } else {
+                null
+            }
+        }
+        val legacyQueue = "${KEY_QUEUE_UPDATED_AT}_$userId"
+        val targetQueue = "${KEY_QUEUE_UPDATED_AT}_${ownerIdFor(userId)}"
+        val queueValue = prefs.getLong(legacyQueue, 0)
+            .takeIf { !prefs.contains(targetQueue) && prefs.contains(legacyQueue) }
+        prefs.edit(commit = true) {
+            legacyValues.forEach { (target, value) -> putLong(target, value) }
+            for (prefix in listOf("cursor", "push_watermark")) {
+                remove("${prefix}_$userId")
+            }
+            queueValue?.let { putLong(targetQueue, it) }
+            remove(legacyQueue)
+        }
+    }
+
     fun clear() {
         beginAccountTransition()
         cachedToken = null
@@ -83,16 +118,16 @@ class SecureAccountStore @Inject constructor(
         }
     }
 
-    fun cursor(userId: String): Long = prefs.getLong("cursor_$userId", 0)
+    fun cursor(userId: String): Long = scopedLong("cursor", userId)
 
     fun setCursor(userId: String, cursor: Long) {
-        prefs.edit { putLong("cursor_$userId", cursor.coerceAtLeast(0)) }
+        prefs.edit { putLong(scopedKey("cursor", userId), cursor.coerceAtLeast(0)) }
     }
 
-    fun pushWatermark(userId: String): Long = prefs.getLong("push_watermark_$userId", 0)
+    fun pushWatermark(userId: String): Long = scopedLong("push_watermark", userId)
 
     fun setPushWatermark(userId: String, timestamp: Long) {
-        prefs.edit { putLong("push_watermark_$userId", timestamp.coerceAtLeast(0)) }
+        prefs.edit { putLong(scopedKey("push_watermark", userId), timestamp.coerceAtLeast(0)) }
     }
 
     fun queueUpdatedAt(): Long = prefs.getLong(queueUpdatedAtKey(), 0)
@@ -105,18 +140,28 @@ class SecureAccountStore @Inject constructor(
         prefs.edit { putLong(queueUpdatedAtKey(), timestamp.coerceAtLeast(0)) }
     }
 
-    fun activeOwnerId(): String = _account.value?.userId ?: GUEST_OWNER
+    fun activeOwnerId(): String =
+        _account.value?.userId?.let { accountOwnerId(serverOrigin, it) } ?: GUEST_OWNER
 
-    fun accountGeneration(): Long = prefs.getLong(KEY_ACCOUNT_GENERATION, 0)
+    fun ownerIdFor(userId: String): String = accountOwnerId(serverOrigin, userId)
+
+    fun accountGeneration(): Long = _generation.value
 
     fun beginAccountTransition(): Long {
         val next = accountGeneration() + 1
         prefs.edit(commit = true) { putLong(KEY_ACCOUNT_GENERATION, next) }
+        _generation.value = next
         return next
     }
 
     private fun queueUpdatedAtKey(): String =
-        "${KEY_QUEUE_UPDATED_AT}_${_account.value?.userId ?: GUEST_OWNER}"
+        "${KEY_QUEUE_UPDATED_AT}_${activeOwnerId()}"
+
+    private fun scopedKey(prefix: String, userId: String) =
+        "${prefix}_${accountOwnerId(serverOrigin, userId)}"
+
+    private fun scopedLong(prefix: String, userId: String): Long =
+        prefs.getLong(scopedKey(prefix, userId), 0)
 
     private fun readAccount(): Account? {
         val userId = prefs.getString(KEY_USER_ID, null) ?: return null
@@ -176,8 +221,17 @@ class SecureAccountStore @Inject constructor(
         const val KEY_ROLE = "role"
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_TOKEN = "device_token"
+        const val KEY_SERVER_ORIGIN = "server_origin"
         const val KEY_QUEUE_UPDATED_AT = "queue_updated_at"
         const val KEY_ACCOUNT_GENERATION = "account_generation"
         const val GUEST_OWNER = "guest"
+
+        fun accountOwnerId(serverOrigin: String, userId: String): String {
+            val serverHash = MessageDigest.getInstance("SHA-256")
+                .digest(serverOrigin.trimEnd('/').toByteArray(Charsets.UTF_8))
+                .take(12)
+                .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            return "account:$serverHash:$userId"
+        }
     }
 }

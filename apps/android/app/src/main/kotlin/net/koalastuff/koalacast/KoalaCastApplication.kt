@@ -32,6 +32,7 @@ import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 
 @HiltAndroidApp
 class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
@@ -75,7 +76,14 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     override fun onCreate() {
         super.onCreate()
         runBlocking(Dispatchers.IO) {
-            accountData.initialize(accountStore.account.value?.userId)
+            accountStore.setServerOrigin(preferences.serverUrl.first())
+            val account = accountStore.account.value
+            val ownerId = accountStore.activeOwnerId()
+            accountData.initialize(ownerId, account?.userId)
+            account?.let {
+                accountStore.migrateLegacySyncState(it.userId)
+                preferences.migrateUserScope(it.userId, ownerId)
+            }
             preferences.migrateLegacyForCurrentOwner()
         }
         syncCoordinator.start()

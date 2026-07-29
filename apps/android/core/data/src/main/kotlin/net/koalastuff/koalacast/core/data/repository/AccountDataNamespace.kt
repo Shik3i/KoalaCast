@@ -31,30 +31,36 @@ class AccountDataNamespace @Inject constructor(
 ) {
     private val mutex = Mutex()
 
-    suspend fun initialize(userId: String?) {
+    suspend fun initialize(ownerId: String, legacyUserId: String? = null) {
         val mustSwitch = mutex.withLock {
             database.withTransaction {
                 val archives = database.accountDataArchiveDao()
                 val state = archives.state()
                 if (state == null) {
                     archives.setState(
-                        AccountNamespaceStateEntity(activeOwnerKey = ownerKey(userId)),
+                        AccountNamespaceStateEntity(activeOwnerKey = ownerId),
                     )
                     false
+                } else if (
+                    legacyUserId != null &&
+                    state.activeOwnerKey == legacyOwnerKey(legacyUserId) &&
+                    state.activeOwnerKey != ownerId
+                ) {
+                    archives.setState(state.copy(activeOwnerKey = ownerId))
+                    false
                 } else {
-                    state.activeOwnerKey != ownerKey(userId)
+                    state.activeOwnerKey != ownerId
                 }
             }
         }
-        if (mustSwitch) switchTo(userId)
+        if (mustSwitch) switchTo(ownerId)
     }
 
-    suspend fun switchTo(userId: String?) = mutex.withLock {
-        val targetOwner = ownerKey(userId)
+    suspend fun switchTo(targetOwner: String) = mutex.withLock {
         database.withTransaction {
             val archives = database.accountDataArchiveDao()
             val state = archives.state()
-                ?: AccountNamespaceStateEntity(activeOwnerKey = GUEST)
+                ?: AccountNamespaceStateEntity(activeOwnerKey = GUEST_OWNER)
             if (state.activeOwnerKey == targetOwner) {
                 archives.setState(state)
                 return@withTransaction
@@ -73,12 +79,12 @@ class AccountDataNamespace @Inject constructor(
                 restore(json.decodeFromString(AccountDataBundle.serializer(), archive.payloadJson))
             }
 
-            val mergeGuest = state.activeOwnerKey == GUEST &&
-                targetOwner != GUEST &&
+            val mergeGuest = state.activeOwnerKey == GUEST_OWNER &&
+                targetOwner != GUEST_OWNER &&
                 !state.guestMerged
             if (mergeGuest) {
                 restore(current)
-                archives.delete(GUEST)
+                archives.delete(GUEST_OWNER)
             }
             archives.setState(
                 state.copy(
@@ -122,11 +128,10 @@ class AccountDataNamespace @Inject constructor(
         bundle.tombstones.forEach { database.tombstoneDao().upsert(it) }
     }
 
-    private fun ownerKey(userId: String?) =
-        userId?.takeIf(String::isNotBlank)?.let { "account:$it" } ?: GUEST
+    private fun legacyOwnerKey(userId: String) = "account:$userId"
 
-    private companion object {
-        const val GUEST = "guest"
+    companion object {
+        const val GUEST_OWNER = "guest"
     }
 }
 

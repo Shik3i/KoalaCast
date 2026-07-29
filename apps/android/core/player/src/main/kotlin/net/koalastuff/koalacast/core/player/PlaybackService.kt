@@ -31,8 +31,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
@@ -68,6 +70,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var preferences: PreferencesRepository
     @Inject lateinit var artworkUrls: ArtworkUrls
     @Inject lateinit var clock: Clock
+    @Inject lateinit var accountStore: SecureAccountStore
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val recorder = ListeningSessionRecorder()
@@ -84,6 +87,8 @@ class PlaybackService : MediaLibraryService() {
     private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var boostWanted: Boolean = false
     private var activeTrack: Track? = null
+    private var activePlaybackOwnerId: String? = null
+    private var activePlaybackGeneration: Long? = null
     private var transitionOldPositionMs: Long? = null
 
     private var playerListener: PlayerListener? = null
@@ -112,6 +117,18 @@ class PlaybackService : MediaLibraryService() {
         player.addListener(listener)
         mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
             .build()
+
+        scope.launch {
+            accountStore.generation.drop(1).collect { generation ->
+                if (activeTrack == null || generation == activePlaybackGeneration) return@collect
+                recorder.stop(clock.nowMs())
+                activeTrack = null
+                activePlaybackOwnerId = null
+                activePlaybackGeneration = null
+                player.pause()
+                player.clearMediaItems()
+            }
+        }
 
         // Audio processing is a stored preference, so apply it as soon as it is
         // readable and whenever it changes rather than only at track start.
@@ -451,7 +468,13 @@ class PlaybackService : MediaLibraryService() {
                 clock.nowMs(),
                 player.currentPosition,
             )?.let { session ->
-                scope.launch { progress.recordListeningSession(session) }
+                val ownerId = activePlaybackOwnerId
+                val generation = activePlaybackGeneration
+                scope.launch {
+                    if (isCurrentPlaybackOwner(ownerId, generation)) {
+                        progress.recordListeningSession(session)
+                    }
+                }
             }
         }
 
@@ -481,8 +504,12 @@ class PlaybackService : MediaLibraryService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             publishWidgetState(player)
             val previousTrack = activeTrack
+            val previousOwnerId = activePlaybackOwnerId
+            val previousGeneration = activePlaybackGeneration
             val nextTrack = TrackMediaItem.toTrack(mediaItem)
             activeTrack = nextTrack
+            activePlaybackOwnerId = nextTrack?.let { accountStore.activeOwnerId() }
+            activePlaybackGeneration = nextTrack?.let { accountStore.accountGeneration() }
             nextTrack?.let { track ->
                 scope.launch {
                     val global = preferences.preferences.first()
@@ -501,11 +528,17 @@ class PlaybackService : MediaLibraryService() {
             if (previousTrack != null && previousTrack.episodeId != nextTrack?.episodeId) {
                 val position = transitionOldPositionMs ?: 0L
                 scope.launch {
-                    progress.savePosition(previousTrack, position, previousTrack.durationMs)
-                    closedSession?.let { progress.recordListeningSession(it) }
+                    if (isCurrentPlaybackOwner(previousOwnerId, previousGeneration)) {
+                        progress.savePosition(previousTrack, position, previousTrack.durationMs)
+                        closedSession?.let { progress.recordListeningSession(it) }
+                    }
                 }
             } else if (closedSession != null) {
-                scope.launch { progress.recordListeningSession(closedSession) }
+                scope.launch {
+                    if (isCurrentPlaybackOwner(previousOwnerId, previousGeneration)) {
+                        progress.recordListeningSession(closedSession)
+                    }
+                }
             }
             transitionOldPositionMs = null
             outroHandledEpisodeId = null
@@ -599,13 +632,27 @@ class PlaybackService : MediaLibraryService() {
         val positionMs = player.currentPosition
         val durationMs = player.duration.takeIf { it != C.TIME_UNSET } ?: track.durationMs
         val session = if (finalise) recorder.stop(clock.nowMs(), positionMs) else null
-        return PlaybackPersistence(track, positionMs, durationMs, session)
+        return PlaybackPersistence(
+            track,
+            positionMs,
+            durationMs,
+            session,
+            activePlaybackOwnerId,
+            activePlaybackGeneration,
+        )
     }
 
     private suspend fun persist(playback: PlaybackPersistence) {
+        if (!isCurrentPlaybackOwner(playback.ownerId, playback.generation)) return
         progress.savePosition(playback.track, playback.positionMs, playback.durationMs)
         playback.session?.let { progress.recordListeningSession(it) }
     }
+
+    private fun isCurrentPlaybackOwner(ownerId: String?, generation: Long?): Boolean =
+        ownerId != null &&
+            generation != null &&
+            accountStore.activeOwnerId() == ownerId &&
+            accountStore.accountGeneration() == generation
 
     /**
      * An episode that ran to the end is finished, and the queue moves on — the
@@ -614,8 +661,15 @@ class PlaybackService : MediaLibraryService() {
     private fun onEpisodeFinished(player: ExoPlayer, advanceQueue: Boolean) {
         val finished = TrackMediaItem.toTrack(player.currentMediaItem)
         val session = recorder.stop(clock.nowMs(), player.currentPosition)
+        val ownerId = activePlaybackOwnerId
+        val generation = activePlaybackGeneration
 
         scope.launch {
+            if (!isCurrentPlaybackOwner(ownerId, generation)) {
+                player.pause()
+                player.clearMediaItems()
+                return@launch
+            }
             finished?.let {
                 progress.setPlayed(it, played = true)
                 queue.remove(it.episodeId)
@@ -693,6 +747,8 @@ class PlaybackService : MediaLibraryService() {
         val positionMs: Long,
         val durationMs: Long,
         val session: net.koalastuff.koalacast.core.model.ListeningSession?,
+        val ownerId: String?,
+        val generation: Long?,
     )
 }
 

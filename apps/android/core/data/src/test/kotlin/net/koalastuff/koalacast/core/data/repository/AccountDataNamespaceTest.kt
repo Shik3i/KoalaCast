@@ -39,7 +39,7 @@ class AccountDataNamespaceTest {
 
     @Test
     fun `logout and login as B cannot expose or push A records`() = runTest {
-        namespace.initialize("A")
+        namespace.initialize(OWNER_A)
         database.subscriptionDao().upsert(
             SubscriptionEntity("show-a", "https://a/feed", "A", "", 1),
         )
@@ -79,13 +79,13 @@ class AccountDataNamespaceTest {
             ),
         )
 
-        namespace.switchTo(null)
+        namespace.switchTo(AccountDataNamespace.GUEST_OWNER)
         assertActiveTablesEmpty()
-        namespace.switchTo("B")
+        namespace.switchTo(OWNER_B)
         assertActiveTablesEmpty()
 
-        namespace.switchTo(null)
-        namespace.switchTo("A")
+        namespace.switchTo(AccountDataNamespace.GUEST_OWNER)
+        namespace.switchTo(OWNER_A)
         assertEquals(listOf("show-a"), database.subscriptionDao().getAll().map { it.podcastId })
         assertEquals(listOf("favorite-a"), database.favoriteDao().getAll().map { it.episodeId })
         assertEquals(listOf("episode-a"), database.playbackStateDao().getAll().map { it.episodeId })
@@ -97,6 +97,41 @@ class AccountDataNamespaceTest {
         )
     }
 
+    @Test
+    fun `same user id on another server has an isolated archive`() = runTest {
+        namespace.initialize(OWNER_A)
+        database.subscriptionDao().upsert(
+            SubscriptionEntity("server-a-show", "https://a/feed", "A", "", 1),
+        )
+
+        namespace.switchTo(OWNER_A_OTHER_SERVER)
+        assertActiveTablesEmpty()
+        database.subscriptionDao().upsert(
+            SubscriptionEntity("server-b-show", "https://b/feed", "B", "", 2),
+        )
+
+        namespace.switchTo(OWNER_A)
+        assertEquals(
+            listOf("server-a-show"),
+            database.subscriptionDao().getAll().map { it.podcastId },
+        )
+    }
+
+    @Test
+    fun `legacy active user namespace migrates without losing rows`() = runTest {
+        namespace.initialize("account:A")
+        database.subscriptionDao().upsert(
+            SubscriptionEntity("legacy-show", "https://legacy/feed", "Legacy", "", 1),
+        )
+
+        namespace.initialize(OWNER_A, legacyUserId = "A")
+
+        assertEquals(
+            listOf("legacy-show"),
+            database.subscriptionDao().getAll().map { it.podcastId },
+        )
+    }
+
     private suspend fun assertActiveTablesEmpty() {
         assertTrue(database.subscriptionDao().getAll().isEmpty())
         assertTrue(database.favoriteDao().getAll().isEmpty())
@@ -104,5 +139,11 @@ class AccountDataNamespaceTest {
         assertTrue(database.listeningSessionDao().getAll().isEmpty())
         assertTrue(database.tombstoneDao().getAll().isEmpty())
         assertTrue(database.episodeDownloadDao().getAllOldestFirst().isEmpty())
+    }
+
+    private companion object {
+        const val OWNER_A = "account:server-a:A"
+        const val OWNER_B = "account:server-a:B"
+        const val OWNER_A_OTHER_SERVER = "account:server-b:A"
     }
 }

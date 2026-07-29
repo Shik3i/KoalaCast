@@ -67,11 +67,13 @@ class ServerRepository @Inject constructor(
             is DataResult.Failure -> validated
             is DataResult.Success -> {
                 val changed = preferences.serverUrl.first() != validated.data
-                preferences.setServerUrl(validated.data)
                 if (changed) {
-                    accountData.switchTo(null)
+                    accountStore.beginAccountTransition()
+                    accountData.switchTo(AccountDataNamespace.GUEST_OWNER)
                     accountStore.clear()
+                    accountStore.setServerOrigin(validated.data)
                 }
+                preferences.setServerUrl(validated.data)
                 validated
             }
         }
