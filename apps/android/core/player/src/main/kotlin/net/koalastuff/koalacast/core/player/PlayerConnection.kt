@@ -2,10 +2,12 @@ package net.koalastuff.koalacast.core.player
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -85,6 +87,7 @@ class PlayerConnection @Inject constructor(
     private val connectMutex = Mutex()
     private var positionTicker: Job? = null
     private var sleepJob: Job? = null
+    private var sleepTargetPositionMs: Long? = null
     private val playGeneration = AtomicLong()
 
     init {
@@ -113,6 +116,10 @@ class PlayerConnection @Inject constructor(
                 created
             }.also { syncFromController() }
         }
+    }
+
+    fun connect() {
+        scope.launch { runCatching { controller() } }
     }
 
     private suspend fun <T> suspendGet(
@@ -250,6 +257,8 @@ class PlayerConnection @Inject constructor(
      */
     fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
         sleepJob?.cancel()
+        sleepTargetPositionMs = null
+        sendSleepTimerCommand(atEpisodeEnd = atEpisodeEnd, positionMs = null)
         if (atChapterEnd) {
             _state.update {
                 it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtEpisodeEnd = false, sleepAtChapterEnd = true)
@@ -277,6 +286,30 @@ class PlayerConnection @Inject constructor(
             delay(minutes * 60_000L)
             onController { it.pause() }
             _state.update { it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtChapterEnd = false) }
+        }
+    }
+
+    fun setSleepAtPosition(positionMs: Long) {
+        sleepJob?.cancel()
+        sleepTargetPositionMs = positionMs.coerceAtLeast(0)
+        _state.update {
+            it.copy(
+                sleepAtMs = null,
+                sleepMinutes = null,
+                sleepAtEpisodeEnd = false,
+                sleepAtChapterEnd = true,
+            )
+        }
+        sendSleepTimerCommand(atEpisodeEnd = false, positionMs = sleepTargetPositionMs)
+    }
+
+    private fun sendSleepTimerCommand(atEpisodeEnd: Boolean, positionMs: Long?) {
+        onController {
+            val args = Bundle().apply {
+                putBoolean(ARG_SLEEP_AT_EPISODE_END, atEpisodeEnd)
+                putLong(ARG_SLEEP_AT_POSITION_MS, positionMs ?: C.TIME_UNSET)
+            }
+            it.sendCustomCommand(SessionCommand(ACTION_SET_SLEEP_TIMER, Bundle.EMPTY), args)
         }
     }
 
@@ -324,6 +357,11 @@ class PlayerConnection @Inject constructor(
         positionTicker = scope.launch {
             while (true) {
                 syncFromController()
+                val target = sleepTargetPositionMs
+                if (target != null && _state.value.positionMs >= target) {
+                    sleepTargetPositionMs = null
+                    _state.update { it.copy(sleepAtChapterEnd = false) }
+                }
                 delay(POSITION_TICK_MS)
             }
         }
@@ -364,5 +402,8 @@ class PlayerConnection @Inject constructor(
     private companion object {
         const val POSITION_TICK_MS = 500L
         const val ARTWORK_PX = 512
+        const val ACTION_SET_SLEEP_TIMER = "net.koalastuff.koalacast.SET_SLEEP_TIMER"
+        const val ARG_SLEEP_AT_EPISODE_END = "sleep_at_episode_end"
+        const val ARG_SLEEP_AT_POSITION_MS = "sleep_at_position_ms"
     }
 }

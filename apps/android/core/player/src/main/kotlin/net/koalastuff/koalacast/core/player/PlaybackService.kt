@@ -77,7 +77,9 @@ class PlaybackService : MediaLibraryService() {
     private var outroHandledEpisodeId: String? = null
     private var outroSettingsPodcastId: String? = null
     private var cachedSkipOutroMs = 0L
-    private var automaticSeekTargetMs: Long? = null
+    private var automaticSeekTargetMs: Long? = null
+    private var sleepAtEpisodeEnd = false
+    private var sleepAtPositionMs: Long? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var boostWanted: Boolean = false
@@ -179,11 +181,15 @@ class PlaybackService : MediaLibraryService() {
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
+            if (!controller.isTrusted) {
+                return MediaSession.ConnectionResult.reject()
+            }
             val default = super.onConnect(session, controller)
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(
                     default.availableSessionCommands.buildUpon()
                         .add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
+                        .add(SessionCommand(ACTION_SET_SLEEP_TIMER, Bundle.EMPTY))
                         .build(),
                 )
                 .setCustomLayout(ImmutableList.of(speedButton()))
@@ -196,17 +202,28 @@ class PlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction != ACTION_CYCLE_SPEED) {
+            if (!controller.isTrusted) {
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
-            val player = session.player
-            val next = SPEED_STEPS[(SPEED_STEPS.indexOfFirst {
-                abs(it - player.playbackParameters.speed) < 0.01f
-            } + 1).mod(SPEED_STEPS.size)]
-            player.playbackParameters = PlaybackParameters(next)
-            // The label carries the current value, so the button has to be re-sent.
-            session.setCustomLayout(controller, ImmutableList.of(speedButton()))
-            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            return when (customCommand.customAction) {
+                ACTION_CYCLE_SPEED -> {
+                    val player = session.player
+                    val next = SPEED_STEPS[(SPEED_STEPS.indexOfFirst {
+                        abs(it - player.playbackParameters.speed) < 0.01f
+                    } + 1).mod(SPEED_STEPS.size)]
+                    player.playbackParameters = PlaybackParameters(next)
+                    // The label carries the current value, so the button has to be re-sent.
+                    session.setCustomLayout(controller, ImmutableList.of(speedButton()))
+                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                ACTION_SET_SLEEP_TIMER -> {
+                    sleepAtEpisodeEnd = args.getBoolean(ARG_SLEEP_AT_EPISODE_END, false)
+                    sleepAtPositionMs = args.getLong(ARG_SLEEP_AT_POSITION_MS, C.TIME_UNSET)
+                        .takeUnless { it == C.TIME_UNSET }
+                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+                else -> Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+            }
         }
 
         override fun onGetLibraryRoot(
@@ -350,16 +367,14 @@ class PlaybackService : MediaLibraryService() {
                     val (track, positionMs) = resumable
                     future.set(
                         MediaSession.MediaItemsWithStartPosition(
-                            listOf(
-                                TrackMediaItem.from(
-                                    track,
-                                    artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX),
-                                ),
-                            ),
+                            listOf(playableItem(track)),
                             /* startIndex = */ 0,
                             positionMs,
                         ),
                     )
+                    val settings = library.podcastSettingsSnapshot(track.podcastId)
+                    val speed = settings.speed ?: preferences.preferences.first().playbackSpeed
+                    mediaSession.player.playbackParameters = PlaybackParameters(speed)
                 }
             }
             return future
@@ -423,7 +438,10 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
-                onEpisodeFinished(player)
+                val stopAfterEpisode = sleepAtEpisodeEnd
+                sleepAtEpisodeEnd = false
+                sleepAtPositionMs = null
+                onEpisodeFinished(player, advanceQueue = !stopAfterEpisode)
             }
         }
 
@@ -525,6 +543,7 @@ class PlaybackService : MediaLibraryService() {
             var secondsSinceSave = 0
             while (true) {
                 delay(OUTRO_CHECK_INTERVAL_MS)
+                maybeApplySleepTimer()
                 maybeSkipOutro()
                 secondsSinceSave++
                 if (secondsSinceSave >= POSITION_SAVE_INTERVAL_SECONDS) {
@@ -533,6 +552,15 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
         }
+    }
+
+    private fun maybeApplySleepTimer() {
+        val target = sleepAtPositionMs ?: return
+        val player = mediaSession?.player ?: return
+        if (player.currentPosition < target) return
+        sleepAtPositionMs = null
+        sleepAtEpisodeEnd = false
+        player.pause()
     }
 
     private suspend fun maybeSkipOutro() {
@@ -583,7 +611,7 @@ class PlaybackService : MediaLibraryService() {
      * An episode that ran to the end is finished, and the queue moves on — the
      * same behaviour the web client has.
      */
-    private fun onEpisodeFinished(player: ExoPlayer) {
+    private fun onEpisodeFinished(player: ExoPlayer, advanceQueue: Boolean) {
         val finished = TrackMediaItem.toTrack(player.currentMediaItem)
         val session = recorder.stop(clock.nowMs(), player.currentPosition)
 
@@ -594,7 +622,7 @@ class PlaybackService : MediaLibraryService() {
             }
             session?.let { progress.recordListeningSession(it) }
 
-            val next = queue.head()
+            val next = queue.head().takeIf { advanceQueue }
             if (next == null) {
                 player.pause()
                 player.seekTo(0)
@@ -646,6 +674,9 @@ class PlaybackService : MediaLibraryService() {
         const val CONTINUE_ID = "continue"
         const val DOWNLOADS_ID = "downloads"
         const val ACTION_CYCLE_SPEED = "net.koalastuff.koalacast.CYCLE_SPEED"
+        const val ACTION_SET_SLEEP_TIMER = "net.koalastuff.koalacast.SET_SLEEP_TIMER"
+        const val ARG_SLEEP_AT_EPISODE_END = "sleep_at_episode_end"
+        const val ARG_SLEEP_AT_POSITION_MS = "sleep_at_position_ms"
         const val WIDGET_STATE_CHANGED = "net.koalastuff.koalacast.WIDGET_STATE_CHANGED"
         const val WIDGET_PREFERENCES = "playback_widget"
         const val WIDGET_TITLE = "title"

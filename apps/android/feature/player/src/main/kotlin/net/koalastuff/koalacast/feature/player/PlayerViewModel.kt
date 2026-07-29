@@ -33,6 +33,7 @@ class PlayerViewModel @Inject constructor(
     val chapters: StateFlow<List<Chapter>> = _chapters.asStateFlow()
 
     init {
+        player.connect()
         // Reload only when the episode changes, not on every position tick.
         viewModelScope.launch {
             player.state
@@ -63,8 +64,18 @@ class PlayerViewModel @Inject constructor(
     fun seekForward() = player.seekForward()
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)
     fun cycleSpeed() = player.cycleSpeed()
-    fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) =
-        player.setSleepTimer(minutes, atEpisodeEnd, atChapterEnd)
+    fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
+        if (!atChapterEnd) {
+            player.setSleepTimer(minutes, atEpisodeEnd, atChapterEnd = false)
+            return
+        }
+        val nextChapter = ChapterState.nextStartMs(chapters.value, state.value.positionMs)
+        if (nextChapter == null) {
+            player.setSleepTimer(minutes = null, atEpisodeEnd = true)
+        } else {
+            player.setSleepAtPosition(nextChapter)
+        }
+    }
     fun playNextFromQueue() = player.playNextFromQueue()
     fun stop() = player.stop()
 }
