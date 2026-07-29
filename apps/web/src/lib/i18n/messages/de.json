@@ -164,7 +164,15 @@
 		"sections": "Bereiche der Mediathek",
 		"openShow": "{title} öffnen",
 		"subscribedHint": "Abonniert · für Folgen öffnen",
-		"queued": "Eingereiht"
+		"queued": "Eingereiht",
+		"namedQueues": "Benannte Warteschlangen",
+		"namedQueuesHint": "Speichere diese Reihenfolge und stelle sie später wieder her.",
+		"namedQueuePlaceholder": "Name der Warteschlange",
+		"saveQueue": "Warteschlange speichern",
+		"namedQueueEpisodes": "{count} Folgen",
+		"deleteNamedQueue": "Benannte Warteschlange {name} löschen",
+		"namedQueueSaved": "Warteschlange „{name}“ gespeichert.",
+		"namedQueueRestored": "Warteschlange „{name}“ wiederhergestellt."
 	},
 	"inbox": {
 		"title": "Neu",

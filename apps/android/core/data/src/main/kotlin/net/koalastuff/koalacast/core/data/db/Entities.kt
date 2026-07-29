@@ -107,6 +107,16 @@ data class TimeBookmarkEntity(
     val createdAt: Long,
 )
 
+@Entity(tableName = "named_queues", indices = [Index(value = ["name"], unique = true), Index("updatedAt")])
+@Serializable
+data class NamedQueueEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val itemsJson: String,
+    val itemCount: Int,
+    val updatedAt: Long,
+)
+
 /**
  * One uninterrupted play segment (play → pause/end). These are the raw records
  * the Profile screen aggregates; they never leave the device unless the listener

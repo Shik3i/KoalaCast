@@ -4,7 +4,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
+import net.koalastuff.koalacast.core.data.db.QueueItemEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.InboxMode
@@ -155,6 +158,34 @@ class LibraryRepositoryTest {
 
         repository.removeTimeBookmark(bookmarks.first().id)
         assertEquals(listOf(90_000L), repository.timeBookmarks("e1").first().map { it.positionMs })
+    }
+
+    @Test
+    fun `named queue restores an independent snapshot`() = runTest {
+        db.queueDao().insert(
+            QueueItemEntity(
+                id = "q1",
+                episodeId = "e1",
+                podcastId = "p1",
+                title = "Episode",
+                enclosureUrl = "https://example.com/e1.mp3",
+                positionOrder = 0,
+                addedAt = now,
+            ),
+        )
+        val namedQueues = NamedQueueRepository(
+            namedQueues = db.namedQueueDao(),
+            queue = db.queueDao(),
+            json = Json,
+            clock = clock,
+            syncMetadata = SecureAccountStore(ApplicationProvider.getApplicationContext()),
+        )
+
+        namedQueues.save("Commute")
+        db.queueDao().clear()
+        namedQueues.restore(namedQueues.all.first().single().id)
+
+        assertEquals(listOf("e1"), db.queueDao().getAll().map { it.episodeId })
     }
 
     @Test

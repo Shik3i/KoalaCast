@@ -25,8 +25,10 @@ import net.koalastuff.koalacast.core.data.db.MIGRATION_5_6
 import net.koalastuff.koalacast.core.data.db.MIGRATION_6_7
 import net.koalastuff.koalacast.core.data.db.MIGRATION_7_8
 import net.koalastuff.koalacast.core.data.db.MIGRATION_8_9
+import net.koalastuff.koalacast.core.data.db.MIGRATION_9_10
 import net.koalastuff.koalacast.core.data.db.ContentCacheDao
 import net.koalastuff.koalacast.core.data.db.TimeBookmarkDao
+import net.koalastuff.koalacast.core.data.db.NamedQueueDao
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.data.util.SystemClock
 import javax.inject.Singleton
@@ -51,6 +53,7 @@ object DatabaseModule {
                 MIGRATION_6_7,
                 MIGRATION_7_8,
                 MIGRATION_8_9,
+                MIGRATION_9_10,
             )
             .build()
 
@@ -59,6 +62,7 @@ object DatabaseModule {
     @Provides fun provideQueueDao(db: KoalaCastDatabase): QueueDao = db.queueDao()
     @Provides fun provideFavoriteDao(db: KoalaCastDatabase): FavoriteDao = db.favoriteDao()
     @Provides fun provideTimeBookmarkDao(db: KoalaCastDatabase): TimeBookmarkDao = db.timeBookmarkDao()
+    @Provides fun provideNamedQueueDao(db: KoalaCastDatabase): NamedQueueDao = db.namedQueueDao()
     @Provides fun provideListeningSessionDao(db: KoalaCastDatabase): ListeningSessionDao = db.listeningSessionDao()
     @Provides fun provideTombstoneDao(db: KoalaCastDatabase): TombstoneDao = db.tombstoneDao()
     @Provides fun providePodcastSettingsDao(db: KoalaCastDatabase): PodcastSettingsDao = db.podcastSettingsDao()

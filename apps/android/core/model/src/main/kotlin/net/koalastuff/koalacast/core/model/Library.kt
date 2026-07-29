@@ -62,6 +62,13 @@ data class TimeBookmark(
     val createdAtMs: Long,
 )
 
+data class NamedQueue(
+    val id: String,
+    val name: String,
+    val itemCount: Int,
+    val updatedAtMs: Long,
+)
+
 /** Per-show playback overrides. */
 data class PodcastSettings(
     val podcastId: String,

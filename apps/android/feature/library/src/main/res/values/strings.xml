@@ -30,4 +30,9 @@
     <string name="library_empty_favorites_title">Nothing saved</string>
     <string name="library_empty_favorites_body">Save an episode to come back to it later.</string>
     <string name="library_play">Play</string>
+    <string name="library_named_queues">Named queues</string>
+    <string name="library_named_queue_name">Queue name</string>
+    <string name="library_named_queue_save">Save</string>
+    <string name="library_named_queue_count">%1$d episodes</string>
+    <string name="library_named_queue_delete">Delete named queue %1$s</string>
 </resources>

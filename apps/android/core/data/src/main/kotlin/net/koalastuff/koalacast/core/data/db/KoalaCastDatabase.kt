@@ -34,6 +34,7 @@ class Converters {
         QueueItemEntity::class,
         FavoriteEntity::class,
         TimeBookmarkEntity::class,
+        NamedQueueEntity::class,
         ListeningSessionEntity::class,
         TombstoneEntity::class,
         PodcastSettingsEntity::class,
@@ -42,7 +43,7 @@ class Converters {
         AccountNamespaceStateEntity::class,
         ContentCacheEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -52,6 +53,7 @@ abstract class KoalaCastDatabase : RoomDatabase() {
     abstract fun queueDao(): QueueDao
     abstract fun favoriteDao(): FavoriteDao
     abstract fun timeBookmarkDao(): TimeBookmarkDao
+    abstract fun namedQueueDao(): NamedQueueDao
     abstract fun listeningSessionDao(): ListeningSessionDao
     abstract fun tombstoneDao(): TombstoneDao
     abstract fun podcastSettingsDao(): PodcastSettingsDao

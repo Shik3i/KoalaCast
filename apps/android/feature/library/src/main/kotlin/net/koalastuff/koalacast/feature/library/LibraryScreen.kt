@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,10 +34,12 @@ import net.koalastuff.koalacast.core.model.Favorite
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.QueueEntry
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.model.NamedQueue
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.ProgressTrack
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
@@ -73,6 +79,9 @@ fun LibraryScreen(
         },
         onClearQueue = viewModel::clearQueue,
         onRemoveFavorite = viewModel::removeFavorite,
+        onSaveNamedQueue = viewModel::saveNamedQueue,
+        onRestoreNamedQueue = viewModel::restoreNamedQueue,
+        onDeleteNamedQueue = viewModel::deleteNamedQueue,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -92,6 +101,9 @@ internal fun LibraryContent(
     onMoveInQueue: (Int, Int) -> Unit,
     onClearQueue: () -> Unit,
     onRemoveFavorite: (String) -> Unit,
+    onSaveNamedQueue: (String) -> Unit,
+    onRestoreNamedQueue: (String) -> Unit,
+    onDeleteNamedQueue: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -144,6 +156,10 @@ internal fun LibraryContent(
                 onRemove = onRemoveFromQueue,
                 onMove = onMoveInQueue,
                 onClear = onClearQueue,
+                namedQueues = state.namedQueues,
+                onSaveNamedQueue = onSaveNamedQueue,
+                onRestoreNamedQueue = onRestoreNamedQueue,
+                onDeleteNamedQueue = onDeleteNamedQueue,
             )
 
             LibraryTab.FAVORITES -> FavoritesList(
@@ -207,20 +223,100 @@ private fun QueueList(
     onRemove: (String) -> Unit,
     onMove: (Int, Int) -> Unit,
     onClear: () -> Unit,
+    namedQueues: List<NamedQueue>,
+    onSaveNamedQueue: (String) -> Unit,
+    onRestoreNamedQueue: (String) -> Unit,
+    onDeleteNamedQueue: (String) -> Unit,
 ) {
-    if (items.isEmpty()) {
-        EmptyState(
-            title = stringResource(R.string.library_empty_queue_title),
-            body = stringResource(R.string.library_empty_queue_body),
-            icon = PhosphorIcons.ListPlus,
-        )
-        return
-    }
-
     val context = LocalContext.current
     val totalMs = items.sumOf { it.track.durationMs }
+    var queueName by remember { mutableStateOf("") }
 
     LazyColumn {
+        item(key = "named-queues") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.gap),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            ) {
+                MonoText(
+                    text = stringResource(R.string.library_named_queues),
+                    color = KoalaTheme.colors.ink3,
+                    style = KoalaTheme.type.monoStrong,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = queueName,
+                        onValueChange = { queueName = it },
+                        label = { Text(stringResource(R.string.library_named_queue_name)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlineButton(
+                        text = stringResource(R.string.library_named_queue_save),
+                        onClick = {
+                            onSaveNamedQueue(queueName)
+                            queueName = ""
+                        },
+                        enabled = queueName.isNotBlank() && items.isNotEmpty(),
+                    )
+                }
+                namedQueues.forEach { saved ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onRestoreNamedQueue(saved.id) }
+                                .padding(vertical = KoalaSpacing.gapSmall),
+                        ) {
+                            Text(
+                                text = saved.name,
+                                style = KoalaTheme.type.listTitle,
+                                color = KoalaTheme.colors.ink2,
+                            )
+                            MonoText(
+                                text = stringResource(
+                                    R.string.library_named_queue_count,
+                                    saved.itemCount,
+                                ),
+                                color = KoalaTheme.colors.ink4,
+                                style = KoalaTheme.type.monoSmall,
+                            )
+                        }
+                        IconButtonSquare(
+                            icon = PhosphorIcons.Trash,
+                            contentDescription = stringResource(
+                                R.string.library_named_queue_delete,
+                                saved.name,
+                            ),
+                            onClick = { onDeleteNamedQueue(saved.id) },
+                            bordered = false,
+                        )
+                    }
+                }
+            }
+            RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
+        }
+
+        if (items.isEmpty()) {
+            item(key = "queue-empty") {
+                EmptyState(
+                    title = stringResource(R.string.library_empty_queue_title),
+                    body = stringResource(R.string.library_empty_queue_body),
+                    icon = PhosphorIcons.ListPlus,
+                )
+            }
+        }
+
+        if (items.isNotEmpty()) {
         item(key = "queue-summary") {
             Row(
                 modifier = Modifier
@@ -262,6 +358,7 @@ private fun QueueList(
                 onMoveDown = { onMove(index, index + 1) },
             )
             RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
+        }
         }
     }
 }

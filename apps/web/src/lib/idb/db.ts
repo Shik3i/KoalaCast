@@ -131,12 +131,19 @@ export interface LocalTimeBookmark {
 	created_at: number;
 }
 
+export interface LocalNamedQueue {
+	id: string;
+	name: string;
+	items: LocalQueueItem[];
+	updated_at: number;
+}
+
 const GUEST_DB_NAME = 'koalacast_local_db';
 const ACTIVE_CONTEXT_KEY = 'koalacast_local_data_context';
 const INITIALIZED_KEY = 'context_initialized';
 // v2 dropped the never-used 'history' store. v3 adds local-only listening
 // sessions for accurate Profile analytics.
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 let activeContext = 'guest';
@@ -166,6 +173,10 @@ function openLocalDB(name: string): Promise<IDBPDatabase> {
 			if (!db.objectStoreNames.contains('time_bookmarks')) {
 				const bookmarks = db.createObjectStore('time_bookmarks', { keyPath: 'id' });
 				bookmarks.createIndex('episode_id', 'episode_id');
+			}
+			if (!db.objectStoreNames.contains('named_queues')) {
+				const namedQueues = db.createObjectStore('named_queues', { keyPath: 'id' });
+				namedQueues.createIndex('updated_at', 'updated_at');
 			}
 			if (!db.objectStoreNames.contains('settings')) {
 				db.createObjectStore('settings', { keyPath: 'key' });
@@ -243,6 +254,7 @@ async function copyAndClearGuestData(target: IDBPDatabase): Promise<void> {
 			'queue',
 			'favorites',
 			'time_bookmarks',
+			'named_queues',
 			'settings',
 			'tombstones',
 			'listening_sessions',
@@ -630,6 +642,38 @@ export async function removeLocalTimeBookmark(id: string): Promise<void> {
 	await db.delete('time_bookmarks', id);
 }
 
+export async function getLocalNamedQueues(): Promise<LocalNamedQueue[]> {
+	const db = await getLocalDB();
+	const queues: LocalNamedQueue[] = await db.getAll('named_queues');
+	return queues.sort((a, b) => b.updated_at - a.updated_at);
+}
+
+export async function saveLocalNamedQueue(
+	name: string,
+	items: LocalQueueItem[]
+): Promise<LocalNamedQueue> {
+	const normalizedName = name.trim();
+	if (!normalizedName) throw new Error('named queue requires a name');
+	const db = await getLocalDB();
+	const existing: LocalNamedQueue[] = await db.getAll('named_queues');
+	const current = existing.find(
+		(queue) => queue.name.localeCompare(normalizedName, undefined, { sensitivity: 'base' }) === 0
+	);
+	const namedQueue: LocalNamedQueue = {
+		id: current?.id ?? crypto.randomUUID(),
+		name: normalizedName,
+		items: plainJSON(items),
+		updated_at: Date.now()
+	};
+	await db.put('named_queues', namedQueue);
+	return namedQueue;
+}
+
+export async function removeLocalNamedQueue(id: string): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('named_queues', id);
+}
+
 // ---- Deletion tombstones (for cross-device sync) ----
 export type TombstoneEntity = 'subscription' | 'favorite';
 export interface LocalTombstone {
@@ -680,6 +724,7 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('queue');
 	await db.clear('favorites');
 	await db.clear('time_bookmarks');
+	await db.clear('named_queues');
 	await db.clear('settings');
 	await db.clear('tombstones');
 	await db.clear('listening_sessions');

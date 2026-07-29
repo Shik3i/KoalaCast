@@ -13,12 +13,14 @@ import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
+import net.koalastuff.koalacast.core.data.repository.NamedQueueRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.Favorite
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.QueueEntry
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.model.NamedQueue
 import javax.inject.Inject
 
 enum class LibraryTab { SUBSCRIPTIONS, IN_PROGRESS, QUEUE, FAVORITES }
@@ -28,6 +30,7 @@ data class LibraryUiState(
     val inProgress: List<PlaybackProgress> = emptyList(),
     val queue: List<QueueEntry> = emptyList(),
     val favorites: List<Favorite> = emptyList(),
+    val namedQueues: List<NamedQueue> = emptyList(),
 ) {
     /** Total remaining runtime of the queue at the given speed. */
     fun queueRuntimeMs(speed: Float): Long =
@@ -43,6 +46,7 @@ class LibraryViewModel @Inject constructor(
     private val account: AccountRepository,
     private val library: LibraryRepository,
     private val queue: QueueRepository,
+    private val namedQueues: NamedQueueRepository,
     private val progress: ProgressRepository,
     private val player: PlayerConnection,
 ) : ViewModel() {
@@ -59,12 +63,14 @@ class LibraryViewModel @Inject constructor(
         progress.inProgress,
         queue.entries,
         library.allFavorites,
-    ) { subscriptions, inProgress, queueEntries, favorites ->
+        namedQueues.all,
+    ) { subscriptions, inProgress, queueEntries, favorites, savedQueues ->
         LibraryUiState(
             subscriptions = subscriptions,
             inProgress = inProgress,
             queue = queueEntries,
             favorites = favorites,
+            namedQueues = savedQueues,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -100,5 +106,17 @@ class LibraryViewModel @Inject constructor(
 
     fun removeFavorite(episodeId: String) {
         viewModelScope.launch { library.removeFavorite(episodeId) }
+    }
+
+    fun saveNamedQueue(name: String) {
+        viewModelScope.launch { namedQueues.save(name) }
+    }
+
+    fun restoreNamedQueue(id: String) {
+        viewModelScope.launch { namedQueues.restore(id) }
+    }
+
+    fun deleteNamedQueue(id: String) {
+        viewModelScope.launch { namedQueues.delete(id) }
     }
 }

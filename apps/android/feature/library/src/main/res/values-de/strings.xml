@@ -30,4 +30,9 @@
     <string name="library_empty_favorites_title">Nichts gemerkt</string>
     <string name="library_empty_favorites_body">Merke dir eine Folge, um später darauf zurückzukommen.</string>
     <string name="library_play">Abspielen</string>
+    <string name="library_named_queues">Benannte Warteschlangen</string>
+    <string name="library_named_queue_name">Name der Warteschlange</string>
+    <string name="library_named_queue_save">Speichern</string>
+    <string name="library_named_queue_count">%1$d Folgen</string>
+    <string name="library_named_queue_delete">Benannte Warteschlange %1$s löschen</string>
 </resources>

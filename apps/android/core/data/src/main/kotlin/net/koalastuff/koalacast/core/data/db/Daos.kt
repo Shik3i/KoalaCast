@@ -198,6 +198,31 @@ interface TimeBookmarkDao {
 }
 
 @Dao
+interface NamedQueueDao {
+
+    @Query("SELECT * FROM named_queues ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<NamedQueueEntity>>
+
+    @Query("SELECT * FROM named_queues")
+    suspend fun getAll(): List<NamedQueueEntity>
+
+    @Query("SELECT * FROM named_queues WHERE id = :id")
+    suspend fun get(id: String): NamedQueueEntity?
+
+    @Query("SELECT * FROM named_queues WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun getByName(name: String): NamedQueueEntity?
+
+    @Upsert
+    suspend fun upsert(queue: NamedQueueEntity)
+
+    @Query("DELETE FROM named_queues WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("DELETE FROM named_queues")
+    suspend fun clear()
+}
+
+@Dao
 interface ListeningSessionDao {
 
     @Query("SELECT * FROM listening_sessions ORDER BY startedAt ASC")

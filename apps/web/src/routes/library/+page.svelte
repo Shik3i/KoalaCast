@@ -9,9 +9,15 @@
 		reorderLocalQueue,
 		getLocalFavorites,
 		removeLocalFavorite,
+		getLocalNamedQueues,
+		saveLocalNamedQueue,
+		removeLocalNamedQueue,
+		replaceLocalQueueFromSync,
 		type LocalSubscription,
 		type LocalPlaybackState,
-		type LocalFavorite
+		type LocalFavorite,
+		type LocalNamedQueue,
+		type LocalQueueItem
 	} from '$lib/idb/db';
 	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -25,6 +31,8 @@
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
 	let queue = $state<CurrentTrack[]>([]);
 	let favorites = $state<LocalFavorite[]>([]);
+	let namedQueues = $state<LocalNamedQueue[]>([]);
+	let queueName = $state('');
 	let activeTab = $state<'subscriptions' | 'episodes' | 'queue' | 'favorites'>('subscriptions');
 	let dragIndex = $state<number | null>(null);
 	let libraryQuery = $state('');
@@ -64,6 +72,7 @@
 		recentEpisodes = await getRecentPlaybackStates(30);
 		await player.loadQueue();
 		favorites = await getLocalFavorites();
+		namedQueues = await getLocalNamedQueues();
 	});
 
 	// Mirror the store's queue into the local list so the tab stays correct when the
@@ -113,6 +122,34 @@
 			queue = [];
 			toast.success(t('toast.queueCleared'));
 		}
+	}
+
+	async function saveNamedQueue() {
+		const name = queueName.trim();
+		if (!name || !queue.length) return;
+		const now = Date.now();
+		const items: LocalQueueItem[] = queue.map((item, index) => ({
+			id: crypto.randomUUID(),
+			...item,
+			position_order: index,
+			added_at: now + index
+		}));
+		await saveLocalNamedQueue(name, items);
+		namedQueues = await getLocalNamedQueues();
+		queueName = '';
+		toast.success(t('library.namedQueueSaved', { name }));
+	}
+
+	async function restoreNamedQueue(namedQueue: LocalNamedQueue) {
+		await replaceLocalQueueFromSync(namedQueue.items, Date.now(), { authoritative: true });
+		await player.loadQueue();
+		queue = [...player.queue];
+		toast.success(t('library.namedQueueRestored', { name: namedQueue.name }));
+	}
+
+	async function deleteNamedQueue(id: string) {
+		await removeLocalNamedQueue(id);
+		namedQueues = namedQueues.filter((queue) => queue.id !== id);
 	}
 
 	// Drag-to-reorder.
@@ -307,6 +344,45 @@
 			</div>
 		{/if}
 	{:else if activeTab === 'queue'}
+		<section class="named-queues" aria-labelledby="named-queues-title">
+			<div class="named-queue-head">
+				<div>
+					<h2 id="named-queues-title">{t('library.namedQueues')}</h2>
+					<p>{t('library.namedQueuesHint')}</p>
+				</div>
+				<div class="named-queue-save">
+					<input
+						bind:value={queueName}
+						placeholder={t('library.namedQueuePlaceholder')}
+						aria-label={t('library.namedQueuePlaceholder')}
+						onkeydown={(event) => event.key === 'Enter' && saveNamedQueue()}
+					/>
+					<button onclick={saveNamedQueue} disabled={!queueName.trim() || queue.length === 0}>
+						<i class="ph ph-floppy-disk" aria-hidden="true"></i>
+						{t('library.saveQueue')}
+					</button>
+				</div>
+			</div>
+			{#if namedQueues.length > 0}
+				<div class="named-queue-list">
+					{#each namedQueues as namedQueue (namedQueue.id)}
+						<div class="named-queue-row">
+							<button class="named-queue-restore" onclick={() => restoreNamedQueue(namedQueue)}>
+								<strong>{namedQueue.name}</strong>
+								<span>{t('library.namedQueueEpisodes', { count: namedQueue.items.length })}</span>
+							</button>
+							<button
+								class="named-queue-delete"
+								onclick={() => deleteNamedQueue(namedQueue.id)}
+								aria-label={t('library.deleteNamedQueue', { name: namedQueue.name })}
+							>
+								<i class="ph ph-trash" aria-hidden="true"></i>
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
 		{#if queue.length === 0}
 			<div class="empty-state">
 				<img class="empty-illustration queue" src="/illustrations/empty-queue.webp" width="192" height="288" loading="lazy" decoding="async" alt="" />
@@ -558,6 +634,48 @@
 
 	.queue-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
 	.queue-hint { font-size: 0.8rem; color: var(--text-muted); }
+	.named-queues {
+		margin-bottom: 1rem;
+		padding: 1rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: 12px;
+		background: var(--bg-surface);
+	}
+	.named-queue-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+	.named-queue-head h2 { font-size: 1rem; }
+	.named-queue-head p { margin-top: 0.2rem; color: var(--text-muted); font-size: 0.8rem; }
+	.named-queue-save { display: flex; gap: 0.5rem; }
+	.named-queue-save input {
+		min-height: 44px;
+		padding: 0 0.75rem;
+		border: 1px solid var(--border-ui);
+		border-radius: 8px;
+		background: var(--bg-sunken);
+		color: var(--text-primary);
+	}
+	.named-queue-save button,
+	.named-queue-restore,
+	.named-queue-delete {
+		border: 1px solid var(--border-ui);
+		border-radius: 8px;
+		background: var(--bg-elevated);
+		color: var(--text-primary);
+	}
+	.named-queue-save button { min-height: 44px; padding: 0 0.9rem; }
+	.named-queue-save button:disabled { opacity: 0.45; }
+	.named-queue-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; }
+	.named-queue-row { display: flex; }
+	.named-queue-restore {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.1rem;
+		padding: 0.55rem 0.75rem;
+		border-radius: 8px 0 0 8px;
+	}
+	.named-queue-restore span { color: var(--text-muted); font-size: 0.75rem; }
+	.named-queue-delete { width: 44px; border-left: 0; border-radius: 0 8px 8px 0; color: var(--text-muted); }
+	.named-queue-delete:hover { color: var(--color-danger); }
 	.drag-handle { color: var(--text-muted); font-size: 1.3rem; cursor: grab; flex-shrink: 0; display: grid; place-items: center; }
 	.drag-handle:active { cursor: grabbing; }
 
@@ -615,6 +733,8 @@
 
 	@media (max-width: 640px) {
 		.ep-pct { display: none; }
+		.named-queue-head { align-items: stretch; flex-direction: column; }
+		.named-queue-save { flex-direction: column; }
 	}
 
 	/* Quiet Edition 4b */

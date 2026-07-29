@@ -164,7 +164,15 @@
 		"sections": "Library sections",
 		"openShow": "Open {title}",
 		"subscribedHint": "Subscribed · open for episodes",
-		"queued": "Queued"
+		"queued": "Queued",
+		"namedQueues": "Named queues",
+		"namedQueuesHint": "Save this running order and restore it later.",
+		"namedQueuePlaceholder": "Queue name",
+		"saveQueue": "Save queue",
+		"namedQueueEpisodes": "{count} episodes",
+		"deleteNamedQueue": "Delete named queue {name}",
+		"namedQueueSaved": "Saved queue “{name}”.",
+		"namedQueueRestored": "Restored queue “{name}”."
 	},
 	"inbox": {
 		"title": "New",
