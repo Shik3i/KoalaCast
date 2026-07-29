@@ -1,6 +1,6 @@
 # KoalaCast Current Implementation Status
 
-**Last updated:** July 27, 2026
+**Last updated:** July 29, 2026
 **License:** MIT
 
 This document records shipped behavior. Proposed work belongs in
@@ -12,9 +12,9 @@ This document records shipped behavior. Proposed work belongs in
 | :--- | :--- | :--- |
 | **Web application** | Implemented | SvelteKit 5 static SPA, served by the Go application. Responsive three-column layout with resizable/collapsible side rails and mobile navigation. |
 | **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language/genre filters, clear/reset behavior, and subscription-aware Inbox. |
-| **Playback** | Implemented | HTML audio + Media Session, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, and progress ring controls. |
-| **Local-first storage** | Implemented | Subscriptions, queue, favorites, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. |
-| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, and listening sessions. Queue and per-podcast settings remain local until their server materialization is implemented; see [`api_todo.md`](../api_todo.md). |
+| **Playback** | Implemented | HTML audio + Media Session, compatible-browser Remote Playback, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, timestamp bookmarks, and handoff links. |
+| **Local-first storage** | Implemented | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. |
+| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. Named queues, folders, and timestamp bookmarks remain local. |
 | **Statistics** | Implemented | Personal listening duration, sessions, podcasts, speed and time-saved metrics. Signed-in users can separately opt into global aggregates, podcast rankings, and the listener leaderboard; participation defaults to off. |
 | **Themes and accessibility** | Implemented | System/light/dark modes, nine palettes (Fjord default; Eucalyptus retained), scalable/resizable layout, reduced motion, focus treatment, tooltips, accessible names, and English/German UI. |
 | **SEO and sharing** | Implemented | Canonical/robots metadata, sitemap with Git-derived `lastmod`, WebSite/SoftwareApplication JSON-LD, `llms.txt`, `llms-full.txt`, and 1200×630 Open Graph/Twitter artwork. |
@@ -24,12 +24,13 @@ This document records shipped behavior. Proposed work belongs in
 
 ## Android
 
-The native Kotlin/Compose/Media3 application has P0–P6 shipped: onboarding and
+The native Kotlin/Compose/Media3 application has P0–P7 shipped: onboarding and
 server selection, discovery/search, playback, Room local-first library,
 resumable downloads, Inbox, profile statistics, accounts, device-token sync,
-OPML, and global statistics. Remaining P7 platform work includes Android Auto,
-widgets, chapters, dynamic artwork palettes, advanced download policies, and
-additional UI/integration test coverage. The detailed live checklist is
+OPML, global statistics, Android Auto/Wear browse support, a home-screen widget,
+chapters, dynamic artwork palettes, advanced download policies, timestamp
+bookmarks, handoff links, named queues, and podcast folders. Additional
+UI/integration test coverage remains desirable. The detailed live checklist is
 [`apps/android/README.md`](../apps/android/README.md).
 
 ## Delivery and quality gates

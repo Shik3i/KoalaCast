@@ -208,13 +208,15 @@ Self-hosters run their own server. The app must let the user choose the server:
 ## 3. Data model (Room — mirror the web IndexedDB stores)
 
 Web stores (`apps/web/src/lib/idb/db.ts`) to mirror as Room entities:
-- `subscriptions` (podcast_id PK, feed_url, title, artwork_url, added_at)
+- `subscriptions` (podcast_id PK, feed_url, title, artwork_url, folder, added_at)
 - `playback_states` (episode_id PK, podcast_id, position_ms, completed,
   progress_percent, last_played_at, + denormalized title/podcast_title/artwork_url/
   enclosure_url/duration_ms for offline resume)
 - `queue` (id PK, episode_id, podcast_id, title, artwork_url, enclosure_url,
   duration_ms, position_order, added_at)
 - `favorites` (episode_id PK, added_at)
+- `saved_queues` (id PK, name, serialized queue entries, created_at, updated_at)
+- `bookmarks` (id PK, episode metadata, position_ms, note, created_at)
 - `history` (autoincrement, played_at index)
 - **New for Android:** `podcasts`, `episodes` (cached feed content for offline
   browsing), `downloads` (episode_id PK, state, progress, local_uri, size_bytes,
@@ -261,6 +263,10 @@ Web has these today; Android should match:
 - [x] Continue Listening rail / In-Progress tab.
 - [x] Nine colour palettes in light and dark, with Fjord as the shared default.
 - [x] Queue (play, remove, accessible up/down reorder; drag remains optional polish).
+- [x] Reusable named queues, stored locally and included in account archives.
+- [x] Timestamp bookmarks with optional notes.
+- [x] Timestamp handoff links shared between web and Android.
+- [x] Local podcast folders with library filtering.
 - [x] Dynamic per-show accent color from cover art (Coil + Palette).
 - [x] OPML import/export.
 - [x] Account: register / login / recovery code / session management.
@@ -360,9 +366,9 @@ per-subscription request fan-out.
    `api_todo.md`.
 4. **Downloads engine** — implemented with OkHttp + WorkManager, resumable range
    requests and app-private storage.
-5. **Min / target SDK** — **26 / 36**, `compileSdk 36`, pinned in
-   `gradle/libs.versions.toml` together with AGP 8.13.2 and Kotlin 2.2.21. Hilt is
-   held at 2.57.2 because 2.58+ requires AGP 9.
+5. **Min / target SDK** — **26 / 36**, `compileSdk 37`, pinned in
+   `gradle/libs.versions.toml` together with AGP 9.3.1, Kotlin 2.4.10 and
+   Hilt 2.60.1.
 6. **Show-notes rendering** — `HtmlSanitizer` + Compose's HTML-to-`AnnotatedString`
    conversion (`core:ui/component/ShowNotes.kt`). Script/style/iframe/object/embed
    blocks are dropped with their content, inline `on*` handlers are stripped, and only

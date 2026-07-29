@@ -56,6 +56,7 @@ fun EpisodeScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val handoffChooserTitle = stringResource(R.string.episode_handoff)
 
     EpisodeContent(
         state = state,
@@ -83,7 +84,7 @@ fun EpisodeScreen(
                     putExtra(Intent.EXTRA_TEXT, url)
                 }
                 context.startActivity(
-                    Intent.createChooser(intent, context.getString(R.string.episode_handoff)),
+                    Intent.createChooser(intent, handoffChooserTitle),
                 )
             }
         },

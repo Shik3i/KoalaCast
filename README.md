@@ -56,10 +56,10 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 | :--- | :--- |
 | **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, add any feed by direct RSS URL |
 | **Languages** | Spoken-language filtering (not just storefront region) for Discover and Search, language + genre search filters, fully translated English/German interface (add a language with one JSON file) |
-| **Playback** | Web Audio player, Media Session API, playback-speed control, per-podcast controls, listening-time tracking, keyboard shortcuts |
-| **Library** | Subscriptions, queue, favorites, OPML import/export |
+| **Playback** | Web Audio player, Media Session and Remote Playback APIs, playback-speed control, per-podcast controls, timestamp handoff links, listening-time tracking, keyboard shortcuts |
+| **Library** | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, OPML import/export |
 | **Accounts (optional)** | Argon2id hashing, Base32 recovery codes, HttpOnly session cookies, Bearer device tokens |
-| **Sync** | Subscriptions, favorites, playback state, and listening sessions via monotonic cursor pull/push and idempotent writes |
+| **Sync** | Subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings via monotonic cursor pull/push and idempotent writes |
 | **Statistics** | Private personal listening analytics plus separately opt-in global aggregates and listener leaderboard |
 | **Customization** | Light/dark/system modes, nine palettes with Fjord as default, resizable side rails, per-show playback preferences |
 | **Admin** | Registration toggle, user suspension, feed-health inspection, manual refresh, system metrics |
