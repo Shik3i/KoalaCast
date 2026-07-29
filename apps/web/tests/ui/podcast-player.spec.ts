@@ -102,3 +102,30 @@ test('ordinary playback does not route audio through a suspended AudioContext', 
 	await expect(transport).toHaveAttribute('aria-label', 'Play');
 	await expect(transport.locator('.play-pause-icon')).not.toHaveClass(/playing/);
 });
+
+test('desktop progress track and interaction area both stay compact', async ({
+	page
+}, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop-player');
+
+	await page.goto('/podcast/test-show');
+	await page.getByRole('button', { name: 'Play episode', exact: true }).click();
+
+	const timeline = page.locator(".timeline input[type='range']");
+	await expect(timeline).toBeVisible();
+	const metrics = await timeline.evaluate((element) => {
+		const style = getComputedStyle(element);
+		const height = Number.parseFloat(style.height);
+		const paddingTop = Number.parseFloat(style.paddingTop);
+		const paddingBottom = Number.parseFloat(style.paddingBottom);
+		return {
+			height,
+			paintedTrackHeight: height - paddingTop - paddingBottom,
+			backgroundClip: style.backgroundClip
+		};
+	});
+
+	expect(metrics.height).toBe(20);
+	expect(metrics.paintedTrackHeight).toBe(4);
+	expect(metrics.backgroundClip).toBe('content-box');
+});

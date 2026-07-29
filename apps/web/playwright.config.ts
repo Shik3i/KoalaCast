@@ -30,6 +30,14 @@ export default defineConfig({
 				...devices['Galaxy S9+'],
 				viewport: { width: 320, height: 640 }
 			}
+		},
+		{
+			name: 'desktop-player',
+			testMatch: /podcast-player\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				viewport: { width: 1440, height: 900 }
+			}
 		}
 	]
 });

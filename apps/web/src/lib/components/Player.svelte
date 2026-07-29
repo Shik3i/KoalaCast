@@ -1624,10 +1624,9 @@
 		flex: 1;
 		-webkit-appearance: none;
 		appearance: none;
-		height: 44px;
-		padding-block: 19px;
+		height: 24px;
+		padding-block: 9px;
 		box-sizing: border-box;
-		background-clip: content-box;
 		border-radius: 999px;
 		background: linear-gradient(
 			90deg,
@@ -1635,6 +1634,9 @@
 			var(--show-accent, var(--accent-green)) var(--progress, 0%),
 			color-mix(in srgb, var(--player-text) 24%, transparent) var(--progress, 0%)
 		);
+		/* Keep a compact 24px control area while painting only the 6px track.
+		   This must follow `background`, whose shorthand resets background-clip. */
+		background-clip: content-box;
 		cursor: pointer;
 	}
 	.np-timeline input[type='range']::-webkit-slider-thumb {
@@ -2010,11 +2012,12 @@
 	.play-btn:hover { transform: none; filter: none; }
 	.timeline { gap: 11px; }
 	.timeline input[type='range'] {
-		height: 44px;
-		padding-block: 20px;
+		height: 20px;
+		padding-block: 8px;
 		box-sizing: border-box;
-		background-clip: content-box;
 		background: linear-gradient(90deg, var(--accent-fill) 0%, var(--accent-fill) var(--progress,0%), var(--track) var(--progress,0%));
+		/* Compact 20px control area, 4px visible track. */
+		background-clip: content-box;
 	}
 	.timeline input[type='range']::-webkit-slider-thumb { width: 12px; height: 12px; background: var(--ink); box-shadow: none; }
 	.timeline input[type='range']::-moz-range-thumb { width: 12px; height: 12px; background: var(--ink); }
