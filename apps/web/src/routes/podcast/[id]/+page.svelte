@@ -36,6 +36,7 @@
 	let isLoading = $state(true);
 	let loadError = $state('');
 	let isSubscribed = $state(false);
+	let isSubscriptionPending = $state(false);
 	let showAccent = $state<string | null>(null);
 	let playedIds = $state<Set<string>>(new Set());
 	let playbackStates = $state<Record<string, LocalPlaybackState>>({});
@@ -314,21 +315,26 @@
 	}
 
 	async function handleSubscribe() {
-		if (!podcast) return;
-		if (isSubscribed) {
-			await removeLocalSubscription(podcast.id);
-			isSubscribed = false;
-			toast.success(t('toast.unsubscribedFrom', { title: podcast.title }));
-		} else {
-			await saveLocalSubscription({
-				podcast_id: podcast.id,
-				feed_url: podcast.feed_url,
-				title: podcast.title,
-				artwork_url: podcast.artwork_url,
-				added_at: Date.now()
-			});
-			isSubscribed = true;
-			toast.success(t('toast.subscribed', { title: podcast.title }));
+		if (!podcast || isSubscriptionPending) return;
+		isSubscriptionPending = true;
+		try {
+			if (isSubscribed) {
+				await removeLocalSubscription(podcast.id);
+				isSubscribed = false;
+				toast.success(t('toast.unsubscribedFrom', { title: podcast.title }));
+			} else {
+				await saveLocalSubscription({
+					podcast_id: podcast.id,
+					feed_url: podcast.feed_url,
+					title: podcast.title,
+					artwork_url: podcast.artwork_url,
+					added_at: Date.now()
+				});
+				isSubscribed = true;
+				toast.success(t('toast.subscribed', { title: podcast.title }));
+			}
+		} finally {
+			isSubscriptionPending = false;
 		}
 	}
 
@@ -543,7 +549,7 @@
 							<i class="ph-fill ph-play" aria-hidden="true"></i> {t('podcast.playLatest')}
 						</button>
 					{/if}
-					<button class="btn-subscribe" class:subscribed={isSubscribed} onclick={handleSubscribe}>
+					<button class="btn-subscribe" class:subscribed={isSubscribed} disabled={isSubscriptionPending} onclick={handleSubscribe}>
 						{#if isSubscribed}
 							<i class="ph ph-check" aria-hidden="true"></i> {t('common.subscribed')}
 						{:else}

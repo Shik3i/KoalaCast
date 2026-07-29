@@ -70,6 +70,7 @@
 	let searchInput: HTMLInputElement;
 	let requestId = 0;
 	const metadataRequests = new Map<string, Promise<void>>();
+	const subscriptionRequests = new Set<string>();
 
 	const categories = ['All', ...GENRES.map((genre) => genre.name)];
 	const filtered = $derived(
@@ -413,6 +414,9 @@
 
 	async function subscribe(event: MouseEvent, podcast: PodcastItem) {
 		event.stopPropagation();
+		const requestKey = podcast.feed_url || podcast.id;
+		if (isSubscribed(podcast) || subscriptionRequests.has(requestKey)) return;
+		subscriptionRequests.add(requestKey);
 		let id = podcast.id;
 		try {
 			if (podcast.feed_url) {
@@ -431,11 +435,13 @@
 				artwork_url: podcast.artwork_url,
 				added_at: Date.now()
 			});
-			subscribedIds = [...subscribedIds, id];
-			if (podcast.feed_url) subscribedFeeds = [...subscribedFeeds, podcast.feed_url];
+			subscribedIds = [...new Set([...subscribedIds, id])];
+			if (podcast.feed_url) subscribedFeeds = [...new Set([...subscribedFeeds, podcast.feed_url])];
 			toast.success(t('discover.subscribeSuccess', { title: podcast.title }));
 		} catch {
 			toast.error(t('discover.subscribeError'));
+		} finally {
+			subscriptionRequests.delete(requestKey);
 		}
 	}
 </script>

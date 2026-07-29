@@ -20,6 +20,7 @@ import (
 	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"golang.org/x/sync/singleflight"
 )
 
 type PodcastHandler struct {
@@ -29,6 +30,7 @@ type PodcastHandler struct {
 	Worker         *worker.FeedWorker
 	MaxResponseB   int64
 	FeedHTTPClient *http.Client
+	feedIngest     singleflight.Group
 }
 
 type AddFeedRequest struct {
@@ -367,6 +369,16 @@ func (h *PodcastHandler) IngestFeedURL(ctx context.Context, feedURL string) (str
 // Errors are *ingestError with an HTTP status hint.
 func (h *PodcastHandler) ingestFeedURL(ctx context.Context, feedURL string) (string, error) {
 	feedURL = strings.TrimSpace(feedURL)
+	value, err, _ := h.feedIngest.Do(feedURL, func() (any, error) {
+		return h.ingestFeedURLOnce(ctx, feedURL)
+	})
+	if err != nil {
+		return "", err
+	}
+	return value.(string), nil
+}
+
+func (h *PodcastHandler) ingestFeedURLOnce(ctx context.Context, feedURL string) (string, error) {
 	// Validate URL & SSRF checks
 	if err := rss.ValidateURL(feedURL); err != nil {
 		return "", &ingestError{Status: http.StatusBadRequest, Msg: err.Error()}

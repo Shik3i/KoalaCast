@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePlaybackSpeed, parsePlaybackSpeed } from './playback-speed';
+import { normalizePlaybackSpeed, parsePlaybackSpeed, storedPlaybackSpeed } from './playback-speed';
 
 describe('playback speed', () => {
 	it('accepts decimal comma and decimal point custom values', () => {
@@ -16,5 +16,12 @@ describe('playback speed', () => {
 		expect(parsePlaybackSpeed('0,24')).toBeNull();
 		expect(parsePlaybackSpeed('4.01')).toBeNull();
 		expect(parsePlaybackSpeed('fast')).toBeNull();
+	});
+
+	it('defaults missing or invalid persisted values to normal speed', () => {
+		expect(storedPlaybackSpeed(null)).toBe(1);
+		expect(storedPlaybackSpeed('')).toBe(1);
+		expect(storedPlaybackSpeed('fast')).toBe(1);
+		expect(storedPlaybackSpeed('1.75')).toBe(1.75);
 	});
 });

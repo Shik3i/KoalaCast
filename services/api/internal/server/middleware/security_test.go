@@ -28,3 +28,15 @@ func TestCORSPreflightAllowsPut(t *testing.T) {
 		)
 	}
 }
+
+func TestSecurityHeadersAllowsPublisherFetches(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	SecurityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+		ServeHTTP(recorder, request)
+
+	csp := recorder.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "connect-src 'self' https: http:") {
+		t.Fatalf("publisher fetches missing from CSP: %q", csp)
+	}
+}

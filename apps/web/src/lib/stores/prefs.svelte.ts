@@ -10,6 +10,7 @@ import {
 // Only the pure registry is imported here, never the runtime: the runtime reads
 // this store, and importing it back would create a cycle.
 import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
+import { storedPlaybackSpeed } from '$lib/player/playback-speed';
 
 export type DateFormat = 'absolute' | 'relative';
 
@@ -52,8 +53,7 @@ function initialBoolean(key: string): boolean {
 
 function initialPlaybackSpeed(): number {
 	if (typeof localStorage === 'undefined') return 1;
-	const value = Number(localStorage.getItem(scopedKey(PLAYBACK_SPEED_KEY)));
-	return Number.isFinite(value) ? Math.max(0.5, Math.min(3, value)) : 1;
+	return storedPlaybackSpeed(localStorage.getItem(scopedKey(PLAYBACK_SPEED_KEY)));
 }
 
 // Reads the stored content languages, migrating the legacy storefront codes
@@ -229,7 +229,7 @@ class Prefs {
 	}
 
 	setPlaybackSpeed(speed: number) {
-		this.playbackSpeed = Number.isFinite(speed) ? Math.max(0.5, Math.min(3, speed)) : 1;
+		this.playbackSpeed = storedPlaybackSpeed(speed);
 		try {
 			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
 		} catch (_) {}
@@ -330,8 +330,8 @@ class Prefs {
 		if (typeof payload.skip_silence === 'boolean') {
 			this.skipSilence = payload.skip_silence;
 		}
-		if (Number.isFinite(Number(payload.playback_speed))) {
-			this.playbackSpeed = Math.max(0.5, Math.min(3, Number(payload.playback_speed)));
+		if (payload.playback_speed !== null && payload.playback_speed !== undefined) {
+			this.playbackSpeed = storedPlaybackSpeed(payload.playback_speed);
 		}
 		this.updatedAt = updatedAt;
 		try {

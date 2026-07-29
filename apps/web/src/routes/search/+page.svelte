@@ -29,6 +29,7 @@
 	// Monotonic id so a slow earlier query can't overwrite the results of a newer one.
 	let searchReqId = 0;
 	let searchController: AbortController | null = null;
+	const subscriptionRequests = new Set<string>();
 
 	// Search filters. Languages start pre-selected from the listener's settings —
 	// the same default as Discover — but unlike Discover they can be cleared here,
@@ -257,6 +258,9 @@
 
 	async function handleAddPodcast(e: Event, pod: any) {
 		e.stopPropagation();
+		const requestKey = pod.feed_url || pod.feedUrl || pod.id;
+		if (isSubscribed(pod) || subscriptionRequests.has(requestKey)) return;
+		subscriptionRequests.add(requestKey);
 		try {
 			let feedUrl = pod.feed_url || pod.feedUrl;
 			let podId = pod.id;
@@ -279,12 +283,14 @@
 				added_at: Date.now()
 			});
 
-			subscribedIds = [...subscribedIds, podId];
-			if (feedUrl) subscribedFeeds = [...subscribedFeeds, feedUrl];
+			subscribedIds = [...new Set([...subscribedIds, podId])];
+			if (feedUrl) subscribedFeeds = [...new Set([...subscribedFeeds, feedUrl])];
 			toast.success(t('toast.subscribed', { title: pod.title || pod.trackName }));
 		} catch (err) {
 			console.error(err);
 			toast.error(t('toast.subscribeError'));
+		} finally {
+			subscriptionRequests.delete(requestKey);
 		}
 	}
 

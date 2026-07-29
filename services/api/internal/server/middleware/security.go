@@ -16,7 +16,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		// Defense-in-depth CSP. The episode view renders publisher-supplied HTML
 		// (DOMPurify-sanitized) via {@html}, so lock down the dangerous sinks:
 		// no plugins/objects, no framing, no <base> hijack, forms only to self,
-		// and scripts/XHR restricted to same-origin. 'unsafe-inline' is required
+		// and scripts restricted to same-origin. 'unsafe-inline' is required
 		// for scripts because SvelteKit inlines its hydration bootstrap and the
 		// app.html theme snippet, and for styles because the CSS is inlined; images
 		// and audio must allow remote http(s) hosts since artwork/enclosures live on
@@ -32,7 +32,9 @@ func SecurityHeaders(next http.Handler) http.Handler {
 			"img-src 'self' data: https: http:",
 			"media-src 'self' https: http:",
 			"font-src 'self'",
-			"connect-src 'self'",
+			// Downloads, RSS artwork effects and audio analysis use fetch() against
+			// publisher CDNs; media-src alone does not authorize those connections.
+			"connect-src 'self' https: http:",
 		}, "; "))
 		next.ServeHTTP(w, r)
 	})

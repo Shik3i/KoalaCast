@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -216,6 +218,62 @@ func TestPodcastHandler_AddFeed_SSRFValidation(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400 for loopback RSS feed URL, got %d", rec.Code)
+	}
+}
+
+func TestPodcastHandler_ConcurrentFeedIngestIsIdempotent(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	database, err := db.OpenDB(filepath.Join(t.TempDir(), "concurrent-feed.db"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	var fetches atomic.Int32
+	release := make(chan struct{})
+	feedClient := &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		fetches.Add(1)
+		<-release
+		body := `<?xml version="1.0"?><rss version="2.0"><channel><title>Concurrent</title><item><guid>ep-1</guid><title>Episode</title><enclosure url="https://cdn.example/ep.mp3" type="audio/mpeg"/></item></channel></rss>`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	})}
+	handler := &PodcastHandler{DB: database, MaxResponseB: 1024 * 1024, FeedHTTPClient: feedClient}
+
+	const callers = 8
+	ids := make(chan string, callers)
+	errs := make(chan error, callers)
+	var started sync.WaitGroup
+	started.Add(callers)
+	for range callers {
+		go func() {
+			started.Done()
+			id, ingestErr := handler.IngestFeedURL(context.Background(), "https://feeds.example/concurrent.xml")
+			ids <- id
+			errs <- ingestErr
+		}()
+	}
+	started.Wait()
+	close(release)
+
+	var firstID string
+	for range callers {
+		if ingestErr := <-errs; ingestErr != nil {
+			t.Fatal(ingestErr)
+		}
+		id := <-ids
+		if firstID == "" {
+			firstID = id
+		} else if id != firstID {
+			t.Fatalf("concurrent ingest returned different IDs: %q != %q", id, firstID)
+		}
+	}
+	if got := fetches.Load(); got != 1 {
+		t.Fatalf("expected one feed fetch, got %d", got)
 	}
 }
 
