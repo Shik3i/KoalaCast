@@ -40,12 +40,12 @@ interface SubscriptionDao {
 
     @Transaction
     suspend fun upsertResolvedImport(sourceFeedUrl: String, subscription: SubscriptionEntity) {
-        val existing = getByFeedUrl(sourceFeedUrl)
+        val existing = getByFeedUrl(sourceFeedUrl) ?: return
         deleteAliases(sourceFeedUrl, subscription.podcastId)
         upsert(
             subscription.copy(
-                addedAt = existing?.addedAt ?: subscription.addedAt,
-                inboxMode = existing?.inboxMode ?: subscription.inboxMode,
+                addedAt = existing.addedAt,
+                inboxMode = existing.inboxMode,
             ),
         )
     }

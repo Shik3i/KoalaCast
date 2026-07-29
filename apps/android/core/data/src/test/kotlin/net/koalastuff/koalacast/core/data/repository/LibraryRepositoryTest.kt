@@ -144,6 +144,17 @@ class LibraryRepositoryTest {
     }
 
     @Test
+    fun `resolving a podcast without an imported placeholder does not subscribe`() = runTest {
+        repository.canonicalizeImportedSubscription(
+            sourceFeedUrl = "https://example.org/not-imported.xml",
+            podcast = podcast(),
+        )
+
+        assertTrue(repository.subscriptionsSnapshot().isEmpty())
+        assertFalse(repository.isSubscribed("p1").first())
+    }
+
+    @Test
     fun `favouriting keeps enough metadata to play without a refetch`() = runTest {
         repository.addFavorite(track())
 
