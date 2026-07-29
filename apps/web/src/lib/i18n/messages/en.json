@@ -172,7 +172,11 @@
 		"namedQueueEpisodes": "{count} episodes",
 		"deleteNamedQueue": "Delete named queue {name}",
 		"namedQueueSaved": "Saved queue “{name}”.",
-		"namedQueueRestored": "Restored queue “{name}”."
+		"namedQueueRestored": "Restored queue “{name}”.",
+		"folderFilter": "Podcast folders",
+		"allFolders": "All folders",
+		"assignFolder": "Assign {title} to a folder",
+		"folderPrompt": "Folder for {title}. Leave empty to remove it from a folder."
 	},
 	"inbox": {
 		"title": "New",

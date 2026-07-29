@@ -46,12 +46,16 @@ interface SubscriptionDao {
             subscription.copy(
                 addedAt = existing.addedAt,
                 inboxMode = existing.inboxMode,
+                folder = existing.folder,
             ),
         )
     }
 
     @Query("UPDATE subscriptions SET inboxMode = :mode WHERE podcastId = :podcastId")
     suspend fun setInboxMode(podcastId: String, mode: String)
+
+    @Query("UPDATE subscriptions SET folder = :folder WHERE podcastId = :podcastId")
+    suspend fun setFolder(podcastId: String, folder: String)
 
     @Query("DELETE FROM subscriptions")
     suspend fun clear()

@@ -29,6 +29,7 @@ data class SubscriptionEntity(
      * usable instead of a flood.
      */
     val inboxMode: String = INBOX_MODE_ALL,
+    val folder: String = "",
 ) {
     companion object {
         const val INBOX_MODE_ALL = "all"

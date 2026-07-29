@@ -69,6 +69,7 @@ fun LibraryScreen(
         onPlay = viewModel::play,
         onOpenDiscover = onOpenDiscover,
         onUnsubscribe = viewModel::unsubscribe,
+        onSetFolder = viewModel::setFolder,
         onRemoveFromQueue = viewModel::removeFromQueue,
         onMoveInQueue = { from, to ->
             val ids = state.queue.map { it.track.episodeId }.toMutableList()
@@ -97,6 +98,7 @@ internal fun LibraryContent(
     onPlay: (Track?) -> Unit,
     onOpenDiscover: () -> Unit,
     onUnsubscribe: (String) -> Unit,
+    onSetFolder: (String, String) -> Unit,
     onRemoveFromQueue: (String) -> Unit,
     onMoveInQueue: (Int, Int) -> Unit,
     onClearQueue: () -> Unit,
@@ -140,6 +142,7 @@ internal fun LibraryContent(
                 subscriptions = state.subscriptions,
                 onOpen = onOpenPodcast,
                 onUnsubscribe = onUnsubscribe,
+                onSetFolder = onSetFolder,
                 onOpenDiscover = onOpenDiscover,
             )
 

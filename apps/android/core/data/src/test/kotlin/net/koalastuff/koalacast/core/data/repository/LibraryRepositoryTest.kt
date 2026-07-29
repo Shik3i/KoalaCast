@@ -148,6 +148,14 @@ class LibraryRepositoryTest {
     }
 
     @Test
+    fun `subscription folders are local library metadata`() = runTest {
+        repository.subscribe(podcast())
+        repository.setFolder("p1", "Research")
+
+        assertEquals("Research", repository.subscriptionsSnapshot().single().folder)
+    }
+
+    @Test
     fun `time bookmarks are ordered and removable`() = runTest {
         repository.addTimeBookmark("e1", 90_000)
         now++

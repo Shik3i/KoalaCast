@@ -208,6 +208,10 @@ class LibraryRepository @Inject constructor(
         return nowFavorite
     }
 
+    suspend fun setFolder(podcastId: String, folder: String) {
+        subscriptions.setFolder(podcastId, folder.trim())
+    }
+
     // ---- Timestamp bookmarks ----
 
     fun timeBookmarks(episodeId: String): Flow<List<TimeBookmark>> =

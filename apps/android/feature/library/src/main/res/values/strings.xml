@@ -35,4 +35,9 @@
     <string name="library_named_queue_save">Save</string>
     <string name="library_named_queue_count">%1$d episodes</string>
     <string name="library_named_queue_delete">Delete named queue %1$s</string>
+    <string name="library_all_folders">All folders</string>
+    <string name="library_manage_title">Manage %1$s</string>
+    <string name="library_folder_name">Folder</string>
+    <string name="library_folder_hint">Leave empty to remove the folder assignment.</string>
+    <string name="library_folder_save">Save folder</string>
 </resources>

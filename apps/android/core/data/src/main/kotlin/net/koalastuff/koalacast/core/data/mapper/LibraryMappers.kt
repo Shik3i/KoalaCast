@@ -27,6 +27,7 @@ fun SubscriptionEntity.toModel() = Subscription(
         SubscriptionEntity.INBOX_MODE_LATEST -> InboxMode.LATEST
         else -> InboxMode.ALL
     },
+    folder = folder,
 )
 
 fun Subscription.toEntity() = SubscriptionEntity(
@@ -39,6 +40,7 @@ fun Subscription.toEntity() = SubscriptionEntity(
         InboxMode.LATEST -> SubscriptionEntity.INBOX_MODE_LATEST
         InboxMode.ALL -> SubscriptionEntity.INBOX_MODE_ALL
     },
+    folder = folder,
 )
 
 fun Podcast.toSubscription(nowMs: Long) = Subscription(

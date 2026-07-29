@@ -172,7 +172,11 @@
 		"namedQueueEpisodes": "{count} Folgen",
 		"deleteNamedQueue": "Benannte Warteschlange {name} löschen",
 		"namedQueueSaved": "Warteschlange „{name}“ gespeichert.",
-		"namedQueueRestored": "Warteschlange „{name}“ wiederhergestellt."
+		"namedQueueRestored": "Warteschlange „{name}“ wiederhergestellt.",
+		"folderFilter": "Podcast-Ordner",
+		"allFolders": "Alle Ordner",
+		"assignFolder": "{title} einem Ordner zuweisen",
+		"folderPrompt": "Ordner für {title}. Leer lassen, um die Ordnerzuordnung zu entfernen."
 	},
 	"inbox": {
 		"title": "Neu",

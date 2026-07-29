@@ -12,6 +12,7 @@ export interface LocalSubscription {
 	// recent episode, 'latest' only the single newest one (ideal for hourly news
 	// shows that would otherwise flood the feed). Defaults to 'all' when unset.
 	inbox_mode?: InboxMode;
+	folder?: string;
 }
 
 export interface LocalPlaybackState {
@@ -331,7 +332,11 @@ export async function putCachedContent<T>(key: string, value: T): Promise<void> 
 
 export async function saveLocalSubscription(sub: LocalSubscription): Promise<void> {
 	const db = await getLocalDB();
-	await db.put('subscriptions', { ...sub });
+	const existing = (await db.get('subscriptions', sub.podcast_id)) as LocalSubscription | undefined;
+	await db.put('subscriptions', {
+		...sub,
+		folder: sub.folder ?? existing?.folder ?? ''
+	});
 	// Re-subscribing clears any prior deletion tombstone.
 	await db.delete('tombstones', tombstoneId('subscription', sub.podcast_id));
 }
@@ -606,6 +611,16 @@ export async function removeLocalFavorite(episode_id: string): Promise<void> {
 	const db = await getLocalDB();
 	await db.delete('favorites', episode_id);
 	await recordTombstone(db, 'favorite', episode_id);
+}
+
+export async function setLocalSubscriptionFolder(
+	podcast_id: string,
+	folder: string
+): Promise<void> {
+	const db = await getLocalDB();
+	const sub = (await db.get('subscriptions', podcast_id)) as LocalSubscription | undefined;
+	if (!sub) return;
+	await db.put('subscriptions', { ...sub, folder: folder.trim() });
 }
 
 // Timestamp bookmarks are local-first and scoped by the active guest/account

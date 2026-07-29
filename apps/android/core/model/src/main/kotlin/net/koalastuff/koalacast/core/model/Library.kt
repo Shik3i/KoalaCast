@@ -10,6 +10,7 @@ data class Subscription(
     val artworkUrl: String,
     val addedAtMs: Long,
     val inboxMode: InboxMode = InboxMode.ALL,
+    val folder: String = "",
 )
 
 /**

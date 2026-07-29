@@ -13,6 +13,7 @@
 		saveLocalNamedQueue,
 		removeLocalNamedQueue,
 		replaceLocalQueueFromSync,
+		setLocalSubscriptionFolder,
 		type LocalSubscription,
 		type LocalPlaybackState,
 		type LocalFavorite,
@@ -38,8 +39,14 @@
 	let libraryQuery = $state('');
 	let librarySort = $state<'recent' | 'az'>('recent');
 	let activeCover = $state<string | null>(null);
+	let activeFolder = $state('');
 	let longPressTimer: number | null = null;
 	const libraryTabs = ['subscriptions', 'episodes', 'queue', 'favorites'] as const;
+	const subscriptionFolders = $derived(
+		Array.from(
+			new Set(subscriptions.map((subscription) => subscription.folder?.trim()).filter(Boolean))
+		).sort((a, b) => String(a).localeCompare(String(b))) as string[]
+	);
 
 	function handleTabKey(event: KeyboardEvent) {
 		if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -59,6 +66,7 @@
 		let list = subscriptions.filter((subscription) =>
 			subscription.title.toLowerCase().includes(libraryQuery.trim().toLowerCase())
 		);
+		if (activeFolder) list = list.filter((subscription) => subscription.folder === activeFolder);
 		if (librarySort === 'az') list = [...list].sort((a, b) => a.title.localeCompare(b.title));
 		return list;
 	});
@@ -194,6 +202,18 @@
 		}
 	}
 
+	async function assignFolder(subscription: LocalSubscription) {
+		const folder = window.prompt(
+			t('library.folderPrompt', { title: subscription.title }),
+			subscription.folder || ''
+		);
+		if (folder === null) return;
+		await setLocalSubscriptionFolder(subscription.podcast_id, folder);
+		subscriptions = subscriptions.map((item) =>
+			item.podcast_id === subscription.podcast_id ? { ...item, folder: folder.trim() } : item
+		);
+	}
+
 	function resume(item: LocalPlaybackState) {
 		if (!item.enclosure_url) {
 			goto(`/episode/${item.episode_id}`);
@@ -280,6 +300,18 @@
 	</div>
 
 	{#if activeTab === 'subscriptions'}
+		{#if subscriptionFolders.length > 0}
+			<div class="folder-filter" role="group" aria-label={t('library.folderFilter')}>
+				<button class:active={activeFolder === ''} onclick={() => (activeFolder = '')}>
+					{t('library.allFolders')}
+				</button>
+				{#each subscriptionFolders as folder}
+					<button class:active={activeFolder === folder} onclick={() => (activeFolder = folder)}>
+						<i class="ph ph-folder-simple" aria-hidden="true"></i> {folder}
+					</button>
+				{/each}
+			</div>
+		{/if}
 		{#if subscriptions.length === 0}
 			<div class="empty-state">
 				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
@@ -302,6 +334,7 @@
 							<div class="actions">
 								<a href={podcastHref(sub)} class="round-action primary" aria-label={t('common.viewEpisodes')} title={t('common.viewEpisodes')}><i class="ph-fill ph-play" aria-hidden="true"></i></a>
 								<button class="round-action" onclick={() => goto(podcastHref(sub))} aria-label={t('library.openShow', { title: sub.title })} title={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
+								<button class="round-action" onclick={() => assignFolder(sub)} aria-label={t('library.assignFolder', { title: sub.title })} title={sub.folder || t('library.assignFolder', { title: sub.title })}><i class="ph ph-folder-simple" aria-hidden="true"></i></button>
 								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')} title={t('common.unsubscribe')}><i class="ph ph-dots-three" aria-hidden="true"></i></button>
 							</div>
 						</div>
@@ -504,6 +537,29 @@
 	}
 	.tabs button :global(.ph) { font-size: 1.05rem; }
 	.tabs button:hover { border-color: var(--accent-green); color: var(--text-primary); }
+	.folder-filter {
+		display: flex;
+		gap: 0.45rem;
+		margin-bottom: 1rem;
+		overflow-x: auto;
+	}
+	.folder-filter button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-height: 40px;
+		padding: 0 0.8rem;
+		border: 1px solid var(--border-ui);
+		border-radius: 999px;
+		background: var(--bg-surface);
+		color: var(--text-secondary);
+		white-space: nowrap;
+	}
+	.folder-filter button.active {
+		border-color: var(--accent-green);
+		color: var(--accent-green);
+		background: color-mix(in srgb, var(--accent-green) 10%, var(--bg-surface));
+	}
 
 	.tabs button.active {
 		background: var(--accent-green);

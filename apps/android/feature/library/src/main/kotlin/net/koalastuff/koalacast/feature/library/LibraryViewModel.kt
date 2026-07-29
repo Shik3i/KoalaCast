@@ -91,6 +91,10 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch { library.unsubscribe(podcastId) }
     }
 
+    fun setFolder(podcastId: String, folder: String) {
+        viewModelScope.launch { library.setFolder(podcastId, folder) }
+    }
+
     fun removeFromQueue(episodeId: String) {
         viewModelScope.launch { queue.remove(episodeId) }
     }

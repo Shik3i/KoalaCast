@@ -166,6 +166,7 @@ class SyncRepository @Inject constructor(
         }
         database.withTransaction {
             ensureGeneration(generation)
+            val localFolders = subscriptions.getAll().associate { it.podcastId to it.folder }
             subscriptions.clear()
             favorites.clear()
             playbackStates.clear()
@@ -189,6 +190,9 @@ class SyncRepository @Inject constructor(
                         inboxMode = payload.string("inbox_mode")
                             .takeIf { it == SubscriptionEntity.INBOX_MODE_LATEST }
                             ?: SubscriptionEntity.INBOX_MODE_ALL,
+                        folder = payload.string("folder").ifBlank {
+                            localFolders[podcastId].orEmpty()
+                        },
                     ),
                 )
             }
@@ -368,9 +372,11 @@ class SyncRepository @Inject constructor(
             tombstones.delete("subscription:${change.entityId}")
             return
         }
+        val podcastId = payload.string("podcast_id").ifBlank { change.entityId }
+        val localFolder = subscriptions.get(podcastId)?.folder.orEmpty()
         subscriptions.upsert(
             SubscriptionEntity(
-                podcastId = payload.string("podcast_id").ifBlank { change.entityId },
+                podcastId = podcastId,
                 feedUrl = payload.string("feed_url"),
                 title = payload.string("title").ifBlank { "Podcast" },
                 artworkUrl = payload.string("artwork_url"),
@@ -380,6 +386,7 @@ class SyncRepository @Inject constructor(
                 inboxMode = payload.string("inbox_mode")
                     .takeIf { it == SubscriptionEntity.INBOX_MODE_LATEST }
                     ?: SubscriptionEntity.INBOX_MODE_ALL,
+                folder = payload.string("folder").ifBlank { localFolder },
             ),
         )
         tombstones.delete("subscription:${change.entityId}")
@@ -590,6 +597,7 @@ class SyncRepository @Inject constructor(
         put("artwork_url", item.artworkUrl)
         put("added_at", item.addedAt)
         put("inbox_mode", item.inboxMode)
+        put("folder", item.folder)
     }
 
     private fun favoritePayload(item: FavoriteEntity) = buildJsonObject {

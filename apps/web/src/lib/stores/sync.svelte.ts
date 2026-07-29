@@ -483,7 +483,8 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 				title: p.title || 'Podcast',
 				artwork_url: p.artwork_url || '',
 				added_at: p.added_at || cs.client_timestamp || Date.now(),
-				inbox_mode: p.inbox_mode
+				inbox_mode: p.inbox_mode,
+				folder: p.folder
 			});
 		} else throw new Error('invalid subscription changeset payload');
 	} else if (cs.entity_type === 'favorite') {
