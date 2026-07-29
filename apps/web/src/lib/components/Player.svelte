@@ -384,7 +384,8 @@
 		if (!t || !audioEl) return;
 
 		const desiredSource = t.enclosure_url;
-		if (audioEl.src !== new URL(desiredSource, location.href).href) {
+		const sourceChanged = audioEl.src !== new URL(desiredSource, location.href).href;
+		if (sourceChanged) {
 			trackSettings = getPodcastPlaybackSettings(t.podcast_id);
 			player.setPlaybackSpeed(trackSettings.speed ?? player.defaultPlaybackSpeed, false);
 			outroHandled = false;
@@ -397,16 +398,35 @@
 		}
 		if (token !== lastToken) {
 			lastToken = token;
+			if (!sourceChanged) {
+				const requestedPosition = player.consumeRequestedPosition();
+				if (requestedPosition !== null) {
+					const apply = () => {
+						if (!audioEl || player.current?.episode_id !== t.episode_id) return;
+						audioEl.currentTime = requestedPosition / 1000;
+						currentTimeMs = requestedPosition;
+						player.updatePosition(requestedPosition, durationMs || t.duration_ms);
+					};
+					if (audioEl.readyState >= 1 /* HAVE_METADATA */) apply();
+					else audioEl.addEventListener('loadedmetadata', apply, { once: true });
+				}
+			}
 			requestPlayback();
 		}
 	});
 
 	async function loadSavedPosition(epId: string) {
+		const requestedPosition = player.consumeRequestedPosition();
 		const state = await getLocalPlaybackState(epId);
 		if (!audioEl) return;
 		const el = audioEl;
-		const resume = !!state && state.position_ms > 0 && !state.completed;
-		const seconds = resume ? (state?.position_ms ?? 0) / 1000 : trackSettings.skipIntroSeconds;
+		const resume = requestedPosition === null && !!state && state.position_ms > 0 && !state.completed;
+		const seconds =
+			requestedPosition !== null
+				? requestedPosition / 1000
+				: resume
+					? (state?.position_ms ?? 0) / 1000
+					: trackSettings.skipIntroSeconds;
 		if (seconds <= 0) return;
 		const apply = () => {
 			// A different track may have loaded while we awaited IndexedDB; only seek
@@ -415,7 +435,7 @@
 			el.currentTime = seconds;
 			currentTimeMs = seconds * 1000;
 			player.updatePosition(currentTimeMs, durationMs || track?.duration_ms || 0);
-			if (!resume) {
+			if (!resume && requestedPosition === null) {
 				if (activeSession) activeSession.intro_outro_skipped_ms += currentTimeMs;
 				else pendingIntroOutroSkippedMs += currentTimeMs;
 			}

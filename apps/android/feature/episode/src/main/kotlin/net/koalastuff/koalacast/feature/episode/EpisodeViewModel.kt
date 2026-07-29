@@ -27,6 +27,7 @@ import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.model.TimeBookmark
 import javax.inject.Inject
 
 data class EpisodeUiState(
@@ -49,6 +50,8 @@ data class EpisodeUiState(
     val chapters: List<Chapter> = emptyList(),
     val chaptersError: Boolean = false,
     val downloadState: DownloadState? = null,
+    val timeBookmarks: List<TimeBookmark> = emptyList(),
+    val bookmarkPositionMs: Long = 0,
 ) {
     val visibleTranscript: String
         get() {
@@ -80,6 +83,28 @@ class EpisodeViewModel @Inject constructor(
     init {
         load(force = false)
         observeLocalState()
+        observeBookmarks()
+    }
+
+    private fun observeBookmarks() {
+        viewModelScope.launch {
+            combine(
+                library.timeBookmarks(episodeId),
+                player.state,
+                progress.progress(episodeId),
+            ) { bookmarks, playback, saved ->
+                val position = if (playback.track?.episodeId == episodeId) {
+                    playback.positionMs
+                } else {
+                    saved?.positionMs ?: 0
+                }
+                bookmarks to position
+            }.collect { (bookmarks, position) ->
+                _state.update {
+                    it.copy(timeBookmarks = bookmarks, bookmarkPositionMs = position)
+                }
+            }
+        }
     }
 
     /**
@@ -218,6 +243,33 @@ class EpisodeViewModel @Inject constructor(
                 DownloadState.DONE -> downloads.remove(track.episodeId)
             }
         }
+    }
+
+    fun addTimeBookmark() {
+        viewModelScope.launch {
+            library.addTimeBookmark(episodeId, _state.value.bookmarkPositionMs)
+        }
+    }
+
+    fun removeTimeBookmark(id: String) {
+        viewModelScope.launch { library.removeTimeBookmark(id) }
+    }
+
+    fun playTimeBookmark(bookmark: TimeBookmark) {
+        val track = track() ?: return
+        if (player.state.value.track?.episodeId == track.episodeId) {
+            player.seekTo(bookmark.positionMs)
+        } else {
+            player.playAt(track, bookmark.positionMs)
+        }
+    }
+
+    fun handoffUrl(): String? {
+        val state = _state.value
+        if (state.episode == null || state.serverUrl.isBlank()) return null
+        val base = state.serverUrl.trimEnd('/')
+        val seconds = state.bookmarkPositionMs.coerceAtLeast(0) / 1_000
+        return "$base/episode/${android.net.Uri.encode(episodeId)}?t=$seconds"
     }
 
     fun toggleChapters() {

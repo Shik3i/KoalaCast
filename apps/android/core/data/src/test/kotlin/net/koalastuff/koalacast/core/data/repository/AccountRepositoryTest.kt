@@ -68,6 +68,7 @@ class AccountRepositoryTest {
         val library = LibraryRepository(
             subscriptions = database.subscriptionDao(),
             favorites = database.favoriteDao(),
+            timeBookmarks = database.timeBookmarkDao(),
             tombstones = database.tombstoneDao(),
             podcastSettings = database.podcastSettingsDao(),
             clock = object : Clock {

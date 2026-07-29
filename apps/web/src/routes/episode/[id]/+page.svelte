@@ -8,7 +8,11 @@
 		saveLocalPlaybackState,
 		isLocalFavorite,
 		addLocalFavorite,
-		removeLocalFavorite
+		removeLocalFavorite,
+		getLocalTimeBookmarks,
+		addLocalTimeBookmark,
+		removeLocalTimeBookmark,
+		type LocalTimeBookmark
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -28,6 +32,8 @@
 	let isFavorite = $state(false);
 	let showAccent = $state<string | null>(null);
 	let audioDownloaded = $state(false);
+	let timeBookmarks = $state<LocalTimeBookmark[]>([]);
+	let requestedStartMs = $state<number | null>(null);
 	const currentDownload = $derived(audioDownloads.get(episodeId));
 	const audioDownloadBusy = $derived(currentDownload?.state === 'downloading');
 
@@ -39,6 +45,8 @@
 
 	$effect(() => {
 		episodeId = $page.params.id || '';
+		const seconds = Number($page.url.searchParams.get('t'));
+		requestedStartMs = Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : null;
 		if (episodeId) loadEpisodeDetails(episodeId);
 	});
 
@@ -55,6 +63,7 @@
 		podcast = null;
 		playbackState = null;
 		isFavorite = false;
+		timeBookmarks = [];
 		showAccent = null;
 		// Reset per-episode expandable state so the previous episode's chapters or
 		// transcript never bleed into the newly opened one.
@@ -89,13 +98,15 @@
 				isLoading = false;
 				const art = episode?.artwork_url || podcast?.artwork_url;
 				if (art) dominantColor(art).then((c) => (reqId === loadReqId ? (showAccent = c) : null));
-				const [state, favorite] = await Promise.all([
+				const [state, favorite, bookmarks] = await Promise.all([
 					getLocalPlaybackState(id),
-					isLocalFavorite(id)
+					isLocalFavorite(id),
+					getLocalTimeBookmarks(id)
 				]);
 				if (reqId !== loadReqId) return;
 				if (state) playbackState = state;
 				isFavorite = favorite;
+				timeBookmarks = bookmarks;
 				if (cachedEpisode.fresh && (!episode.podcast_id || cachedPodcast?.fresh)) return;
 			}
 
@@ -125,6 +136,7 @@
 			if (reqId !== loadReqId) return;
 			if (state) playbackState = state;
 			isFavorite = await isLocalFavorite(id);
+			timeBookmarks = await getLocalTimeBookmarks(id);
 		} catch (err) {
 			console.error('Failed to load episode details', err);
 		} finally {
@@ -166,10 +178,53 @@
 			enclosure_url: episode.enclosure_url,
 			duration_ms: episode.duration_ms,
 			categories: podcast?.categories || (podcast?.category ? [podcast.category] : [])
-		});
+		}, requestedStartMs ?? undefined);
+		requestedStartMs = null;
 	}
 
 	const isCurrent = $derived(player.current?.episode_id === episode?.id);
+	const handoffPositionMs = $derived(
+		isCurrent ? player.positionMs : (requestedStartMs ?? playbackState?.position_ms ?? 0)
+	);
+
+	async function addTimeBookmark() {
+		if (!episode) return;
+		const bookmark = await addLocalTimeBookmark(episode.id, handoffPositionMs);
+		timeBookmarks = [...timeBookmarks, bookmark].sort(
+			(a, b) => a.position_ms - b.position_ms || a.created_at - b.created_at
+		);
+		toast.success(t('episode.bookmarkAdded'));
+	}
+
+	async function removeTimeBookmark(id: string) {
+		await removeLocalTimeBookmark(id);
+		timeBookmarks = timeBookmarks.filter((bookmark) => bookmark.id !== id);
+	}
+
+	function playBookmark(positionMs: number) {
+		if (isCurrent) {
+			seekToCue(positionMs / 1000);
+			return;
+		}
+		requestedStartMs = positionMs;
+		handlePlay();
+	}
+
+	async function shareHandoff() {
+		if (!episode || !browser) return;
+		const url = new URL(`/episode/${encodeURIComponent(episode.id)}`, location.origin);
+		url.searchParams.set('t', String(Math.floor(handoffPositionMs / 1000)));
+		const data = { title: episode.title, text: t('episode.handoffText'), url: url.toString() };
+		try {
+			if (navigator.share) await navigator.share(data);
+			else {
+				await navigator.clipboard.writeText(url.toString());
+				toast.success(t('episode.handoffCopied'));
+			}
+		} catch (error: any) {
+			if (error?.name !== 'AbortError') toast.error(t('episode.handoffFailed'));
+		}
+	}
 
 	async function handleAddToQueue() {
 		if (!episode) return;
@@ -221,6 +276,16 @@
 		const m = Math.floor((totalSec % 3600) / 60);
 		if (h > 0) return `${h}h ${m}m`;
 		return `${m}m`;
+	}
+
+	function formatTimecode(ms: number) {
+		const totalSec = Math.max(0, Math.floor(ms / 1000));
+		const h = Math.floor(totalSec / 3600);
+		const m = Math.floor((totalSec % 3600) / 60);
+		const s = totalSec % 60;
+		return h > 0
+			? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+			: `${m}:${String(s).padStart(2, '0')}`;
 	}
 
 	let showChapters = $state(false);
@@ -457,6 +522,14 @@
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}
 					</button>
+					<button class="btn-secondary" onclick={addTimeBookmark}>
+						<i class="ph ph-bookmark-simple" aria-hidden="true"></i>
+						{t('episode.addBookmarkAt', { time: formatTimecode(handoffPositionMs) })}
+					</button>
+					<button class="btn-secondary" onclick={shareHandoff}>
+						<i class="ph ph-share-network" aria-hidden="true"></i>
+						{t('episode.handoff')}
+					</button>
 					{#if episode.chapters_url}
 						<button class="btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
 							<i class="ph ph-list-numbers" aria-hidden="true"></i> {t('episode.chapters')}
@@ -470,6 +543,31 @@
 				</div>
 			</div>
 		</div>
+
+		{#if timeBookmarks.length > 0}
+			<section class="bookmarks-card">
+				<h3><i class="ph ph-bookmark-simple" aria-hidden="true"></i> {t('episode.bookmarks')}</h3>
+				<div class="bookmark-list">
+					{#each timeBookmarks as bookmark (bookmark.id)}
+						<div class="bookmark-row">
+							<button class="bookmark-seek" onclick={() => playBookmark(bookmark.position_ms)}>
+								<i class="ph-fill ph-play" aria-hidden="true"></i>
+								<span>{formatTimecode(bookmark.position_ms)}</span>
+							</button>
+							<button
+								class="bookmark-remove"
+								onclick={() => removeTimeBookmark(bookmark.id)}
+								aria-label={t('episode.removeBookmarkAt', {
+									time: formatTimecode(bookmark.position_ms)
+								})}
+							>
+								<i class="ph ph-trash" aria-hidden="true"></i>
+							</button>
+						</div>
+					{/each}
+				</div>
+			</section>
+		{/if}
 
 		{#if showChapters}
 			<section class="chapters-card" transition:slide={{ duration: 220 }}>
@@ -667,17 +765,46 @@
 
 	.description-card,
 	.transcript-card,
-	.chapters-card {
+	.chapters-card,
+	.bookmarks-card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg, 18px);
 		padding: 2rem;
 	}
 	.chapters-card h3,
-	.transcript-card h3 { display: flex; align-items: center; gap: 0.5rem; }
+	.transcript-card h3,
+	.bookmarks-card h3 { display: flex; align-items: center; gap: 0.5rem; }
 	.chapters-card h3 :global(.ph),
-	.transcript-card h3 :global(.ph) { color: var(--show-accent, var(--accent-green)); }
+	.transcript-card h3 :global(.ph),
+	.bookmarks-card h3 :global(.ph) { color: var(--show-accent, var(--accent-green)); }
 	.transcript-status { color: var(--text-muted); margin-top: 1rem; }
+
+	.bookmark-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.65rem;
+		margin-top: 1rem;
+	}
+	.bookmark-row {
+		display: flex;
+		align-items: stretch;
+		border: 1px solid var(--border-subtle);
+		border-radius: 10px;
+		overflow: hidden;
+		background: var(--bg-elevated);
+	}
+	.bookmark-seek,
+	.bookmark-remove {
+		border: 0;
+		background: transparent;
+		color: var(--text-primary);
+		padding: 0.6rem 0.8rem;
+	}
+	.bookmark-seek { display: flex; align-items: center; gap: 0.45rem; font-family: monospace; }
+	.bookmark-remove { border-left: 1px solid var(--border-subtle); color: var(--text-muted); }
+	.bookmark-seek:hover { color: var(--show-accent, var(--accent-green)); }
+	.bookmark-remove:hover { color: #e5484d; }
 
 	.chapters-list, .cue-list {
 		display: flex;

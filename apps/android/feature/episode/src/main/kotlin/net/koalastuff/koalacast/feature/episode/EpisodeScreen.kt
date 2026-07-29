@@ -1,5 +1,6 @@
 package net.koalastuff.koalacast.feature.episode
 
+import android.content.Intent
 import androidx.compose.foundation.background
 
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Chapter
+import net.koalastuff.koalacast.core.model.TimeBookmark
 
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.CoverArt
@@ -53,6 +55,7 @@ fun EpisodeScreen(
     viewModel: EpisodeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     EpisodeContent(
         state = state,
@@ -69,6 +72,21 @@ fun EpisodeScreen(
 
         onSeekToChapter = viewModel::seekToChapter,
         onToggleDownload = viewModel::toggleDownload,
+        onAddTimeBookmark = viewModel::addTimeBookmark,
+        onRemoveTimeBookmark = viewModel::removeTimeBookmark,
+        onPlayTimeBookmark = viewModel::playTimeBookmark,
+        onShareHandoff = {
+            viewModel.handoffUrl()?.let { url ->
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, state.episode?.title.orEmpty())
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+                context.startActivity(
+                    Intent.createChooser(intent, context.getString(R.string.episode_handoff)),
+                )
+            }
+        },
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -90,6 +108,10 @@ internal fun EpisodeContent(
 
     onSeekToChapter: (Chapter) -> Unit,
     onToggleDownload: () -> Unit,
+    onAddTimeBookmark: () -> Unit,
+    onRemoveTimeBookmark: (String) -> Unit,
+    onPlayTimeBookmark: (TimeBookmark) -> Unit,
+    onShareHandoff: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -252,6 +274,61 @@ internal fun EpisodeContent(
                     ),
                     verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                    ) {
+                        OutlineButton(
+                            text = stringResource(
+                                R.string.episode_add_bookmark,
+                                Format.timeCode(state.bookmarkPositionMs),
+                            ),
+                            onClick = onAddTimeBookmark,
+                            leadingIcon = PhosphorIcons.Clock,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlineButton(
+                            text = stringResource(R.string.episode_handoff),
+                            onClick = onShareHandoff,
+                            leadingIcon = PhosphorIcons.ArrowSquareOut,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
+                    if (state.timeBookmarks.isNotEmpty()) {
+                        MonoText(
+                            text = stringResource(R.string.episode_bookmarks),
+                            color = colors.ink4,
+                            style = KoalaTheme.type.monoSmall,
+                        )
+                        state.timeBookmarks.forEach { bookmark ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPlayTimeBookmark(bookmark) }
+                                    .padding(vertical = KoalaSpacing.gapTiny),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                            ) {
+                                MonoText(
+                                    text = Format.timeCode(bookmark.positionMs),
+                                    color = colors.accentInk,
+                                    style = KoalaTheme.type.monoStrong,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButtonSquare(
+                                    icon = PhosphorIcons.Trash,
+                                    contentDescription = stringResource(
+                                        R.string.episode_remove_bookmark,
+                                        Format.timeCode(bookmark.positionMs),
+                                    ),
+                                    onClick = { onRemoveTimeBookmark(bookmark.id) },
+                                    bordered = false,
+                                )
+                            }
+                        }
+                    }
+
                     MonoText(
                         text = stringResource(R.string.episode_show_notes),
                         color = colors.ink4,

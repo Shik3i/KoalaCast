@@ -26,4 +26,8 @@
     <string name="episode_loading_chapters">Kapitel werden geladen…</string>
     <string name="episode_chapters_error">Kapitel konnten nicht geladen werden.</string>
     <string name="episode_empty_chapters">Diese Folge nennt keine Kapitel.</string>
+    <string name="episode_bookmarks">Zeitmarken</string>
+    <string name="episode_add_bookmark">Zeitmarke %1$s</string>
+    <string name="episode_remove_bookmark">Zeitmarke bei %1$s entfernen</string>
+    <string name="episode_handoff">Auf anderem Gerät fortsetzen</string>
 </resources>

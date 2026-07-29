@@ -41,6 +41,7 @@ class LibraryRepositoryTest {
         repository = LibraryRepository(
             subscriptions = db.subscriptionDao(),
             favorites = db.favoriteDao(),
+            timeBookmarks = db.timeBookmarkDao(),
             tombstones = db.tombstoneDao(),
             podcastSettings = db.podcastSettingsDao(),
             clock = clock,
@@ -141,6 +142,19 @@ class LibraryRepositoryTest {
         assertEquals("https://cdn.example/resolved.jpg", stored.artworkUrl)
         assertEquals(addedAt, stored.addedAtMs)
         assertEquals(InboxMode.LATEST, stored.inboxMode)
+    }
+
+    @Test
+    fun `time bookmarks are ordered and removable`() = runTest {
+        repository.addTimeBookmark("e1", 90_000)
+        now++
+        repository.addTimeBookmark("e1", 15_000)
+
+        val bookmarks = repository.timeBookmarks("e1").first()
+        assertEquals(listOf(15_000L, 90_000L), bookmarks.map { it.positionMs })
+
+        repository.removeTimeBookmark(bookmarks.first().id)
+        assertEquals(listOf(90_000L), repository.timeBookmarks("e1").first().map { it.positionMs })
     }
 
     @Test

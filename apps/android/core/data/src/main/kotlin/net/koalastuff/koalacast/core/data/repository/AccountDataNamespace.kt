@@ -18,6 +18,7 @@ import net.koalastuff.koalacast.core.data.db.PodcastSettingsEntity
 import net.koalastuff.koalacast.core.data.db.QueueItemEntity
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
+import net.koalastuff.koalacast.core.data.db.TimeBookmarkEntity
 
 /**
  * The active Room tables are a fast working set. Account-owned copies are archived
@@ -98,6 +99,7 @@ class AccountDataNamespace @Inject constructor(
     private suspend fun capture() = AccountDataBundle(
         subscriptions = database.subscriptionDao().getAll(),
         favorites = database.favoriteDao().getAll(),
+        timeBookmarks = database.timeBookmarkDao().getAll(),
         playbackStates = database.playbackStateDao().getAll(),
         listeningSessions = database.listeningSessionDao().getAll(),
         queue = database.queueDao().getAll(),
@@ -109,6 +111,7 @@ class AccountDataNamespace @Inject constructor(
     private suspend fun clearActive() {
         database.subscriptionDao().clear()
         database.favoriteDao().clear()
+        database.timeBookmarkDao().clear()
         database.playbackStateDao().clear()
         database.listeningSessionDao().clear()
         database.queueDao().clear()
@@ -120,6 +123,7 @@ class AccountDataNamespace @Inject constructor(
     private suspend fun restore(bundle: AccountDataBundle) {
         database.subscriptionDao().upsertAll(bundle.subscriptions)
         bundle.favorites.forEach { database.favoriteDao().upsert(it) }
+        bundle.timeBookmarks.forEach { database.timeBookmarkDao().upsert(it) }
         bundle.playbackStates.forEach { database.playbackStateDao().upsert(it) }
         bundle.listeningSessions.forEach { database.listeningSessionDao().upsert(it) }
         bundle.queue.forEach { database.queueDao().insert(it) }
@@ -139,6 +143,7 @@ class AccountDataNamespace @Inject constructor(
 private data class AccountDataBundle(
     val subscriptions: List<SubscriptionEntity> = emptyList(),
     val favorites: List<FavoriteEntity> = emptyList(),
+    val timeBookmarks: List<TimeBookmarkEntity> = emptyList(),
     val playbackStates: List<PlaybackStateEntity> = emptyList(),
     val listeningSessions: List<ListeningSessionEntity> = emptyList(),
     val queue: List<QueueItemEntity> = emptyList(),

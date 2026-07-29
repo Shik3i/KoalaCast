@@ -94,6 +94,19 @@ data class FavoriteEntity(
     val categories: List<String> = emptyList(),
 )
 
+@Entity(
+    tableName = "time_bookmarks",
+    indices = [Index("episodeId"), Index(value = ["episodeId", "positionMs"])],
+)
+@Serializable
+data class TimeBookmarkEntity(
+    @PrimaryKey val id: String,
+    val episodeId: String,
+    val positionMs: Long,
+    val label: String = "",
+    val createdAt: Long,
+)
+
 /**
  * One uninterrupted play segment (play → pause/end). These are the raw records
  * the Profile screen aggregates; they never leave the device unless the listener

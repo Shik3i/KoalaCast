@@ -179,6 +179,25 @@ interface FavoriteDao {
 }
 
 @Dao
+interface TimeBookmarkDao {
+
+    @Query("SELECT * FROM time_bookmarks WHERE episodeId = :episodeId ORDER BY positionMs ASC, createdAt ASC")
+    fun observeForEpisode(episodeId: String): Flow<List<TimeBookmarkEntity>>
+
+    @Query("SELECT * FROM time_bookmarks")
+    suspend fun getAll(): List<TimeBookmarkEntity>
+
+    @Upsert
+    suspend fun upsert(bookmark: TimeBookmarkEntity)
+
+    @Query("DELETE FROM time_bookmarks WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("DELETE FROM time_bookmarks")
+    suspend fun clear()
+}
+
+@Dao
 interface ListeningSessionDao {
 
     @Query("SELECT * FROM listening_sessions ORDER BY startedAt ASC")

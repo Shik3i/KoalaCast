@@ -123,12 +123,20 @@ export interface LocalFavorite {
 	categories?: string[];
 }
 
+export interface LocalTimeBookmark {
+	id: string;
+	episode_id: string;
+	position_ms: number;
+	label: string;
+	created_at: number;
+}
+
 const GUEST_DB_NAME = 'koalacast_local_db';
 const ACTIVE_CONTEXT_KEY = 'koalacast_local_data_context';
 const INITIALIZED_KEY = 'context_initialized';
 // v2 dropped the never-used 'history' store. v3 adds local-only listening
 // sessions for accurate Profile analytics.
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 let activeContext = 'guest';
@@ -154,6 +162,10 @@ function openLocalDB(name: string): Promise<IDBPDatabase> {
 			}
 			if (!db.objectStoreNames.contains('favorites')) {
 				db.createObjectStore('favorites', { keyPath: 'episode_id' });
+			}
+			if (!db.objectStoreNames.contains('time_bookmarks')) {
+				const bookmarks = db.createObjectStore('time_bookmarks', { keyPath: 'id' });
+				bookmarks.createIndex('episode_id', 'episode_id');
 			}
 			if (!db.objectStoreNames.contains('settings')) {
 				db.createObjectStore('settings', { keyPath: 'key' });
@@ -230,6 +242,7 @@ async function copyAndClearGuestData(target: IDBPDatabase): Promise<void> {
 			'playback_states',
 			'queue',
 			'favorites',
+			'time_bookmarks',
 			'settings',
 			'tombstones',
 			'listening_sessions',
@@ -583,6 +596,40 @@ export async function removeLocalFavorite(episode_id: string): Promise<void> {
 	await recordTombstone(db, 'favorite', episode_id);
 }
 
+// Timestamp bookmarks are local-first and scoped by the active guest/account
+// IndexedDB, like the rest of the listener's private library.
+export async function getLocalTimeBookmarks(episode_id: string): Promise<LocalTimeBookmark[]> {
+	const db = await getLocalDB();
+	const items: LocalTimeBookmark[] = await db.getAllFromIndex(
+		'time_bookmarks',
+		'episode_id',
+		episode_id
+	);
+	return items.sort((a, b) => a.position_ms - b.position_ms || a.created_at - b.created_at);
+}
+
+export async function addLocalTimeBookmark(
+	episode_id: string,
+	position_ms: number,
+	label = ''
+): Promise<LocalTimeBookmark> {
+	const db = await getLocalDB();
+	const bookmark: LocalTimeBookmark = {
+		id: crypto.randomUUID(),
+		episode_id,
+		position_ms: Math.max(0, Math.round(position_ms)),
+		label: label.trim(),
+		created_at: Date.now()
+	};
+	await db.put('time_bookmarks', bookmark);
+	return bookmark;
+}
+
+export async function removeLocalTimeBookmark(id: string): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('time_bookmarks', id);
+}
+
 // ---- Deletion tombstones (for cross-device sync) ----
 export type TombstoneEntity = 'subscription' | 'favorite';
 export interface LocalTombstone {
@@ -632,6 +679,7 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('playback_states');
 	await db.clear('queue');
 	await db.clear('favorites');
+	await db.clear('time_bookmarks');
 	await db.clear('settings');
 	await db.clear('tombstones');
 	await db.clear('listening_sessions');

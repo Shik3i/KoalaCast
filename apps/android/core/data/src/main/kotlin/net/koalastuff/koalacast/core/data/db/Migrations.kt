@@ -3,6 +3,29 @@ package net.koalastuff.koalacast.core.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `time_bookmarks` (
+                `id` TEXT NOT NULL,
+                `episodeId` TEXT NOT NULL,
+                `positionMs` INTEGER NOT NULL,
+                `label` TEXT NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_time_bookmarks_episodeId` ON `time_bookmarks` (`episodeId`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_time_bookmarks_episodeId_positionMs` ON `time_bookmarks` (`episodeId`, `positionMs`)",
+        )
+    }
+}
+
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `podcast_settings` ADD COLUMN `volumeBoost` INTEGER DEFAULT NULL")

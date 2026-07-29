@@ -61,14 +61,17 @@ class PlayerStore {
 	positionMs = $state(0);
 	durationMs = $state(0);
 	positionUpdatedAt = $state(Date.now());
+	requestedPositionMs: number | null = null;
 
-	play(track: CurrentTrack) {
+	play(track: CurrentTrack, positionMs?: number) {
 		this.current = track;
-		this.positionMs = 0;
+		this.requestedPositionMs =
+			positionMs !== undefined && Number.isFinite(positionMs) ? Math.max(0, positionMs) : null;
+		this.positionMs = this.requestedPositionMs ?? 0;
 		this.durationMs = track.duration_ms;
 		this.positionUpdatedAt = Date.now();
 		this.playToken++;
-		void saveLocalCurrentPlayback({ ...track, position_ms: 0 }).catch(() => {});
+		void saveLocalCurrentPlayback({ ...track, position_ms: this.positionMs }).catch(() => {});
 		void resolveOfflineAudioUrl(track.episode_id, track.enclosure_url).then((resolvedUrl) => {
 			if (resolvedUrl === track.enclosure_url || this.current?.episode_id !== track.episode_id) return;
 			this.current = { ...this.current, enclosure_url: resolvedUrl };
@@ -123,6 +126,12 @@ class PlayerStore {
 		this.positionUpdatedAt = Date.now();
 	}
 
+	consumeRequestedPosition(): number | null {
+		const requested = this.requestedPositionMs;
+		this.requestedPositionMs = null;
+		return requested;
+	}
+
 	setSleepTimer(value: string) {
 		this.sleepAtEpisodeEnd = value === 'episode';
 		this.sleepAtChapterEnd = value === 'chapter';
@@ -140,6 +149,7 @@ class PlayerStore {
 	async loadContext() {
 		this.isPlaying = false;
 		this.playToken = 0;
+		this.requestedPositionMs = null;
 		const [items, saved] = await Promise.all([getLocalQueue(), getLocalCurrentPlayback()]);
 		this.current = saved ? itemToTrack({ ...saved, id: '', position_order: 0, added_at: 0 }) : null;
 		this.positionMs = saved?.position_ms ?? 0;

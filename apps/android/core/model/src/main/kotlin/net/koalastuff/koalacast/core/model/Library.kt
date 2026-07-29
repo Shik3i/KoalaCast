@@ -54,6 +54,14 @@ data class Favorite(
     val track: Track?,
 )
 
+data class TimeBookmark(
+    val id: String,
+    val episodeId: String,
+    val positionMs: Long,
+    val label: String,
+    val createdAtMs: Long,
+)
+
 /** Per-show playback overrides. */
 data class PodcastSettings(
     val podcastId: String,

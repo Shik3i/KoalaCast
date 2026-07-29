@@ -26,4 +26,8 @@
     <string name="episode_loading_chapters">Loading chapters…</string>
     <string name="episode_chapters_error">Chapters could not be loaded.</string>
     <string name="episode_empty_chapters">This episode lists no chapters.</string>
+    <string name="episode_bookmarks">Time bookmarks</string>
+    <string name="episode_add_bookmark">Bookmark %1$s</string>
+    <string name="episode_remove_bookmark">Remove bookmark at %1$s</string>
+    <string name="episode_handoff">Continue on another device</string>
 </resources>

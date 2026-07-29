@@ -9,6 +9,8 @@ import net.koalastuff.koalacast.core.data.db.SubscriptionDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneDao
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
+import net.koalastuff.koalacast.core.data.db.TimeBookmarkDao
+import net.koalastuff.koalacast.core.data.db.TimeBookmarkEntity
 import net.koalastuff.koalacast.core.data.mapper.toEntity
 import net.koalastuff.koalacast.core.data.mapper.toModel
 import net.koalastuff.koalacast.core.data.mapper.toSubscription
@@ -19,6 +21,7 @@ import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.PodcastSettings
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.model.TimeBookmark
 import net.koalastuff.koalacast.core.network.dto.OpmlImportedPodcast
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +35,7 @@ import javax.inject.Singleton
 class LibraryRepository @Inject constructor(
     private val subscriptions: SubscriptionDao,
     private val favorites: FavoriteDao,
+    private val timeBookmarks: TimeBookmarkDao,
     private val tombstones: TombstoneDao,
     private val podcastSettings: PodcastSettingsDao,
     private val clock: Clock,
@@ -202,6 +206,37 @@ class LibraryRepository @Inject constructor(
         val nowFavorite = !favorites.contains(track.episodeId)
         if (nowFavorite) addFavorite(track) else removeFavorite(track.episodeId)
         return nowFavorite
+    }
+
+    // ---- Timestamp bookmarks ----
+
+    fun timeBookmarks(episodeId: String): Flow<List<TimeBookmark>> =
+        timeBookmarks.observeForEpisode(episodeId).map { bookmarks ->
+            bookmarks.map {
+                TimeBookmark(
+                    id = it.id,
+                    episodeId = it.episodeId,
+                    positionMs = it.positionMs,
+                    label = it.label,
+                    createdAtMs = it.createdAt,
+                )
+            }
+        }
+
+    suspend fun addTimeBookmark(episodeId: String, positionMs: Long, label: String = "") {
+        timeBookmarks.upsert(
+            TimeBookmarkEntity(
+                id = java.util.UUID.randomUUID().toString(),
+                episodeId = episodeId,
+                positionMs = positionMs.coerceAtLeast(0),
+                label = label.trim(),
+                createdAt = clock.nowMs(),
+            ),
+        )
+    }
+
+    suspend fun removeTimeBookmark(id: String) {
+        timeBookmarks.delete(id)
     }
 
     // ---- Per-show settings ----
