@@ -54,7 +54,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 
 | Area | Highlights |
 | :--- | :--- |
-| **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, add any feed by direct RSS URL |
+| **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, multi-select preferred/hidden genres, per-podcast hiding, add any feed by direct RSS URL |
 | **Languages** | Spoken-language filtering (not just storefront region) for Discover and Search, language + genre search filters, fully translated English/German interface (add a language with one JSON file) |
 | **Playback** | Web Audio player, Media Session and Remote Playback APIs, playback-speed control, per-podcast controls, timestamp handoff links, listening-time tracking, keyboard shortcuts |
 | **Library** | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, OPML import/export |

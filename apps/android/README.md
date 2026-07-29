@@ -230,7 +230,8 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 
 ### 4.1 MVP (ship-blocking)
 - [x] **Onboarding + server selection** (§2.1) — pick/validate server, or "use official".
-- [x] **Discover** — cover story, category chips, chart (`/podcasts/discover`).
+- [x] **Discover** — cover story, category chips, chart (`/podcasts/discover`),
+      preferred/hidden genres and per-podcast hiding with Web preference sync.
 - [x] **Search** — live debounced (`/podcasts/search`), language + genre filters,
       add-by-RSS-URL (`/podcasts/feed`).
 - [x] **Podcast screen** — header, description, paged episode list, subscribe,
@@ -239,8 +240,8 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Player** — Media3/ExoPlayer: play/pause, skip ±15/+30, scrub, speed cycling,
       **sleep timer** (incl. end-of-episode), media notification, lock screen,
       Bluetooth/media buttons, fine-grained speed, skip-silence and volume boost.
-- [x] **Mini-player + full-screen Now Playing**, including the per-show accent
-      derived from cached cover art.
+- [x] **Mini-player + full-screen Now Playing** using the selected KoalaCast
+      palette consistently.
 - [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
 - [x] **Resume playback** from saved position (works offline via denormalised metadata).
 - [x] **Local-first persistence** (Room) — everything usable with no account.

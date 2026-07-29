@@ -11,7 +11,7 @@ This document records shipped behavior. Proposed work belongs in
 | Area | Status | Current behavior |
 | :--- | :--- | :--- |
 | **Web application** | Implemented | SvelteKit 5 static SPA, served by the Go application. Responsive three-column layout with resizable/collapsible side rails and mobile navigation. |
-| **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language/genre filters, clear/reset behavior, and subscription-aware Inbox. |
+| **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language filters, multi-select preferred/hidden genres, per-podcast hiding, clear/reset behavior, and subscription-aware Inbox. |
 | **Playback** | Implemented | HTML audio + Media Session, compatible-browser Remote Playback, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, timestamp bookmarks, and handoff links. |
 | **Local-first storage** | Implemented | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. |
 | **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. Named queues, folders, and timestamp bookmarks remain local. |
@@ -25,7 +25,8 @@ This document records shipped behavior. Proposed work belongs in
 ## Android
 
 The native Kotlin/Compose/Media3 application has P0–P7 shipped: onboarding and
-server selection, discovery/search, playback, Room local-first library,
+server selection, discovery/search with preferred/hidden genres and per-podcast
+hiding, playback, Room local-first library,
 resumable downloads, Inbox, profile statistics, accounts, device-token sync,
 OPML, global statistics, Android Auto/Wear browse support, a home-screen widget,
 chapters, dynamic artwork palettes, advanced download policies, timestamp
