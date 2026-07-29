@@ -308,8 +308,8 @@ internal fun SettingsContent(
                     color = colors.ink2,
                 )
                 prefs.hiddenPodcasts
-                    ?.sortedBy { it.title.lowercase() }
-                    ?.forEach { podcast ->
+                    .sortedBy { it.title.lowercase() }
+                    .forEach { podcast ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),

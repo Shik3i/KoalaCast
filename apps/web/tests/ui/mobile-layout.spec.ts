@@ -44,7 +44,7 @@ test('audio controls remain visible without consuming the settings screen', asyn
 
 test('settings start as a compact overview', async ({ page }) => {
 	await page.goto('/settings');
-	await expect(page.locator('details.card')).toHaveCount(9);
+	await expect(page.locator('details.card')).toHaveCount(10);
 	await expect(page.locator('details.card[open]')).toHaveCount(0);
 });
 
