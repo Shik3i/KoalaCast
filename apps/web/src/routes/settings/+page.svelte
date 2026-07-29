@@ -58,6 +58,18 @@
 	let opmlReport = $state<any>(null);
 	let opmlError = $state('');
 
+	onMount(() => {
+		const openHashSection = () => {
+			const id = window.location.hash.slice(1);
+			if (!id) return;
+			const section = document.getElementById(id);
+			if (section instanceof HTMLDetailsElement) section.open = true;
+		};
+		openHashSection();
+		window.addEventListener('hashchange', openHashSection);
+		return () => window.removeEventListener('hashchange', openHashSection);
+	});
+
 	onMount(async () => {
 		currentTheme = getStoredTheme();
 		currentPalette = getStoredPalette();
@@ -77,6 +89,12 @@
 			}
 		} catch (_) {}
 	});
+
+	function themeLabel(mode: ThemeMode) {
+		if (mode === 'dark') return t('settings.themeDark');
+		if (mode === 'light') return t('settings.themeLight');
+		return t('settings.themeSystem');
+	}
 
 	async function revokeSession(id: string) {
 		try {
@@ -346,10 +364,19 @@
 		<a href="#data">{t('settings.dataManagement')}</a>
 	</nav>
 
+	<div class="settings-grid">
 	<!-- Theme Selection Card -->
-	<section class="card" id="appearance">
-		<h3><i class="ph ph-palette" aria-hidden="true"></i> {t('settings.appearance')}</h3>
-		<p class="subtitle">{t('settings.appearanceHint')}</p>
+	<details class="card" id="appearance" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-palette" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.appearance')}</strong>
+				<small>{t('settings.appearanceHint')}</small>
+			</span>
+			<span class="summary-value">{themeLabel(currentTheme)}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
 
 		<div class="theme-selector">
 			<button
@@ -410,14 +437,23 @@
 					{/if}
 				</button>
 			{/each}
+			</div>
+
 		</div>
+	</details>
 
-	</section>
-
-	<section class="card" id="playback">
-		<h3><i class="ph ph-play-circle" aria-hidden="true"></i> {t('settings.playback')}</h3>
-		<p class="subtitle">{t('settings.playbackHint')}</p>
-		<div class="audio-settings">
+	<details class="card" id="playback" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-play-circle" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.playback')}</strong>
+				<small>{t('settings.playbackHint')}</small>
+			</span>
+			<span class="summary-value">{prefs.dateFormat === 'relative' ? t('settings.dateRelative') : t('settings.dateAbsolute')}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			<div class="audio-settings">
 			<div class="consent-row">
 				<div>
 					<h4>{t('settings.volumeBoost')}</h4>
@@ -468,17 +504,26 @@
 				onclick={() => prefs.setDateFormat('relative')}
 			>
 				<i class="ph ph-clock-countdown" aria-hidden="true"></i> {t('settings.dateRelative')}
-			</button>
+				</button>
+			</div>
 		</div>
-	</section>
+	</details>
 
 	<!-- Interface Language Card — what KoalaCast itself is displayed in. Kept
 	     separate from content languages: wanting a German UI and wanting only
 	     German podcasts are two different preferences. -->
-	<section class="card" id="discovery">
-		<h3><i class="ph ph-globe" aria-hidden="true"></i> {t('settings.interfaceLanguage')}</h3>
-		<p class="subtitle">{t('settings.interfaceLanguageHint')}</p>
-		<div class="language-grid">
+	<details class="card" id="discovery" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-globe" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.interfaceLanguage')}</strong>
+				<small>{t('settings.interfaceLanguageHint')}</small>
+			</span>
+			<span class="summary-value">{LOCALES.find((locale) => locale.code === prefs.uiLanguage)?.name}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			<div class="language-grid">
 			{#each LOCALES as locale (locale.code)}
 				<button
 					type="button"
@@ -500,15 +545,24 @@
 			<a href="https://github.com/Shik3i/KoalaCast/blob/main/docs/i18n.md" target="_blank" rel="noopener noreferrer">
 				{t('settings.helpTranslateLink')}
 				<i class="ph ph-arrow-square-out" aria-hidden="true"></i>
-			</a>
-		</p>
-	</section>
+				</a>
+			</p>
+		</div>
+	</details>
 
 	<!-- Content Languages Card -->
-	<section class="card" id="languages">
-		<h3><i class="ph ph-translate" aria-hidden="true"></i> {t('settings.contentLanguages')}</h3>
-		<p class="subtitle">{t('settings.contentLanguagesHint')}</p>
-		<div class="language-grid">
+	<details class="card" id="languages" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-translate" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.contentLanguages')}</strong>
+				<small>{t('settings.contentLanguagesHint')}</small>
+			</span>
+			<span class="summary-value">{prefs.languages.length}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			<div class="language-grid">
 			{#each SUPPORTED_LANGUAGES as lang (lang.code)}
 				<button
 					type="button"
@@ -523,14 +577,23 @@
 						<i class="ph-fill ph-check-circle state-ic" aria-hidden="true"></i>
 					{/if}
 				</button>
-			{/each}
+				{/each}
+			</div>
 		</div>
-	</section>
+	</details>
 
-	<section class="card" id="interests">
-		<h3><i class="ph ph-sparkle" aria-hidden="true"></i> {t('settings.interests')}</h3>
-		<p class="subtitle">{t('settings.interestsHint')}</p>
-		<div class="genre-grid">
+	<details class="card" id="interests" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-sparkle" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.interests')}</strong>
+				<small>{t('settings.interestsHint')}</small>
+			</span>
+			<span class="summary-value">{prefs.interests.length}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			<div class="genre-grid">
 			{#each GENRES as g (g.name)}
 				<button class="genre-chip {genreState(g.name)}" onclick={() => cycleGenre(g.name)}>
 					<i class="ph {g.icon}" aria-hidden="true"></i>
@@ -542,13 +605,23 @@
 		</div>
 		<div class="genre-legend">
 			<span><span class="dot like"></span> {t('settings.preferred')}</span>
-			<span><span class="dot hide"></span> {t('settings.hidden')}</span>
+				<span><span class="dot hide"></span> {t('settings.hidden')}</span>
+			</div>
 		</div>
-	</section>
+	</details>
 
-	<section class="card" id="privacy">
-		<h3><i class="ph ph-shield-check" aria-hidden="true"></i> {t('settings.privacy')}</h3>
-		<div class="privacy-box">
+	<details class="card" id="privacy" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-shield-check" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.privacy')}</strong>
+				<small>{t('settings.localBrowserMode')}</small>
+			</span>
+			<span class="summary-value">{globalStatsOptIn ? t('common.on') : t('common.off')}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			<div class="privacy-box">
 			<h4>{t('settings.localBrowserMode')}</h4>
 			<p>{t('settings.privacyBody')}</p>
 		</div>
@@ -574,16 +647,24 @@
 			<div class="privacy-box muted">
 				<h4>{t('settings.globalStatsOptIn')}</h4>
 				<p>{t('settings.globalStatsSignIn')}</p>
-			</div>
-		{/if}
-	</section>
+				</div>
+			{/if}
+		</div>
+	</details>
 
 	<!-- OPML Import / Export Card -->
-	<section class="card" id="opml">
-		<h3><i class="ph ph-arrows-down-up" aria-hidden="true"></i> {t('settings.opmlTitle')}</h3>
-		<p class="subtitle">{t('settings.opmlHint')}</p>
+	<details class="card" id="opml" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-arrows-down-up" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.opmlTitle')}</strong>
+				<small>{t('settings.opmlHint')}</small>
+			</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
 
-		{#if opmlError}
+			{#if opmlError}
 			<div class="error-banner">{opmlError}</div>
 		{/if}
 
@@ -606,14 +687,24 @@
 			</label>
 
 			<button type="button" class="btn btn-secondary" onclick={handleExportOpml}>
-				<i class="ph ph-download-simple" aria-hidden="true"></i> {t('settings.exportOpml')}
-			</button>
+					<i class="ph ph-download-simple" aria-hidden="true"></i> {t('settings.exportOpml')}
+				</button>
+			</div>
 		</div>
-	</section>
+	</details>
 
-	<section class="card" id="account">
-		<h3><i class="ph ph-user-circle" aria-hidden="true"></i> {t('settings.accountSync')}</h3>
-		{#if authUser}
+	<details class="card" id="account" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-user-circle" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.accountSync')}</strong>
+				<small>{authUser ? t('settings.syncDescription') : t('settings.signInPrompt')}</small>
+			</span>
+			<span class="summary-value">{authUser ? authUser.username : t('profileStats.localOnly')}</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			{#if authUser}
 			<p class="subtitle">{t('settings.loggedInAs')} <strong>{authUser.username}</strong> ({authUser.role}). {t('settings.syncDescription')}</p>
 			
 			<div class="sync-row">
@@ -649,23 +740,36 @@
 				</a>
 				<a href="/register" class="btn btn-secondary">
 					<i class="ph ph-user-plus" aria-hidden="true"></i> {t('common.createAccount')}
-				</a>
-			</div>
-		{/if}
-	</section>
+					</a>
+				</div>
+			{/if}
+		</div>
+	</details>
 
-	<section class="card" id="data">
-		<h3><i class="ph ph-database" aria-hidden="true"></i> {t('settings.dataManagement')}</h3>
-		<button class="btn-danger" onclick={handleResetLocalData}>{t('settings.resetLocalData')}</button>
-	</section>
+	<details class="card danger-card" id="data" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-database" aria-hidden="true"></i></span>
+			<span class="summary-copy">
+				<strong>{t('settings.dataManagement')}</strong>
+				<small>{t('settings.resetLocalData')}</small>
+			</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content">
+			<button class="btn-danger" onclick={handleResetLocalData}>{t('settings.resetLocalData')}</button>
+		</div>
+	</details>
+	</div>
 </div>
 
 <style>
 	.settings-page {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 1.15rem;
 		padding: clamp(20px, 2.5vw, 34px);
+		max-width: 1280px;
+		margin: 0 auto;
 	}
 	.settings-status { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; color: var(--text-muted); font-size: .8rem; }
 	.settings-status strong { color: var(--text-primary); }
@@ -673,6 +777,12 @@
 	.settings-nav a { flex: 0 0 auto; padding: 8px 10px; border-radius: 5px; color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
 	.settings-nav a:hover, .settings-nav a:focus-visible { background: var(--accent-wash); color: var(--accent-ink); }
 	.card { scroll-margin-top: 64px; }
+	.settings-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: .75rem;
+		align-items: start;
+	}
 
 	.settings-head h1 {
 		font-size: clamp(1.6rem, 3vw, 2.1rem);
@@ -688,20 +798,87 @@
 	.card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 14px;
-		padding: 1.6rem;
+		border-radius: 12px;
+		overflow: clip;
+		transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+	}
+	.card:hover {
+		border-color: var(--border-ui);
+		background: color-mix(in srgb, var(--accent-wash) 18%, var(--bg-surface));
+	}
+	.card[open] {
+		grid-column: 1 / -1;
+		border-color: var(--border-ui);
+		background: var(--bg-surface);
+		box-shadow: 0 14px 34px color-mix(in srgb, var(--ink) 7%, transparent);
+	}
+	.card summary {
+		display: grid;
+		grid-template-columns: 40px minmax(0, 1fr) auto 18px;
+		align-items: center;
+		gap: .8rem;
+		min-height: 78px;
+		padding: .9rem 1rem;
+		cursor: pointer;
+		list-style: none;
+	}
+	.card summary::-webkit-details-marker { display: none; }
+	.card summary:focus-visible {
+		outline: 3px solid var(--focus-ring);
+		outline-offset: -3px;
+	}
+	.summary-icon {
+		display: grid;
+		width: 40px;
+		height: 40px;
+		place-items: center;
+		border-radius: 10px;
+		background: var(--accent-wash);
+		color: var(--accent-ink);
+		font-size: 1.25rem;
+		transition: transform .22s var(--ease-spring, ease), background .2s ease;
+	}
+	.card:hover .summary-icon { transform: scale(1.05) rotate(-2deg); }
+	.card[open] .summary-icon { background: var(--accent-fill); color: var(--accent-on); transform: scale(1) rotate(0); }
+	.summary-copy { display: grid; gap: .2rem; min-width: 0; }
+	.summary-copy strong { color: var(--text-primary); font-size: .95rem; line-height: 1.2; }
+	.summary-copy small {
+		overflow: hidden;
+		color: var(--text-muted);
+		font-size: .78rem;
+		line-height: 1.35;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.summary-value {
+		max-width: 180px;
+		overflow: hidden;
+		padding: .28rem .55rem;
+		border-radius: 999px;
+		background: var(--bg-elevated);
+		color: var(--text-secondary);
+		font: 700 .69rem/1.2 var(--font-ui);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.summary-caret {
+		color: var(--text-muted);
+		transition: transform .22s var(--ease-spring, ease), color .2s ease;
+	}
+	.card[open] .summary-caret { color: var(--accent-ink); transform: rotate(180deg); }
+	.card-content {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		padding: .25rem 1rem 1.25rem 4.8rem;
+		border-top: 1px solid var(--border-hair);
+		animation: settings-content-in .24s var(--ease-out, ease) both;
 	}
-	.card h3 {
-		display: flex;
-		align-items: center;
-		gap: 0.55rem;
-		font-size: 1.1rem;
-		font-weight: 700;
+	.danger-card[open] { border-color: var(--color-danger-border); }
+	@keyframes settings-content-in {
+		from { opacity: 0; transform: translateY(-5px); }
+		to { opacity: 1; transform: translateY(0); }
 	}
-	.card h3 :global(.ph) { color: var(--accent-green); font-size: 1.2rem; }
 	.consent-row {
 		display: flex;
 		align-items: center;
@@ -1129,6 +1306,13 @@
 	}
 	@media (max-width: 620px) {
 		.settings-page { padding: 16px 14px 96px; }
+		.settings-nav { display: none; }
+		.settings-grid { grid-template-columns: 1fr; }
+		.card[open] { grid-column: auto; }
+		.card summary { grid-template-columns: 36px minmax(0, 1fr) 16px; min-height: 70px; padding: .75rem; }
+		.summary-icon { width: 36px; height: 36px; }
+		.summary-value { display: none; }
+		.card-content { padding: .8rem .75rem 1rem; }
 		.consent-row { align-items: flex-start; flex-direction: column; }
 		.theme-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
 		.theme-btn { justify-content: center; min-width: 0; padding-inline: .45rem; }

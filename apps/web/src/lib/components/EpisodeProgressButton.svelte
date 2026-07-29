@@ -27,6 +27,9 @@
 >
 	<span class="progress-inner">
 		<i class="ph-fill {current ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
+		{#if current}
+			<span class="current-pulse" aria-hidden="true"></span>
+		{/if}
 	</span>
 </button>
 
@@ -48,6 +51,7 @@
 	}
 
 	.progress-inner {
+		position: relative;
 		display: grid;
 		width: 100%;
 		height: 100%;
@@ -76,8 +80,22 @@
 	.episode-progress.current {
 		color: var(--show-accent, var(--accent-fill));
 	}
+	.current-pulse {
+		position: absolute;
+		inset: -4px;
+		border: 1px solid currentColor;
+		border-radius: inherit;
+		animation: current-pulse 1.8s ease-out infinite;
+		pointer-events: none;
+	}
+	.episode-progress:active { transform: scale(.94); }
+	@keyframes current-pulse {
+		0% { opacity: .45; transform: scale(.82); }
+		70%, 100% { opacity: 0; transform: scale(1.15); }
+	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.episode-progress { transition: none; }
+		.current-pulse { display: none; }
 	}
 </style>

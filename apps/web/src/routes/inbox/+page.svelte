@@ -403,7 +403,7 @@
 					<input type="checkbox" bind:checked={unplayedOnly} />
 					<span>{t('inbox.unplayedOnly')}</span>
 				</label>
-				<button class="btn-ghost" class:active={showSettings} onclick={() => (showSettings = !showSettings)}>
+				<button class="btn-ghost settings-action" class:active={showSettings} onclick={() => (showSettings = !showSettings)}>
 					<i class="ph ph-sliders-horizontal" aria-hidden="true"></i> {t('inbox.showSettings')}
 				</button>
 			</div>
@@ -762,7 +762,13 @@
 	@media (max-width: 560px) {
 		.inbox-page { padding: 16px; }
 		.head { align-items: flex-start; }
-		.head-actions { width: 100%; }
+		.head-actions {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			width: 100%;
+		}
+		.head-actions > :global(*) { width: 100%; justify-content: center; }
+		.head-actions .settings-action { grid-column: 1 / -1; }
 		.ep-row { grid-template-columns: 48px minmax(0,1fr) 44px 44px; gap: 9px; min-height: 68px; }
 		.ep-art { width: 48px; height: 48px; }
 		.row-menu { display: block; }

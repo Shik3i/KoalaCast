@@ -95,6 +95,12 @@
 	});
 
 	const unplayedCount = $derived(episodes.filter((ep) => !playedIds.has(ep.id)).length);
+	const podcastDescription = $derived(
+		String(podcast?.description || '')
+			.replace(/<[^>]*>?/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+	);
 	const fundingHref = $derived(safeExternalHref(podcast?.funding_url));
 	const liveHref = $derived(safeExternalHref(podcast?.live_url));
 
@@ -517,7 +523,7 @@
 				<span class="badge">{t('podcast.episodeCount', { count: episodes.length })}</span>
 				<h1>{podcast.title}</h1>
 				<span class="author">{t('podcast.byAuthor', { author: podcast.author })}</span>
-				<p class="desc">{podcast.description}</p>
+				<p class="desc">{podcastDescription}</p>
 
 				<div class="actions">
 					{#if episodes.length > 0}
@@ -551,8 +557,20 @@
 			</div>
 		</header>
 
-		<section class="show-controls" aria-labelledby="show-controls-title">
-			<div class="show-history">
+		<details class="show-controls">
+			<summary>
+				<span class="summary-title">
+					<i class="ph ph-sliders-horizontal" aria-hidden="true"></i>
+					<span>
+						<strong>{t('podcast.showOptions')}</strong>
+						<small>{t('podcast.showOptionsHint')}</small>
+					</span>
+				</span>
+				<span class="summary-stats">{formatDuration(showStats.listenedMs) || '0m'} · {showStats.finished}/{showStats.episodes}</span>
+				<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+			</summary>
+			<div class="show-controls-content">
+				<div class="show-history">
 				<p class="control-eyebrow">{t('quiet.show.history')}</p>
 				<strong>{formatDuration(showStats.listenedMs) || '0m'}</strong>
 				<span>{t('quiet.show.summary', {
@@ -561,7 +579,7 @@
 					speed: showStats.averageSpeed.toFixed(2)
 				})}</span>
 			</div>
-			<div class="show-settings">
+				<div class="show-settings">
 				<p class="control-eyebrow" id="show-controls-title">{t('quiet.show.settings')}</p>
 				<label>
 					<span>{t('quiet.show.skipIntro')}</span>
@@ -608,8 +626,9 @@
 					<input type="checkbox" checked={showSettings.notifyNewEpisodes} onchange={(event) => toggleNotifications(event.currentTarget.checked)} />
 					<span>{t('quiet.show.notifications')}</span>
 				</label>
+				</div>
 			</div>
-		</section>
+		</details>
 
 		<!-- Episode List, grouped by recency -->
 		<section class="episodes-section">
@@ -632,30 +651,43 @@
 			</div>
 
 			{#if episodes.length > 0}
-				<div class="episodes-filter-bar">
-					<div class="ep-search-input">
-						<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-						<input
-							type="text"
-							placeholder={t('podcast.searchEpisodes')}
-							bind:value={searchQuery}
-							aria-label={t('podcast.filterEpisodes')}
-						/>
-						{#if searchQuery}
-							<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')} title={t('common.clearSearch')}>
-								<i class="ph ph-x" aria-hidden="true"></i>
-							</button>
-						{/if}
+				<details class="episode-filters">
+					<summary>
+						<span class="summary-title">
+							<i class="ph ph-funnel" aria-hidden="true"></i>
+							<span>
+								<strong>{t('podcast.episodeFilters')}</strong>
+								<small>{t('podcast.episodeFiltersHint')}</small>
+							</span>
+						</span>
+						{#if searchQuery || filterUnplayedOnly}<span class="filter-active-dot" aria-label={t('podcast.filtersActive')}></span>{/if}
+						<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+					</summary>
+					<div class="episodes-filter-bar">
+						<div class="ep-search-input">
+							<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+							<input
+								type="text"
+								placeholder={t('podcast.searchEpisodes')}
+								bind:value={searchQuery}
+								aria-label={t('podcast.filterEpisodes')}
+							/>
+							{#if searchQuery}
+								<button class="clear-btn" onclick={() => (searchQuery = '')} aria-label={t('common.clearSearch')} title={t('common.clearSearch')}>
+									<i class="ph ph-x" aria-hidden="true"></i>
+								</button>
+							{/if}
+						</div>
+						<button
+							class="filter-pill"
+							class:active={filterUnplayedOnly}
+							onclick={() => (filterUnplayedOnly = !filterUnplayedOnly)}
+						>
+							<i class={filterUnplayedOnly ? 'ph-fill ph-check-circle' : 'ph ph-circle'} aria-hidden="true"></i>
+							{t('podcast.unplayedFilter', { count: unplayedCount })}
+						</button>
 					</div>
-					<button
-						class="filter-pill"
-						class:active={filterUnplayedOnly}
-						onclick={() => (filterUnplayedOnly = !filterUnplayedOnly)}
-					>
-						<i class={filterUnplayedOnly ? 'ph-fill ph-check-circle' : 'ph ph-circle'} aria-hidden="true"></i>
-						{t('podcast.unplayedFilter', { count: unplayedCount })}
-					</button>
-				</div>
+				</details>
 			{/if}
 
 			{#if filteredEpisodes.length === 0 && episodes.length > 0}
@@ -835,14 +867,49 @@
 	}
 
 	.show-controls {
-		display: grid;
-		grid-template-columns: minmax(180px, .55fr) minmax(420px, 1.45fr);
-		gap: 0;
 		border: 1px solid var(--border-subtle);
 		border-radius: 12px;
 		background: var(--bg-surface);
 		overflow: hidden;
 	}
+	.show-controls-content {
+		display: grid;
+		grid-template-columns: minmax(180px, .55fr) minmax(420px, 1.45fr);
+	}
+	.show-controls > summary,
+	.episode-filters > summary {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-height: 48px;
+		padding: 8px 16px;
+		color: var(--text-secondary);
+		cursor: pointer;
+		list-style: none;
+	}
+	.show-controls > summary::-webkit-details-marker,
+	.episode-filters > summary::-webkit-details-marker { display: none; }
+	.show-controls > summary:hover,
+	.episode-filters > summary:hover { background: var(--bg-sunken); color: var(--text-primary); }
+	.summary-title {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+	}
+	.summary-title > i { color: var(--show-accent, var(--accent-green)); font-size: 1.1rem; }
+	.summary-title > span { display: grid; gap: 2px; }
+	.summary-title strong { color: var(--text-primary); font-size: .8rem; }
+	.summary-title small { color: var(--text-muted); font-size: .68rem; }
+	.summary-stats {
+		margin-left: auto;
+		color: var(--text-muted);
+		font: 600 .68rem/1 var(--font-mono);
+	}
+	.summary-caret { margin-left: auto; transition: transform .18s ease; }
+	.summary-stats + .summary-caret { margin-left: 0; }
+	details[open] > summary .summary-caret { transform: rotate(180deg); }
+	.show-controls[open] > summary { border-bottom: 1px solid var(--border-subtle); }
 	.show-history, .show-settings { padding: 1rem 1.25rem; }
 	.show-history {
 		display: flex;
@@ -890,6 +957,19 @@
 		align-self: center;
 	}
 	.show-settings .auto-queue input { accent-color: var(--show-accent, var(--accent-green)); }
+	.episode-filters {
+		margin-bottom: 8px;
+		border-bottom: 1px solid var(--border-hair);
+	}
+	.episode-filters > summary { padding-inline: 5px; }
+	.filter-active-dot {
+		width: 7px;
+		height: 7px;
+		margin-left: auto;
+		border-radius: 50%;
+		background: var(--show-accent, var(--accent-green));
+	}
+	.filter-active-dot + .summary-caret { margin-left: 0; }
 
 	.btn-play-latest {
 		background: var(--show-accent, var(--accent-green));
@@ -1276,19 +1356,19 @@
 	.podcast-page { gap: 0; }
 	.podcast-header {
 		gap: 22px;
-		padding: 24px 22px;
+		padding: 18px 22px;
 		border: 0;
 		border-bottom: 1px solid var(--border-hair);
 		border-radius: 0;
 		background: radial-gradient(85% 150% at 0 0, var(--show-accent-soft, var(--accent-wash)), transparent 62%), var(--bg-panel);
 		backdrop-filter: none;
 	}
-	.sk-cover, .artwork { width: 150px; height: 150px; border-radius: 6px; box-shadow: none; background: var(--bg-tile); }
+	.sk-cover, .artwork { width: 116px; height: 116px; border-radius: 6px; box-shadow: none; background: var(--bg-tile); }
 	.meta { gap: 7px; justify-content: center; min-width: 0; }
 	.badge { width: fit-content; padding: 5px 7px; border-radius: 3px; background: var(--accent-fill); color: var(--accent-on); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
-	.meta h1 { font: 750 clamp(30px,4vw,40px)/1.02 var(--font-display); letter-spacing: -.035em; text-transform: uppercase; }
+	.meta h1 { font: 750 clamp(26px,3.3vw,36px)/1.02 var(--font-display); letter-spacing: -.035em; text-transform: uppercase; }
 	.author { color: var(--ink-3); font: 600 11px/1.3 var(--font-sans); }
-	.desc { max-width: 70ch; color: var(--ink-3); font-size: 12px; line-height: 1.45; }
+	.desc { max-width: 78ch; color: var(--ink-3); font-size: 12px; line-height: 1.45; -webkit-line-clamp: 2; line-clamp: 2; }
 	.actions { gap: 6px; margin-top: 4px; }
 	.btn-play-latest, .btn-subscribe, .btn-funding {
 		min-height: 34px;
@@ -1304,8 +1384,8 @@
 		border-radius: 0;
 		background: var(--bg-panel);
 	}
-	.episodes-section { padding: 18px 22px 30px; }
-	.episodes-head { padding-bottom: 11px; border-bottom: 1px solid var(--border-hair); }
+	.episodes-section { padding: 14px 22px 30px; }
+	.episodes-head { margin-bottom: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
 	.episodes-section h2 { font: 800 17px/1 var(--font-ui); }
 	.unplayed-pill, .mark-all-btn { min-height: 32px; border-radius: 4px; font: 600 10px/1 var(--font-mono); }
 	.mark-all-btn { border-color: var(--border-ui); background: transparent; }
@@ -1334,15 +1414,17 @@
 	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
 
 	@media (max-width: 900px) {
-		.show-controls { grid-template-columns: 1fr; }
+		.show-controls-content { grid-template-columns: 1fr; }
 		.show-history { border-right: 0; border-bottom: 1px solid var(--border-subtle); }
 		.show-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 
 	@media (max-width: 620px) {
-		.podcast-header { align-items: flex-start; flex-direction: column; padding: 16px; }
-		.sk-cover, .artwork { width: 100%; height: auto; aspect-ratio: 1; }
-		.meta h1 { font-size: 32px; }
+		.podcast-header { align-items: flex-start; flex-direction: row; gap: 12px; padding: 14px 16px; }
+		.sk-cover, .artwork { width: 88px; height: 88px; }
+		.meta h1 { font-size: 24px; }
+		.badge, .desc { display: none; }
+		.summary-stats, .summary-title small { display: none; }
 		.show-history, .show-settings { padding: 14px 16px; }
 		.show-settings { grid-template-columns: 1fr; }
 		.episodes-section { padding: 16px; }

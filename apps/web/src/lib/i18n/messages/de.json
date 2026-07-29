@@ -555,6 +555,11 @@
 		"feedRefreshRequested": "Feed-Aktualisierung angefordert."
 	},
 	"podcast": {
+		"showOptions": "Sendungsoptionen",
+		"showOptionsHint": "Statistik und Wiedergabe-Einstellungen",
+		"episodeFilters": "Folgen filtern",
+		"episodeFiltersHint": "Suche und Statusfilter",
+		"filtersActive": "Filter aktiv",
 		"tierWeek": "Diese Woche",
 		"tierMonth": "Dieser Monat",
 		"tierYear": "Früher dieses Jahr",

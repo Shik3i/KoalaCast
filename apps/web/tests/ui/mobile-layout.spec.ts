@@ -20,7 +20,7 @@ for (const route of ['/settings', '/search', '/library?view=queue', '/downloads'
 		const routeContent = (await nestedRoute.count()) > 0
 			? nestedRoute.first()
 			: page.locator('#main-content');
-		const firstInteractive = routeContent.locator('button, input, a');
+		const firstInteractive = routeContent.locator('button, input, a, summary').filter({ visible: true });
 		const firstUseful = (await firstInteractive.count()) > 0
 			? firstInteractive.first()
 			: routeContent.locator('h1').first();
@@ -34,8 +34,25 @@ test('audio controls remain visible without consuming the settings screen', asyn
 	await page.goto('/settings#playback');
 	const playback = page.locator('#playback');
 	await expect(playback).toBeVisible();
+	await expect(playback).toHaveAttribute('open', '');
+	await expect(page.locator('details.card[open]')).toHaveCount(1);
 	await expect(playback.locator('input[type="checkbox"]')).toHaveCount(2);
 	await expect(playback.locator('input[type="checkbox"]').first()).toBeVisible();
 	const box = await playback.boundingBox();
 	expect(box?.width ?? 0).toBeLessThanOrEqual(360);
+});
+
+test('settings start as a compact overview', async ({ page }) => {
+	await page.goto('/settings');
+	await expect(page.locator('details.card')).toHaveCount(9);
+	await expect(page.locator('details.card[open]')).toHaveCount(0);
+});
+
+test('library sections remain visible without horizontal scrolling', async ({ page }) => {
+	await page.goto('/library');
+	const tabs = page.locator('.collection-tabs');
+	await expect(tabs.getByRole('tab')).toHaveCount(4);
+	await expect.poll(() =>
+		tabs.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+	).toBe(true);
 });

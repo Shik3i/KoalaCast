@@ -555,6 +555,11 @@
 		"feedRefreshRequested": "Feed refresh requested."
 	},
 	"podcast": {
+		"showOptions": "Show options",
+		"showOptionsHint": "Listening stats and playback settings",
+		"episodeFilters": "Filter episodes",
+		"episodeFiltersHint": "Search and status filters",
+		"filtersActive": "Filters active",
 		"tierWeek": "This week",
 		"tierMonth": "This month",
 		"tierYear": "Earlier this year",

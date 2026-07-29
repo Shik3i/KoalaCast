@@ -857,7 +857,7 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 :root[data-palette='obsidian'] img[src^='/illustrations/'] { filter: grayscale(1) contrast(1.04); }
 button:disabled { cursor: not-allowed; opacity: 0.5; }
-button:active { transform: none; }
+button:not(:disabled):active, .btn:active { filter: brightness(.94); }
 img { display: block; max-width: 100%; }
 h1, h2, h3, h4 { font-family: var(--font-ui); color: var(--ink-strong); text-wrap: balance; }
 p { text-wrap: pretty; }
@@ -1066,7 +1066,11 @@ html.is-resizing-rails * {
 	color: var(--ink-3);
 	font-size: 13px;
 }
-.quiet-nav a i { font-size: 18px; }
+.quiet-nav a i {
+	font-size: 18px;
+	transition: transform .2s var(--ease-spring), color .16s ease;
+}
+.quiet-nav a:hover i, .quiet-nav a:focus-visible i { transform: translateX(2px) scale(1.06); }
 .quiet-nav a.active { background: var(--accent-wash); color: var(--ink); font-weight: 700; }
 .quiet-nav a.active i, .nav-count { color: var(--accent-ink); }
 .nav-count { font: 700 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }

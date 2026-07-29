@@ -26,6 +26,7 @@
 	import { parsePlaybackSpeed } from '$lib/player/playback-speed';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { SilenceGate } from '$lib/audio/silence-gate';
+	import PlayPauseIcon from './PlayPauseIcon.svelte';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
@@ -162,6 +163,7 @@
 			prefs.setVolumeBoost(enabled);
 		}
 		audioEngine.setVolumeBoost(enabled);
+		void audioEngine.resume();
 		toast.success(t(enabled ? 'player.boostEnabled' : 'player.boostDisabled'));
 	}
 
@@ -207,6 +209,31 @@
 		}
 	}
 
+	function requestPlayback() {
+		if (!audioEl) return;
+		const element = audioEl;
+		const needsAudioGraph = effectiveVolumeBoost || effectiveSkipSilence;
+
+		// Leave ordinary playback on the native media-element output. Creating a
+		// MediaElementAudioSourceNode redirects all sound into its AudioContext;
+		// doing that from `onplay` can leave the graph suspended and the episode
+		// completely silent even though the media element is advancing.
+		if (!needsAudioGraph) {
+			element.play().catch(() => {});
+			return;
+		}
+
+		if (!audioEngine.init(element)) {
+			element.play().catch(() => {});
+			return;
+		}
+		audioEngine.skipSilence = effectiveSkipSilence;
+		audioEngine.setVolumeBoost(effectiveVolumeBoost);
+		void audioEngine.resume().then((running) => {
+			if (running) element.play().catch(() => {});
+		});
+	}
+
 	function sampleSilence() {
 		if (!audioEl || !effectiveSkipSilence || !isPlaying) {
 			resetSilenceTrimming();
@@ -228,7 +255,6 @@
 		const boost = effectiveVolumeBoost;
 		const trimSilence = effectiveSkipSilence;
 		audioEngine.skipSilence = trimSilence;
-		if (audioEl && (boost || trimSilence)) audioEngine.init(audioEl);
 		audioEngine.setVolumeBoost(boost);
 		if (!trimSilence) resetSilenceTrimming();
 	});
@@ -258,7 +284,7 @@
 		}
 		if (token !== lastToken) {
 			lastToken = token;
-			audioEl.play().catch(() => {});
+			requestPlayback();
 		}
 	});
 
@@ -290,7 +316,7 @@
 	function togglePlay() {
 		if (!audioEl || !track) return;
 		if (isPlaying) audioEl.pause();
-		else audioEl.play().catch(() => {});
+		else requestPlayback();
 	}
 
 	function retryPlayback() {
@@ -299,7 +325,7 @@
 		loadErrorCode = '';
 		audioEl.load();
 		audioEl.currentTime = currentTimeMs / 1000;
-		audioEl.play().catch(() => {});
+		requestPlayback();
 	}
 
 	function playbackSource() {
@@ -502,7 +528,7 @@
 				artist: track.podcast_title,
 				artwork: track.artwork_url ? [{ src: track.artwork_url, sizes: '512x512' }] : []
 			});
-			navigator.mediaSession.setActionHandler('play', () => audioEl?.play().catch(() => {}));
+			navigator.mediaSession.setActionHandler('play', requestPlayback);
 			navigator.mediaSession.setActionHandler('pause', () => audioEl?.pause());
 			navigator.mediaSession.setActionHandler('seekbackward', (d) => skip(-(d.seekOffset || 10)));
 			navigator.mediaSession.setActionHandler('seekforward', (d) => skip(d.seekOffset || 30));
@@ -695,10 +721,6 @@
 	bind:this={audioEl}
 	preload="metadata"
 	onplay={() => {
-		if (audioEl) audioEngine.init(audioEl);
-		audioEngine.skipSilence = effectiveSkipSilence;
-		audioEngine.setVolumeBoost(effectiveVolumeBoost);
-		audioEngine.resume();
 		isPlaying = true;
 		player.isPlaying = true;
 		loadError = '';
@@ -786,7 +808,7 @@
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>15</small>
 					</button>
 					<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')} title={isPlaying ? t('player.pause') : t('player.play')}>
-						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
+						<PlayPauseIcon playing={isPlaying} />
 					</button>
 					<button class="ctrl jump-control" onclick={() => skip(30)} aria-label={t('player.skipForward30')} title={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
@@ -899,7 +921,7 @@
 						<i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><small>10</small>
 					</button>
 					<button class="np-play" onclick={togglePlay} aria-label={isPlaying ? t('player.pause') : t('player.play')} title={isPlaying ? t('player.pause') : t('player.play')}>
-						<i class="ph-fill {isPlaying ? 'ph-pause' : 'ph-play'}" aria-hidden="true"></i>
+						<PlayPauseIcon playing={isPlaying} />
 					</button>
 					<button class="np-ctrl" onclick={() => skip(30)} aria-label={t('player.skipForward30')} title={t('player.skipForward30')}>
 						<i class="ph ph-arrow-clockwise" aria-hidden="true"></i><small>30</small>
@@ -1192,7 +1214,6 @@
 		transition: transform 0.15s ease, background 0.4s ease, box-shadow 0.4s ease;
 	}
 	.play-btn:hover { filter: brightness(1.08); transform: scale(1.06); }
-	.play-btn i, .np-play i { display: block; line-height: 1; }
 
 	.timeline {
 		display: flex;

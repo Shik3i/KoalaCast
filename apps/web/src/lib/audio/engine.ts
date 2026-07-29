@@ -38,15 +38,20 @@ export class AudioEngine {
 		}
 	}
 
-	public resume() {
-		if (this.audioCtx && this.audioCtx.state === 'suspended') {
-			this.audioCtx.resume().catch(() => {});
+	public async resume(): Promise<boolean> {
+		if (!this.audioCtx) return false;
+		if (this.audioCtx.state === 'suspended') {
+			try {
+				await this.audioCtx.resume();
+			} catch {
+				return false;
+			}
 		}
+		return this.audioCtx.state === 'running';
 	}
 
 	public setVolumeBoost(enabled: boolean) {
 		this.volumeBoost = enabled;
-		this.resume();
 		if (this.gainNode && this.audioCtx) {
 			this.gainNode.gain.setValueAtTime(enabled ? 2.2 : 1.0, this.audioCtx.currentTime);
 		}

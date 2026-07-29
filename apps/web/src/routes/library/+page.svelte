@@ -699,7 +699,12 @@
 	}
 	@media (max-width: 560px) {
 		.library-page { padding: 16px; }
-		.collection-tabs { overflow-x: auto; flex-wrap: nowrap; }
+		.collection-tabs {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			overflow: visible;
+		}
+		.collection-tabs button { justify-content: center; width: 100%; }
 		.podcast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 		.quiet-cover-card .cover-overlay { padding: 8px; }
 		.quiet-cover-card .cover-overlay h3 { font-size: 11px; }
