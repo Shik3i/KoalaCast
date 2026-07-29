@@ -393,6 +393,7 @@ class PlayerConnection @Inject constructor(
                         } else {
                             controller.playerError?.errorCodeName
                         },
+                        isOfflineSource = TrackMediaItem.isOffline(currentItem),
                     )
                 }
             }

@@ -22,6 +22,7 @@ object TrackMediaItem {
     private const val KEY_ARTWORK_URL = "koalacast.artworkUrl"
     private const val KEY_CATEGORIES = "koalacast.categories"
     private const val KEY_ENCLOSURE_URL = "koalacast.enclosureUrl"
+    private const val KEY_OFFLINE_SOURCE = "koalacast.offlineSource"
 
     fun from(track: Track, artworkUri: String? = null, mediaUri: String? = null): MediaItem {
         val extras = Bundle().apply {
@@ -31,6 +32,7 @@ object TrackMediaItem {
             putString(KEY_ARTWORK_URL, track.artworkUrl)
             putStringArray(KEY_CATEGORIES, track.categories.toTypedArray())
             putString(KEY_ENCLOSURE_URL, track.enclosureUrl)
+            putBoolean(KEY_OFFLINE_SOURCE, mediaUri != null)
         }
 
         val metadata = MediaMetadata.Builder()
@@ -66,4 +68,7 @@ object TrackMediaItem {
             categories = extras.getStringArray(KEY_CATEGORIES)?.toList().orEmpty(),
         )
     }
+
+    fun isOffline(item: MediaItem?): Boolean =
+        item?.mediaMetadata?.extras?.getBoolean(KEY_OFFLINE_SOURCE, false) == true
 }

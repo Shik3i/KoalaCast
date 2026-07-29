@@ -273,7 +273,12 @@ class PlaybackService : MediaLibraryService() {
                         .map { playableItem(it.track) }
                     else -> emptyList()
                 }
-                future.set(LibraryResult.ofItemList(ImmutableList.copyOf(items), params))
+                future.set(
+                    LibraryResult.ofItemList(
+                        ImmutableList.copyOf(pagedItems(items, page, pageSize)),
+                        params,
+                    ),
+                )
             }
             return future
         }
@@ -463,6 +468,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+            mediaSession?.setCustomLayout(ImmutableList.of(speedButton()))
             recorder.onSpeedChanged(
                 playbackParameters.speed,
                 clock.nowMs(),
@@ -762,4 +768,12 @@ internal suspend fun resolveSessionMediaItem(
         ?: storedTrack(item.mediaId)
         ?: return null
     return playableItem(track)
+}
+
+internal fun <T> pagedItems(items: List<T>, page: Int, pageSize: Int): List<T> {
+    if (page < 0 || pageSize <= 0) return emptyList()
+    val start = page.toLong() * pageSize
+    if (start >= items.size) return emptyList()
+    val end = minOf(items.size.toLong(), start + pageSize).toInt()
+    return items.subList(start.toInt(), end)
 }
