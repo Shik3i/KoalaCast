@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import net.koalastuff.koalacast.core.data.db.AccountDataArchiveEntity
 import net.koalastuff.koalacast.core.data.db.AccountNamespaceStateEntity
 import net.koalastuff.koalacast.core.data.db.FavoriteEntity
+import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.db.ListeningSessionEntity
 import net.koalastuff.koalacast.core.data.db.PlaybackStateEntity
@@ -30,15 +31,22 @@ class AccountDataNamespace @Inject constructor(
 ) {
     private val mutex = Mutex()
 
-    suspend fun initialize(userId: String?) = mutex.withLock {
-        database.withTransaction {
-            val archives = database.accountDataArchiveDao()
-            if (archives.state() == null) {
-                archives.setState(
-                    AccountNamespaceStateEntity(activeOwnerKey = ownerKey(userId)),
-                )
+    suspend fun initialize(userId: String?) {
+        val mustSwitch = mutex.withLock {
+            database.withTransaction {
+                val archives = database.accountDataArchiveDao()
+                val state = archives.state()
+                if (state == null) {
+                    archives.setState(
+                        AccountNamespaceStateEntity(activeOwnerKey = ownerKey(userId)),
+                    )
+                    false
+                } else {
+                    state.activeOwnerKey != ownerKey(userId)
+                }
             }
         }
+        if (mustSwitch) switchTo(userId)
     }
 
     suspend fun switchTo(userId: String?) = mutex.withLock {
@@ -88,6 +96,7 @@ class AccountDataNamespace @Inject constructor(
         listeningSessions = database.listeningSessionDao().getAll(),
         queue = database.queueDao().getAll(),
         podcastSettings = database.podcastSettingsDao().getAll(),
+        downloads = database.episodeDownloadDao().getAllOldestFirst(),
         tombstones = database.tombstoneDao().getAll(),
     )
 
@@ -98,6 +107,7 @@ class AccountDataNamespace @Inject constructor(
         database.listeningSessionDao().clear()
         database.queueDao().clear()
         database.podcastSettingsDao().clear()
+        database.episodeDownloadDao().clear()
         database.tombstoneDao().clear()
     }
 
@@ -108,6 +118,7 @@ class AccountDataNamespace @Inject constructor(
         bundle.listeningSessions.forEach { database.listeningSessionDao().upsert(it) }
         bundle.queue.forEach { database.queueDao().insert(it) }
         bundle.podcastSettings.forEach { database.podcastSettingsDao().upsert(it) }
+        bundle.downloads.forEach { database.episodeDownloadDao().upsert(it) }
         bundle.tombstones.forEach { database.tombstoneDao().upsert(it) }
     }
 
@@ -127,5 +138,6 @@ private data class AccountDataBundle(
     val listeningSessions: List<ListeningSessionEntity> = emptyList(),
     val queue: List<QueueItemEntity> = emptyList(),
     val podcastSettings: List<PodcastSettingsEntity> = emptyList(),
+    val downloads: List<EpisodeDownloadEntity> = emptyList(),
     val tombstones: List<TombstoneEntity> = emptyList(),
 )

@@ -289,8 +289,26 @@ interface EpisodeDownloadDao {
         updatedAt: Long,
     )
 
+    @Query(
+        "UPDATE episode_downloads SET state = :state, bytesDownloaded = :bytes, " +
+            "totalBytes = :total, localPath = :path, error = :error, updatedAt = :updatedAt " +
+            "WHERE episodeId = :episodeId AND state IN ('QUEUED', 'DOWNLOADING')",
+    )
+    suspend fun updateProgressFromWorker(
+        episodeId: String,
+        state: String,
+        bytes: Long,
+        total: Long,
+        path: String?,
+        error: String?,
+        updatedAt: Long,
+    )
+
     @Query("DELETE FROM episode_downloads WHERE episodeId = :episodeId")
     suspend fun delete(episodeId: String)
+
+    @Query("DELETE FROM episode_downloads")
+    suspend fun clear()
 }
 
 @Dao

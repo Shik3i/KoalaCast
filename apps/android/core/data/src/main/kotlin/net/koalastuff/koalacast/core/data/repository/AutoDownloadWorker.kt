@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
 import net.koalastuff.koalacast.core.data.db.PodcastSettingsDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionDao
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.mapper.toModel
 import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
@@ -52,14 +53,18 @@ class AutoDownloadWorker @AssistedInject constructor(
     private val progress: ProgressRepository,
     private val preferences: PreferencesRepository,
     private val clock: Clock,
+    private val accountStore: SecureAccountStore,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val ownerId = accountStore.activeOwnerId()
+        val generation = accountStore.accountGeneration()
         val prefs = preferences.preferences.first()
 
         // Sweep first: freeing space before fetching means a full device is more
         // likely to have room for the new episodes.
-        runCatching { applyRetention(prefs.downloadRetention) }
+        runCatching { applyRetention(ownerId, generation, prefs.downloadRetention) }
+        if (!isCurrentAccount(ownerId, generation)) return@withContext Result.success()
 
         val enabled = settingsDao.autoDownloadEnabled()
         if (enabled.isEmpty()) return@withContext Result.success()
@@ -84,6 +89,7 @@ class AutoDownloadWorker @AssistedInject constructor(
                             is DataResult.Failure -> true
                             is DataResult.Success -> {
                                 for (episode in result.data.take(prefs.autoDownloadCount)) {
+                                    if (!isCurrentAccount(ownerId, generation)) return@withPermit false
                                     if (episode.enclosureUrl.isBlank()) continue
                                     if (downloadDao.get(episode.id) != null) continue
                                     if (episode.id in completed) continue
@@ -109,12 +115,17 @@ class AutoDownloadWorker @AssistedInject constructor(
         Result.success()
     }
 
-    private suspend fun applyRetention(retention: DownloadRetention) {
+    private suspend fun applyRetention(
+        ownerId: String,
+        generation: Long,
+        retention: DownloadRetention,
+    ) {
         if (retention == DownloadRetention.KEEP) return
         val completed = progress.completedEpisodeIds.first()
         val now = clock.nowMs()
 
         for (row in downloadDao.observeAll().first()) {
+            if (!isCurrentAccount(ownerId, generation)) return
             if (row.state != DownloadState.DONE.name) continue
             val expired = shouldRemoveDownload(
                 retention = retention,
@@ -125,6 +136,10 @@ class AutoDownloadWorker @AssistedInject constructor(
             if (expired) downloads.remove(row.episodeId)
         }
     }
+
+    private fun isCurrentAccount(ownerId: String, generation: Long): Boolean =
+        accountStore.activeOwnerId() == ownerId &&
+            accountStore.accountGeneration() == generation
 
     companion object {
         private const val WORK_NAME = "auto-download"

@@ -28,6 +28,7 @@ import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.AccountDataNamespace
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
@@ -63,6 +64,9 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject
     lateinit var accountStore: SecureAccountStore
 
+    @Inject
+    lateinit var preferences: PreferencesRepository
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -72,6 +76,7 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
         super.onCreate()
         runBlocking(Dispatchers.IO) {
             accountData.initialize(accountStore.account.value?.userId)
+            preferences.migrateLegacyForCurrentOwner()
         }
         syncCoordinator.start()
         // Idempotent (KEEP policy), so registering on every start costs nothing

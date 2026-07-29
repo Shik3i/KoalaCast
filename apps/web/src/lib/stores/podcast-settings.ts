@@ -23,9 +23,49 @@ const defaults: PodcastPlaybackSettings = {
 };
 
 const KEY_PREFIX = 'koalacast_podcast_settings_';
+const GUEST_MIGRATION_KEY = 'koalacast_guest_podcast_settings_migrated';
+let activeOwner: string | null = null;
 
 function key(podcastId: string) {
-	return `${KEY_PREFIX}${podcastId}`;
+	return activeOwner
+		? `${KEY_PREFIX}account_${encodeURIComponent(activeOwner)}_${podcastId}`
+		: `${KEY_PREFIX}${podcastId}`;
+}
+
+function activePrefix() {
+	return activeOwner
+		? `${KEY_PREFIX}account_${encodeURIComponent(activeOwner)}_`
+		: KEY_PREFIX;
+}
+
+export function activatePodcastSettingsContext(
+	userId: string | null,
+	options: { migrateGuest?: boolean } = {}
+) {
+	if (typeof localStorage === 'undefined') {
+		activeOwner = userId;
+		return;
+	}
+	if (
+		userId &&
+		options.migrateGuest &&
+		localStorage.getItem(GUEST_MIGRATION_KEY) !== '1'
+	) {
+		const targetPrefix = `${KEY_PREFIX}account_${encodeURIComponent(userId)}_`;
+		const legacy: Array<[string, string]> = [];
+		for (let index = 0; index < localStorage.length; index++) {
+			const storageKey = localStorage.key(index);
+			if (!storageKey?.startsWith(KEY_PREFIX) || storageKey.startsWith(`${KEY_PREFIX}account_`)) continue;
+			const value = localStorage.getItem(storageKey);
+			if (value !== null) legacy.push([storageKey.slice(KEY_PREFIX.length), value]);
+		}
+		for (const [podcastId, value] of legacy) {
+			const targetKey = `${targetPrefix}${podcastId}`;
+			if (localStorage.getItem(targetKey) === null) localStorage.setItem(targetKey, value);
+		}
+		localStorage.setItem(GUEST_MIGRATION_KEY, '1');
+	}
+	activeOwner = userId;
 }
 
 function normalize(parsed: Partial<PodcastPlaybackSettings>): PodcastPlaybackSettings {
@@ -61,10 +101,12 @@ export function savePodcastPlaybackSettings(podcastId: string, settings: Podcast
 export function getAllPodcastPlaybackSettings(): Array<PodcastPlaybackSettings & { podcastId: string }> {
 	if (typeof localStorage === 'undefined') return [];
 	const result: Array<PodcastPlaybackSettings & { podcastId: string }> = [];
+	const prefix = activePrefix();
 	for (let index = 0; index < localStorage.length; index++) {
 		const storageKey = localStorage.key(index);
-		if (!storageKey?.startsWith(KEY_PREFIX)) continue;
-		const podcastId = storageKey.slice(KEY_PREFIX.length);
+		if (!storageKey?.startsWith(prefix)) continue;
+		if (!activeOwner && storageKey.startsWith(`${KEY_PREFIX}account_`)) continue;
+		const podcastId = storageKey.slice(prefix.length);
 		if (podcastId) result.push({ podcastId, ...getPodcastPlaybackSettings(podcastId) });
 	}
 	return result;
@@ -72,12 +114,26 @@ export function getAllPodcastPlaybackSettings(): Array<PodcastPlaybackSettings &
 
 export function applySyncedPodcastPlaybackSettings(
 	podcastId: string,
-	incoming: Partial<PodcastPlaybackSettings>
+	incoming: Partial<PodcastPlaybackSettings>,
+	options: { authoritative?: boolean } = {}
 ) {
 	if (typeof localStorage === 'undefined' || !podcastId) return;
 	const normalized = normalize(incoming);
-	if (getPodcastPlaybackSettings(podcastId).updatedAt >= normalized.updatedAt) return;
+	if (!options.authoritative && getPodcastPlaybackSettings(podcastId).updatedAt >= normalized.updatedAt) return;
 	try {
 		localStorage.setItem(key(podcastId), JSON.stringify(normalized));
 	} catch (_) {}
+}
+
+export function clearPodcastPlaybackSettingsContext() {
+	if (typeof localStorage === 'undefined') return;
+	const prefix = activePrefix();
+	const keys: string[] = [];
+	for (let index = 0; index < localStorage.length; index++) {
+		const storageKey = localStorage.key(index);
+		if (!storageKey?.startsWith(prefix)) continue;
+		if (!activeOwner && storageKey.startsWith(`${KEY_PREFIX}account_`)) continue;
+		keys.push(storageKey);
+	}
+	for (const storageKey of keys) localStorage.removeItem(storageKey);
 }

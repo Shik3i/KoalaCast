@@ -81,6 +81,8 @@ class PlaybackService : MediaLibraryService() {
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var boostWanted: Boolean = false
+    private var activeTrack: Track? = null
+    private var transitionOldPositionMs: Long? = null
 
     private var playerListener: PlayerListener? = null
 
@@ -249,7 +251,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<MediaItem>> {
             val future = SettableFuture.create<LibraryResult<MediaItem>>()
             scope.launch {
-                val track = progress.progressSnapshot(mediaId)?.track
+                val track = storedTrack(mediaId)
                 future.set(
                     if (track == null) {
                         LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
@@ -275,9 +277,7 @@ class PlaybackService : MediaLibraryService() {
             val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             scope.launch {
                 val resolved = mediaItems.mapNotNull { item ->
-                    progress.progressSnapshot(item.mediaId)?.track?.let { track ->
-                        TrackMediaItem.from(track, artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX))
-                    }
+                    storedTrack(item.mediaId)?.let { track -> playableItem(track) }
                 }
                 if (resolved.isEmpty()) {
                     future.setException(UnsupportedOperationException("unknown media id"))
@@ -320,8 +320,21 @@ class PlaybackService : MediaLibraryService() {
             )
             .build()
 
-    private fun playableItem(track: Track): MediaItem =
-        TrackMediaItem.from(track, artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX))
+    private suspend fun storedTrack(episodeId: String): Track? =
+        progress.progressSnapshot(episodeId)?.track ?: downloads.completedTrack(episodeId)
+
+    private suspend fun playableItem(track: Track): MediaItem {
+        val localMediaUri = downloads.completedPath(track.episodeId)
+            ?.let {
+                if (it.startsWith("content://")) it
+                else android.net.Uri.fromFile(java.io.File(it)).toString()
+            }
+        return TrackMediaItem.from(
+            track,
+            artworkUrls.forArtwork(track.artworkUrl, ARTWORK_PX),
+            localMediaUri,
+        )
+    }
 
     private inner class ResumptionCallback : MediaSession.Callback {
         override fun onPlaybackResumption(
@@ -434,6 +447,7 @@ class PlaybackService : MediaLibraryService() {
             newPosition: Player.PositionInfo,
             reason: Int,
         ) {
+            transitionOldPositionMs = oldPosition.positionMs.coerceAtLeast(0)
             if (reason != Player.DISCONTINUITY_REASON_SEEK) return
             val automaticTarget = automaticSeekTargetMs
             automaticSeekTargetMs = null
@@ -448,7 +462,10 @@ class PlaybackService : MediaLibraryService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             publishWidgetState(player)
-            TrackMediaItem.toTrack(mediaItem)?.let { track ->
+            val previousTrack = activeTrack
+            val nextTrack = TrackMediaItem.toTrack(mediaItem)
+            activeTrack = nextTrack
+            nextTrack?.let { track ->
                 scope.launch {
                     val global = preferences.preferences.first()
                     val show = library.podcastSettingsSnapshot(track.podcastId)
@@ -462,9 +479,17 @@ class PlaybackService : MediaLibraryService() {
             // episode, so close only the recorder and start the new segment.
             // The playhead already belongs to the new item, so the closing
             // segment gets no position: it would measure the wrong episode.
-            recorder.stop(clock.nowMs())?.let { session ->
-                scope.launch { progress.recordListeningSession(session) }
+            val closedSession = recorder.stop(clock.nowMs())
+            if (previousTrack != null && previousTrack.episodeId != nextTrack?.episodeId) {
+                val position = transitionOldPositionMs ?: 0L
+                scope.launch {
+                    progress.savePosition(previousTrack, position, previousTrack.durationMs)
+                    closedSession?.let { progress.recordListeningSession(it) }
+                }
+            } else if (closedSession != null) {
+                scope.launch { progress.recordListeningSession(closedSession) }
             }
+            transitionOldPositionMs = null
             outroHandledEpisodeId = null
             automaticSeekTargetMs = null
             if (player.isPlaying) {

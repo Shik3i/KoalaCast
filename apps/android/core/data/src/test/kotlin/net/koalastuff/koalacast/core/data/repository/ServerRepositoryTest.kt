@@ -39,8 +39,10 @@ class ServerRepositoryTest {
         server.start()
         val context = ApplicationProvider.getApplicationContext<Context>()
         preferencesFile = File(context.cacheDir, "server-test-${UUID.randomUUID()}.preferences_pb")
+        val accountStore = SecureAccountStore(context)
         val preferences = PreferencesRepository(
             PreferenceDataStoreFactory.create { preferencesFile },
+            accountStore,
         )
         val json = Json {
             ignoreUnknownKeys = true
@@ -55,7 +57,7 @@ class ServerRepositoryTest {
         repository = ServerRepository(
             api = api,
             preferences = preferences,
-            accountStore = SecureAccountStore(context),
+            accountStore = accountStore,
             accountData = AccountDataNamespace(
                 Room.inMemoryDatabaseBuilder(context, KoalaCastDatabase::class.java)
                     .allowMainThreadQueries()

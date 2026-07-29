@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -65,7 +66,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		Worker: feedWorker,
 	}
 
-	proxyHandler := handlers.NewProxyHandler()
+	proxyHandler := handlers.NewProxyHandler(cfg.AudioEffectsProxyEnabled)
 
 	// Operational Probes
 	r.Get("/healthz", healthHandler.Healthz)
@@ -75,9 +76,15 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/healthz", healthHandler.Healthz)
 		r.Get("/readyz", healthHandler.Readyz)
+		r.Get("/config", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]bool{
+				"audio_effects_proxy_enabled": cfg.AudioEffectsProxyEnabled,
+			})
+		})
 
-		// Proxy endpoints for CORS-safe Chapters, Transcripts, and Privacy-Safe Cached
-		// Images. Each fetches an arbitrary client-supplied URL server-side, so the
+		// Proxy endpoints for CORS-safe chapters/transcripts and privacy-safe cached
+		// images. Each fetches an arbitrary client-supplied URL server-side, so the
 		// group is throttled per client IP to bound outbound-fetch, open-relay and
 		// image-decode CPU/RAM abuse. The cap is generous (a discover page loads many
 		// artworks) but still bounds a hostile client.
@@ -91,7 +98,9 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Get("/proxy/image", proxyHandler.GetImageProxy)
 			r.Head("/proxy/image", proxyHandler.GetImageProxy)
 		})
-		audioProxyLimiter := customMiddleware.NewRateLimiter(12, 1*time.Hour)
+		// Audio effects may legitimately open multiple range requests while seeking
+		// or switching episodes. Keep abuse bounded without breaking normal playback.
+		audioProxyLimiter := customMiddleware.NewRateLimiter(180, 1*time.Hour)
 		r.Group(func(r chi.Router) {
 			r.Use(audioProxyLimiter.Limit)
 			r.Get("/proxy/audio", proxyHandler.GetAudioProxy)
@@ -199,6 +208,12 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	if _, err := os.Stat(webDir); err == nil {
 		fileServer := http.FileServer(http.Dir(webDir))
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error":"not found"}`))
+				return
+			}
 			if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {

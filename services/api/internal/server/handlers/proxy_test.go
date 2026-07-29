@@ -29,7 +29,7 @@ func TestProxyHandler_GetChapters(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	proxy := NewProxyHandler()
+	proxy := NewProxyHandler(false)
 	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/chapters?url="+ts.URL, nil)
@@ -73,7 +73,7 @@ Enjoy your podcast experience.
 	}))
 	defer ts.Close()
 
-	proxy := NewProxyHandler()
+	proxy := NewProxyHandler(false)
 	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/transcript?url="+ts.URL, nil)
@@ -110,8 +110,11 @@ func TestProxyHandler_GetAudioProxy(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	proxy := NewProxyHandler()
-	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	proxy := NewProxyHandler(true)
+	proxy.streamClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{
+		AllowLoopback:         true,
+		DisableRequestTimeout: true,
+	})
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/audio?url="+ts.URL, nil)
 	rec := httptest.NewRecorder()
 	proxy.GetAudioProxy(rec, req)
@@ -127,6 +130,22 @@ func TestProxyHandler_GetAudioProxy(t *testing.T) {
 	}
 }
 
+func TestProxyHandler_GetAudioProxyDisabled(t *testing.T) {
+	proxy := NewProxyHandler(false)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/proxy/audio?url=https://cdn.example/episode.mp3",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	proxy.GetAudioProxy(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected disabled proxy to return 403, got %d", rec.Code)
+	}
+}
+
 // TestProxyHandler_BlocksLoopbackByDefault verifies the production handler (whose
 // client is built by NewProxyHandler, i.e. AllowLoopback=false) refuses to fetch a
 // loopback/private target — the SSRF guard that must not regress.
@@ -137,7 +156,7 @@ func TestProxyHandler_BlocksLoopbackByDefault(t *testing.T) {
 	defer ts.Close()
 
 	// Note: no override of proxy.httpClient — exercise the real production client.
-	proxy := NewProxyHandler()
+	proxy := NewProxyHandler(false)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/chapters?url="+ts.URL, nil)
 	rec := httptest.NewRecorder()
@@ -166,7 +185,7 @@ func TestProxyHandler_GetImageProxy(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	proxy := NewProxyHandler()
+	proxy := NewProxyHandler(false)
 	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/image?url="+ts.URL+"&w=50", nil)
@@ -198,7 +217,7 @@ func TestProxyHandler_GetImageProxyReturnsFallbackWhenUpstreamFails(t *testing.T
 	}))
 	defer ts.Close()
 
-	proxy := NewProxyHandler()
+	proxy := NewProxyHandler(false)
 	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/image?url="+ts.URL, nil)

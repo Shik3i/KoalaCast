@@ -169,7 +169,7 @@
 				<div class="panel-head"><div><p class="eyebrow">{t('globalStats.weeks', { count: 26 })}</p><h2>{t('globalStats.communityActivity')}</h2></div><strong>{duration(stats.total_wall_ms)}</strong></div>
 				<div class="heatmap" aria-label={t('globalStats.communityActivity')}>
 					{#each activity as day (day.key)}
-						<span class="level-{day.level}" title={`${day.key}: ${duration(day.ms)}`}></span>
+						<span class="level-{day.level}" title={`${day.key}: ${duration(day.ms)}`} aria-label={`${day.key}: ${duration(day.ms)}`}></span>
 					{/each}
 				</div>
 			</section>
@@ -187,7 +187,7 @@
 					<div class="panel-head"><h2>{t('globalStats.hour')}</h2></div>
 					<div class="hour-chart">
 						{#each stats.hour_totals as ms, index}
-							<div title={`${String(index).padStart(2, '0')}:00 · ${duration(ms)}`}><i style:height={`${Math.max(3, ms / maxHour * 100)}%`}></i><span>{index % 4 === 0 ? String(index).padStart(2, '0') : ''}</span></div>
+							<div title={`${String(index).padStart(2, '0')}:00 · ${duration(ms)}`} aria-label={`${String(index).padStart(2, '0')}:00 · ${duration(ms)}`}><i aria-hidden="true" style:height={`${Math.max(3, ms / maxHour * 100)}%`}></i><span aria-hidden="true">{index % 4 === 0 ? String(index).padStart(2, '0') : ''}</span></div>
 						{/each}
 					</div>
 				</section>
@@ -246,7 +246,7 @@
 	.global-head > div > p:last-child { max-width: 650px; color: var(--ink-4); font-size: 13px; }
 	.eyebrow { color: var(--accent); font: 700 10px/1 var(--font-mono); letter-spacing: .01em; }
 	.range-tabs { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; flex-shrink: 0; }
-	.range-tabs button { min-height: 34px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.range-tabs button { min-height: 44px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.range-tabs button.active { color: var(--accent-on); background: var(--accent-fill); }
 	.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border-ui); }
 	.kpi-grid article { padding: 18px; display: flex; flex-direction: column; border-right: 1px solid var(--border-hair); background: var(--bg-panel); }
@@ -274,7 +274,7 @@
 	.hour-chart { height: 145px; display: grid; grid-template-columns: repeat(24, 1fr); align-items: end; gap: 3px; border-bottom: 1px solid var(--border-ui); }
 	.hour-chart > div { height: 100%; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 5px; }
 	.hour-chart i { width: 100%; min-height: 3px; background: var(--accent-fill); opacity: .84; }
-	.hour-chart span { height: 12px; color: var(--ink-5); font: 600 9px/1 var(--font-mono); }
+	.hour-chart span { height: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.saved-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 	.saved-grid > div { position: relative; padding: 12px; overflow: hidden; background: var(--bg-sunken); border: 1px solid var(--border-hair); }
 	.saved-grid span { display: block; color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); }
@@ -285,10 +285,10 @@
 	.ranking-list { max-height: 490px; overflow-y: auto; }
 	.ranking-list > div { min-height: 58px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--border-hair); }
 	.ranking-list > div:last-child { border: 0; }
-	.ranking-list b { color: var(--ink-5); font: 600 10px/1 var(--font-mono); }
+	.ranking-list b { color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.ranking-list span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 	.ranking-list span strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 12px; }
-	.ranking-list small { color: var(--ink-5); font: 500 10px/1 var(--font-mono); }
+	.ranking-list small { color: var(--ink-4); font: 500 10px/1 var(--font-mono); }
 	.ranking-list em { color: var(--ink-3); font: 600 10px/1 var(--font-mono); font-style: normal; }
 	.privacy-note { padding: 14px 16px; display: flex; gap: 10px; align-items: start; border: 1px solid var(--border-hair); color: var(--ink-4); font-size: 11px; }
 	.privacy-note i { color: var(--accent); font-size: 17px; }

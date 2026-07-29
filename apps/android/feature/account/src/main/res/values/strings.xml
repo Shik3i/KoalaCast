@@ -14,6 +14,7 @@
     <string name="account_create">Create account</string>
     <string name="account_save_recovery">Save this recovery code now. It cannot be shown again.</string>
     <string name="account_copy">Copy code</string>
+    <string name="account_recovery_saved">I saved my recovery code</string>
     <string name="account_sign_out">Sign out</string>
     <string name="account_sync_off">Sync off</string>
     <string name="account_sync_now">Sync now</string>

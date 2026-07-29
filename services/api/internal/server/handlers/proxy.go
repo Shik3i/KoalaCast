@@ -95,12 +95,14 @@ func (c *MemoryLRUCache) Put(key string, data []byte) {
 }
 
 type ProxyHandler struct {
-	httpClient   *http.Client
-	memCache     *MemoryLRUCache
-	requestGroup singleflight.Group
+	httpClient        *http.Client
+	streamClient      *http.Client
+	memCache          *MemoryLRUCache
+	requestGroup      singleflight.Group
+	audioProxyEnabled bool
 }
 
-func NewProxyHandler() *ProxyHandler {
+func NewProxyHandler(audioProxyEnabled bool) *ProxyHandler {
 	return &ProxyHandler{
 		// SSRF-safe client: never allow loopback/private/link-local targets. These
 		// endpoints fetch fully attacker-controlled URLs, so AllowLoopback MUST stay
@@ -108,8 +110,14 @@ func NewProxyHandler() *ProxyHandler {
 		httpClient: rss.NewSafeHTTPClient(rss.SafeTransportConfig{
 			ConnectTimeout: 10 * time.Second,
 		}),
+		streamClient: rss.NewSafeHTTPClient(rss.SafeTransportConfig{
+			ConnectTimeout:        10 * time.Second,
+			ResponseTimeout:       15 * time.Second,
+			DisableRequestTimeout: true,
+		}),
 		// Bounded 100 MB In-Memory RAM LRU cache
-		memCache: NewMemoryLRUCache(100 * 1024 * 1024),
+		memCache:          NewMemoryLRUCache(100 * 1024 * 1024),
+		audioProxyEnabled: audioProxyEnabled,
 	}
 }
 
@@ -142,9 +150,13 @@ func writeImageFallback(w http.ResponseWriter) {
 }
 
 // GetAudioProxy streams an enclosure through the listener's KoalaCast instance.
-// It exists for explicit PWA downloads only; normal playback still contacts the
-// publisher directly and therefore does not spend server bandwidth.
+// The browser uses it only as an explicitly enabled fallback when publisher CORS
+// blocks direct downloads or Web Audio effects. Ordinary playback stays direct.
 func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
+	if !h.audioProxyEnabled {
+		http.Error(w, `{"error":"audio proxy disabled"}`, http.StatusForbidden)
+		return
+	}
 	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
 	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
 		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
@@ -162,7 +174,12 @@ func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("Range", rangeHeader)
 	}
 
-	resp, err := h.httpClient.Do(req)
+	// The server-wide write deadline is appropriate for JSON handlers but would
+	// terminate a normal podcast stream. Keep connect/TLS/header deadlines in the
+	// SSRF-safe client and allow response bytes to stream until client cancellation.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+
+	resp, err := h.streamClient.Do(req)
 	if err != nil {
 		http.Error(w, `{"error":"audio upstream unavailable"}`, http.StatusBadGateway)
 		return
@@ -281,10 +298,14 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 		}
 
 		dstW := targetW
-		dstH := (srcH * dstW) / srcW
-		if dstH < 1 {
-			dstH = 1
+		dstH64 := (int64(srcH) * int64(dstW)) / int64(srcW)
+		if dstH64 < 1 {
+			dstH64 = 1
 		}
+		if int64(dstW)*dstH64 > maxDecodedPixels || dstH64 > int64(^uint(0)>>1) {
+			return nil, fmt.Errorf("resized image dimensions too large")
+		}
+		dstH := int(dstH64)
 
 		dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
 		draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)

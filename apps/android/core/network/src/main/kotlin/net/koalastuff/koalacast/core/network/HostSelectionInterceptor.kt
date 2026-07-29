@@ -34,7 +34,12 @@ class HostSelectionInterceptor @Inject constructor(
         val request = chain.request()
 
         if (request.header(ABSOLUTE_HEADER) != null) {
-            return chain.proceed(request.newBuilder().removeHeader(ABSOLUTE_HEADER).build())
+            return chain.proceed(
+                request.newBuilder()
+                    .removeHeader(ABSOLUTE_HEADER)
+                    .tag(AuthPolicy::class.java, AuthPolicy.NO_AUTH)
+                    .build(),
+            )
         }
 
         val base = baseUrlProvider.current()

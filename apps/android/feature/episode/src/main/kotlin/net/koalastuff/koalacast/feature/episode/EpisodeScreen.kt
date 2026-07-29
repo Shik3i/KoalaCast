@@ -178,9 +178,9 @@ internal fun EpisodeContent(
                         color = colors.inkStrong,
                     )
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
                     ) {
                         AccentButton(
                             text = stringResource(
@@ -189,49 +189,56 @@ internal fun EpisodeContent(
                             ),
                             onClick = onPlay,
                             leadingIcon = PhosphorIcons.PlayFill,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        IconButtonSquare(
-                            icon = if (state.isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
-                            contentDescription = stringResource(
-                                if (state.isQueued) R.string.episode_queued else R.string.episode_queue,
-                            ),
-                            onClick = onToggleQueue,
-                            tint = if (state.isQueued) colors.accentInk else colors.ink3,
-                        )
-                        IconButtonSquare(
-                            icon = if (state.isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
-                            contentDescription = stringResource(
-                                if (state.isFavorite) R.string.episode_unsave else R.string.episode_save,
-                            ),
-                            onClick = onToggleFavorite,
-                            tint = if (state.isFavorite) colors.accentInk else colors.ink3,
-                        )
-                        IconButtonSquare(
-                            icon = if (state.isPlayed) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
-                            contentDescription = stringResource(
-                                if (state.isPlayed) R.string.episode_mark_unplayed else R.string.episode_mark_played,
-                            ),
-                            onClick = onTogglePlayed,
-                            tint = if (state.isPlayed) colors.accentInk else colors.ink3,
-                        )
-                        IconButtonSquare(
-                            icon = PhosphorIcons.DownloadSimple,
-                            contentDescription = stringResource(
-                                when (state.downloadState) {
-                                    net.koalastuff.koalacast.core.model.DownloadState.DONE ->
-                                        R.string.episode_remove_download
-                                    net.koalastuff.koalacast.core.model.DownloadState.DOWNLOADING,
-                                    net.koalastuff.koalacast.core.model.DownloadState.QUEUED ->
-                                        R.string.episode_pause_download
-                                    else -> R.string.episode_download
-                                },
-                            ),
-                            onClick = onToggleDownload,
-                            tint = if (
-                                state.downloadState ==
-                                net.koalastuff.koalacast.core.model.DownloadState.DONE
-                            ) colors.accentInk else colors.ink3,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconButtonSquare(
+                                icon = if (state.isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
+                                contentDescription = stringResource(
+                                    if (state.isQueued) R.string.episode_queued else R.string.episode_queue,
+                                ),
+                                onClick = onToggleQueue,
+                                tint = if (state.isQueued) colors.accentInk else colors.ink3,
+                            )
+                            IconButtonSquare(
+                                icon = if (state.isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
+                                contentDescription = stringResource(
+                                    if (state.isFavorite) R.string.episode_unsave else R.string.episode_save,
+                                ),
+                                onClick = onToggleFavorite,
+                                tint = if (state.isFavorite) colors.accentInk else colors.ink3,
+                            )
+                            IconButtonSquare(
+                                icon = if (state.isPlayed) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
+                                contentDescription = stringResource(
+                                    if (state.isPlayed) R.string.episode_mark_unplayed else R.string.episode_mark_played,
+                                ),
+                                onClick = onTogglePlayed,
+                                tint = if (state.isPlayed) colors.accentInk else colors.ink3,
+                            )
+                            IconButtonSquare(
+                                icon = PhosphorIcons.DownloadSimple,
+                                contentDescription = stringResource(
+                                    when (state.downloadState) {
+                                        net.koalastuff.koalacast.core.model.DownloadState.DONE ->
+                                            R.string.episode_remove_download
+                                        net.koalastuff.koalacast.core.model.DownloadState.DOWNLOADING,
+                                        net.koalastuff.koalacast.core.model.DownloadState.QUEUED ->
+                                            R.string.episode_pause_download
+                                        else -> R.string.episode_download
+                                    },
+                                ),
+                                onClick = onToggleDownload,
+                                tint = if (
+                                    state.downloadState ==
+                                    net.koalastuff.koalacast.core.model.DownloadState.DONE
+                                ) colors.accentInk else colors.ink3,
+                            )
+                        }
                     }
 
                 }

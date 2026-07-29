@@ -11,9 +11,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -42,6 +47,8 @@ fun DownloadsScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val colors = KoalaTheme.colors
+    var removeTarget by remember { mutableStateOf<EpisodeDownload?>(null) }
+    var confirmRemoveAll by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = modifier.fillMaxSize().background(colors.bgPanel),
         contentPadding = contentPadding,
@@ -81,7 +88,7 @@ fun DownloadsScreen(
                         )
                         OutlineButton(
                             text = stringResource(R.string.downloads_remove_all),
-                            onClick = viewModel::removeAll,
+                            onClick = { confirmRemoveAll = true },
                         )
                     }
                 }
@@ -101,10 +108,54 @@ fun DownloadsScreen(
             DownloadRow(
                 item = item,
                 onPrimary = { viewModel.primary(item) },
-                onRemove = { viewModel.remove(item) },
+                onRemove = { removeTarget = item },
             )
             RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
         }
+    }
+    if (confirmRemoveAll) {
+        AlertDialog(
+            onDismissRequest = { confirmRemoveAll = false },
+            title = { Text(stringResource(R.string.downloads_remove_all_confirm_title)) },
+            text = { Text(stringResource(R.string.downloads_remove_all_confirm_body, items.size)) },
+            dismissButton = {
+                TextButton(onClick = { confirmRemoveAll = false }) {
+                    Text(stringResource(R.string.downloads_cancel))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmRemoveAll = false
+                        viewModel.removeAll()
+                    },
+                ) {
+                    Text(stringResource(R.string.downloads_remove_all))
+                }
+            },
+        )
+    }
+    removeTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { removeTarget = null },
+            title = { Text(stringResource(R.string.downloads_remove_confirm_title)) },
+            text = { Text(stringResource(R.string.downloads_remove_confirm_body, target.track.title)) },
+            dismissButton = {
+                TextButton(onClick = { removeTarget = null }) {
+                    Text(stringResource(R.string.downloads_cancel))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        removeTarget = null
+                        viewModel.remove(target)
+                    },
+                ) {
+                    Text(stringResource(R.string.downloads_remove))
+                }
+            },
+        )
     }
 }
 

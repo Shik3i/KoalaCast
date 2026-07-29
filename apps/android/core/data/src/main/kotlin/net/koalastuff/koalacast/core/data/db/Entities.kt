@@ -177,6 +177,7 @@ data class AccountNamespaceStateEntity(
 )
 
 @Entity(tableName = "episode_downloads", indices = [Index("state"), Index("updatedAt")])
+@Serializable
 data class EpisodeDownloadEntity(
     @PrimaryKey val episodeId: String,
     val podcastId: String,

@@ -161,11 +161,13 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 		}
 		if authUser != nil {
 			nowMs := time.Now().UnixMilli()
-			if _, err := h.DB.SQL.ExecContext(r.Context(), `
-				INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at, is_deleted, sync_version)
-				VALUES (?, ?, ?, ?, 0, 1)
-				ON CONFLICT(user_id, podcast_id) DO UPDATE SET is_deleted = 0, updated_at = excluded.updated_at
-			`, authUser.ID, item.podcast.ID, nowMs, nowMs); err != nil {
+			if err := h.persistImportedSubscription(
+				r.Context(),
+				authUser.ID,
+				item.podcast,
+				nowMs,
+				index,
+			); err != nil {
 				report.Failures = append(report.Failures, OPMLImportError{
 					URL:    feedURL,
 					Reason: "failed to persist subscription",
@@ -181,6 +183,82 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(report)
+}
+
+func (h *OPMLHandler) persistImportedSubscription(
+	ctx context.Context,
+	userID string,
+	podcast OPMLImportedPodcast,
+	nowMs int64,
+	index int,
+) error {
+	tx, err := h.DB.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO user_sync_cursors
+			(user_id, current_cursor, min_retained_cursor, protocol_version, client_schema_version)
+		VALUES (?, 0, 0, 1, 1)
+	`, userID); err != nil {
+		return err
+	}
+	var cursor int64
+	if err := tx.QueryRowContext(ctx,
+		"SELECT current_cursor FROM user_sync_cursors WHERE user_id = ?",
+		userID,
+	).Scan(&cursor); err != nil {
+		return err
+	}
+	cursor++
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at, is_deleted, sync_version)
+		VALUES (?, ?, ?, ?, 0, ?)
+		ON CONFLICT(user_id, podcast_id) DO UPDATE SET
+			is_deleted = 0,
+			updated_at = excluded.updated_at,
+			sync_version = excluded.sync_version
+	`, userID, podcast.ID, nowMs, nowMs, cursor); err != nil {
+		return err
+	}
+
+	payload, err := json.Marshal(map[string]any{
+		"podcast_id":  podcast.ID,
+		"feed_url":    podcast.FeedURL,
+		"title":       podcast.Title,
+		"artwork_url": podcast.ArtworkURL,
+		"added_at":    nowMs,
+	})
+	if err != nil {
+		return err
+	}
+	clientOpID := fmt.Sprintf("server-opml:%s:%d:%d", podcast.ID, nowMs, index)
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO sync_log
+			(user_id, device_id, client_op_id, entity_type, entity_id, action,
+			 payload_json, client_timestamp, server_timestamp, server_cursor)
+		VALUES (?, 'server:opml', ?, 'subscription', ?, 'upsert', ?, ?, ?, ?)
+	`, userID, clientOpID, podcast.ID, string(payload), nowMs, nowMs, cursor); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO processed_sync_operations
+			(user_id, device_id, client_op_id, server_cursor, processed_at)
+		VALUES (?, 'server:opml', ?, ?, ?)
+	`, userID, clientOpID, cursor, nowMs); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE user_sync_cursors SET current_cursor = ? WHERE user_id = ?",
+		cursor,
+		userID,
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func extractOutlines(outlines []opmlOutline) []string {

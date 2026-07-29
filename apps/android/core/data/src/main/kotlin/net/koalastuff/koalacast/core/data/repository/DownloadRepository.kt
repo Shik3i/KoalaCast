@@ -21,12 +21,14 @@ import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.EpisodeDownload
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 
 @Singleton
 class DownloadRepository @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val dao: EpisodeDownloadDao,
     private val clock: Clock,
+    private val accountStore: SecureAccountStore,
 ) {
     val downloads: Flow<List<EpisodeDownload>> = dao.observeAll().map { rows -> rows.map { it.toModel() } }
 
@@ -42,6 +44,8 @@ class DownloadRepository @Inject constructor(
         budgetBytes: Long = DEFAULT_BUDGET_BYTES,
     ) {
         val now = clock.nowMs()
+        val ownerId = accountStore.activeOwnerId()
+        val accountGeneration = accountStore.accountGeneration()
         val old = dao.get(track.episodeId)
         dao.upsert(
             EpisodeDownloadEntity(
@@ -73,20 +77,22 @@ class DownloadRepository @Inject constructor(
                     EpisodeDownloadWorker.KEY_TREE_URI to treeUri,
                     EpisodeDownloadWorker.KEY_BUDGET_BYTES to budgetBytes,
                     EpisodeDownloadWorker.KEY_CONCURRENCY to concurrency.coerceIn(1, 4),
+                    EpisodeDownloadWorker.KEY_OWNER_ID to ownerId,
+                    EpisodeDownloadWorker.KEY_ACCOUNT_GENERATION to accountGeneration,
                 ),
             )
             .setConstraints(constraints)
-            .addTag(workName(track.episodeId))
+            .addTag(workName(ownerId, track.episodeId))
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            workName(track.episodeId),
+            workName(ownerId, track.episodeId),
             ExistingWorkPolicy.REPLACE,
             request,
         )
     }
 
     suspend fun pause(episodeId: String) {
-        WorkManager.getInstance(context).cancelAllWorkByTag(workName(episodeId))
+        WorkManager.getInstance(context).cancelAllWorkByTag(workName(accountStore.activeOwnerId(), episodeId))
         val row = dao.get(episodeId) ?: return
         dao.updateProgress(
             episodeId,
@@ -100,7 +106,8 @@ class DownloadRepository @Inject constructor(
     }
 
     suspend fun remove(episodeId: String) {
-        WorkManager.getInstance(context).cancelAllWorkByTag(workName(episodeId))
+        val ownerId = accountStore.activeOwnerId()
+        WorkManager.getInstance(context).cancelAllWorkByTag(workName(ownerId, episodeId))
         dao.get(episodeId)?.localPath?.let { location ->
             if (location.startsWith("content://")) {
                 context.contentResolver.delete(android.net.Uri.parse(location), null, null)
@@ -108,7 +115,7 @@ class DownloadRepository @Inject constructor(
                 File(location).takeIf(File::exists)?.delete()
             }
         }
-        partialFile(context, episodeId).takeIf(File::exists)?.delete()
+        partialFile(context, ownerId, episodeId).takeIf(File::exists)?.delete()
         dao.delete(episodeId)
     }
 
@@ -126,6 +133,12 @@ class DownloadRepository @Inject constructor(
                     File(it).exists()
                 }
             }
+
+    suspend fun completedTrack(episodeId: String): Track? =
+        dao.get(episodeId)
+            ?.takeIf { it.state == DownloadState.DONE.name }
+            ?.toModel()
+            ?.track
 
     suspend fun cleanupToBudget(budgetBytes: Long) {
         if (budgetBytes <= 0) return
@@ -170,18 +183,19 @@ class DownloadRepository @Inject constructor(
     )
 
     companion object {
-        internal fun storageKey(episodeId: String): String =
+        internal fun storageKey(episodeId: String, ownerId: String = "guest"): String =
             MessageDigest.getInstance("SHA-256")
-                .digest(episodeId.toByteArray(Charsets.UTF_8))
+                .digest("$ownerId\u0000$episodeId".toByteArray(Charsets.UTF_8))
                 .joinToString("") { "%02x".format(it) }
 
-        internal fun workName(episodeId: String) = "episode-download-${storageKey(episodeId)}"
+        internal fun workName(ownerId: String, episodeId: String) =
+            "episode-download-${storageKey(episodeId, ownerId)}"
         internal fun downloadDirectory(context: Context) =
             File(context.filesDir, "episodes").apply { mkdirs() }
-        internal fun partialFile(context: Context, episodeId: String) =
-            File(downloadDirectory(context), "${storageKey(episodeId)}.part")
-        internal fun completedFile(context: Context, episodeId: String) =
-            File(downloadDirectory(context), "${storageKey(episodeId)}.audio")
+        internal fun partialFile(context: Context, ownerId: String, episodeId: String) =
+            File(downloadDirectory(context), "${storageKey(episodeId, ownerId)}.part")
+        internal fun completedFile(context: Context, ownerId: String, episodeId: String) =
+            File(downloadDirectory(context), "${storageKey(episodeId, ownerId)}.audio")
         internal fun externalDownloadDirectory(context: Context) =
             File(context.getExternalFilesDir(null) ?: context.filesDir, "episodes").apply { mkdirs() }
         const val DEFAULT_BUDGET_BYTES = 2L * 1024 * 1024 * 1024

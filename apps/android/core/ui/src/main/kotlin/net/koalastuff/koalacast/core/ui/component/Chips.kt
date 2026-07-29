@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -15,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
@@ -76,7 +79,8 @@ fun SegmentedControl(
     Row(
         modifier = modifier
             .clip(KoalaShapes.chip)
-            .border(BorderStroke(1.dp, colors.borderUi), KoalaShapes.chip),
+            .border(BorderStroke(1.dp, colors.borderUi), KoalaShapes.chip)
+            .selectableGroup(),
         horizontalArrangement = Arrangement.Start,
     ) {
         options.forEachIndexed { index, option ->
@@ -93,13 +97,23 @@ fun SegmentedControl(
             }
             Box(
                 modifier = Modifier
+                    .weight(1f)
                     .background(ground)
-                    .clickable(role = Role.RadioButton, onClick = { onSelect(index) })
+                    .selectable(
+                        selected = selected,
+                        role = Role.RadioButton,
+                        onClick = { onSelect(index) },
+                    )
                     .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                MonoText(text = option, color = ink, style = KoalaTheme.type.monoSmall)
+                MonoText(
+                    text = option,
+                    color = ink,
+                    style = KoalaTheme.type.monoSmall.copy(textAlign = TextAlign.Center),
+                    maxLines = 2,
+                )
             }
         }
     }

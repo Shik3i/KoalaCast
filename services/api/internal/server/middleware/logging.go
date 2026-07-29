@@ -12,6 +12,10 @@ type responseWriterInterceptor struct {
 	bytesCount int
 }
 
+func (rwi *responseWriterInterceptor) Unwrap() http.ResponseWriter {
+	return rwi.ResponseWriter
+}
+
 func (rwi *responseWriterInterceptor) WriteHeader(statusCode int) {
 	rwi.statusCode = statusCode
 	rwi.ResponseWriter.WriteHeader(statusCode)

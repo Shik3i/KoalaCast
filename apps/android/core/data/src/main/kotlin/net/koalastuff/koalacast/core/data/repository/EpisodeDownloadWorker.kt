@@ -23,8 +23,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.ConcurrentHashMap
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import okhttp3.OkHttpClient
@@ -36,18 +39,28 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val dao: EpisodeDownloadDao,
     private val client: OkHttpClient,
+    private val accountStore: SecureAccountStore,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val episodeId = inputData.getString(KEY_EPISODE_ID) ?: return@withContext Result.failure()
+        val ownerId = inputData.getString(KEY_OWNER_ID) ?: return@withContext Result.failure()
+        val generation = inputData.getLong(KEY_ACCOUNT_GENERATION, -1)
+        if (!isCurrentAccount(ownerId, generation)) return@withContext Result.success()
         val row = dao.get(episodeId) ?: return@withContext Result.failure()
         val concurrency = inputData.getInt(KEY_CONCURRENCY, 2).coerceIn(1, 4)
         return@withContext DownloadWorkerLimiter.withLimit(concurrency) {
-            performDownload(episodeId, row)
+            if (!isCurrentAccount(ownerId, generation)) {
+                Result.success()
+            } else {
+                performDownload(ownerId, generation, episodeId, row)
+            }
         }
     }
 
     private suspend fun performDownload(
+        ownerId: String,
+        generation: Long,
         episodeId: String,
         row: EpisodeDownloadEntity,
     ): Result {
@@ -57,7 +70,7 @@ class EpisodeDownloadWorker @AssistedInject constructor(
             KEY_BUDGET_BYTES,
             DownloadRepository.DEFAULT_BUDGET_BYTES,
         )
-        val target = createTarget(episodeId, storage, treeUri)
+        val target = createTarget(ownerId, episodeId, storage, treeUri)
             ?: return permanentFailure(episodeId, row.totalBytes, "Storage folder unavailable")
         val existing = target.length()
         setForeground(createForeground(row.title, 0))
@@ -69,6 +82,25 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                 .apply { if (existing > 0) header("Range", "bytes=$existing-") }
                 .build()
             client.newCall(request).execute().use { response ->
+                if (!isCurrentAccount(ownerId, generation)) throw ObsoleteDownloadException()
+                if (response.code == 416 && existing > 0) {
+                    val remoteTotal = parseContentRange(response.header("Content-Range"))?.total
+                    if (remoteTotal == existing) {
+                        val completed = target.finalizeDownload()
+                            ?: throw IOException("Could not finalize completed partial download")
+                        update(
+                            episodeId,
+                            DownloadState.DONE,
+                            completed.length,
+                            remoteTotal,
+                            completed.location,
+                        )
+                        enforceBudget(ownerId, generation, episodeId, budgetBytes)
+                        return Result.success()
+                    }
+                    target.truncate()
+                    throw IOException("Server rejected resume offset $existing")
+                }
                 if (!response.isSuccessful) {
                     val message = "HTTP ${response.code}"
                     if (response.code == 408 || response.code == 429 || response.code >= 500) {
@@ -77,9 +109,16 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                     throw PermanentDownloadException(message)
                 }
                 val append = existing > 0 && response.code == 206
+                val contentRange = parseContentRange(response.header("Content-Range"))
+                if (append && contentRange?.start != existing) {
+                    target.truncate()
+                    throw IOException(
+                        "Invalid Content-Range start ${contentRange?.start} for offset $existing",
+                    )
+                }
                 val start = if (append) existing else 0L
                 val responseLength = response.body.contentLength().takeIf { it >= 0 }
-                val total = responseLength?.plus(start) ?: 0L
+                val total = contentRange?.total ?: responseLength?.plus(start) ?: 0L
                 if (!append) target.truncate()
 
                 var downloaded = start
@@ -88,7 +127,10 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         var lastUpdate = 0L
                         while (true) {
-                            if (isStopped) return Result.retry()
+                            if (isStopped) throw CancellationException("Download stopped")
+                            if (!isCurrentAccount(ownerId, generation)) {
+                                throw ObsoleteDownloadException()
+                            }
                             val read = input.read(buffer)
                             if (read < 0) break
                             output.write(buffer, 0, read)
@@ -119,11 +161,12 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                     total.takeIf { it > 0 } ?: completed.length,
                     completed.location,
                 )
-                enforceBudget(episodeId, budgetBytes)
+                enforceBudget(ownerId, generation, episodeId, budgetBytes)
                 Result.success()
             }
         } catch (error: Exception) {
             if (error is CancellationException) throw error
+            if (error is ObsoleteDownloadException) return Result.success()
             val retry = error !is PermanentDownloadException && runAttemptCount < MAX_RETRY_ATTEMPTS
             update(
                 episodeId,
@@ -148,7 +191,15 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         path: String? = null,
         error: String? = null,
     ) {
-        dao.updateProgress(id, state.name, bytes, total, path, error, System.currentTimeMillis())
+        dao.updateProgressFromWorker(
+            id,
+            state.name,
+            bytes,
+            total,
+            path,
+            error,
+            System.currentTimeMillis(),
+        )
     }
 
     private fun createForeground(title: String, progress: Int): ForegroundInfo {
@@ -188,11 +239,12 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     }
 
     private fun createTarget(
+        ownerId: String,
         episodeId: String,
         storage: DownloadStorage,
         treeUri: String,
     ): DownloadTarget? {
-        val key = DownloadRepository.storageKey(episodeId)
+        val key = DownloadRepository.storageKey(episodeId, ownerId)
         if (storage == DownloadStorage.SAF) {
             val tree = treeUri.takeIf(String::isNotBlank)
                 ?.let(Uri::parse)
@@ -212,7 +264,13 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         return FileTarget(File(directory, "$key.part"), File(directory, "$key.audio"))
     }
 
-    private suspend fun enforceBudget(currentEpisodeId: String, budgetBytes: Long) {
+    private suspend fun enforceBudget(
+        ownerId: String,
+        generation: Long,
+        currentEpisodeId: String,
+        budgetBytes: Long,
+    ) {
+        if (!isCurrentAccount(ownerId, generation)) return
         if (budgetBytes <= 0) return
         val completed = dao.getAllOldestFirst()
             .filter { it.state == DownloadState.DONE.name && it.localPath != null }
@@ -234,12 +292,18 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         }
     }
 
+    private fun isCurrentAccount(ownerId: String, generation: Long): Boolean =
+        accountStore.activeOwnerId() == ownerId &&
+            accountStore.accountGeneration() == generation
+
     companion object {
         const val KEY_EPISODE_ID = "episode_id"
         const val KEY_STORAGE = "storage"
         const val KEY_TREE_URI = "tree_uri"
         const val KEY_BUDGET_BYTES = "budget_bytes"
         const val KEY_CONCURRENCY = "concurrency"
+        const val KEY_OWNER_ID = "owner_id"
+        const val KEY_ACCOUNT_GENERATION = "account_generation"
         private const val CHANNEL_ID = "episode_downloads"
         private const val NOTIFICATION_ID_BASE = 20_000
         private const val UPDATE_BYTES = 256L * 1024L
@@ -248,21 +312,31 @@ class EpisodeDownloadWorker @AssistedInject constructor(
 }
 
 private object DownloadWorkerLimiter {
-    private const val PERMITS = 12
-    private val semaphore = Semaphore(PERMITS)
+    private val semaphores = ConcurrentHashMap<Int, Semaphore>()
 
     suspend fun <T> withLimit(concurrency: Int, block: suspend () -> T): T {
-        val needed = PERMITS / concurrency.coerceIn(1, 4)
-        repeat(needed) { semaphore.acquire() }
-        return try {
-            block()
-        } finally {
-            repeat(needed) { semaphore.release() }
-        }
+        val limit = concurrency.coerceIn(1, 4)
+        return semaphores.getOrPut(limit) { Semaphore(limit) }.withPermit { block() }
     }
 }
 
 private class PermanentDownloadException(message: String) : Exception(message)
+private class ObsoleteDownloadException : Exception()
+
+internal data class ParsedContentRange(
+    val start: Long?,
+    val total: Long?,
+)
+
+internal fun parseContentRange(value: String?): ParsedContentRange? {
+    val match = Regex("""^bytes (?:(\d+)-\d+|\*)/(\d+|\*)$""")
+        .matchEntire(value?.trim().orEmpty())
+        ?: return null
+    return ParsedContentRange(
+        start = match.groupValues[1].takeIf(String::isNotBlank)?.toLongOrNull(),
+        total = match.groupValues[2].takeIf { it != "*" }?.toLongOrNull(),
+    )
+}
 
 private data class CompletedTarget(val location: String, val length: Long)
 

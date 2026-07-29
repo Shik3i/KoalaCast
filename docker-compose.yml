@@ -11,6 +11,7 @@ services:
     environment:
       - PORT=3000
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:3000}
+      - KC_AUDIO_EFFECTS_PROXY_ENABLED=${KC_AUDIO_EFFECTS_PROXY_ENABLED:-false}
       - LOG_LEVEL=info
       - DATABASE_PATH=/app/data/koalacast.db
       - SESSION_SECRET=${SESSION_SECRET}

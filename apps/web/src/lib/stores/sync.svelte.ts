@@ -34,6 +34,7 @@ import {
 } from '$lib/idb/db';
 import {
 	applySyncedPodcastPlaybackSettings,
+	clearPodcastPlaybackSettingsContext,
 	getAllPodcastPlaybackSettings,
 	type PodcastPlaybackSettings
 } from '$lib/stores/podcast-settings';
@@ -270,14 +271,21 @@ class SyncStore {
 		this.#assertRun(userId, generation, signal);
 		if (!Number.isFinite(snapshot.cursor)) throw new Error('sync snapshot missing cursor');
 		await replaceLocalSyncSnapshot(snapshot);
-		for (const payload of snapshot.queue || []) {
-			await applyQueuePayload(payload);
+		const queuePayloads = Array.isArray(snapshot.queue) ? snapshot.queue : [];
+		if (queuePayloads.length === 0) {
+			await replaceLocalQueueFromSync([], 0, { authoritative: true });
+		} else {
+			for (const payload of queuePayloads) {
+				await applyQueuePayload(payload, true);
+			}
 		}
+		clearPodcastPlaybackSettingsContext();
 		for (const payload of snapshot.podcast_settings || []) {
-			applyPodcastSettingsPayload(payload);
+			applyPodcastSettingsPayload(payload, '', true);
 		}
+		prefs.resetSynced();
 		for (const payload of snapshot.settings || []) {
-			applySettingsPayload(payload);
+			applySettingsPayload(payload, true);
 		}
 		this.#assertRun(userId, generation, signal);
 		const cursor = Number(snapshot.cursor);
@@ -557,14 +565,14 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 	}
 }
 
-async function applyQueuePayload(payload: any) {
+async function applyQueuePayload(payload: any, authoritative = false) {
 	if (!payload || !Array.isArray(payload.items) || !Number.isFinite(payload.updated_at)) {
 		throw new Error('invalid queue changeset payload');
 	}
-	await replaceLocalQueueFromSync(payload.items, Number(payload.updated_at));
+	await replaceLocalQueueFromSync(payload.items, Number(payload.updated_at), { authoritative });
 }
 
-function applyPodcastSettingsPayload(payload: any, fallbackPodcastId = '') {
+function applyPodcastSettingsPayload(payload: any, fallbackPodcastId = '', authoritative = false) {
 	if (!payload || typeof payload !== 'object' || !Number.isFinite(payload.updated_at)) {
 		throw new Error('invalid podcast settings changeset payload');
 	}
@@ -580,14 +588,14 @@ function applyPodcastSettingsPayload(payload: any, fallbackPodcastId = '') {
 		autoDownload: payload.auto_download ?? payload.autoDownload,
 		notifyNewEpisodes: payload.notify_new_episodes ?? payload.notifyNewEpisodes,
 		updatedAt: Number(payload.updated_at)
-	});
+	}, { authoritative });
 }
 
-function applySettingsPayload(payload: any) {
+function applySettingsPayload(payload: any, authoritative = false) {
 	if (!payload || typeof payload !== 'object' || !Number.isFinite(payload.updated_at)) {
 		throw new Error('invalid settings changeset payload');
 	}
-	prefs.applySynced(payload);
+	prefs.applySynced(payload, { authoritative });
 }
 
 export const sync = new SyncStore();

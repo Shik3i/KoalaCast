@@ -12,6 +12,10 @@ export class AudioEngine {
 	public volumeBoost = false;
 	public skipSilence = false;
 
+	public get initialized(): boolean {
+		return this.audioCtx !== null;
+	}
+
 	public init(audioEl: HTMLAudioElement): boolean {
 		if (this.audioCtx) return true;
 		try {
@@ -48,6 +52,22 @@ export class AudioEngine {
 			}
 		}
 		return this.audioCtx.state === 'running';
+	}
+
+	public destroy() {
+		this.sourceNode?.disconnect();
+		this.gainNode?.disconnect();
+		this.compressorNode?.disconnect();
+		this.analyserNode?.disconnect();
+		void this.audioCtx?.close();
+		this.audioCtx = null;
+		this.sourceNode = null;
+		this.gainNode = null;
+		this.compressorNode = null;
+		this.analyserNode = null;
+		this.levelData = null;
+		this.volumeBoost = false;
+		this.skipSilence = false;
 	}
 
 	public setVolumeBoost(enabled: boolean) {

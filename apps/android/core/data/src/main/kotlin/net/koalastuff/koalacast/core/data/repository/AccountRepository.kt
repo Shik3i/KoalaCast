@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
 import net.koalastuff.koalacast.core.data.util.OpmlParser
 import net.koalastuff.koalacast.core.model.Account
@@ -33,6 +34,7 @@ class AccountRepository @Inject constructor(
     private val accountData: AccountDataNamespace,
     private val library: LibraryRepository,
     private val podcasts: PodcastRepository,
+    private val preferences: PreferencesRepository,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) {
     val account: Flow<Account?> = store.account
@@ -70,6 +72,10 @@ class AccountRepository @Inject constructor(
                             username = response.username,
                             deviceId = response.deviceId,
                         )
+                        if (store.account.value == null) {
+                            preferences.migrateGuestToAccount(account.userId)
+                        }
+                        store.beginAccountTransition()
                         accountData.switchTo(account.userId)
                         store.save(account, response.deviceToken)
                         DataResult.Success(account)
@@ -97,6 +103,7 @@ class AccountRepository @Inject constructor(
         val response = runCatching { api.authStatus() }.getOrNull() ?: return@withContext false
         val authenticated = response.isSuccessful && response.body()?.authenticated == true
         if (!authenticated) {
+            store.beginAccountTransition()
             accountData.switchTo(null)
             store.clear()
         }
@@ -105,6 +112,7 @@ class AccountRepository @Inject constructor(
 
     suspend fun logout() = withContext(dispatcher) {
         runCatching { api.logout() }
+        store.beginAccountTransition()
         accountData.switchTo(null)
         store.clear()
     }

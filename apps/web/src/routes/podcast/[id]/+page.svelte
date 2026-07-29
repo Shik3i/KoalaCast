@@ -43,6 +43,7 @@
 	let openMenuId = $state<string | null>(null);
 	let searchQuery = $state('');
 	let filterUnplayedOnly = $state(false);
+	let visibleEpisodeCounts = $state<Record<string, number>>({});
 	let showStats = $state({ listenedMs: 0, finished: 0, episodes: 0, averageSpeed: 1 });
 	let showSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
 
@@ -123,6 +124,17 @@
 		const reqId = ++loadReqId;
 		isLoading = true;
 		loadError = '';
+		podcast = null;
+		episodes = [];
+		isSubscribed = false;
+		showAccent = null;
+		playedIds = new Set();
+		playbackStates = {};
+		collapsedTiers = new Set(['older']);
+		openMenuId = null;
+		searchQuery = '';
+		filterUnplayedOnly = false;
+		visibleEpisodeCounts = {};
 		try {
 			// Check if id is an iTunes ID or feed URL passed via query param
 			const urlParams = new URLSearchParams(window.location.search);
@@ -721,7 +733,7 @@
 
 					{#if open}
 						<div class="episode-list" transition:slide={{ duration: 240 }}>
-							{#each group.episodes as ep (ep.id)}
+							{#each group.episodes.slice(0, visibleEpisodeCounts[group.key] ?? 20) as ep (ep.id)}
 								<div class="episode-row" class:current={player.current?.episode_id === ep.id} class:played={playedIds.has(ep.id)} class:menu-open={openMenuId === ep.id}>
 									<div class="ep-info">
 										<h3><a href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a></h3>
@@ -763,6 +775,19 @@
 								</div>
 								</div>
 							{/each}
+							{#if group.episodes.length > (visibleEpisodeCounts[group.key] ?? 20)}
+								<button
+									class="load-more-episodes"
+									onclick={() => {
+										visibleEpisodeCounts = {
+											...visibleEpisodeCounts,
+											[group.key]: Math.min(group.episodes.length, (visibleEpisodeCounts[group.key] ?? 20) + 20)
+										};
+									}}
+								>
+									{t('discover.loadMore')}
+								</button>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -1371,7 +1396,7 @@
 	.desc { max-width: 78ch; color: var(--ink-3); font-size: 12px; line-height: 1.45; -webkit-line-clamp: 2; line-clamp: 2; }
 	.actions { gap: 6px; margin-top: 4px; }
 	.btn-play-latest, .btn-subscribe, .btn-funding {
-		min-height: 34px;
+		min-height: 44px;
 		padding: 0 10px;
 		border-radius: 5px;
 		box-shadow: none;
@@ -1387,15 +1412,24 @@
 	.episodes-section { padding: 14px 22px 30px; }
 	.episodes-head { margin-bottom: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
 	.episodes-section h2 { font: 800 17px/1 var(--font-ui); }
-	.unplayed-pill, .mark-all-btn { min-height: 32px; border-radius: 4px; font: 600 10px/1 var(--font-mono); }
+	.unplayed-pill, .mark-all-btn { min-height: 44px; border-radius: 4px; font: 600 10px/1 var(--font-mono); }
 	.mark-all-btn { border-color: var(--border-ui); background: transparent; }
 	.episodes-filter-bar { padding: 10px 0; border-bottom: 1px solid var(--border-hair); }
 	.ep-search-input { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-sunken); }
-	.filter-pill { min-height: 32px; border-color: var(--border-ui); border-radius: 4px; background: transparent; font: 600 10px/1 var(--font-mono); }
+	.filter-pill { min-height: 44px; border-color: var(--border-ui); border-radius: 4px; background: transparent; font: 600 10px/1 var(--font-mono); }
 	.tier { margin: 0; }
 	.tier-head { min-height: 38px; padding: 0 5px; background: var(--bg-sunken); border-bottom: 1px solid var(--border-hair); }
-	.tier-toggle, .tier-mark { min-height: 32px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.tier-toggle, .tier-mark { min-height: 44px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.episode-list { gap: 0; }
+	.load-more-episodes {
+		width: 100%;
+		min-height: 44px;
+		border: 0;
+		border-bottom: 1px solid var(--border-row);
+		background: var(--bg-sunken);
+		color: var(--accent-ink);
+		font: 700 11px/1 var(--font-mono);
+	}
 	.episode-row {
 		min-height: 76px;
 		padding: 10px 5px;

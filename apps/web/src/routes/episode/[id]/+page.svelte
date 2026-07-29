@@ -51,6 +51,11 @@
 		const reqId = ++loadReqId;
 		chaptersController?.abort();
 		isLoading = true;
+		episode = null;
+		podcast = null;
+		playbackState = null;
+		isFavorite = false;
+		showAccent = null;
 		// Reset per-episode expandable state so the previous episode's chapters or
 		// transcript never bleed into the newly opened one.
 		showChapters = false;
@@ -413,7 +418,7 @@
 			<img src={optimizeArtwork(episode.artwork_url || podcast?.artwork_url, 350)} alt={episode.title} class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 
 			<div class="meta">
-				<h2>{episode.title}</h2>
+				<h1>{episode.title}</h1>
 				{#if podcast}
 					<span class="podcast-link"><a href={`/podcast/${podcast.id}`}>{podcast.title}</a></span>
 				{/if}
@@ -430,7 +435,7 @@
 				<div class="action-buttons">
 					<button class="btn-play" onclick={handlePlay}>
 						<i class="ph-fill {isCurrent ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
-						{isCurrent ? 'Now Playing' : 'Play Episode'}
+						{isCurrent ? t('player.nowPlaying') : t('podcast.playEpisode')}
 					</button>
 					<button class="btn-secondary" onclick={handleAddToQueue}>
 						<i class="ph ph-plus" aria-hidden="true"></i> {t('episode.addToQueue')}
@@ -450,7 +455,7 @@
 					{/if}
 					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
-						{isFavorite ? 'Favorited' : 'Favorite'}
+						{isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}
 					</button>
 					{#if episode.chapters_url}
 						<button class="btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
@@ -571,7 +576,7 @@
 		min-width: 0;
 	}
 
-	.meta h2 {
+	.meta h1 {
 		font-size: clamp(1.5rem, 3vw, 2.1rem);
 		font-weight: 800;
 		line-height: 1.2;

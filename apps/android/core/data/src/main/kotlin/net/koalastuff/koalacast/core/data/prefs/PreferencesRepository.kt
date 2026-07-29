@@ -10,8 +10,10 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.PaletteId
@@ -28,8 +30,11 @@ import javax.inject.Singleton
 @Singleton
 class PreferencesRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
+    private val accountStore: SecureAccountStore,
 ) {
-    val preferences: Flow<UserPreferences> = dataStore.data.map { it.toUserPreferences() }
+    val preferences: Flow<UserPreferences> = combine(dataStore.data, accountStore.account) { values, account ->
+        values.toUserPreferences(account?.userId)
+    }
 
     val serverUrl: Flow<String> = preferences.map { it.serverUrl }
 
@@ -42,57 +47,57 @@ class PreferencesRepository @Inject constructor(
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        dataStore.edit { it[Keys.THEME_MODE] = mode.name; it.touch() }
+        dataStore.edit { it[Keys.themeMode(owner())] = mode.name; it.touch(owner()) }
     }
 
     suspend fun setPalette(palette: PaletteId) {
-        dataStore.edit { it[Keys.PALETTE] = palette.id; it.touch() }
+        dataStore.edit { it[Keys.palette(owner())] = palette.id; it.touch(owner()) }
     }
 
     suspend fun setLanguages(languages: Set<String>) {
-        dataStore.edit { it[Keys.LANGUAGES] = languages; it.touch() }
+        dataStore.edit { it[Keys.languages(owner())] = languages; it.touch(owner()) }
     }
 
     suspend fun setCategory(category: String) {
-        dataStore.edit { it[Keys.CATEGORY] = category; it.touch() }
+        dataStore.edit { it[Keys.category(owner())] = category; it.touch(owner()) }
     }
 
     suspend fun setProxyImages(enabled: Boolean) {
-        dataStore.edit { it[Keys.PROXY_IMAGES] = enabled; it.touch() }
+        dataStore.edit { it[Keys.proxyImages(owner())] = enabled; it.touch(owner()) }
     }
 
     suspend fun setPlaybackSpeed(speed: Float) {
-        dataStore.edit { it[Keys.PLAYBACK_SPEED] = speed.coerceIn(0.5f, 3f); it.touch() }
+        dataStore.edit { it[Keys.playbackSpeed(owner())] = speed.coerceIn(0.5f, 3f); it.touch(owner()) }
     }
 
     suspend fun setDownloadWifiOnly(enabled: Boolean) {
-        dataStore.edit { it[Keys.DOWNLOAD_WIFI_ONLY] = enabled; it.touch() }
+        dataStore.edit { it[Keys.downloadWifiOnly(owner())] = enabled; it.touch(owner()) }
     }
 
     suspend fun setSkipSilence(enabled: Boolean) {
-        dataStore.edit { it[Keys.SKIP_SILENCE] = enabled; it.touch() }
+        dataStore.edit { it[Keys.skipSilence(owner())] = enabled; it.touch(owner()) }
     }
 
     suspend fun setVolumeBoost(enabled: Boolean) {
-        dataStore.edit { it[Keys.VOLUME_BOOST] = enabled; it.touch() }
+        dataStore.edit { it[Keys.volumeBoost(owner())] = enabled; it.touch(owner()) }
     }
 
     suspend fun setAutoDownloadCount(count: Int) {
-        dataStore.edit { it[Keys.AUTO_DOWNLOAD_COUNT] = count.coerceIn(1, 20); it.touch() }
+        dataStore.edit { it[Keys.autoDownloadCount(owner())] = count.coerceIn(1, 20); it.touch(owner()) }
     }
 
     suspend fun setDownloadRetention(retention: DownloadRetention) {
-        dataStore.edit { it[Keys.DOWNLOAD_RETENTION] = retention.id; it.touch() }
+        dataStore.edit { it[Keys.downloadRetention(owner())] = retention.id; it.touch(owner()) }
     }
 
     suspend fun setDownloadConcurrency(value: Int) {
-        dataStore.edit { it[Keys.DOWNLOAD_CONCURRENCY] = value.coerceIn(1, 4); it.touch() }
+        dataStore.edit { it[Keys.downloadConcurrency(owner())] = value.coerceIn(1, 4); it.touch(owner()) }
     }
 
     suspend fun setDownloadBudgetBytes(value: Long) {
         dataStore.edit {
-            it[Keys.DOWNLOAD_BUDGET_MB] = (value / MB).toInt().coerceAtLeast(0)
-            it.touch()
+            it[Keys.downloadBudgetMb(owner())] = (value / MB).toInt().coerceAtLeast(0)
+            it.touch(owner())
         }
     }
 
@@ -105,47 +110,139 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun syncSnapshot(): Pair<UserPreferences, Long> {
         val values = dataStore.data.first()
-        return values.toUserPreferences() to (values[Keys.SETTINGS_UPDATED_AT] ?: 0)
+        val owner = owner()
+        return values.toUserPreferences(owner) to (values[Keys.settingsUpdatedAt(owner)] ?: 0)
     }
 
-    suspend fun applySynced(preferences: UserPreferences, updatedAt: Long) {
+    suspend fun applySynced(preferences: UserPreferences, updatedAt: Long, force: Boolean = false) {
         dataStore.edit {
-            if ((it[Keys.SETTINGS_UPDATED_AT] ?: 0) >= updatedAt) return@edit
-            it[Keys.THEME_MODE] = preferences.themeMode.name
-            it[Keys.PALETTE] = preferences.palette.id
-            it[Keys.LANGUAGES] = preferences.languages
-            it[Keys.CATEGORY] = preferences.category
-            it[Keys.PROXY_IMAGES] = preferences.proxyImages
-            it[Keys.PLAYBACK_SPEED] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
-            it[Keys.DOWNLOAD_WIFI_ONLY] = preferences.downloadWifiOnly
-            it[Keys.SKIP_SILENCE] = preferences.skipSilence
-            it[Keys.VOLUME_BOOST] = preferences.volumeBoost
-            it[Keys.AUTO_DOWNLOAD_COUNT] = preferences.autoDownloadCount.coerceIn(1, 20)
-            it[Keys.DOWNLOAD_RETENTION] = preferences.downloadRetention.id
-            it[Keys.DOWNLOAD_CONCURRENCY] = preferences.downloadConcurrency.coerceIn(1, 4)
-            it[Keys.DOWNLOAD_BUDGET_MB] = (preferences.downloadBudgetBytes / MB).toInt()
-            it[Keys.SETTINGS_UPDATED_AT] = updatedAt
+            val owner = owner()
+            if (!force && (it[Keys.settingsUpdatedAt(owner)] ?: 0) >= updatedAt) return@edit
+            it[Keys.themeMode(owner)] = preferences.themeMode.name
+            it[Keys.palette(owner)] = preferences.palette.id
+            it[Keys.languages(owner)] = preferences.languages
+            it[Keys.category(owner)] = preferences.category
+            it[Keys.proxyImages(owner)] = preferences.proxyImages
+            it[Keys.playbackSpeed(owner)] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
+            it[Keys.downloadWifiOnly(owner)] = preferences.downloadWifiOnly
+            it[Keys.skipSilence(owner)] = preferences.skipSilence
+            it[Keys.volumeBoost(owner)] = preferences.volumeBoost
+            it[Keys.autoDownloadCount(owner)] = preferences.autoDownloadCount.coerceIn(1, 20)
+            it[Keys.downloadRetention(owner)] = preferences.downloadRetention.id
+            it[Keys.downloadConcurrency(owner)] = preferences.downloadConcurrency.coerceIn(1, 4)
+            it[Keys.downloadBudgetMb(owner)] = (preferences.downloadBudgetBytes / MB).toInt()
+            it[Keys.settingsUpdatedAt(owner)] = updatedAt
         }
     }
 
-    private fun Preferences.toUserPreferences() = UserPreferences(
+    suspend fun resetSynced() {
+        dataStore.edit {
+            val owner = owner()
+            it.remove(Keys.themeMode(owner))
+            it.remove(Keys.palette(owner))
+            it.remove(Keys.languages(owner))
+            it.remove(Keys.category(owner))
+            it.remove(Keys.proxyImages(owner))
+            it.remove(Keys.playbackSpeed(owner))
+            it.remove(Keys.downloadWifiOnly(owner))
+            it.remove(Keys.skipSilence(owner))
+            it.remove(Keys.volumeBoost(owner))
+            it.remove(Keys.autoDownloadCount(owner))
+            it.remove(Keys.downloadRetention(owner))
+            it.remove(Keys.downloadConcurrency(owner))
+            it.remove(Keys.downloadBudgetMb(owner))
+            it.remove(Keys.settingsUpdatedAt(owner))
+        }
+    }
+
+    suspend fun migrateLegacyForCurrentOwner() {
+        dataStore.edit {
+            val owner = owner()
+            if (it[Keys.migrationComplete(owner)] == true) return@edit
+            it.copyIfAbsent(Keys.themeMode(owner), Keys.LEGACY_THEME_MODE)
+            it.copyIfAbsent(Keys.palette(owner), Keys.LEGACY_PALETTE)
+            it.copyIfAbsent(Keys.languages(owner), Keys.LEGACY_LANGUAGES)
+            it.copyIfAbsent(Keys.category(owner), Keys.LEGACY_CATEGORY)
+            it.copyIfAbsent(Keys.proxyImages(owner), Keys.LEGACY_PROXY_IMAGES)
+            it.copyIfAbsent(Keys.playbackSpeed(owner), Keys.LEGACY_PLAYBACK_SPEED)
+            it.copyIfAbsent(Keys.downloadWifiOnly(owner), Keys.LEGACY_DOWNLOAD_WIFI_ONLY)
+            it.copyIfAbsent(Keys.skipSilence(owner), Keys.LEGACY_SKIP_SILENCE)
+            it.copyIfAbsent(Keys.volumeBoost(owner), Keys.LEGACY_VOLUME_BOOST)
+            it.copyIfAbsent(Keys.autoDownloadCount(owner), Keys.LEGACY_AUTO_DOWNLOAD_COUNT)
+            it.copyIfAbsent(Keys.downloadRetention(owner), Keys.LEGACY_DOWNLOAD_RETENTION)
+            it.copyIfAbsent(Keys.downloadConcurrency(owner), Keys.LEGACY_DOWNLOAD_CONCURRENCY)
+            it.copyIfAbsent(Keys.downloadBudgetMb(owner), Keys.LEGACY_DOWNLOAD_BUDGET_MB)
+            it.copyIfAbsent(Keys.settingsUpdatedAt(owner), Keys.LEGACY_SETTINGS_UPDATED_AT)
+            it[Keys.migrationComplete(owner)] = true
+        }
+    }
+
+    suspend fun migrateGuestToAccount(userId: String) {
+        if (userId.isBlank()) return
+        dataStore.edit {
+            if (it[Keys.GUEST_PREFS_MERGED] == true) return@edit
+            it.copyIfAbsent(Keys.themeMode(userId), Keys.themeMode(null), removeSource = false)
+            it.copyIfAbsent(Keys.palette(userId), Keys.palette(null), removeSource = false)
+            it.copyIfAbsent(Keys.languages(userId), Keys.languages(null), removeSource = false)
+            it.copyIfAbsent(Keys.category(userId), Keys.category(null), removeSource = false)
+            it.copyIfAbsent(Keys.proxyImages(userId), Keys.proxyImages(null), removeSource = false)
+            it.copyIfAbsent(Keys.playbackSpeed(userId), Keys.playbackSpeed(null), removeSource = false)
+            it.copyIfAbsent(
+                Keys.downloadWifiOnly(userId),
+                Keys.downloadWifiOnly(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(Keys.skipSilence(userId), Keys.skipSilence(null), removeSource = false)
+            it.copyIfAbsent(Keys.volumeBoost(userId), Keys.volumeBoost(null), removeSource = false)
+            it.copyIfAbsent(
+                Keys.autoDownloadCount(userId),
+                Keys.autoDownloadCount(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.downloadRetention(userId),
+                Keys.downloadRetention(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.downloadConcurrency(userId),
+                Keys.downloadConcurrency(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.downloadBudgetMb(userId),
+                Keys.downloadBudgetMb(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.settingsUpdatedAt(userId),
+                Keys.settingsUpdatedAt(null),
+                removeSource = false,
+            )
+            it[Keys.GUEST_PREFS_MERGED] = true
+        }
+    }
+
+    private fun owner(): String? = accountStore.account.value?.userId
+
+    private fun Preferences.toUserPreferences(owner: String?) = UserPreferences(
         serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,
         onboardingComplete = this[Keys.ONBOARDING_COMPLETE] ?: false,
-        themeMode = this[Keys.THEME_MODE]
+        themeMode = this[Keys.themeMode(owner)]
             ?.let { name -> runCatching { ThemeMode.valueOf(name) }.getOrNull() }
             ?: ThemeMode.SYSTEM,
-        palette = PaletteId.fromId(this[Keys.PALETTE]),
-        languages = this[Keys.LANGUAGES] ?: emptySet(),
-        category = this[Keys.CATEGORY].orEmpty(),
-        proxyImages = this[Keys.PROXY_IMAGES] ?: true,
-        playbackSpeed = this[Keys.PLAYBACK_SPEED] ?: 1f,
-        downloadWifiOnly = this[Keys.DOWNLOAD_WIFI_ONLY] ?: true,
-        skipSilence = this[Keys.SKIP_SILENCE] ?: false,
-        volumeBoost = this[Keys.VOLUME_BOOST] ?: false,
-        autoDownloadCount = this[Keys.AUTO_DOWNLOAD_COUNT] ?: 3,
-        downloadRetention = DownloadRetention.fromId(this[Keys.DOWNLOAD_RETENTION]),
-        downloadConcurrency = (this[Keys.DOWNLOAD_CONCURRENCY] ?: 2).coerceIn(1, 4),
-        downloadBudgetBytes = (this[Keys.DOWNLOAD_BUDGET_MB] ?: 2_048).toLong() * MB,
+        palette = PaletteId.fromId(this[Keys.palette(owner)]),
+        languages = this[Keys.languages(owner)] ?: emptySet(),
+        category = this[Keys.category(owner)].orEmpty(),
+        proxyImages = this[Keys.proxyImages(owner)] ?: true,
+        playbackSpeed = this[Keys.playbackSpeed(owner)] ?: 1f,
+        downloadWifiOnly = this[Keys.downloadWifiOnly(owner)] ?: true,
+        skipSilence = this[Keys.skipSilence(owner)] ?: false,
+        volumeBoost = this[Keys.volumeBoost(owner)] ?: false,
+        autoDownloadCount = this[Keys.autoDownloadCount(owner)] ?: 3,
+        downloadRetention = DownloadRetention.fromId(this[Keys.downloadRetention(owner)]),
+        downloadConcurrency = (this[Keys.downloadConcurrency(owner)] ?: 2).coerceIn(1, 4),
+        downloadBudgetBytes = (this[Keys.downloadBudgetMb(owner)] ?: 2_048).toLong() * MB,
         downloadStorage = DownloadStorage.fromId(this[Keys.DOWNLOAD_STORAGE]),
         downloadTreeUri = this[Keys.DOWNLOAD_TREE_URI].orEmpty(),
     )
@@ -153,26 +250,52 @@ class PreferencesRepository @Inject constructor(
     private object Keys {
         val SERVER_URL = stringPreferencesKey("server_url")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
-        val THEME_MODE = stringPreferencesKey("theme_mode")
-        val PALETTE = stringPreferencesKey("palette")
-        val LANGUAGES = stringSetPreferencesKey("languages")
-        val CATEGORY = stringPreferencesKey("category")
-        val PROXY_IMAGES = booleanPreferencesKey("proxy_images")
-        val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
-        val DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
-        val SKIP_SILENCE = booleanPreferencesKey("skip_silence")
-        val VOLUME_BOOST = booleanPreferencesKey("volume_boost")
-        val AUTO_DOWNLOAD_COUNT = intPreferencesKey("auto_download_count")
-        val DOWNLOAD_RETENTION = stringPreferencesKey("download_retention")
-        val DOWNLOAD_CONCURRENCY = intPreferencesKey("download_concurrency")
-        val DOWNLOAD_BUDGET_MB = intPreferencesKey("download_budget_mb")
+        private fun scoped(base: String, owner: String?) = "$base:${owner ?: "guest"}"
+        fun themeMode(owner: String?) = stringPreferencesKey(scoped("theme_mode", owner))
+        fun palette(owner: String?) = stringPreferencesKey(scoped("palette", owner))
+        fun languages(owner: String?) = stringSetPreferencesKey(scoped("languages", owner))
+        fun category(owner: String?) = stringPreferencesKey(scoped("category", owner))
+        fun proxyImages(owner: String?) = booleanPreferencesKey(scoped("proxy_images", owner))
+        fun playbackSpeed(owner: String?) = floatPreferencesKey(scoped("playback_speed", owner))
+        fun downloadWifiOnly(owner: String?) = booleanPreferencesKey(scoped("download_wifi_only", owner))
+        fun skipSilence(owner: String?) = booleanPreferencesKey(scoped("skip_silence", owner))
+        fun volumeBoost(owner: String?) = booleanPreferencesKey(scoped("volume_boost", owner))
+        fun autoDownloadCount(owner: String?) = intPreferencesKey(scoped("auto_download_count", owner))
+        fun downloadRetention(owner: String?) = stringPreferencesKey(scoped("download_retention", owner))
+        fun downloadConcurrency(owner: String?) = intPreferencesKey(scoped("download_concurrency", owner))
+        fun downloadBudgetMb(owner: String?) = intPreferencesKey(scoped("download_budget_mb", owner))
         val DOWNLOAD_STORAGE = stringPreferencesKey("download_storage")
         val DOWNLOAD_TREE_URI = stringPreferencesKey("download_tree_uri")
-        val SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
+        fun settingsUpdatedAt(owner: String?) = longPreferencesKey(scoped("settings_updated_at", owner))
+        fun migrationComplete(owner: String?) = booleanPreferencesKey(scoped("legacy_migrated", owner))
+        val LEGACY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val LEGACY_PALETTE = stringPreferencesKey("palette")
+        val LEGACY_LANGUAGES = stringSetPreferencesKey("languages")
+        val LEGACY_CATEGORY = stringPreferencesKey("category")
+        val LEGACY_PROXY_IMAGES = booleanPreferencesKey("proxy_images")
+        val LEGACY_PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
+        val LEGACY_DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
+        val LEGACY_SKIP_SILENCE = booleanPreferencesKey("skip_silence")
+        val LEGACY_VOLUME_BOOST = booleanPreferencesKey("volume_boost")
+        val LEGACY_AUTO_DOWNLOAD_COUNT = intPreferencesKey("auto_download_count")
+        val LEGACY_DOWNLOAD_RETENTION = stringPreferencesKey("download_retention")
+        val LEGACY_DOWNLOAD_CONCURRENCY = intPreferencesKey("download_concurrency")
+        val LEGACY_DOWNLOAD_BUDGET_MB = intPreferencesKey("download_budget_mb")
+        val LEGACY_SETTINGS_UPDATED_AT = longPreferencesKey("settings_updated_at")
+        val GUEST_PREFS_MERGED = booleanPreferencesKey("guest_preferences_merged")
     }
 
-    private fun androidx.datastore.preferences.core.MutablePreferences.touch() {
-        this[Keys.SETTINGS_UPDATED_AT] = System.currentTimeMillis()
+    private fun <T> androidx.datastore.preferences.core.MutablePreferences.copyIfAbsent(
+        target: Preferences.Key<T>,
+        source: Preferences.Key<T>,
+        removeSource: Boolean = true,
+    ) {
+        if (this[target] == null) this[source]?.let { this[target] = it }
+        if (removeSource) remove(source)
+    }
+
+    private fun androidx.datastore.preferences.core.MutablePreferences.touch(owner: String?) {
+        this[Keys.settingsUpdatedAt(owner)] = System.currentTimeMillis()
     }
 
     private companion object {

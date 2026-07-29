@@ -15,6 +15,7 @@
 	},
 	"common": {
 		"loading": "Loading…",
+		"notifications": "Notifications",
 		"retry": "Retry",
 		"cancel": "Cancel",
 		"confirm": "Confirm",
@@ -484,6 +485,7 @@
 		"toggleVolumeBoost": "Toggle Volume Boost",
 		"endOfEpisode": "End of episode",
 		"loadError": "Audio couldn't be loaded — a tracking/ad blocker may be blocking the file.",
+		"effectsCorsUnavailable": "This publisher does not permit browser audio effects. The effect remains off; ask the instance operator to enable the optional audio-effects relay if appropriate.",
 		"retry": "Retry",
 		"source": "Source",
 		"sourceOffline": "Offline download",
@@ -538,6 +540,7 @@
 		"sessionRevoked": "Session revoked.",
 		"sessionRevokeError": "Failed to revoke session.",
 		"signedOut": "Signed out successfully.",
+		"signOutError": "Sign-out could not be confirmed by the server. You remain signed in.",
 		"welcomeBack": "Welcome back, {username}!",
 		"accountCreated": "Account created successfully!",
 		"accountCreatedSaveCode": "Account created — save your recovery code below.",

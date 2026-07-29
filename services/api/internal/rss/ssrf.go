@@ -79,7 +79,10 @@ type SafeTransportConfig struct {
 	Dialer          NetworkDialer
 	ConnectTimeout  time.Duration
 	ResponseTimeout time.Duration
-	AllowLoopback   bool // Set true ONLY in unit tests targeting httptest.NewServer
+	// DisableRequestTimeout keeps the SSRF-safe connect/TLS/header deadlines but
+	// removes the whole-request deadline needed for long-lived audio streams.
+	DisableRequestTimeout bool
+	AllowLoopback         bool // Set true ONLY in unit tests targeting httptest.NewServer
 }
 
 // NewSafeHTTPClient creates a secure http.Client with custom DialContext that validates DNS resolution at connect time.
@@ -148,9 +151,13 @@ func NewSafeHTTPClient(cfg SafeTransportConfig) *http.Client {
 		MinVersion: tls.VersionTLS12,
 	}
 
+	requestTimeout := cfg.ResponseTimeout
+	if cfg.DisableRequestTimeout {
+		requestTimeout = 0
+	}
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   cfg.ResponseTimeout,
+		Timeout:   requestTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects (max 5)")

@@ -98,3 +98,26 @@ func TestConfig_RegistrationEnabledOverride(t *testing.T) {
 		t.Errorf("expected error for invalid KC_REGISTRATION_ENABLED value, got nil")
 	}
 }
+
+func TestConfig_AudioEffectsProxyOptIn(t *testing.T) {
+	t.Setenv("SESSION_SECRET", "a-very-secure-production-secret-with-at-least-32-characters")
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("KC_AUDIO_EFFECTS_PROXY_ENABLED", "")
+
+	defaultCfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("unexpected error with default proxy setting: %v", err)
+	}
+	if defaultCfg.AudioEffectsProxyEnabled {
+		t.Fatal("expected audio effects proxy to be disabled by default")
+	}
+
+	t.Setenv("KC_AUDIO_EFFECTS_PROXY_ENABLED", "true")
+	enabledCfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("unexpected error with enabled proxy setting: %v", err)
+	}
+	if !enabledCfg.AudioEffectsProxyEnabled {
+		t.Fatal("expected audio effects proxy to be enabled explicitly")
+	}
+}

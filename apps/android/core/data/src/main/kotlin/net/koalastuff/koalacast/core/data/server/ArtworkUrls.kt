@@ -59,14 +59,15 @@ class ArtworkUrls @Inject constructor(
     ): String? {
         val source = rawUrl?.trim().orEmpty()
         if (source.isEmpty()) return null
-        if (!proxyEnabled) return source
+        val normalizedSource = if (source.startsWith("//")) "https:$source" else source
+        if (!proxyEnabled) return normalizedSource
 
         val base = serverUrl.toHttpUrlOrNull() ?: return source
-        if (source.toHttpUrlOrNull() == null) return source
+        if (normalizedSource.toHttpUrlOrNull() == null) return normalizedSource
 
         return base.newBuilder()
             .addPathSegments("api/v1/proxy/image")
-            .addQueryParameter("url", source)
+            .addQueryParameter("url", normalizedSource)
             .apply { widthPx?.let { addQueryParameter("w", it.toString()) } }
             .build()
             .toString()

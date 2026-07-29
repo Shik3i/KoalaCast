@@ -21,15 +21,39 @@ const UI_LANGUAGE_KEY = 'koalacast_ui_language';
 const ONBOARDED_KEY = 'koalacast_onboarded';
 const VOLUME_BOOST_KEY = 'koalacast_volume_boost';
 const SKIP_SILENCE_KEY = 'koalacast_skip_silence';
+const PLAYBACK_SPEED_KEY = 'koalacast_playback_speed';
 const SETTINGS_UPDATED_AT_KEY = 'koalacast_settings_updated_at';
+const GUEST_MIGRATION_KEY = 'koalacast_guest_preferences_migrated';
+const ACCOUNT_SCOPED_KEYS = [
+	KEY,
+	INTERESTS_KEY,
+	HIDDEN_KEY,
+	LANGUAGES_KEY,
+	UI_LANGUAGE_KEY,
+	VOLUME_BOOST_KEY,
+	SKIP_SILENCE_KEY,
+	PLAYBACK_SPEED_KEY,
+	SETTINGS_UPDATED_AT_KEY
+];
+let activeOwner: string | null = null;
+
+function scopedKey(key: string, owner = activeOwner): string {
+	return owner ? `${key}:account:${encodeURIComponent(owner)}` : key;
+}
 
 function initialBoolean(key: string): boolean {
 	if (typeof localStorage === 'undefined') return false;
 	try {
-		return localStorage.getItem(key) === '1';
+		return localStorage.getItem(scopedKey(key)) === '1';
 	} catch (_) {
 		return false;
 	}
+}
+
+function initialPlaybackSpeed(): number {
+	if (typeof localStorage === 'undefined') return 1;
+	const value = Number(localStorage.getItem(scopedKey(PLAYBACK_SPEED_KEY)));
+	return Number.isFinite(value) ? Math.max(0.5, Math.min(3, value)) : 1;
 }
 
 // Reads the stored content languages, migrating the legacy storefront codes
@@ -38,7 +62,7 @@ function initialBoolean(key: string): boolean {
 function initialLanguages(): string[] {
 	if (typeof localStorage === 'undefined') return ['en'];
 	try {
-		const stored = normalizeLanguageList(JSON.parse(localStorage.getItem(LANGUAGES_KEY) || '[]'));
+		const stored = normalizeLanguageList(JSON.parse(localStorage.getItem(scopedKey(LANGUAGES_KEY)) || '[]'));
 		return stored.length > 0 ? stored : detectBrowserLanguages();
 	} catch (_) {
 		return detectBrowserLanguages();
@@ -51,7 +75,7 @@ function initialLanguages(): string[] {
 // browser's own language.
 export function initialUILanguage(contentLanguages: string[] = initialLanguages()): string {
 	if (typeof localStorage === 'undefined') return 'en';
-	const stored = localStorage.getItem(UI_LANGUAGE_KEY);
+	const stored = localStorage.getItem(scopedKey(UI_LANGUAGE_KEY));
 	if (stored && isSupportedLocale(stored)) return stored;
 	const fromContent = resolveLocale(contentLanguages[0]);
 	if (fromContent !== 'en') return fromContent;
@@ -60,13 +84,13 @@ export function initialUILanguage(contentLanguages: string[] = initialLanguages(
 
 function initialFormat(): DateFormat {
 	if (typeof localStorage === 'undefined') return 'absolute';
-	return localStorage.getItem(KEY) === 'relative' ? 'relative' : 'absolute';
+	return localStorage.getItem(scopedKey(KEY)) === 'relative' ? 'relative' : 'absolute';
 }
 
 function initialInterests(): string[] {
 	if (typeof localStorage === 'undefined') return [];
 	try {
-		const v = JSON.parse(localStorage.getItem(INTERESTS_KEY) || '[]');
+		const v = JSON.parse(localStorage.getItem(scopedKey(INTERESTS_KEY)) || '[]');
 		return Array.isArray(v) ? v : [];
 	} catch (_) {
 		return [];
@@ -76,7 +100,7 @@ function initialInterests(): string[] {
 function initialHidden(): string[] {
 	if (typeof localStorage === 'undefined') return [];
 	try {
-		const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]');
+		const v = JSON.parse(localStorage.getItem(scopedKey(HIDDEN_KEY)) || '[]');
 		return Array.isArray(v) ? v : [];
 	} catch (_) {
 		return [];
@@ -104,16 +128,48 @@ class Prefs {
 	onboarded = $state<boolean>(initialOnboarded());
 	volumeBoost = $state<boolean>(initialBoolean(VOLUME_BOOST_KEY));
 	skipSilence = $state<boolean>(initialBoolean(SKIP_SILENCE_KEY));
+	playbackSpeed = $state<number>(initialPlaybackSpeed());
 	updatedAt = $state<number>(
 		typeof localStorage === 'undefined'
 			? 0
-			: Math.max(0, Number(localStorage.getItem(SETTINGS_UPDATED_AT_KEY)) || 0)
+			: Math.max(0, Number(localStorage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0)
 	);
+
+	activateContext(userId: string | null, options: { migrateGuest?: boolean } = {}) {
+		if (
+			typeof localStorage !== 'undefined' &&
+			userId &&
+			options.migrateGuest &&
+			localStorage.getItem(GUEST_MIGRATION_KEY) !== '1'
+		) {
+			for (const baseKey of ACCOUNT_SCOPED_KEYS) {
+				const target = scopedKey(baseKey, userId);
+				if (localStorage.getItem(target) === null) {
+					const legacy = localStorage.getItem(baseKey);
+					if (legacy !== null) localStorage.setItem(target, legacy);
+				}
+			}
+			localStorage.setItem(GUEST_MIGRATION_KEY, '1');
+		}
+		activeOwner = userId;
+		this.dateFormat = initialFormat();
+		this.interests = initialInterests();
+		this.hiddenGenres = initialHidden();
+		this.languages = initialLanguages();
+		this.uiLanguage = initialUILanguage(this.languages);
+		this.volumeBoost = initialBoolean(VOLUME_BOOST_KEY);
+		this.skipSilence = initialBoolean(SKIP_SILENCE_KEY);
+		this.playbackSpeed = initialPlaybackSpeed();
+		this.updatedAt =
+			typeof localStorage === 'undefined'
+				? 0
+				: Math.max(0, Number(localStorage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0);
+	}
 
 	#touch() {
 		this.updatedAt = Date.now();
 		try {
-			localStorage.setItem(SETTINGS_UPDATED_AT_KEY, String(this.updatedAt));
+			localStorage.setItem(scopedKey(SETTINGS_UPDATED_AT_KEY), String(this.updatedAt));
 		} catch (_) {}
 	}
 
@@ -125,7 +181,7 @@ class Prefs {
 
 	#persistLanguages() {
 		try {
-			localStorage.setItem(LANGUAGES_KEY, JSON.stringify(this.languages));
+			localStorage.setItem(scopedKey(LANGUAGES_KEY), JSON.stringify(this.languages));
 		} catch (_) {}
 	}
 
@@ -143,7 +199,7 @@ class Prefs {
 	setUILanguage(locale: string) {
 		this.uiLanguage = locale;
 		try {
-			localStorage.setItem(UI_LANGUAGE_KEY, locale);
+			localStorage.setItem(scopedKey(UI_LANGUAGE_KEY), locale);
 		} catch (_) {}
 		this.#touch();
 	}
@@ -151,7 +207,7 @@ class Prefs {
 	setDateFormat(mode: DateFormat) {
 		this.dateFormat = mode;
 		try {
-			localStorage.setItem(KEY, mode);
+			localStorage.setItem(scopedKey(KEY), mode);
 		} catch (_) {}
 		this.#touch();
 	}
@@ -159,7 +215,7 @@ class Prefs {
 	setVolumeBoost(enabled: boolean) {
 		this.volumeBoost = enabled;
 		try {
-			localStorage.setItem(VOLUME_BOOST_KEY, enabled ? '1' : '0');
+			localStorage.setItem(scopedKey(VOLUME_BOOST_KEY), enabled ? '1' : '0');
 		} catch (_) {}
 		this.#touch();
 	}
@@ -167,14 +223,22 @@ class Prefs {
 	setSkipSilence(enabled: boolean) {
 		this.skipSilence = enabled;
 		try {
-			localStorage.setItem(SKIP_SILENCE_KEY, enabled ? '1' : '0');
+			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), enabled ? '1' : '0');
+		} catch (_) {}
+		this.#touch();
+	}
+
+	setPlaybackSpeed(speed: number) {
+		this.playbackSpeed = Number.isFinite(speed) ? Math.max(0.5, Math.min(3, speed)) : 1;
+		try {
+			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
 		} catch (_) {}
 		this.#touch();
 	}
 
 	#persistInterests() {
 		try {
-			localStorage.setItem(INTERESTS_KEY, JSON.stringify(this.interests));
+			localStorage.setItem(scopedKey(INTERESTS_KEY), JSON.stringify(this.interests));
 		} catch (_) {}
 	}
 
@@ -192,7 +256,7 @@ class Prefs {
 
 	#persistHidden() {
 		try {
-			localStorage.setItem(HIDDEN_KEY, JSON.stringify(this.hiddenGenres));
+			localStorage.setItem(scopedKey(HIDDEN_KEY), JSON.stringify(this.hiddenGenres));
 		} catch (_) {}
 	}
 
@@ -217,13 +281,31 @@ class Prefs {
 			ui_language: this.uiLanguage,
 			volume_boost: this.volumeBoost,
 			skip_silence: this.skipSilence,
+			playback_speed: this.playbackSpeed,
 			updated_at: this.updatedAt
 		};
 	}
 
-	applySynced(payload: Record<string, unknown>) {
+	resetSynced() {
+		this.dateFormat = 'absolute';
+		this.interests = [];
+		this.hiddenGenres = [];
+		this.languages = detectBrowserLanguages();
+		this.uiLanguage = initialUILanguage(this.languages);
+		this.volumeBoost = false;
+		this.skipSilence = false;
+		this.playbackSpeed = 1;
+		this.updatedAt = 0;
+		try {
+			for (const baseKey of ACCOUNT_SCOPED_KEYS) {
+				localStorage.removeItem(scopedKey(baseKey));
+			}
+		} catch (_) {}
+	}
+
+	applySynced(payload: Record<string, unknown>, options: { authoritative?: boolean } = {}) {
 		const updatedAt = Math.max(0, Number(payload.updated_at) || 0);
-		if (!updatedAt || this.updatedAt >= updatedAt) return;
+		if (!updatedAt || (!options.authoritative && this.updatedAt >= updatedAt)) return;
 		const languages = normalizeLanguageList(Array.isArray(payload.languages) ? payload.languages : []);
 		if (payload.date_format === 'relative' || payload.date_format === 'absolute') {
 			this.dateFormat = payload.date_format;
@@ -248,16 +330,20 @@ class Prefs {
 		if (typeof payload.skip_silence === 'boolean') {
 			this.skipSilence = payload.skip_silence;
 		}
+		if (Number.isFinite(Number(payload.playback_speed))) {
+			this.playbackSpeed = Math.max(0.5, Math.min(3, Number(payload.playback_speed)));
+		}
 		this.updatedAt = updatedAt;
 		try {
-			localStorage.setItem(KEY, this.dateFormat);
-			localStorage.setItem(LANGUAGES_KEY, JSON.stringify(this.languages));
-			localStorage.setItem(INTERESTS_KEY, JSON.stringify(this.interests));
-			localStorage.setItem(HIDDEN_KEY, JSON.stringify(this.hiddenGenres));
-			localStorage.setItem(UI_LANGUAGE_KEY, this.uiLanguage);
-			localStorage.setItem(VOLUME_BOOST_KEY, this.volumeBoost ? '1' : '0');
-			localStorage.setItem(SKIP_SILENCE_KEY, this.skipSilence ? '1' : '0');
-			localStorage.setItem(SETTINGS_UPDATED_AT_KEY, String(this.updatedAt));
+			localStorage.setItem(scopedKey(KEY), this.dateFormat);
+			localStorage.setItem(scopedKey(LANGUAGES_KEY), JSON.stringify(this.languages));
+			localStorage.setItem(scopedKey(INTERESTS_KEY), JSON.stringify(this.interests));
+			localStorage.setItem(scopedKey(HIDDEN_KEY), JSON.stringify(this.hiddenGenres));
+			localStorage.setItem(scopedKey(UI_LANGUAGE_KEY), this.uiLanguage);
+			localStorage.setItem(scopedKey(VOLUME_BOOST_KEY), this.volumeBoost ? '1' : '0');
+			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), this.skipSilence ? '1' : '0');
+			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
+			localStorage.setItem(scopedKey(SETTINGS_UPDATED_AT_KEY), String(this.updatedAt));
 		} catch (_) {}
 	}
 

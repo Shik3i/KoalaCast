@@ -8,7 +8,10 @@
 // the last useful screen immediately while the next snapshot is fetched.
 
 import { build, files, version } from '$service-worker';
-import { AUDIO_DOWNLOAD_CACHE } from '$lib/downloads/offline-audio';
+import {
+	AUDIO_DOWNLOAD_CACHE_PREFIX,
+	audioDownloadCacheNameForOfflinePath
+} from '$lib/downloads/offline-audio';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -72,7 +75,12 @@ sw.addEventListener('activate', (event) => {
 			.then((keys) =>
 				Promise.all(
 					keys
-						.filter((k) => k !== CACHE && k !== PUBLIC_API_CACHE && k !== AUDIO_DOWNLOAD_CACHE)
+						.filter(
+							(k) =>
+								k !== CACHE &&
+								k !== PUBLIC_API_CACHE &&
+								!k.startsWith(`${AUDIO_DOWNLOAD_CACHE_PREFIX}-`)
+						)
 						.map((k) => caches.delete(k))
 				)
 			)
@@ -90,8 +98,10 @@ sw.addEventListener('fetch', (event) => {
 	if (url.origin !== sw.location.origin) return;
 
 	if (url.pathname.startsWith('/offline/audio/')) {
+		const audioCacheName = audioDownloadCacheNameForOfflinePath(url.pathname);
 		event.respondWith(
-			caches.open(AUDIO_DOWNLOAD_CACHE).then(async (cache) => {
+			(audioCacheName ? caches.open(audioCacheName) : Promise.resolve(null)).then(async (cache) => {
+				if (!cache) return new Response('Invalid offline audio path', { status: 404 });
 				const cached = await cache.match(url.pathname);
 				if (!cached) return new Response('Audio is not downloaded', { status: 404 });
 				const range = request.headers.get('range');

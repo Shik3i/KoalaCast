@@ -44,7 +44,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 1. **100% free and open source** — MIT licensed, no ads, no tracking, no premium tier.
 2. **Local-first** — use the entire app with no account; data lives in your browser's IndexedDB.
 3. **Optional cross-device sync** — an account syncs subscriptions, favorites, playback progress, and listening statistics.
-4. **Direct publisher audio** — audio streams straight from the publisher CDN; KoalaCast never proxies or stores it.
+4. **Direct publisher audio by default** — playback streams straight from the publisher CDN. Self-hosters can opt into an audio relay for browser effects/downloads blocked by publisher CORS.
 5. **RSS as the source of truth** — standard RSS 2.0/Atom plus Podcasting 2.0 tags are preserved.
 6. **Self-hosting parity** — a self-hosted instance has exactly the same capabilities as any official one.
 
@@ -195,6 +195,7 @@ The backend is configured entirely through environment variables. Copy [`.env.ex
 | `PODCAST_INDEX_KEY` / `_SECRET` | empty | Optional Podcast Index API creds (iTunes used as fallback) |
 | `FEED_WORKER_CONCURRENCY` | `5` | Background feed-refresh workers |
 | `FEED_MAX_RESPONSE_BYTES` | `10485760` | Max RSS body size (SSRF/DoS guard) |
+| `KC_AUDIO_EFFECTS_PROXY_ENABLED` | `false` | Optional relay fallback for CORS-blocked browser effects/downloads; uses the self-hoster's bandwidth |
 
 Full precedence rules: [docs/architecture/overview.md](docs/architecture/overview.md).
 

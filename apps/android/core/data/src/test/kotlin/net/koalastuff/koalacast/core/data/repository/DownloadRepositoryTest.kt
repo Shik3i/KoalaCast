@@ -12,14 +12,15 @@ class DownloadRepositoryTest {
     @Test
     fun `storage key is deterministic and safe as one path segment`() {
         val unsafeId = "../../publisher/episode?id=one"
-        val key = DownloadRepository.storageKey(unsafeId)
+        val key = DownloadRepository.storageKey(unsafeId, "user-a")
 
-        assertEquals(key, DownloadRepository.storageKey(unsafeId))
+        assertEquals(key, DownloadRepository.storageKey(unsafeId, "user-a"))
         assertEquals(64, key.length)
         assertTrue(key.all { it in '0'..'9' || it in 'a'..'f' })
         assertFalse(key.contains('/'))
         assertFalse(key.contains(".."))
-        assertNotEquals(key, DownloadRepository.storageKey("$unsafeId-2"))
+        assertNotEquals(key, DownloadRepository.storageKey("$unsafeId-2", "user-a"))
+        assertNotEquals(key, DownloadRepository.storageKey(unsafeId, "user-b"))
     }
 
     @Test
@@ -35,6 +36,19 @@ class DownloadRepositoryTest {
         assertFalse(shouldRemoveDownload(DownloadRetention.AFTER_14_DAYS, false, now - 14 * DAY + 1, now))
         assertTrue(shouldRemoveDownload(DownloadRetention.AFTER_30_DAYS, false, now - 30 * DAY, now))
         assertFalse(shouldRemoveDownload(DownloadRetention.AFTER_30_DAYS, false, now - 30 * DAY + 1, now))
+    }
+
+    @Test
+    fun `content range parser validates resume offsets and complete partials`() {
+        assertEquals(
+            ParsedContentRange(start = 1024, total = 4096),
+            parseContentRange("bytes 1024-4095/4096"),
+        )
+        assertEquals(
+            ParsedContentRange(start = null, total = 4096),
+            parseContentRange("bytes */4096"),
+        )
+        assertEquals(null, parseContentRange("bytes invalid"))
     }
 
     private companion object {

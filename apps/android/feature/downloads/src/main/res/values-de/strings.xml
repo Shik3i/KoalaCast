@@ -14,4 +14,8 @@
     <string name="downloads_remove">Löschen</string>
     <string name="downloads_remove_all">Alle löschen</string>
     <string name="downloads_storage">%1$s gespeichert</string>
+    <string name="downloads_remove_all_confirm_title">Alle Downloads entfernen?</string>
+    <string name="downloads_remove_all_confirm_body">Dadurch werden %1$d heruntergeladene Folgen dauerhaft von diesem Gerät entfernt.</string>
+    <string name="downloads_remove_confirm_title">Download entfernen?</string>
+    <string name="downloads_remove_confirm_body">„%1$s“ wird dauerhaft von diesem Gerät entfernt.</string>
 </resources>

@@ -26,7 +26,7 @@ export async function notifyNewPodcastEpisodes(
 	await registration.showNotification(podcastTitle, {
 		body,
 		icon: '/icon-192.png',
-		badge: '/icon-96.png',
+		badge: '/icon-72.png',
 		tag: `new-episodes-${podcastId}`,
 		data: { url: `/podcast/${encodeURIComponent(podcastId)}` }
 	});

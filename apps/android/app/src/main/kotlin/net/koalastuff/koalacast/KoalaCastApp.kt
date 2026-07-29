@@ -1,7 +1,8 @@
 package net.koalastuff.koalacast
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -21,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -66,6 +69,8 @@ import net.koalastuff.koalacast.navigation.TopLevelDestination
 @Composable
 fun KoalaCastApp(
     onboardingComplete: Boolean?,
+    requestedEpisodeId: String? = null,
+    onEpisodeRequestConsumed: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
 ) {
     val colors = KoalaTheme.colors
@@ -81,6 +86,13 @@ fun KoalaCastApp(
     // The expanded player is a layer over the graph, not a destination: the back
     // stack underneath must survive collapsing it.
     var nowPlayingExpanded by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(onboardingComplete, requestedEpisodeId) {
+        val episodeId = requestedEpisodeId?.takeIf(String::isNotBlank) ?: return@LaunchedEffect
+        if (!onboardingComplete) return@LaunchedEffect
+        navController.navigate(Routes.episode(episodeId)) { launchSingleTop = true }
+        onEpisodeRequestConsumed()
+    }
 
     BackHandler(enabled = nowPlayingExpanded) { nowPlayingExpanded = false }
 
@@ -303,7 +315,8 @@ private fun KoalaBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(vertical = KoalaSpacing.gapSmall),
+                .padding(vertical = KoalaSpacing.gapSmall)
+                .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -312,7 +325,12 @@ private fun KoalaBottomBar(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable(role = Role.Tab) { onSelect(destination) }
+                        .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+                        .selectable(
+                            selected = selected,
+                            role = Role.Tab,
+                            onClick = { onSelect(destination) },
+                        )
                         .padding(vertical = KoalaSpacing.gapSmall),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),

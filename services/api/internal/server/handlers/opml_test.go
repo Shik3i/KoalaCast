@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
+	customMiddleware "github.com/Shik3i/KoalaCast/services/api/internal/server/middleware"
 )
 
 func TestOPMLHandler_Import_InvalidXML(t *testing.T) {
@@ -34,6 +35,13 @@ func TestOPMLHandler_Import_InvalidXML(t *testing.T) {
 
 	handler := &OPMLHandler{
 		DB: database,
+	}
+	if _, err := database.SQL.Exec(`
+		INSERT INTO users
+			(id, username, normalized_username, password_hash, recovery_code_hash, created_at, updated_at)
+		VALUES ('u-opml', 'OPML User', 'opml-user', 'hash', 'recovery', 0, 0)
+	`); err != nil {
+		t.Fatalf("seed user: %v", err)
 	}
 
 	invalidXML := []byte(`<opml><unclosed_tag>`)
@@ -139,6 +147,14 @@ func TestOPMLHandler_Import_UsesCompleteFeedIngestionAndReturnsResolvedMetadata(
 
 	const sourceURL = "https://example.org/original.xml"
 	const canonicalURL = "https://cdn.example.org/canonical.xml"
+	now := time.Now().UnixMilli()
+	if _, err := database.SQL.Exec(`
+		INSERT INTO users
+			(id, username, normalized_username, password_hash, recovery_code_hash, created_at, updated_at)
+		VALUES ('u-opml', 'opml-user', 'opml-user', 'hash', 'recovery', ?, ?)
+	`, now, now); err != nil {
+		t.Fatalf("insert auth user: %v", err)
+	}
 	called := false
 	handler := &OPMLHandler{
 		DB: database,
@@ -160,7 +176,13 @@ func TestOPMLHandler_Import_UsesCompleteFeedIngestionAndReturnsResolvedMetadata(
 <opml version="2.0"><body>
 	<outline type="rss" text="Podcast" xmlUrl="https://example.org/original.xml"/>
 </body></opml>`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/opml/import", bytes.NewBuffer(payload))
+	authCtx := context.WithValue(
+		context.Background(),
+		customMiddleware.UserContextKey,
+		&customMiddleware.AuthUser{ID: "u-opml"},
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/opml/import", bytes.NewBuffer(payload)).
+		WithContext(authCtx)
 	rec := httptest.NewRecorder()
 
 	handler.Import(rec, req)
@@ -182,6 +204,13 @@ func TestOPMLHandler_Import_UsesCompleteFeedIngestionAndReturnsResolvedMetadata(
 	if got.ID != "resolved-id" || got.SourceURL != sourceURL || got.FeedURL != canonicalURL ||
 		got.ArtworkURL != "https://cdn.example.org/cover.jpg" {
 		t.Fatalf("unexpected resolved podcast: %+v", got)
+	}
+	var syncEntries int
+	if err := database.SQL.QueryRow(`
+		SELECT COUNT(*) FROM sync_log
+		WHERE user_id='u-opml' AND entity_type='subscription' AND entity_id='resolved-id'
+	`).Scan(&syncEntries); err != nil || syncEntries != 1 {
+		t.Fatalf("import did not emit subscription sync entry: count=%d err=%v", syncEntries, err)
 	}
 }
 

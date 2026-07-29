@@ -11,25 +11,26 @@ import (
 )
 
 type Config struct {
-	AppEnv                 string
-	Port                   string
-	PublicBaseURL          string
-	APIBaseURL             string
-	LogLevel               slog.Level
-	DatabasePath           string
-	SessionSecret          string
-	PepperSecret           string
-	RegistrationEnabledEnv *bool // nil if unset/empty (defer to DB admin setting), non-nil acts as hard override
-	TrustedProxies         []string
-	SecureCookies          bool
-	PodcastIndexKey        string
-	PodcastIndexSecret     string
-	AdminUsername          string
-	AdminPassword          string
-	FeedWorkerConcurrency  int
-	FeedRequestTimeoutMS   int
-	FeedMaxResponseBytes   int64
-	AllowedCORSOrigins     []string
+	AppEnv                   string
+	Port                     string
+	PublicBaseURL            string
+	APIBaseURL               string
+	LogLevel                 slog.Level
+	DatabasePath             string
+	SessionSecret            string
+	PepperSecret             string
+	RegistrationEnabledEnv   *bool // nil if unset/empty (defer to DB admin setting), non-nil acts as hard override
+	TrustedProxies           []string
+	SecureCookies            bool
+	PodcastIndexKey          string
+	PodcastIndexSecret       string
+	AdminUsername            string
+	AdminPassword            string
+	FeedWorkerConcurrency    int
+	FeedRequestTimeoutMS     int
+	FeedMaxResponseBytes     int64
+	AllowedCORSOrigins       []string
+	AudioEffectsProxyEnabled bool
 }
 
 var knownInsecureSecrets = []string{
@@ -44,20 +45,21 @@ func LoadConfig() (*Config, error) {
 	appEnv := strings.ToLower(getEnv("APP_ENV", "production"))
 
 	cfg := &Config{
-		AppEnv:                appEnv,
-		Port:                  getEnv("PORT", "3000"),
-		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:3000"),
-		APIBaseURL:            getEnv("API_BASE_URL", "http://localhost:3000/api/v1"),
-		DatabasePath:          getEnv("DATABASE_PATH", "./data/koalacast.db"),
-		SessionSecret:         os.Getenv("SESSION_SECRET"),
-		PepperSecret:          getEnv("PEPPER_SECRET", os.Getenv("KC_PEPPER_SECRET")),
-		PodcastIndexKey:       os.Getenv("PODCAST_INDEX_KEY"),
-		PodcastIndexSecret:    os.Getenv("PODCAST_INDEX_SECRET"),
-		AdminUsername:         os.Getenv("ADMIN_USERNAME"),
-		AdminPassword:         os.Getenv("ADMIN_PASSWORD"),
-		FeedWorkerConcurrency: getEnvInt("FEED_WORKER_CONCURRENCY", 5),
-		FeedRequestTimeoutMS:  getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
-		FeedMaxResponseBytes:  int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),
+		AppEnv:                   appEnv,
+		Port:                     getEnv("PORT", "3000"),
+		PublicBaseURL:            getEnv("PUBLIC_BASE_URL", "http://localhost:3000"),
+		APIBaseURL:               getEnv("API_BASE_URL", "http://localhost:3000/api/v1"),
+		DatabasePath:             getEnv("DATABASE_PATH", "./data/koalacast.db"),
+		SessionSecret:            os.Getenv("SESSION_SECRET"),
+		PepperSecret:             getEnv("PEPPER_SECRET", os.Getenv("KC_PEPPER_SECRET")),
+		PodcastIndexKey:          os.Getenv("PODCAST_INDEX_KEY"),
+		PodcastIndexSecret:       os.Getenv("PODCAST_INDEX_SECRET"),
+		AdminUsername:            os.Getenv("ADMIN_USERNAME"),
+		AdminPassword:            os.Getenv("ADMIN_PASSWORD"),
+		FeedWorkerConcurrency:    getEnvInt("FEED_WORKER_CONCURRENCY", 5),
+		FeedRequestTimeoutMS:     getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
+		FeedMaxResponseBytes:     int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),
+		AudioEffectsProxyEnabled: getEnvBool("KC_AUDIO_EFFECTS_PROXY_ENABLED", false),
 		// Secure cookies default ON in production; a deployment terminating TLS
 		// elsewhere (e.g. plain-HTTP local demo behind a proxy) can opt out with
 		// SECURE_COOKIES=false.

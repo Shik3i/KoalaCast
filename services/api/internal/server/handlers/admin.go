@@ -121,23 +121,27 @@ func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Suspend bool `json:"suspend"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	var targetRole string
+	var targetSuspended int
+	err := h.DB.SQL.QueryRowContext(r.Context(),
+		"SELECT role, is_suspended FROM users WHERE id = ?", targetID).Scan(&targetRole, &targetSuspended)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 
 	if req.Suspend {
 		// Guard against an admin locking themselves out, or removing the last admin.
 		if authUser != nil && targetID == authUser.ID {
 			http.Error(w, `{"error":"you cannot suspend your own account"}`, http.StatusBadRequest)
-			return
-		}
-		var targetRole string
-		var targetSuspended int
-		err := h.DB.SQL.QueryRowContext(r.Context(),
-			"SELECT role, is_suspended FROM users WHERE id = ?", targetID).Scan(&targetRole, &targetSuspended)
-		if err == sql.ErrNoRows {
-			http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
-			return
-		} else if err != nil {
-			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
 			return
 		}
 		if targetRole == "admin" {
@@ -156,15 +160,31 @@ func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
 		suspendInt = 1
 	}
 
-	_, err := h.DB.SQL.ExecContext(r.Context(), "UPDATE users SET is_suspended = ? WHERE id = ?", suspendInt, targetID)
+	tx, err := h.DB.SQL.BeginTx(r.Context(), nil)
 	if err != nil {
+		http.Error(w, `{"error":"failed to begin user status update"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(r.Context(), "UPDATE users SET is_suspended = ? WHERE id = ?", suspendInt, targetID); err != nil {
 		http.Error(w, `{"error":"failed to update user status"}`, http.StatusInternalServerError)
 		return
 	}
 
 	if req.Suspend {
-		// Revoke all sessions upon suspension
-		_, _ = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE user_id = ?", targetID)
+		if _, err := tx.ExecContext(r.Context(), "DELETE FROM sessions WHERE user_id = ?", targetID); err != nil {
+			http.Error(w, `{"error":"failed to revoke web sessions"}`, http.StatusInternalServerError)
+			return
+		}
+		if _, err := tx.ExecContext(r.Context(), "DELETE FROM device_credentials WHERE user_id = ?", targetID); err != nil {
+			http.Error(w, `{"error":"failed to revoke device credentials"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, `{"error":"failed to commit user status"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

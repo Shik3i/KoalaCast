@@ -14,6 +14,7 @@
     <string name="account_create">Konto erstellen</string>
     <string name="account_save_recovery">Speichere diesen Wiederherstellungscode jetzt. Er wird nicht erneut angezeigt.</string>
     <string name="account_copy">Code kopieren</string>
+    <string name="account_recovery_saved">Ich habe den Wiederherstellungscode gespeichert</string>
     <string name="account_sign_out">Abmelden</string>
     <string name="account_sync_off">Sync aus</string>
     <string name="account_sync_now">Jetzt synchronisieren</string>

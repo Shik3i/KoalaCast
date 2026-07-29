@@ -113,6 +113,7 @@ fun AccountScreen(
         onRegister = viewModel::register,
         onLogin = viewModel::login,
         onRecover = viewModel::recover,
+        onRecoverySaved = viewModel::confirmRecoveryCodeSaved,
         onLogout = viewModel::logout,
         onSync = viewModel::syncNow,
         onRevoke = viewModel::revokeSession,
@@ -139,6 +140,7 @@ internal fun AccountContent(
     onRegister: () -> Unit,
     onLogin: () -> Unit,
     onRecover: () -> Unit,
+    onRecoverySaved: () -> Unit,
     onLogout: () -> Unit,
     onSync: () -> Unit,
     onRevoke: (String) -> Unit,
@@ -186,7 +188,12 @@ internal fun AccountContent(
             )
         }
 
-        if (state.account == null) {
+        if (state.recoveryCodeDisplay != null) {
+            RecoveryCodeContent(
+                code = state.recoveryCodeDisplay,
+                onConfirmed = onRecoverySaved,
+            )
+        } else if (state.account == null) {
             SignedOutContent(
                 state = state,
                 onUsername = onUsername,
@@ -207,8 +214,9 @@ internal fun AccountContent(
             )
         }
 
-        Hairline()
-        Section(stringResource(R.string.account_opml)) {
+        if (state.recoveryCodeDisplay == null) {
+            Hairline()
+            Section(stringResource(R.string.account_opml)) {
             Text(
                 text = stringResource(R.string.account_opml_body),
                 style = KoalaTheme.type.bodySmall,
@@ -266,6 +274,7 @@ internal fun AccountContent(
                     Text(text = it, style = KoalaTheme.type.bodySmall, color = KoalaTheme.colors.ink4)
                 }
             }
+            }
         }
     }
 }
@@ -291,6 +300,11 @@ private fun SignedOutContent(
         selectedIndex = mode,
         onSelect = { mode = it },
     )
+    MonoText(
+        text = stringResource(R.string.account_username),
+        color = KoalaTheme.colors.ink4,
+        style = KoalaTheme.type.monoSmall,
+    )
     KoalaTextField(
         value = state.username,
         onValueChange = onUsername,
@@ -299,12 +313,22 @@ private fun SignedOutContent(
         imeAction = ImeAction.Next,
     )
     if (mode == 2) {
+        MonoText(
+            text = stringResource(R.string.account_recovery_code),
+            color = KoalaTheme.colors.ink4,
+            style = KoalaTheme.type.monoSmall,
+        )
         KoalaTextField(
             value = state.recoveryCodeInput,
             onValueChange = onRecoveryCode,
             placeholder = stringResource(R.string.account_recovery_code),
             leadingIcon = PhosphorIcons.ShieldCheck,
             imeAction = ImeAction.Next,
+        )
+        MonoText(
+            text = stringResource(R.string.account_new_password),
+            color = KoalaTheme.colors.ink4,
+            style = KoalaTheme.type.monoSmall,
         )
         KoalaTextField(
             value = state.newPassword,
@@ -323,6 +347,11 @@ private fun SignedOutContent(
                 state.recoveryCodeInput.isNotBlank() && state.newPassword.length >= 8,
         )
     } else {
+        MonoText(
+            text = stringResource(R.string.account_password),
+            color = KoalaTheme.colors.ink4,
+            style = KoalaTheme.type.monoSmall,
+        )
         KoalaTextField(
             value = state.password,
             onValueChange = onPassword,
@@ -341,31 +370,40 @@ private fun SignedOutContent(
             enabled = !state.busy && state.username.length >= 3 && state.password.length >= 8,
         )
     }
-    state.recoveryCodeDisplay?.let { code ->
-        val context = LocalContext.current
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(KoalaTheme.colors.accentWash, KoalaShapes.card)
-                .padding(KoalaSpacing.gap),
-            verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-        ) {
-            Text(
-                text = stringResource(R.string.account_save_recovery),
-                style = KoalaTheme.type.label,
-                color = KoalaTheme.colors.inkStrong,
-            )
-            SelectionContainer {
-                MonoText(text = code, color = KoalaTheme.colors.accentInk, style = KoalaTheme.type.monoStrong)
-            }
-            OutlineButton(
-                text = stringResource(R.string.account_copy),
-                onClick = {
-                    val clipboard = context.getSystemService(ClipboardManager::class.java)
-                    clipboard.setPrimaryClip(ClipData.newPlainText("KoalaCast recovery code", code))
-                },
-            )
+}
+
+@Composable
+private fun RecoveryCodeContent(
+    code: String,
+    onConfirmed: () -> Unit,
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(KoalaTheme.colors.accentWash, KoalaShapes.card)
+            .padding(KoalaSpacing.gap),
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+    ) {
+        Text(
+            text = stringResource(R.string.account_save_recovery),
+            style = KoalaTheme.type.label,
+            color = KoalaTheme.colors.inkStrong,
+        )
+        SelectionContainer {
+            MonoText(text = code, color = KoalaTheme.colors.accentInk, style = KoalaTheme.type.monoStrong)
         }
+        OutlineButton(
+            text = stringResource(R.string.account_copy),
+            onClick = {
+                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                clipboard.setPrimaryClip(ClipData.newPlainText("KoalaCast recovery code", code))
+            },
+        )
+        AccentButton(
+            text = stringResource(R.string.account_recovery_saved),
+            onClick = onConfirmed,
+        )
     }
 }
 

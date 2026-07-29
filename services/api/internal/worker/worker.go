@@ -252,6 +252,10 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 
 	newETag := resp.Header.Get("ETag")
 	newLastModified := resp.Header.Get("Last-Modified")
+	podcastExplicitInt := 0
+	if parsedFeed.Explicit {
+		podcastExplicitInt = 1
+	}
 
 	// Update Podcast metadata
 	tx, err := w.db.SQL.BeginTx(ctx, nil)
@@ -268,6 +272,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 			artwork_url = ?,
 			link = ?,
 			language = ?,
+			explicit = ?,
 			copyright = ?,
 			last_fetch_attempt_at = ?,
 			last_successful_fetch_at = ?,
@@ -280,7 +285,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 			updated_at = ?
 		WHERE id = ?
 	`, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author, parsedFeed.ArtworkURL,
-		parsedFeed.Link, parsedFeed.Language, parsedFeed.Copyright,
+		parsedFeed.Link, parsedFeed.Language, podcastExplicitInt, parsedFeed.Copyright,
 		nowMs, nowMs, nowMs+86400000, newETag, newLastModified, nowMs, podcastID)
 	if err != nil {
 		return fmt.Errorf("failed to update podcast: %w", err)
@@ -336,18 +341,25 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 				SET title = ?,
 					description = ?,
 					content_encoded = ?,
+					pub_date = ?,
+					has_pub_date = ?,
 					duration_ms = ?,
 					enclosure_url = ?,
 					enclosure_type = ?,
 					enclosure_length = ?,
 					artwork_url = ?,
+					episode_number = ?,
+					season_number = ?,
+					episode_type = ?,
+					explicit = ?,
 					link = ?,
 					transcripts = ?,
 					chapters_url = ?
 				WHERE id = ?
-			`, ep.Title, ep.Description, ep.ContentEncoded, ep.DurationMS, ep.EnclosureURL,
-				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.Link, transcriptsJSON,
-				ep.ChaptersURL, existingID)
+			`, ep.Title, ep.Description, ep.ContentEncoded, pubDateUnix, hasPubDateInt,
+				ep.DurationMS, ep.EnclosureURL, ep.EnclosureType, ep.EnclosureLength,
+				ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber, ep.EpisodeType,
+				explicitInt, ep.Link, transcriptsJSON, ep.ChaptersURL, existingID)
 			if err != nil {
 				return fmt.Errorf("failed to update episode: %w", err)
 			}
@@ -366,7 +378,12 @@ func (w *FeedWorker) updateFeedError(podcastID, category string, httpStatus int,
 			consecutive_error_count = consecutive_error_count + 1,
 			last_error_category = ?,
 			last_http_status = ?,
-			next_scheduled_fetch_at = ? + (consecutive_error_count + 1) * 3600000
+			next_scheduled_fetch_at = ? + (
+				CASE
+					WHEN consecutive_error_count >= 6 THEN 64
+					ELSE (1 << consecutive_error_count)
+				END
+			) * 3600000
 		WHERE id = ?
 	`, nowMs, category, httpStatus, nowMs, podcastID)
 }

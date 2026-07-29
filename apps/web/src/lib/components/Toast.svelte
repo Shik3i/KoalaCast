@@ -11,10 +11,13 @@
 	};
 </script>
 
-<div class="toast-stack" role="status" aria-live="polite">
+<div class="toast-stack" aria-label={t('common.notifications')}>
 	{#each toast.items as item (item.id)}
 		<div
 			class="toast {item.type}"
+			role={item.type === 'error' ? 'alert' : 'status'}
+			aria-live={item.type === 'error' ? 'assertive' : 'polite'}
+			aria-atomic="true"
 			animate:flip={{ duration: 260 }}
 			in:fly={{ y: 16, duration: 260 }}
 			out:fly={{ y: 10, duration: 200 }}
@@ -79,8 +82,8 @@
 	}
 
 	.toast button {
-		width: 32px;
-		height: 32px;
+		width: 44px;
+		height: 44px;
 		background: none;
 		border: none;
 		color: var(--text-muted);

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -11,6 +12,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
@@ -24,6 +27,7 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private var requestedEpisodeId by mutableStateOf<String?>(null)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -37,6 +41,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        requestedEpisodeId = intent.getStringExtra(EXTRA_EPISODE_ID)
 
         setContent {
             val prefs by preferences.preferences.collectAsStateWithLifecycle(initialValue = null)
@@ -63,9 +68,21 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalArtworkUrls provides artworkUrls) {
                     KoalaCastApp(
                         onboardingComplete = prefs?.onboardingComplete,
+                        requestedEpisodeId = requestedEpisodeId,
+                        onEpisodeRequestConsumed = { requestedEpisodeId = null },
                     )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        requestedEpisodeId = intent.getStringExtra(EXTRA_EPISODE_ID)
+    }
+
+    private companion object {
+        const val EXTRA_EPISODE_ID = "episodeId"
     }
 }

@@ -74,17 +74,22 @@ class SyncRepository @Inject constructor(
             _status.value = SyncStatus.OFF
             return@withLock false
         }
+        val generation = store.accountGeneration()
         _status.value = SyncStatus.SYNCING
         try {
-            pull(account.userId)
-            push(account.userId, account.deviceId)
+            pull(account.userId, generation)
+            push(account.userId, account.deviceId, generation)
             _lastSyncedAt.value = System.currentTimeMillis()
             _status.value = SyncStatus.IDLE
             true
         } catch (error: AuthExpired) {
+            store.beginAccountTransition()
             accountData.switchTo(null)
             store.clear()
             _status.value = SyncStatus.OFF
+            false
+        } catch (_: AccountChanged) {
+            _status.value = if (store.account.value == null) SyncStatus.OFF else SyncStatus.IDLE
             false
         } catch (_: Exception) {
             _status.value = SyncStatus.ERROR
@@ -96,11 +101,15 @@ class SyncRepository @Inject constructor(
         _status.value = SyncStatus.OFF
     }
 
-    internal suspend fun pull(userId: String) {
+    internal suspend fun pull(
+        userId: String,
+        generation: Long = store.accountGeneration(),
+    ) {
         var cursor = store.cursor(userId)
         var recoveredFromSnapshot = false
         while (true) {
             val response = api.pullSync(cursor, PAGE_LIMIT)
+            ensureGeneration(generation)
             when (response.code()) {
                 401 -> throw AuthExpired()
                 410 -> {
@@ -108,13 +117,14 @@ class SyncRepository @Inject constructor(
                         throw IOException("sync pull returned 410 after snapshot recovery")
                     }
                     val snapshotResponse = api.syncSnapshot()
+                    ensureGeneration(generation)
                     if (snapshotResponse.code() == 401) throw AuthExpired()
                     if (!snapshotResponse.isSuccessful) {
                         throw IOException("sync snapshot failed: ${snapshotResponse.code()}")
                     }
                     val snapshot = snapshotResponse.body()
                         ?: throw IOException("sync snapshot returned no body")
-                    applySnapshot(snapshot)
+                    applySnapshot(snapshot, generation)
                     cursor = snapshot.cursor.coerceAtLeast(0)
                     store.setCursor(userId, cursor)
                     recoveredFromSnapshot = true
@@ -123,7 +133,7 @@ class SyncRepository @Inject constructor(
             }
             if (!response.isSuccessful) throw IOException("sync pull failed: ${response.code()}")
             val body = response.body() ?: throw IOException("sync pull returned no body")
-            body.changesets.forEach { apply(it) }
+            body.changesets.forEach { apply(it, generation) }
             val nextCursor = body.nextCursor
                 ?: body.changesets.lastOrNull()?.serverCursor
                 ?: maxOf(cursor, body.currentCursor)
@@ -137,7 +147,7 @@ class SyncRepository @Inject constructor(
         }
     }
 
-    private suspend fun applySnapshot(snapshot: SyncSnapshotResponse) {
+    private suspend fun applySnapshot(snapshot: SyncSnapshotResponse, generation: Long) {
         if (snapshot.cursor < 0 ||
             snapshot.subscriptions.any {
                 it.string("podcast_id").isBlank() || it.long("added_at") <= 0
@@ -155,10 +165,13 @@ class SyncRepository @Inject constructor(
             throw IOException("sync snapshot contains invalid records")
         }
         database.withTransaction {
+            ensureGeneration(generation)
             subscriptions.clear()
             favorites.clear()
             playbackStates.clear()
             listeningSessions.clear()
+            queue.clear()
+            podcastSettings.clear()
             tombstones.clear()
 
             snapshot.subscriptions.forEach { payload ->
@@ -208,19 +221,29 @@ class SyncRepository @Inject constructor(
                 if (id.isBlank()) return@forEach
                 listeningSessions.upsert(listeningEntity(id, payload, payload.long("ended_at")))
             }
-            snapshot.queue.forEach { applyQueue(it) }
-            snapshot.podcastSettings.forEach { applyPodcastSettings(it) }
+            store.resetQueueUpdatedAt()
+            snapshot.queue.forEach { applyQueue(it, authoritative = true) }
+            snapshot.podcastSettings.forEach { applyPodcastSettings(it, authoritative = true) }
         }
-        snapshot.settings.forEach { applySettings(it) }
+        ensureGeneration(generation)
+        preferences.resetSynced()
+        snapshot.settings.forEach {
+            ensureGeneration(generation)
+            applySettings(it, authoritative = true)
+        }
     }
 
-    private suspend fun push(userId: String, deviceId: String) {
+    private suspend fun push(userId: String, deviceId: String, generation: Long) {
+        ensureGeneration(generation)
         val previousWatermark = store.pushWatermark(userId)
         val nextWatermark = System.currentTimeMillis()
         val operations = buildOperations(deviceId)
             .filter { it.clientTimestamp > previousWatermark }
+        ensureGeneration(generation)
         operations.chunked(PUSH_BATCH).forEach { batch ->
+            ensureGeneration(generation)
             val response = api.pushSync(SyncPushRequest(batch))
+            ensureGeneration(generation)
             if (response.code() == 401) throw AuthExpired()
             if (!response.isSuccessful) throw IOException("sync push failed: ${response.code()}")
         }
@@ -320,9 +343,10 @@ class SyncRepository @Inject constructor(
         return operations
     }
 
-    private suspend fun apply(change: SyncChangesetDto) {
+    private suspend fun apply(change: SyncChangesetDto, generation: Long) {
         val payload = change.payload as? JsonObject ?: JsonObject(emptyMap())
         database.withTransaction {
+            ensureGeneration(generation)
             when (change.entityType) {
                 "subscription" -> applySubscription(change, payload)
                 "favorite" -> applyFavorite(change, payload)
@@ -334,6 +358,7 @@ class SyncRepository @Inject constructor(
                 }
             }
         }
+        ensureGeneration(generation)
         if (change.entityType == "settings" && change.action != "delete") applySettings(payload)
     }
 
@@ -405,11 +430,11 @@ class SyncRepository @Inject constructor(
         listeningSessions.upsert(listeningEntity(id, payload, incomingAt))
     }
 
-    private suspend fun applyQueue(payload: JsonObject) {
+    private suspend fun applyQueue(payload: JsonObject, authoritative: Boolean = false) {
         val updatedAt = payload.long("updated_at")
-        if (updatedAt <= store.queueUpdatedAt()) return
+        if (!authoritative && updatedAt <= store.queueUpdatedAt()) return
         val items = payload["items"] as? JsonArray ?: return
-        queue.clear()
+        if (!authoritative) queue.clear()
         items.take(500).forEachIndexed { index, element ->
             val item = element as? JsonObject ?: return@forEachIndexed
             val episodeId = item.string("episode_id")
@@ -433,11 +458,15 @@ class SyncRepository @Inject constructor(
         store.markQueueUpdated(updatedAt)
     }
 
-    private suspend fun applyPodcastSettings(payload: JsonObject, fallbackId: String = "") {
+    private suspend fun applyPodcastSettings(
+        payload: JsonObject,
+        fallbackId: String = "",
+        authoritative: Boolean = false,
+    ) {
         val podcastId = payload.string("podcast_id").ifBlank { fallbackId }
         val updatedAt = payload.long("updated_at")
         if (podcastId.isBlank() || updatedAt <= 0) return
-        if ((podcastSettings.get(podcastId)?.updatedAt ?: 0) >= updatedAt) return
+        if (!authoritative && (podcastSettings.get(podcastId)?.updatedAt ?: 0) >= updatedAt) return
         podcastSettings.upsert(
             PodcastSettingsEntity(
                 podcastId = podcastId,
@@ -459,11 +488,11 @@ class SyncRepository @Inject constructor(
         )
     }
 
-    private suspend fun applySettings(payload: JsonObject) {
+    private suspend fun applySettings(payload: JsonObject, authoritative: Boolean = false) {
         val updatedAt = payload.long("updated_at")
         if (updatedAt <= 0) return
         val (current, localUpdatedAt) = preferences.syncSnapshot()
-        if (localUpdatedAt >= updatedAt) return
+        if (!authoritative && localUpdatedAt >= updatedAt) return
         preferences.applySynced(
             current.copy(
                 themeMode = payload.string("theme_mode").ifBlank {
@@ -497,6 +526,7 @@ class SyncRepository @Inject constructor(
                     .takeIf { it > 0 } ?: current.downloadBudgetBytes,
             ),
             updatedAt,
+            force = authoritative,
         )
     }
 
@@ -697,7 +727,12 @@ class SyncRepository @Inject constructor(
         if (value != null) put(key, value)
     }
 
+    private fun ensureGeneration(expected: Long) {
+        if (store.accountGeneration() != expected) throw AccountChanged()
+    }
+
     private class AuthExpired : Exception()
+    private class AccountChanged : Exception()
 
     private companion object {
         const val PAGE_LIMIT = 500

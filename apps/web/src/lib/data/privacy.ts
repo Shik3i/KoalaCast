@@ -73,14 +73,14 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 					{ label: 'Search & Discovery', text: 'Search queries (iTunes Search API & PodcastIndex API) are executed by the Go backend. Search APIs see only the KoalaCast server IP address.' },
 					{ label: 'RSS Feed Parsing', text: 'Podcast RSS XML feed files are fetched and parsed on the server side.' },
 					{ label: 'Chapters & Transcripts', text: 'Episode chapter JSON and WebVTT/SRT transcript files are fetched via CORS-safe proxy endpoints (/api/v1/proxy/chapters, /api/v1/proxy/transcript).' },
-					{ label: 'Explicit offline downloads', text: 'When you press Download in the PWA, that episode audio is streamed once through /api/v1/proxy/audio into this browser’s private Cache Storage. Normal playback still contacts the publisher directly.' }
+					{ label: 'Downloads and optional audio effects', text: 'Browser downloads, Volume Boost, and Trim Silence use the publisher directly when its CORS policy permits browser access. A self-hoster may explicitly enable KC_AUDIO_EFFECTS_PROXY_ENABLED to relay only CORS-incompatible downloads or effect playback; this fallback is disabled by default.' }
 				]
 			},
 			direct: {
 				title: 'Direct Connection (NOT Proxied):',
 				items: [
-					{ label: 'Audio Streams (MP3 / AAC)', text: "Audio media files are streamed directly from podcast publishers' CDNs (e.g. Libsyn, Megaphone, Podbean, Anchor, AWS S3) to your browser HTML5 player." },
-					{ label: 'Reasoning', text: 'Normal playback remains direct for minimal server latency. Only an explicit PWA download uses the bounded, rate-limited audio proxy needed to make publisher audio reliably available offline.' },
+					{ label: 'Audio Streams (MP3 / AAC)', text: "Normal playback without optional Web Audio effects is streamed directly from podcast publishers' CDNs (e.g. Libsyn, Megaphone, Podbean, Anchor, AWS S3)." },
+					{ label: 'Reasoning', text: 'Direct playback minimizes server latency and bandwidth. If a publisher blocks Web Audio and the instance operator has not enabled the optional relay, KoalaCast leaves the effect disabled and explains why instead of producing silence.' },
 					{ label: 'Publisher Metadata', text: "When playing an episode, the publisher's CDN receives standard HTTP GET requests directly from your browser, containing your IP address and User-Agent header as required for web audio delivery." }
 				]
 			}

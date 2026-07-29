@@ -7,12 +7,17 @@
 export function optimizeArtwork(url: string | null | undefined, targetSize = 300): string {
 	if (!url) return '/cover-placeholder.webp';
 
-	// Keep local assets as-is
-	if (url.startsWith('/') || url.startsWith('data:')) {
+	// A protocol-relative URL (`//cdn.example/cover.jpg`) is remote, not a local
+	// path. Treating every leading slash as local would silently bypass the
+	// privacy proxy.
+	if ((url.startsWith('/') && !url.startsWith('//')) || url.startsWith('data:')) {
 		return url;
 	}
+	const normalized = url.startsWith('//')
+		? `${typeof location === 'undefined' ? 'https:' : location.protocol}${url}`
+		: url;
 
-	return `/api/v1/proxy/image?url=${encodeURIComponent(url)}&w=${targetSize}`;
+	return `/api/v1/proxy/image?url=${encodeURIComponent(normalized)}&w=${targetSize}`;
 }
 
 const preloadRequests = new Map<string, Promise<void>>();

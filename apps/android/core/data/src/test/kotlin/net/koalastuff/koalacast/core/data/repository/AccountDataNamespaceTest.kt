@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import net.koalastuff.koalacast.core.data.db.FavoriteEntity
+import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
 import net.koalastuff.koalacast.core.data.db.ListeningSessionEntity
 import net.koalastuff.koalacast.core.data.db.PlaybackStateEntity
@@ -62,6 +63,21 @@ class AccountDataNamespaceTest {
         database.tombstoneDao().upsert(
             TombstoneEntity("favorite:deleted-a", "favorite", "deleted-a", 7),
         )
+        database.episodeDownloadDao().upsert(
+            EpisodeDownloadEntity(
+                episodeId = "download-a",
+                podcastId = "show-a",
+                title = "Download A",
+                podcastTitle = "A",
+                artworkUrl = "",
+                enclosureUrl = "https://cdn.example/a.mp3",
+                durationMs = 1,
+                categories = emptyList(),
+                state = "DONE",
+                createdAt = 8,
+                updatedAt = 9,
+            ),
+        )
 
         namespace.switchTo(null)
         assertActiveTablesEmpty()
@@ -75,6 +91,10 @@ class AccountDataNamespaceTest {
         assertEquals(listOf("episode-a"), database.playbackStateDao().getAll().map { it.episodeId })
         assertEquals(listOf("listen-a"), database.listeningSessionDao().getAll().map { it.id })
         assertEquals(listOf("deleted-a"), database.tombstoneDao().getAll().map { it.entityId })
+        assertEquals(
+            listOf("download-a"),
+            database.episodeDownloadDao().getAllOldestFirst().map { it.episodeId },
+        )
     }
 
     private suspend fun assertActiveTablesEmpty() {
@@ -83,5 +103,6 @@ class AccountDataNamespaceTest {
         assertTrue(database.playbackStateDao().getAll().isEmpty())
         assertTrue(database.listeningSessionDao().getAll().isEmpty())
         assertTrue(database.tombstoneDao().getAll().isEmpty())
+        assertTrue(database.episodeDownloadDao().getAllOldestFirst().isEmpty())
     }
 }

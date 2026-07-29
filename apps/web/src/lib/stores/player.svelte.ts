@@ -17,6 +17,7 @@ import {
 } from '$lib/idb/db';
 import { normalizePlaybackSpeed } from '$lib/player/playback-speed';
 import { resolveOfflineAudioUrl } from '$lib/downloads/offline-audio';
+import { prefs } from '$lib/stores/prefs.svelte';
 
 export interface CurrentTrack {
 	episode_id: string;
@@ -43,6 +44,7 @@ function itemToTrack(i: LocalQueueItem): CurrentTrack {
 }
 
 class PlayerStore {
+	#finalizePlayback: (() => Promise<void>) | null = null;
 	current = $state<CurrentTrack | null>(null);
 	// Bumped every time playback is (re)requested, so the Player can autoplay even
 	// when the same track is selected again.
@@ -74,7 +76,12 @@ class PlayerStore {
 		});
 	}
 
-	stop() {
+	registerPlaybackFinalizer(finalizer: (() => Promise<void>) | null) {
+		this.#finalizePlayback = finalizer;
+	}
+
+	async stop() {
+		await this.#finalizePlayback?.();
 		this.current = null;
 		this.isPlaying = false;
 		this.positionMs = 0;
@@ -102,14 +109,17 @@ class PlayerStore {
 		this.playbackSpeed = normalizePlaybackSpeed(speed);
 		if (persist) this.defaultPlaybackSpeed = this.playbackSpeed;
 		if (!persist) return;
-		try {
-			localStorage.setItem('koalacast_playback_speed', String(this.playbackSpeed));
-		} catch (_) {}
+		prefs.setPlaybackSpeed(this.playbackSpeed);
+	}
+
+	activatePreferences(playbackSpeed: number) {
+		this.defaultPlaybackSpeed = normalizePlaybackSpeed(playbackSpeed);
+		if (!this.current) this.playbackSpeed = this.defaultPlaybackSpeed;
 	}
 
 	updatePosition(positionMs: number, durationMs: number) {
-		this.positionMs = Math.max(0, positionMs);
-		this.durationMs = Math.max(0, durationMs);
+		this.positionMs = Number.isFinite(positionMs) ? Math.max(0, positionMs) : 0;
+		this.durationMs = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
 		this.positionUpdatedAt = Date.now();
 	}
 

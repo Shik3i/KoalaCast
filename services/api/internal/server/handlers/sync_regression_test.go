@@ -205,3 +205,41 @@ func TestSyncSnapshotReturnsMaterializedRecordsAtCursor(t *testing.T) {
 		t.Fatalf("playback last_played_at missing: %+v", snapshot.PlaybackStates[0])
 	}
 }
+
+func TestRejectedPassivePlaybackTickIsIdempotentButNotDistributed(t *testing.T) {
+	handler, database, authCtx := newSyncTestHandler(t)
+	now := time.Now().UnixMilli()
+	completed := fmt.Sprintf(`{"operations":[{
+		"client_op_id":"completed","device_id":"dev","entity_type":"playback_state",
+		"action":"upsert","entity_id":"ep-1",
+		"payload":{"episode_id":"ep-1","position_ms":60000,"completed":true,
+		"progress_percent":100,"event_type":"MARK_PLAYED","playback_session_id":"session",
+		"per_session_seq":2,"client_timestamp":%d}
+	}]}`, now)
+	stale := fmt.Sprintf(`{"operations":[{
+		"client_op_id":"stale","device_id":"dev","entity_type":"playback_state",
+		"action":"upsert","entity_id":"ep-1",
+		"payload":{"episode_id":"ep-1","position_ms":1000,"completed":false,
+		"progress_percent":1,"event_type":"PROGRESS_TICK","playback_session_id":"session",
+		"per_session_seq":1,"client_timestamp":%d}
+	}]}`, now-1000)
+	for _, body := range []string{completed, stale, stale} {
+		if rec := pushSync(t, handler, authCtx, body); rec.Code != http.StatusOK {
+			t.Fatalf("push: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	var logCount, ledgerCount, completedValue int
+	if err := database.SQL.QueryRow(`SELECT COUNT(*) FROM sync_log`).Scan(&logCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SQL.QueryRow(`SELECT COUNT(*) FROM processed_sync_operations`).Scan(&ledgerCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SQL.QueryRow(`SELECT completed FROM playback_states WHERE user_id='u1' AND episode_id='ep-1'`).Scan(&completedValue); err != nil {
+		t.Fatal(err)
+	}
+	if logCount != 1 || ledgerCount != 2 || completedValue != 1 {
+		t.Fatalf("rejected tick leaked: log=%d ledger=%d completed=%d", logCount, ledgerCount, completedValue)
+	}
+}

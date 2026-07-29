@@ -52,15 +52,25 @@ func main() {
 	// Graceful shutdown channel
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+	serverErr := make(chan error, 1)
 
 	go func() {
-		if err := srv.Start(); err != nil {
-			logger.Error("server runtime error", "error", err)
-		}
+		serverErr <- srv.Start()
 	}()
 
-	<-stopChan
-	logger.Info("received shutdown signal")
+	select {
+	case <-stopChan:
+		logger.Info("received shutdown signal")
+	case err := <-serverErr:
+		if err != nil {
+			logger.Error("server runtime error", "error", err)
+			cancelWorker()
+			feedWorker.Stop()
+			_ = database.Close()
+			os.Exit(1)
+		}
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

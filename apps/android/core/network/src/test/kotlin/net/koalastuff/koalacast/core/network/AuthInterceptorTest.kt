@@ -6,6 +6,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -51,5 +52,27 @@ class AuthInterceptorTest {
             .close()
 
         assertEquals(null, server.takeRequest().headers["Authorization"])
+    }
+
+    @Test
+    fun `absolute server probe never receives the configured bearer token`() {
+        server.enqueue(MockResponse(code = 200, body = "ok"))
+        val client = OkHttpClient.Builder()
+            .addInterceptor(HostSelectionInterceptor(object : BaseUrlProvider {
+                override fun current() = server.url("/")
+            }))
+            .addInterceptor(AuthInterceptor(AuthTokenProvider { "secret-device-token" }))
+            .build()
+
+        client.newCall(
+            Request.Builder()
+                .url(server.url("/api/v1/healthz"))
+                .header(HostSelectionInterceptor.ABSOLUTE_HEADER, "1")
+                .build(),
+        ).execute().close()
+
+        val request = server.takeRequest()
+        assertNull(request.headers["Authorization"])
+        assertNull(request.headers[HostSelectionInterceptor.ABSOLUTE_HEADER])
     }
 }

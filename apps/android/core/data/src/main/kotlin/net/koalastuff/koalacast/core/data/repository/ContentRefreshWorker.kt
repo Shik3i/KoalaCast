@@ -30,6 +30,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import net.koalastuff.koalacast.core.data.db.PodcastSettingsDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionDao
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.mapper.toModel
 import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.model.DataResult
@@ -46,9 +47,12 @@ class ContentRefreshWorker @AssistedInject constructor(
     private val settingsDao: PodcastSettingsDao,
     private val podcasts: PodcastRepository,
     private val queue: QueueRepository,
+    private val accountStore: SecureAccountStore,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val ownerId = accountStore.activeOwnerId()
+        val generation = accountStore.accountGeneration()
         val subscriptions = subscriptionDao.getAll().map { it.toModel() }
         if (subscriptions.isEmpty()) return@withContext Result.success()
         val settings = settingsDao.getAll().associateBy { it.podcastId }
@@ -75,6 +79,7 @@ class ContentRefreshWorker @AssistedInject constructor(
                         val newEpisodes = result.data.filterNot { it.id in knownIds }
                         if (settings[subscription.podcastId]?.autoQueueNew == true) {
                             newEpisodes.asReversed().forEach { episode ->
+                                if (!isCurrentAccount(ownerId, generation)) return@withPermit emptyList()
                                 if (episode.enclosureUrl.isNotBlank()) {
                                     queue.addToEnd(
                                         episode.toTrack(
@@ -95,9 +100,15 @@ class ContentRefreshWorker @AssistedInject constructor(
             }.awaitAll().flatten()
         }
 
-        if (updates.isNotEmpty()) notifyNewEpisodes(updates)
+        if (updates.isNotEmpty() && isCurrentAccount(ownerId, generation)) {
+            notifyNewEpisodes(updates)
+        }
         Result.success()
     }
+
+    private fun isCurrentAccount(ownerId: String, generation: Long): Boolean =
+        accountStore.activeOwnerId() == ownerId &&
+            accountStore.accountGeneration() == generation
 
     private fun notifyNewEpisodes(updates: List<Pair<String, String>>) {
         if (

@@ -15,6 +15,7 @@
 	},
 	"common": {
 		"loading": "Wird geladen…",
+		"notifications": "Benachrichtigungen",
 		"retry": "Erneut versuchen",
 		"cancel": "Abbrechen",
 		"confirm": "Bestätigen",
@@ -484,6 +485,7 @@
 		"toggleVolumeBoost": "Lautstärkeverstärkung ein-/ausschalten",
 		"endOfEpisode": "Ende der Folge",
 		"loadError": "Audio konnte nicht geladen werden — möglicherweise blockiert ein Tracking-/Werbeblocker die Datei.",
+		"effectsCorsUnavailable": "Dieser Publisher erlaubt keine Audioeffekte im Browser. Der Effekt bleibt aus; der Instanzbetreiber kann bei Bedarf den optionalen Audioeffekt-Relay aktivieren.",
 		"retry": "Erneut versuchen",
 		"source": "Quelle",
 		"sourceOffline": "Offline-Download",
@@ -538,6 +540,7 @@
 		"sessionRevoked": "Sitzung widerrufen.",
 		"sessionRevokeError": "Sitzung konnte nicht widerrufen werden.",
 		"signedOut": "Erfolgreich abgemeldet.",
+		"signOutError": "Die Abmeldung konnte vom Server nicht bestätigt werden. Du bleibst angemeldet.",
 		"welcomeBack": "Willkommen zurück, {username}!",
 		"accountCreated": "Konto erfolgreich erstellt!",
 		"accountCreatedSaveCode": "Konto erstellt — sichere unten deinen Wiederherstellungscode.",

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import {
 		saveLocalPlaybackState,
 		saveLocalListeningSession,
@@ -26,9 +26,15 @@
 	import { parsePlaybackSpeed } from '$lib/player/playback-speed';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { SilenceGate } from '$lib/audio/silence-gate';
+	import {
+		audioEffectsProxyUrl,
+		isCrossOriginAudio,
+		publisherAllowsAudioEffects
+	} from '$lib/audio/source';
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
+	let audioElementGeneration = $state(0);
 	let isPlaying = $state(false);
 	let currentTimeMs = $state(0);
 	let durationMs = $state(0);
@@ -47,8 +53,17 @@
 	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
 	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
 	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
+	$effect(() => {
+		const syncedDefaultSpeed = prefs.playbackSpeed;
+		player.defaultPlaybackSpeed = syncedDefaultSpeed;
+		if (!track || trackSettings.speed === null) {
+			player.setPlaybackSpeed(syncedDefaultSpeed, false);
+		}
+	});
 	let pendingIntroOutroSkippedMs = 0;
 	let outroHandled = false;
+	const graphSources = new Map<string, { source: string; crossOrigin: boolean }>();
+	let runtimeConfigPromise: Promise<boolean> | null = null;
 
 	import { audioEngine } from '$lib/audio/engine';
 
@@ -153,9 +168,9 @@
 		previousChapterIndex = currentIdx;
 	});
 
-	function toggleVolumeBoost() {
-		if (audioEl) audioEngine.init(audioEl);
+	async function toggleVolumeBoost() {
 		const enabled = !effectiveVolumeBoost;
+		if (enabled && !(await prepareAudioGraph())) return;
 		if (track?.podcast_id && trackSettings.volumeBoost !== null) {
 			trackSettings = { ...trackSettings, volumeBoost: enabled, updatedAt: Date.now() };
 			savePodcastPlaybackSettings(track.podcast_id, trackSettings);
@@ -163,6 +178,7 @@
 			prefs.setVolumeBoost(enabled);
 		}
 		audioEngine.setVolumeBoost(enabled);
+		if (!enabled && !effectiveSkipSilence) await resetToNativePlayback();
 		void audioEngine.resume();
 		toast.success(t(enabled ? 'player.boostEnabled' : 'player.boostDisabled'));
 	}
@@ -187,9 +203,9 @@
 		}
 	}
 
-	function toggleSkipSilence() {
-		if (audioEl) audioEngine.init(audioEl);
+	async function toggleSkipSilence() {
 		const enabled = !effectiveSkipSilence;
+		if (enabled && !(await prepareAudioGraph())) return;
 		if (track?.podcast_id && trackSettings.skipSilence !== null) {
 			trackSettings = { ...trackSettings, skipSilence: enabled, updatedAt: Date.now() };
 			savePodcastPlaybackSettings(track.podcast_id, trackSettings);
@@ -198,6 +214,7 @@
 		}
 		audioEngine.skipSilence = enabled;
 		if (!enabled) resetSilenceTrimming();
+		if (!enabled && !effectiveVolumeBoost) await resetToNativePlayback();
 		audioEngine.resume();
 		toast.success(t(enabled ? 'player.skipSilenceEnabled' : 'player.skipSilenceDisabled'));
 	}
@@ -209,29 +226,124 @@
 		}
 	}
 
-	function requestPlayback() {
+	async function audioEffectsRelayEnabled(): Promise<boolean> {
+		if (!runtimeConfigPromise) {
+			runtimeConfigPromise = fetch('/api/v1/config', { cache: 'no-store' })
+				.then(async (response) => {
+					if (!response.ok) return false;
+					const config = await response.json();
+					return config.audio_effects_proxy_enabled === true;
+				})
+				.catch(() => false);
+		}
+		return runtimeConfigPromise;
+	}
+
+	async function resolveGraphSource(source: string): Promise<{ source: string; crossOrigin: boolean } | null> {
+		const cached = graphSources.get(source);
+		if (cached) return cached;
+		if (!isCrossOriginAudio(source, location.origin)) {
+			const result = { source, crossOrigin: false };
+			graphSources.set(source, result);
+			return result;
+		}
+		if (await publisherAllowsAudioEffects(source, location.origin)) {
+			const result = { source, crossOrigin: true };
+			graphSources.set(source, result);
+			return result;
+		}
+		if (await audioEffectsRelayEnabled()) {
+			const result = { source: audioEffectsProxyUrl(source), crossOrigin: false };
+			graphSources.set(source, result);
+			return result;
+		}
+		return null;
+	}
+
+	async function switchAudioSource(source: string, crossOrigin: boolean): Promise<boolean> {
+		if (!audioEl) return false;
+		const element = audioEl;
+		const current = element.currentSrc || element.src;
+		const resolved = new URL(source, location.href).href;
+		const expectedCrossOrigin = crossOrigin ? 'anonymous' : null;
+		if (current === resolved && element.crossOrigin === expectedCrossOrigin) return true;
+
+		const resumeAt = Number.isFinite(element.currentTime) ? element.currentTime : 0;
+		const wasPlaying = !element.paused;
+		element.pause();
+		if (crossOrigin) element.crossOrigin = 'anonymous';
+		else element.removeAttribute('crossorigin');
+		element.src = source;
+
+		const ready = await new Promise<boolean>((resolve) => {
+			const cleanup = () => {
+				element.removeEventListener('loadedmetadata', onReady);
+				element.removeEventListener('error', onError);
+			};
+			const onReady = () => {
+				cleanup();
+				resolve(true);
+			};
+			const onError = () => {
+				cleanup();
+				resolve(false);
+			};
+			element.addEventListener('loadedmetadata', onReady, { once: true });
+			element.addEventListener('error', onError, { once: true });
+			element.load();
+		});
+		if (!ready) return false;
+		if (resumeAt > 0 && Number.isFinite(element.duration)) {
+			element.currentTime = Math.min(resumeAt, Math.max(0, element.duration - 0.1));
+		}
+		if (wasPlaying) await element.play().catch(() => {});
+		return true;
+	}
+
+	async function prepareAudioGraph(): Promise<boolean> {
+		if (!audioEl || !track) return false;
+		const graphSource = await resolveGraphSource(track.enclosure_url);
+		if (!graphSource) {
+			toast.error(t('player.effectsCorsUnavailable'));
+			return false;
+		}
+		if (!(await switchAudioSource(graphSource.source, graphSource.crossOrigin))) return false;
+		return audioEngine.init(audioEl);
+	}
+
+	async function resetToNativePlayback() {
+		if (!audioEl || !track || !audioEngine.initialized) return;
+		const wasPlaying = !audioEl.paused;
+		await saveProgress('PROGRESS_TICK');
+		audioEl.pause();
+		audioEngine.destroy();
+		audioElementGeneration++;
+		await tick();
+		if (wasPlaying) player.playToken++;
+	}
+
+	async function requestPlayback() {
 		if (!audioEl) return;
 		const element = audioEl;
-		const needsAudioGraph = effectiveVolumeBoost || effectiveSkipSilence;
+		const needsAudioGraph = effectiveVolumeBoost || effectiveSkipSilence || audioEngine.initialized;
 
 		// Leave ordinary playback on the native media-element output. Creating a
 		// MediaElementAudioSourceNode redirects all sound into its AudioContext;
 		// doing that from `onplay` can leave the graph suspended and the episode
 		// completely silent even though the media element is advancing.
 		if (!needsAudioGraph) {
-			element.play().catch(() => {});
+			await element.play().catch(() => {});
 			return;
 		}
 
-		if (!audioEngine.init(element)) {
-			element.play().catch(() => {});
+		if (!(await prepareAudioGraph())) {
+			await element.play().catch(() => {});
 			return;
 		}
 		audioEngine.skipSilence = effectiveSkipSilence;
 		audioEngine.setVolumeBoost(effectiveVolumeBoost);
-		void audioEngine.resume().then((running) => {
-			if (running) element.play().catch(() => {});
-		});
+		const running = await audioEngine.resume();
+		if (running) await element.play().catch(() => {});
 	}
 
 	function sampleSilence() {
@@ -271,14 +383,15 @@
 		const token = player.playToken;
 		if (!t || !audioEl) return;
 
-		if (audioEl.src !== t.enclosure_url) {
+		const desiredSource = t.enclosure_url;
+		if (audioEl.src !== new URL(desiredSource, location.href).href) {
 			trackSettings = getPodcastPlaybackSettings(t.podcast_id);
 			player.setPlaybackSpeed(trackSettings.speed ?? player.defaultPlaybackSpeed, false);
 			outroHandled = false;
 			pendingIntroOutroSkippedMs = 0;
 			loadError = '';
 			loadErrorCode = '';
-			audioEl.src = t.enclosure_url;
+			audioEl.src = desiredSource;
 			currentTimeMs = 0;
 			loadSavedPosition(t.episode_id);
 		}
@@ -448,13 +561,33 @@
 	function handleTimeUpdate() {
 		if (!audioEl) return;
 		sampleListening();
-		currentTimeMs = Math.round(audioEl.currentTime * 1000);
-		durationMs = Math.round((audioEl.duration || 0) * 1000);
+		currentTimeMs = Number.isFinite(audioEl.currentTime)
+			? Math.round(audioEl.currentTime * 1000)
+			: 0;
+		durationMs = Number.isFinite(audioEl.duration)
+			? Math.round(audioEl.duration * 1000)
+			: Math.max(0, track?.duration_ms || 0);
 		player.updatePosition(currentTimeMs, durationMs || track?.duration_ms || 0);
 
 		if (player.sleepTimerEndsAt && Date.now() >= player.sleepTimerEndsAt) {
 			audioEl.pause();
 			player.sleepTimerEndsAt = null;
+		}
+		if (player.sleepAtChapterEnd && activeChapterIndex >= 0) {
+			const chapter = chapters[activeChapterIndex];
+			const nextChapter = chapters[activeChapterIndex + 1];
+			const chapterEnd = Number(
+				chapter?.endTime ??
+					chapter?.end ??
+					nextChapter?.startTime ??
+					nextChapter?.start ??
+					(Number.isFinite(audioEl.duration) ? audioEl.duration : 0)
+			);
+			if (chapterEnd > 0 && audioEl.currentTime >= chapterEnd - 0.2) {
+				audioEl.pause();
+				player.sleepAtChapterEnd = false;
+				toast.info(t('player.sleepTimer'));
+			}
 		}
 		const remaining = Math.max(0, durationMs - currentTimeMs);
 		if (!outroHandled && trackSettings.skipOutroSeconds > 0 && remaining > 0 && remaining <= trackSettings.skipOutroSeconds * 1000) {
@@ -650,6 +783,18 @@
 	});
 
 	onMount(() => {
+		player.registerPlaybackFinalizer(async () => {
+			if (!audioEl) return;
+			const element = audioEl;
+			element.pause();
+			await flushListeningSession(true);
+			await saveProgress('PROGRESS_TICK');
+			element.removeAttribute('src');
+			element.load();
+			isPlaying = false;
+			player.isPlaying = false;
+			resetSilenceTrimming();
+		});
 		try {
 			const saved = localStorage.getItem('koalacast_playback_speed');
 			if (saved) {
@@ -676,7 +821,12 @@
 				else if (expanded) expanded = false;
 				return;
 			}
-			if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
+			const target = e.target as HTMLElement | null;
+			if (
+				target?.closest(
+					'input, textarea, select, button, a[href], [contenteditable="true"], [role="slider"], [role="spinbutton"]'
+				)
+			) return;
 			if (!player.current) return;
 			if (e.code === 'Space') {
 				e.preventDefault();
@@ -696,6 +846,7 @@
 		};
 		document.addEventListener('visibilitychange', handleVisibility);
 		return () => {
+			player.registerPlaybackFinalizer(null);
 			window.removeEventListener('keydown', handleKeyDown);
 			document.removeEventListener('visibilitychange', handleVisibility);
 			flushListeningSession(true);
@@ -717,9 +868,10 @@
 	const speeds = [0.75, 1.0, 1.15, 1.25, 1.5, 1.75, 2.0, 2.5];
 </script>
 
-<audio
-	bind:this={audioEl}
-	preload="metadata"
+{#key audioElementGeneration}
+	<audio
+		bind:this={audioEl}
+		preload="metadata"
 	onplay={() => {
 		isPlaying = true;
 		player.isPlaying = true;
@@ -747,8 +899,9 @@
 		loadError = audioEl?.error?.message || t('player.loadError');
 	}}
 	ontimeupdate={handleTimeUpdate}
-	onended={handleEnded}
-></audio>
+		onended={handleEnded}
+	></audio>
+{/key}
 
 <ShortcutsModal bind:show={showShortcutsModal} />
 
@@ -937,15 +1090,15 @@
 					<button class="np-fav" class:active={isFav} onclick={toggleFavorite} aria-pressed={isFav} aria-label={isFav ? t('player.removeFavorite') : t('player.addFavorite')} title={isFav ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFav ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 					</button>
-					<button class="np-pill-btn" class:active={effectiveVolumeBoost} onclick={toggleVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
+					<button class="np-pill-btn" class:active={effectiveVolumeBoost} onclick={toggleVolumeBoost} aria-pressed={effectiveVolumeBoost} aria-label={t('player.toggleVolumeBoost')} title={t('player.toggleVolumeBoost')}>
 						<i class="ph ph-speaker-high" aria-hidden="true"></i> {t('player.boost')}
 					</button>
-					<button class="np-pill-btn" class:active={effectiveSkipSilence} onclick={toggleSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
+					<button class="np-pill-btn" class:active={effectiveSkipSilence} onclick={toggleSkipSilence} aria-pressed={effectiveSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
 						<i class="ph ph-waveform" aria-hidden="true"></i> {t('player.trimSilence')}
 					</button>
-					<div class="speed-selector">
+					<div class="speed-selector" role="group" aria-label={t('player.speed')}>
 						{#each speeds as spd}
-							<button onclick={() => setSpeed(spd)} class:active={player.playbackSpeed === spd}>{spd}x</button>
+							<button onclick={() => setSpeed(spd)} class:active={player.playbackSpeed === spd} aria-pressed={player.playbackSpeed === spd}>{spd}x</button>
 						{/each}
 						<input
 							class="speed-input"
@@ -964,12 +1117,12 @@
 						/>
 					</div>
 					{#if chapters.length > 0}
-						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-label={t('player.toggleChapters')} title={t('player.toggleChapters')}>
+						<button class="np-pill-btn" class:active={showChaptersDrawer} onclick={() => (showChaptersDrawer = !showChaptersDrawer)} aria-expanded={showChaptersDrawer} aria-controls="player-chapters-drawer" aria-label={t('player.toggleChapters')} title={t('player.toggleChapters')}>
 								<i class="ph ph-list-numbers" aria-hidden="true"></i> {t('player.chaptersCount', { count: chapters.length })}
 						</button>
 					{/if}
 					{#if transcriptCues.length > 0 || loadingTranscript}
-						<button class="np-pill-btn" class:active={showTranscriptDrawer} onclick={() => (showTranscriptDrawer = !showTranscriptDrawer)} aria-label={t('episode.transcript')} title={t('episode.transcript')}>
+						<button class="np-pill-btn" class:active={showTranscriptDrawer} onclick={() => (showTranscriptDrawer = !showTranscriptDrawer)} aria-expanded={showTranscriptDrawer} aria-controls="player-transcript-drawer" aria-label={t('episode.transcript')} title={t('episode.transcript')}>
 							<i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}
 						</button>
 					{/if}
@@ -984,7 +1137,7 @@
 				</div>
 
 				{#if showChaptersDrawer && chapters.length > 0}
-					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
+					<div id="player-chapters-drawer" class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
 						<div class="drawer-header">
 								<h4><i class="ph ph-list-numbers" aria-hidden="true"></i> {t('player.episodeChaptersCount', { count: chapters.length })}</h4>
 							<button class="close-drawer" onclick={() => (showChaptersDrawer = false)} aria-label={t('player.closeChapters')} title={t('player.closeChapters')}>
@@ -1012,7 +1165,7 @@
 				{/if}
 
 				{#if showTranscriptDrawer}
-					<div class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
+					<div id="player-transcript-drawer" class="np-chapters-drawer" transition:slide={{ duration: 200 }}>
 						<div class="drawer-header">
 							<h4><i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}</h4>
 							<button class="close-drawer" onclick={() => (showTranscriptDrawer = false)} aria-label={t('player.closeFullscreen')} title={t('player.closeFullscreen')}>
@@ -1080,7 +1233,7 @@
 		box-shadow: var(--shadow-xl, 0 20px 50px rgba(0, 0, 0, 0.4));
 		backdrop-filter: blur(18px) saturate(140%);
 		-webkit-backdrop-filter: blur(18px) saturate(140%);
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.progress-track {
@@ -1184,8 +1337,8 @@
 	.load-error button { border: 1px solid currentColor; color: inherit; background: transparent; padding: 5px 8px; }
 
 	.ctrl {
-		width: 38px;
-		height: 38px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		background: transparent;
 		color: var(--player-text);
@@ -1290,7 +1443,7 @@
 	}
 	.speed-input {
 		width: 52px;
-		height: 30px;
+		height: 44px;
 		box-sizing: border-box;
 		border: 1px solid color-mix(in srgb, var(--player-text) 18%, transparent);
 		border-radius: 7px;
@@ -1320,7 +1473,10 @@
 
 	.speed-selector {
 		display: flex;
+		justify-content: center;
+		flex-wrap: wrap;
 		gap: 2px;
+		max-width: 100%;
 		background: color-mix(in srgb, var(--player-text) 8%, transparent);
 		padding: 3px;
 		border-radius: 9px;
@@ -1331,6 +1487,8 @@
 		color: var(--player-text);
 		border: none;
 		padding: 0.25rem 0.45rem;
+		min-height: 44px;
+		min-width: 44px;
 		border-radius: 6px;
 		font-size: 0.74rem;
 		font-weight: 600;
@@ -1341,7 +1499,7 @@
 		color: #fff;
 		opacity: 1;
 	}
-	.speed-selector .speed-input { width: 48px; height: 26px; }
+	.speed-selector .speed-input { width: 54px; height: 44px; }
 
 	.eq-bars {
 		display: flex;
@@ -1377,8 +1535,10 @@
 		inset: 0;
 		z-index: 300;
 		display: grid;
-		place-items: center;
-		overflow: hidden;
+		place-items: start center;
+		overflow-x: hidden;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		background: var(--player-bg);
 		color: var(--player-text);
 		animation: np-in 0.35s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
@@ -1426,8 +1586,11 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		gap: 1.5rem;
-		padding: 2rem 1rem;
+		min-height: 100%;
+		box-sizing: border-box;
+		padding: max(4.5rem, env(safe-area-inset-top, 0px)) 1rem max(2rem, env(safe-area-inset-bottom, 0px));
 	}
 
 	.np-art-wrap {
@@ -1448,16 +1611,23 @@
 		line-height: 1.25;
 		color: var(--player-text);
 		letter-spacing: -0.01em;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 44px;
 	}
 	.np-title:hover { text-decoration: underline; }
-	.np-podcast { font-size: 0.95rem; color: color-mix(in srgb, var(--player-text) 72%, transparent); }
+	.np-podcast { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; font-size: 0.95rem; color: color-mix(in srgb, var(--player-text) 72%, transparent); }
 
 	.np-timeline { display: flex; align-items: center; gap: 0.75rem; width: 100%; }
 	.np-timeline input[type='range'] {
 		flex: 1;
 		-webkit-appearance: none;
 		appearance: none;
-		height: 6px;
+		height: 44px;
+		padding-block: 19px;
+		box-sizing: border-box;
+		background-clip: content-box;
 		border-radius: 999px;
 		background: linear-gradient(
 			90deg,
@@ -1537,6 +1707,7 @@
 		color: var(--player-text);
 		border: 1px solid color-mix(in srgb, var(--player-text) 16%, transparent);
 		padding: 0.4rem 0.8rem;
+		min-height: 44px;
 		border-radius: 999px;
 		font-size: 0.82rem;
 		font-weight: 600;
@@ -1558,6 +1729,7 @@
 		color: var(--player-text);
 		border: 1px solid color-mix(in srgb, var(--player-text) 16%, transparent);
 		padding: 0.4rem 0.6rem;
+		min-height: 44px;
 		border-radius: 9px;
 		font-size: 0.82rem;
 		font-family: inherit;
@@ -1575,7 +1747,7 @@
 	.np-volume input[type='range'] {
 		flex: 1;
 		accent-color: var(--show-accent, var(--accent-green));
-		height: 4px;
+		height: 44px;
 	}
 
 	.np-upnext {
@@ -1827,8 +1999,8 @@
 	.jump-control { position: relative; }
 	.jump-control small { position: absolute; font: 700 9px/1 var(--font-mono); }
 	.play-btn {
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		background: var(--accent-fill);
 		color: var(--accent-on);
 		font-size: 17px;
@@ -1838,17 +2010,20 @@
 	.play-btn:hover { transform: none; filter: none; }
 	.timeline { gap: 11px; }
 	.timeline input[type='range'] {
-		height: 4px;
+		height: 44px;
+		padding-block: 20px;
+		box-sizing: border-box;
+		background-clip: content-box;
 		background: linear-gradient(90deg, var(--accent-fill) 0%, var(--accent-fill) var(--progress,0%), var(--track) var(--progress,0%));
 	}
 	.timeline input[type='range']::-webkit-slider-thumb { width: 12px; height: 12px; background: var(--ink); box-shadow: none; }
 	.timeline input[type='range']::-moz-range-thumb { width: 12px; height: 12px; background: var(--ink); }
 	.time { min-width: 40px; color: var(--ink-3); font: 500 10px/1 var(--font-mono); opacity: 1; }
 	.extras { gap: 6px; }
-	.speed-cycle { height: 29px; min-width: 46px; padding: 0 6px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
+	.speed-cycle { height: 44px; min-width: 46px; padding: 0 6px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
 	.vol-wrap .ctrl { border: 0; }
 	.extras select {
-		height: 29px;
+		height: 44px;
 		max-width: 62px;
 		padding: 0 5px;
 		border: 1px solid var(--border-ui);
@@ -1861,7 +2036,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
-		height: 29px;
+		height: 44px;
 		padding: 0 7px;
 		border: 1px solid var(--border-ui);
 		border-radius: 4px;
@@ -1889,6 +2064,8 @@
 			gap: 8px;
 		}
 		.track-info { grid-area: info; }
+		.art-btn { min-width: 44px; min-height: 44px; }
+		.track-title { display: flex; align-items: center; min-height: 44px; }
 		.artwork { width: 42px; height: 42px; }
 		.track-icon, .eq-bars { display: none; }
 		.podcast-title { display: none; }
@@ -1909,5 +2086,13 @@
 		.controls .jump-control:first-of-type { display: none; }
 		.play-btn { width: 44px; height: 44px; }
 		.timeline { display: none; }
+	}
+	@media (max-height: 800px) {
+		.np-content { gap: .8rem; justify-content: flex-start; }
+		.np-art-wrap { width: min(48vh, 240px); }
+		.np-meta { gap: .15rem; }
+		.np-title { font-size: 1.1rem; }
+		.np-controls { gap: 1rem; }
+		.np-play { width: 64px; height: 64px; }
 	}
 </style>

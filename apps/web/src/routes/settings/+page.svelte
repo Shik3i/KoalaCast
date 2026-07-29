@@ -176,9 +176,11 @@
 
 	async function handleLogout() {
 		try {
-			await fetch('/api/v1/auth/logout', { method: 'POST' });
+			const res = await fetch('/api/v1/auth/logout', { method: 'POST' });
+			if (!res.ok) throw new Error(`logout ${res.status}`);
 		} catch (_) {
-			// Even if the network call fails, drop the client-side session view.
+			toast.error(t('toast.signOutError'));
+			return;
 		}
 		await activateAccountContext(null);
 		authUser = null;
@@ -773,8 +775,8 @@
 	}
 	.settings-status { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; color: var(--text-muted); font-size: .8rem; }
 	.settings-status strong { color: var(--text-primary); }
-	.settings-nav { position: sticky; top: 0; z-index: 10; display: flex; gap: 6px; overflow-x: auto; padding: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; background: color-mix(in srgb, var(--bg-surface) 94%, transparent); backdrop-filter: blur(12px); }
-	.settings-nav a { flex: 0 0 auto; padding: 8px 10px; border-radius: 5px; color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
+	.settings-nav { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; background: color-mix(in srgb, var(--bg-surface) 94%, transparent); backdrop-filter: blur(12px); }
+	.settings-nav a { display: inline-flex; align-items: center; flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 8px 10px; border-radius: 5px; color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
 	.settings-nav a:hover, .settings-nav a:focus-visible { background: var(--accent-wash); color: var(--accent-ink); }
 	.card { scroll-margin-top: 64px; }
 	.settings-grid {
@@ -1303,6 +1305,10 @@
 		border: 1px solid var(--border-subtle);
 		padding: 0.5rem;
 		border-radius: 6px;
+	}
+	@media (max-width: 900px) {
+		.settings-grid { grid-template-columns: 1fr; }
+		.card[open] { grid-column: auto; }
 	}
 	@media (max-width: 620px) {
 		.settings-page { padding: 16px 14px 96px; }

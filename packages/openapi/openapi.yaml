@@ -94,6 +94,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReadinessResponse'
 
+  /api/v1/config:
+    get:
+      tags: [Health]
+      operationId: getPublicConfig
+      summary: Read public runtime capabilities
+      responses:
+        '200':
+          description: Public server feature flags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicConfigResponse'
+
+  /api/v1/proxy/audio:
+    parameters:
+      - $ref: '#/components/parameters/ProxyURL'
+    get:
+      tags: [Proxy]
+      operationId: getProxiedAudio
+      summary: Stream external audio when the optional self-hosted relay is enabled
+      responses:
+        '200':
+          description: Complete upstream audio
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial audio response for a valid Range request
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: The self-hosted audio relay is disabled
+        '413':
+          description: Audio exceeds the 2 GiB relay limit
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+    head:
+      tags: [Proxy]
+      operationId: headProxiedAudio
+      summary: Fetch proxied audio headers when the optional relay is enabled
+      responses:
+        '200':
+          description: Complete audio headers
+        '206':
+          description: Partial audio headers
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: The self-hosted audio relay is disabled
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+
   /api/v1/proxy/image:
     parameters:
       - $ref: '#/components/parameters/ProxyURL'
@@ -1182,6 +1244,15 @@ components:
         database:
           type: string
           enum: [connected, disconnected]
+
+    PublicConfigResponse:
+      type: object
+      required: [audio_effects_proxy_enabled]
+      additionalProperties: false
+      properties:
+        audio_effects_proxy_enabled:
+          type: boolean
+          description: Whether this self-hosted instance permits audio relay fallback for browser effects and downloads.
 
     Chapter:
       type: object

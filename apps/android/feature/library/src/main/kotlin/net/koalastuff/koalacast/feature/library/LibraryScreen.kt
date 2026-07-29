@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -233,7 +234,12 @@ private fun QueueList(
                     color = KoalaTheme.colors.ink3,
                     style = KoalaTheme.type.monoStrong,
                 )
-                Box(modifier = Modifier.clickable(onClick = onClear)) {
+                Box(
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+                        .clickable(onClick = onClear),
+                    contentAlignment = Alignment.Center,
+                ) {
                     MonoText(
                         text = stringResource(R.string.library_queue_clear),
                         color = KoalaTheme.colors.accentInk,
@@ -280,81 +286,88 @@ private fun QueueRow(
     val colors = KoalaTheme.colors
     val context = LocalContext.current
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = KoalaSpacing.screenH, end = KoalaSpacing.gapSmall),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.gapSmall),
     ) {
-        Box(modifier = Modifier.width(22.dp)) {
-            MonoText(
-                text = "${index + 1}.",
-                color = colors.ink4,
-                style = KoalaTheme.type.monoStrong,
-            )
-        }
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .clickable(onClick = onOpen)
-                .padding(vertical = KoalaSpacing.gap),
-            verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = entry.track.title,
-                style = KoalaTheme.type.listTitle,
-                color = colors.ink2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+            Box(modifier = Modifier.width(22.dp)) {
+                MonoText(
+                    text = "${index + 1}.",
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoStrong,
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onOpen)
+                    .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+                    .padding(vertical = KoalaSpacing.gapSmall),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+            ) {
+                Text(
+                    text = entry.track.title,
+                    style = KoalaTheme.type.listTitle,
+                    color = colors.ink2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                MonoText(
+                    text = listOf(
+                        entry.track.podcastTitle,
+                        Format.duration(context, entry.track.durationMs),
+                    ).filter { it.isNotBlank() }.joinToString(" · "),
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                )
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            IconButtonSquare(
+                icon = PhosphorIcons.PlayFill,
+                contentDescription = stringResource(R.string.library_play),
+                onClick = onPlay,
+                tint = colors.accentInk,
+                bordered = false,
+                boxSize = 26.dp,
+                iconSize = 14.dp,
             )
-            MonoText(
-                text = listOf(
-                    entry.track.podcastTitle,
-                    Format.duration(context, entry.track.durationMs),
-                ).filter { it.isNotBlank() }.joinToString(" · "),
-                color = colors.ink4,
-                style = KoalaTheme.type.monoSmall,
+            IconButtonSquare(
+                icon = PhosphorIcons.CaretUp,
+                contentDescription = stringResource(R.string.library_queue_move_up),
+                onClick = onMoveUp,
+                tint = if (isFirst) colors.track else colors.ink3,
+                bordered = false,
+                boxSize = 26.dp,
+                iconSize = 14.dp,
+                enabled = !isFirst,
+            )
+            IconButtonSquare(
+                icon = PhosphorIcons.CaretDown,
+                contentDescription = stringResource(R.string.library_queue_move_down),
+                onClick = onMoveDown,
+                tint = if (isLast) colors.track else colors.ink3,
+                bordered = false,
+                boxSize = 26.dp,
+                iconSize = 14.dp,
+                enabled = !isLast,
+            )
+            IconButtonSquare(
+                icon = PhosphorIcons.X,
+                contentDescription = stringResource(R.string.library_queue_remove),
+                onClick = onRemove,
+                tint = colors.ink3,
+                bordered = false,
+                boxSize = 26.dp,
+                iconSize = 14.dp,
             )
         }
-        IconButtonSquare(
-            icon = PhosphorIcons.PlayFill,
-            contentDescription = stringResource(R.string.library_play),
-            onClick = onPlay,
-            tint = colors.accentInk,
-            bordered = false,
-            boxSize = 26.dp,
-            iconSize = 14.dp,
-        )
-        IconButtonSquare(
-            icon = PhosphorIcons.CaretUp,
-            contentDescription = stringResource(R.string.library_queue_move_up),
-            onClick = onMoveUp,
-            tint = if (isFirst) colors.track else colors.ink3,
-            bordered = false,
-            boxSize = 26.dp,
-            iconSize = 14.dp,
-            enabled = !isFirst,
-        )
-        IconButtonSquare(
-            icon = PhosphorIcons.CaretDown,
-            contentDescription = stringResource(R.string.library_queue_move_down),
-            onClick = onMoveDown,
-            tint = if (isLast) colors.track else colors.ink3,
-            bordered = false,
-            boxSize = 26.dp,
-            iconSize = 14.dp,
-            enabled = !isLast,
-        )
-        IconButtonSquare(
-            icon = PhosphorIcons.X,
-            contentDescription = stringResource(R.string.library_queue_remove),
-            onClick = onRemove,
-            tint = colors.ink3,
-            bordered = false,
-            boxSize = 26.dp,
-            iconSize = 14.dp,
-        )
     }
 }
 

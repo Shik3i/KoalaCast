@@ -1339,7 +1339,15 @@ html.is-resizing-rails * {
 		color: var(--ink-3);
 		font-size: 12px;
 	}
-	.mobile-legal a { text-decoration: underline; text-underline-offset: 3px; }
+	.mobile-legal a {
+		display: inline-flex;
+		align-items: center;
+		min-width: 44px;
+		min-height: 44px;
+		padding-inline: 4px;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {

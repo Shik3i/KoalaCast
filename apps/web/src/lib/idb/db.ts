@@ -184,6 +184,10 @@ function plainCategories(categories?: readonly string[]): string[] | undefined {
 	return categories ? Array.from(categories, (category) => String(category)) : undefined;
 }
 
+function plainJSON<T>(value: T): T {
+	return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export function getLocalDB(): Promise<IDBPDatabase> {
 	if (!dbPromise) {
 		dbPromise = openLocalDB(contextDBName(activeContext)).catch((err) => {
@@ -295,14 +299,14 @@ export async function putCachedContent<T>(key: string, value: T): Promise<void> 
 	const db = await getLocalDB();
 	await db.put('content_cache', {
 		key,
-		value: structuredClone(value),
+		value: plainJSON(value),
 		stored_at: Date.now()
 	} satisfies LocalContentCacheEntry<T>);
 }
 
 export async function saveLocalSubscription(sub: LocalSubscription): Promise<void> {
 	const db = await getLocalDB();
-	await db.put('subscriptions', sub);
+	await db.put('subscriptions', { ...sub });
 	// Re-subscribing clears any prior deletion tombstone.
 	await db.delete('tombstones', tombstoneId('subscription', sub.podcast_id));
 }
@@ -312,7 +316,7 @@ export async function saveLocalSubscriptions(subscriptions: LocalSubscription[])
 	const db = await getLocalDB();
 	const tx = db.transaction(['subscriptions', 'tombstones'], 'readwrite');
 	for (const sub of subscriptions) {
-		tx.objectStore('subscriptions').put(sub);
+		tx.objectStore('subscriptions').put({ ...sub });
 		tx.objectStore('tombstones').delete(tombstoneId('subscription', sub.podcast_id));
 	}
 	await tx.done;
@@ -506,11 +510,12 @@ export async function clearLocalQueue(): Promise<void> {
 
 export async function replaceLocalQueueFromSync(
 	items: LocalQueueItem[],
-	updatedAt: number
+	updatedAt: number,
+	options: { authoritative?: boolean } = {}
 ): Promise<void> {
 	const db = await getLocalDB();
 	const currentUpdatedAt = await getLocalQueueUpdatedAt();
-	if (currentUpdatedAt >= updatedAt) return;
+	if (!options.authoritative && currentUpdatedAt >= updatedAt) return;
 	const tx = db.transaction(['queue', 'settings'], 'readwrite');
 	await tx.objectStore('queue').clear();
 	for (const item of items.slice(0, 500)) {

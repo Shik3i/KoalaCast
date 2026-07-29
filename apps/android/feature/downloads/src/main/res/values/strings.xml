@@ -14,4 +14,8 @@
     <string name="downloads_remove">Delete</string>
     <string name="downloads_remove_all">Delete all</string>
     <string name="downloads_storage">%1$s stored</string>
+    <string name="downloads_remove_all_confirm_title">Remove all downloads?</string>
+    <string name="downloads_remove_all_confirm_body">This permanently removes %1$d downloaded episodes from this device.</string>
+    <string name="downloads_remove_confirm_title">Remove download?</string>
+    <string name="downloads_remove_confirm_body">This permanently removes “%1$s” from this device.</string>
 </resources>

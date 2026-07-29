@@ -66,6 +66,7 @@ class SyncRepositoryTest {
             podcastSettings = database.podcastSettingsDao(),
             preferences = PreferencesRepository(
                 PreferenceDataStoreFactory.create { preferencesFile },
+                store,
             ),
         )
     }

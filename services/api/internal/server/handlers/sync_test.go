@@ -66,7 +66,7 @@ func TestSyncHandler_PlaybackConflictResolution(t *testing.T) {
 		PerSessionSeq:     1,
 		ClientTimestamp:   nowMs,
 	}
-	syncHandler.applyPlaybackState(ctx, tx, userID, p1, 1, nowMs)
+	_, _ = syncHandler.applyPlaybackState(ctx, tx, userID, p1, 1, nowMs)
 
 	var pos1 int64
 	var comp1 int
@@ -87,7 +87,7 @@ func TestSyncHandler_PlaybackConflictResolution(t *testing.T) {
 		PerSessionSeq:     2,
 		ClientTimestamp:   nowMs + 100,
 	}
-	syncHandler.applyPlaybackState(ctx, tx, userID, p2, 2, nowMs+100)
+	_, _ = syncHandler.applyPlaybackState(ctx, tx, userID, p2, 2, nowMs+100)
 
 	var pos2 int64
 	_ = tx.QueryRowContext(ctx, "SELECT position_ms FROM playback_states WHERE user_id = ? AND episode_id = ?", userID, episodeID).Scan(&pos2)
@@ -107,7 +107,7 @@ func TestSyncHandler_PlaybackConflictResolution(t *testing.T) {
 		PerSessionSeq:     3,
 		ClientTimestamp:   nowMs + 200,
 	}
-	syncHandler.applyPlaybackState(ctx, tx, userID, p3, 3, nowMs+200)
+	_, _ = syncHandler.applyPlaybackState(ctx, tx, userID, p3, 3, nowMs+200)
 
 	var pos3 int64
 	_ = tx.QueryRowContext(ctx, "SELECT position_ms FROM playback_states WHERE user_id = ? AND episode_id = ?", userID, episodeID).Scan(&pos3)
@@ -147,11 +147,11 @@ func TestSyncHandler_ListeningSessionUpsertKeepsNewestAggregate(t *testing.T) {
 		StartedAt: nowMs, EndedAt: nowMs + 60_000, WallClockMS: 60_000,
 		AudioListenedMS: 75_000, SpeedSavedMS: 15_000, SpeedWeightedMS: 75_000,
 	}
-	handler.applyListeningSession(ctx, tx, "u-listen", base, 1)
+	_, _ = handler.applyListeningSession(ctx, tx, "u-listen", base, 1)
 	stale := base
 	stale.EndedAt = nowMs + 30_000
 	stale.WallClockMS = 30_000
-	handler.applyListeningSession(ctx, tx, "u-listen", stale, 2)
+	_, _ = handler.applyListeningSession(ctx, tx, "u-listen", stale, 2)
 
 	var wallMs, syncVersion int64
 	if err := tx.QueryRowContext(ctx, `

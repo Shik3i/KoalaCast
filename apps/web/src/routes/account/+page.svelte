@@ -70,8 +70,12 @@
 
 	async function handleLogout() {
 		try {
-			await fetch('/api/v1/auth/logout', { method: 'POST' });
-		} catch (_) {}
+			const res = await fetch('/api/v1/auth/logout', { method: 'POST' });
+			if (!res.ok) throw new Error(`logout ${res.status}`);
+		} catch (_) {
+			toast.error(t('toast.signOutError'));
+			return;
+		}
 		await activateAccountContext(null);
 		toast.success(t('toast.signedOut'));
 		goto('/login');

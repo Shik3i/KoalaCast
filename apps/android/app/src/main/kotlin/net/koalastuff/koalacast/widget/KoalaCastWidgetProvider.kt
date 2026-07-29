@@ -14,13 +14,18 @@ import com.google.common.util.concurrent.MoreExecutors
 import net.koalastuff.koalacast.MainActivity
 import net.koalastuff.koalacast.R
 import net.koalastuff.koalacast.core.player.PlaybackService
+import java.util.UUID
 
 class KoalaCastWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
-            ACTION_TOGGLE -> togglePlayback(context)
+            ACTION_TOGGLE -> if (
+                intent.getStringExtra(EXTRA_TOGGLE_TOKEN) == toggleToken(context)
+            ) {
+                togglePlayback(context)
+            }
             ACTION_STATE_CHANGED -> updateAll(context)
         }
     }
@@ -69,7 +74,9 @@ class KoalaCastWidgetProvider : AppWidgetProvider() {
             PendingIntent.getBroadcast(
                 context,
                 1,
-                Intent(context, KoalaCastWidgetProvider::class.java).setAction(ACTION_TOGGLE),
+                Intent(context, KoalaCastWidgetProvider::class.java)
+                    .setAction(ACTION_TOGGLE)
+                    .putExtra(EXTRA_TOGGLE_TOKEN, toggleToken(context)),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             ),
         )
@@ -104,12 +111,22 @@ class KoalaCastWidgetProvider : AppWidgetProvider() {
         )
     }
 
+    private fun toggleToken(context: Context): String {
+        val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        preferences.getString(KEY_TOGGLE_TOKEN, null)?.let { return it }
+        val token = UUID.randomUUID().toString()
+        preferences.edit().putString(KEY_TOGGLE_TOKEN, token).apply()
+        return token
+    }
+
     companion object {
         const val ACTION_STATE_CHANGED = "net.koalastuff.koalacast.WIDGET_STATE_CHANGED"
         private const val ACTION_TOGGLE = "net.koalastuff.koalacast.WIDGET_TOGGLE"
+        private const val EXTRA_TOGGLE_TOKEN = "toggle_token"
         const val PREFERENCES = "playback_widget"
         const val KEY_TITLE = "title"
         const val KEY_PODCAST = "podcast"
         const val KEY_PLAYING = "playing"
+        private const val KEY_TOGGLE_TOKEN = "toggle_token"
     }
 }

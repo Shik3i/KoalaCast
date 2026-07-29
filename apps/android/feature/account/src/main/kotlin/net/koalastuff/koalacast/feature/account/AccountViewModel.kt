@@ -74,6 +74,7 @@ class AccountViewModel @Inject constructor(
     fun setPassword(value: String) = form.update { it.copy(password = value) }
     fun setRecoveryCode(value: String) = form.update { it.copy(recoveryCodeInput = value) }
     fun setNewPassword(value: String) = form.update { it.copy(newPassword = value) }
+    fun confirmRecoveryCodeSaved() = form.update { it.copy(recoveryCodeDisplay = null) }
 
     fun register() = launchAction {
         when (val result = accounts.register(state.value.username, state.value.password)) {

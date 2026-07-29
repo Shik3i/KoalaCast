@@ -31,6 +31,21 @@
 	let librarySort = $state<'recent' | 'az'>('recent');
 	let activeCover = $state<string | null>(null);
 	let longPressTimer: number | null = null;
+	const libraryTabs = ['subscriptions', 'episodes', 'queue', 'favorites'] as const;
+
+	function handleTabKey(event: KeyboardEvent) {
+		if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+		event.preventDefault();
+		const current = libraryTabs.indexOf(activeTab);
+		const next = event.key === 'Home'
+			? 0
+			: event.key === 'End'
+				? libraryTabs.length - 1
+				: (current + (event.key === 'ArrowRight' ? 1 : -1) + libraryTabs.length) %
+					libraryTabs.length;
+		activeTab = libraryTabs[next];
+		document.querySelector<HTMLElement>(`[data-library-tab="${activeTab}"]`)?.focus();
+	}
 
 	const visibleSubscriptions = $derived.by(() => {
 		let list = subscriptions.filter((subscription) =>
@@ -213,16 +228,16 @@
 	</div>
 
 	<div class="tabs collection-tabs" role="tablist" aria-label={t('library.sections')}>
-		<button role="tab" aria-selected={activeTab === 'subscriptions'} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')}>
+		<button data-library-tab="subscriptions" role="tab" aria-selected={activeTab === 'subscriptions'} tabindex={activeTab === 'subscriptions' ? 0 : -1} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')} onkeydown={handleTabKey}>
 			<i class="ph ph-books" aria-hidden="true"></i> {t('library.subscriptions')} <span class="count">{subscriptions.length}</span>
 		</button>
-		<button role="tab" aria-selected={activeTab === 'episodes'} class:active={activeTab === 'episodes'} onclick={() => (activeTab = 'episodes')}>
+		<button data-library-tab="episodes" role="tab" aria-selected={activeTab === 'episodes'} tabindex={activeTab === 'episodes' ? 0 : -1} class:active={activeTab === 'episodes'} onclick={() => (activeTab = 'episodes')} onkeydown={handleTabKey}>
 			<i class="ph ph-hourglass-medium" aria-hidden="true"></i> {t('library.inProgress')} <span class="count">{recentEpisodes.length}</span>
 		</button>
-		<button role="tab" aria-selected={activeTab === 'queue'} class:active={activeTab === 'queue'} onclick={() => (activeTab = 'queue')}>
+		<button data-library-tab="queue" role="tab" aria-selected={activeTab === 'queue'} tabindex={activeTab === 'queue' ? 0 : -1} class:active={activeTab === 'queue'} onclick={() => (activeTab = 'queue')} onkeydown={handleTabKey}>
 			<i class="ph ph-list-plus" aria-hidden="true"></i> {t('library.queue')} <span class="count">{queue.length}</span>
 		</button>
-		<button role="tab" aria-selected={activeTab === 'favorites'} class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')}>
+		<button data-library-tab="favorites" role="tab" aria-selected={activeTab === 'favorites'} tabindex={activeTab === 'favorites' ? 0 : -1} class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')} onkeydown={handleTabKey}>
 			<i class="ph ph-heart" aria-hidden="true"></i> {t('library.favorites')} <span class="count">{favorites.length}</span>
 		</button>
 	</div>
@@ -548,8 +563,8 @@
 
 	.reorder-btns { display: flex; gap: 2px; flex-shrink: 0; }
 	.reorder-btn {
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
 		border: none;
 		background: transparent;
 		color: var(--text-muted);
@@ -584,8 +599,8 @@
 
 	.ep-remove {
 		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		border: none;
 		background: transparent;
@@ -617,7 +632,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 36px;
+		min-height: 44px;
 		padding: 0 10px;
 		background: var(--bg-sunken);
 		border: 1px solid var(--border-ui);
@@ -627,6 +642,7 @@
 	.library-filter input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
 	.library-sort { display: flex; gap: 2px; }
 	.library-sort button {
+		min-height: 44px;
 		padding: 6px 8px;
 		border: 0;
 		border-radius: 3px;
@@ -637,7 +653,7 @@
 	}
 	.library-sort button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.collection-tabs { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-hair); }
-	.tabs button { min-height: 34px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); }
+	.tabs button { min-height: 44px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); }
 	.tabs button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.podcast-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 	.podcast-card.quiet-cover-card {

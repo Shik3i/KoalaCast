@@ -53,6 +53,7 @@ class SecureAccountStore @Inject constructor(
     }
 
     fun save(account: Account, token: String) {
+        beginAccountTransition()
         val encrypted = encrypt(token)
         prefs.edit {
             putString(KEY_USER_ID, account.userId)
@@ -66,6 +67,7 @@ class SecureAccountStore @Inject constructor(
     }
 
     fun clear() {
+        beginAccountTransition()
         cachedToken = null
         _account.value = null
         clearStoredAccount()
@@ -93,11 +95,28 @@ class SecureAccountStore @Inject constructor(
         prefs.edit { putLong("push_watermark_$userId", timestamp.coerceAtLeast(0)) }
     }
 
-    fun queueUpdatedAt(): Long = prefs.getLong(KEY_QUEUE_UPDATED_AT, 0)
+    fun queueUpdatedAt(): Long = prefs.getLong(queueUpdatedAtKey(), 0)
 
     fun markQueueUpdated(timestamp: Long = System.currentTimeMillis()) {
-        prefs.edit { putLong(KEY_QUEUE_UPDATED_AT, timestamp.coerceAtLeast(0)) }
+        prefs.edit { putLong(queueUpdatedAtKey(), timestamp.coerceAtLeast(0)) }
     }
+
+    fun resetQueueUpdatedAt(timestamp: Long = 0) {
+        prefs.edit { putLong(queueUpdatedAtKey(), timestamp.coerceAtLeast(0)) }
+    }
+
+    fun activeOwnerId(): String = _account.value?.userId ?: GUEST_OWNER
+
+    fun accountGeneration(): Long = prefs.getLong(KEY_ACCOUNT_GENERATION, 0)
+
+    fun beginAccountTransition(): Long {
+        val next = accountGeneration() + 1
+        prefs.edit(commit = true) { putLong(KEY_ACCOUNT_GENERATION, next) }
+        return next
+    }
+
+    private fun queueUpdatedAtKey(): String =
+        "${KEY_QUEUE_UPDATED_AT}_${_account.value?.userId ?: GUEST_OWNER}"
 
     private fun readAccount(): Account? {
         val userId = prefs.getString(KEY_USER_ID, null) ?: return null
@@ -158,5 +177,7 @@ class SecureAccountStore @Inject constructor(
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_TOKEN = "device_token"
         const val KEY_QUEUE_UPDATED_AT = "queue_updated_at"
+        const val KEY_ACCOUNT_GENERATION = "account_generation"
+        const val GUEST_OWNER = "guest"
     }
 }

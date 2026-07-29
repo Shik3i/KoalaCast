@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -104,6 +107,7 @@ internal fun NowPlayingContent(
             .spotlightGlow(colors.accentFill)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = KoalaSpacing.screenH),
         verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapLarge),
     ) {
@@ -134,6 +138,7 @@ internal fun NowPlayingContent(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxWidth(0.78f)
+                .widthIn(max = 420.dp)
                 .aspectRatio(1f)
                 .align(Alignment.CenterHorizontally),
             sizeHint = 512.dp,

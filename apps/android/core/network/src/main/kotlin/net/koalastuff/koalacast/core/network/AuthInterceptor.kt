@@ -9,12 +9,19 @@ fun interface AuthTokenProvider {
     fun token(): String?
 }
 
+enum class AuthPolicy {
+    NO_AUTH,
+}
+
 @Singleton
 class AuthInterceptor @Inject constructor(
     private val tokenProvider: AuthTokenProvider,
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        if (request.tag(AuthPolicy::class.java) == AuthPolicy.NO_AUTH) {
+            return chain.proceed(request)
+        }
         val token = tokenProvider.token()
         return chain.proceed(
             if (token.isNullOrBlank()) {

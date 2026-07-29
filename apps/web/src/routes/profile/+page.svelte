@@ -138,7 +138,7 @@
 			<div class="weekday-labels" aria-hidden="true"><span>{weekdayRows[0].label}</span><span>{weekdayRows[2].label}</span><span>{weekdayRows[4].label}</span><span>{weekdayRows[6].label}</span></div>
 			<div class="heatmap" aria-label={t('profileStats.activityLabel')}>
 				{#each heatmap as day}
-					<span aria-hidden="true" class={`level-${day.level}`} title={`${day.date.toLocaleDateString(prefs.uiLanguage)}: ${t('profileStats.minutes', { count: Math.round(day.minutes) })}`}></span>
+					<span class={`level-${day.level}`} title={`${day.date.toLocaleDateString(prefs.uiLanguage)}: ${t('profileStats.minutes', { count: Math.round(day.minutes) })}`} aria-label={`${day.date.toLocaleDateString(prefs.uiLanguage)}: ${t('profileStats.minutes', { count: Math.round(day.minutes) })}`}></span>
 				{/each}
 			</div>
 		</div>
@@ -237,7 +237,7 @@
 	.profile-head h1 { font-size: 30px; letter-spacing: -.04em; }
 	.profile-head p, section > header span { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .01em; }
 	.range-tabs { display: flex; gap: 2px; }
-	.range-tabs button { min-height: 32px; padding: 7px 10px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 11px/1 var(--font-mono); }
+	.range-tabs button { min-height: 44px; padding: 7px 10px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 11px/1 var(--font-mono); }
 	.range-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; padding: 18px 0; }
 	.kpi-grid article { padding: 15px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
@@ -284,7 +284,7 @@
 	.saved-summary { margin-top: 10px; color: var(--ink-4); font: 600 10px/1.4 var(--font-mono); }
 	.privacy-card { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 20px; padding: 18px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
 	.privacy-card h2 { margin: 5px 0; font-size: 17px; }.privacy-card p { max-width: 68ch; color: var(--ink-3); font-size: 13px; }
-	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 36px; padding: 9px 11px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
+	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 44px; padding: 9px 11px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
 	@media (max-width: 1050px) { .profile-analysis { grid-template-columns: 1fr; }.breakdowns { grid-template-columns: repeat(3,1fr); }.ranking-list a { grid-template-columns: 22px 36px minmax(0,1fr) 80px 46px; } }
 	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px 1fr; }.profile-avatar { width: 54px; height: 54px; }.range-tabs { grid-column: 1 / -1; overflow-x: auto; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
 	.stats-subnav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-row); padding-bottom: 12px; }

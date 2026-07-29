@@ -10,7 +10,11 @@
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { player } from '$lib/stores/player.svelte';
-	import { activateAccountContext, activateLoggedInAccount } from '$lib/stores/account-context';
+	import {
+		activateAccountContext,
+		activateLoggedInAccount,
+		getLastAccountContext
+	} from '$lib/stores/account-context';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { shell } from '$lib/stores/shell.svelte';
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
@@ -37,7 +41,8 @@
 	onMount(async () => {
 		try {
 			const res = await fetch('/api/v1/auth/status');
-			const me = res.ok ? await res.json() : null;
+			if (!res.ok) throw new Error(`auth status ${res.status}`);
+			const me = await res.json();
 			if (me?.authenticated && me.user_id) {
 				currentUser = me;
 				await activateLoggedInAccount(me.user_id);
@@ -45,7 +50,13 @@
 				await activateAccountContext(null);
 			}
 		} catch {
-			await activateAccountContext(null);
+			const lastAccount = getLastAccountContext();
+			if (lastAccount) {
+				currentUser = { user_id: lastAccount, username: '', role: 'user' };
+				await activateAccountContext(lastAccount);
+			} else {
+				await activateAccountContext(null);
+			}
 		}
 		void getLocalSubscriptions().then(preloadSubscriptionArtwork);
 	});
