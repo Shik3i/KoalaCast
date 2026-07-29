@@ -51,6 +51,8 @@
 	let activeSession: LocalListeningSession | null = null;
 	let lastListeningSampleAt = 0;
 	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
+	let remotePlaybackAvailable = $state(false);
+	let remotePlaybackState = $state<RemotePlaybackState>('disconnected');
 	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
 	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
 	$effect(() => {
@@ -802,6 +804,57 @@
 		if (audioEl) audioEl.volume = player.volume;
 	});
 
+	$effect(() => {
+		const element = audioEl;
+		if (!element || !('remote' in element)) {
+			remotePlaybackAvailable = false;
+			remotePlaybackState = 'disconnected';
+			return;
+		}
+
+		const remote = element.remote;
+		let availabilityWatchId: number | null = null;
+		let disposed = false;
+		const updateState = () => {
+			remotePlaybackState = remote.state;
+			if (remote.state !== 'disconnected') remotePlaybackAvailable = true;
+		};
+		const updateAvailability = (available: boolean) => {
+			if (!disposed) remotePlaybackAvailable = available || remote.state !== 'disconnected';
+		};
+
+		updateState();
+		remote.addEventListener('connecting', updateState);
+		remote.addEventListener('connect', updateState);
+		remote.addEventListener('disconnect', updateState);
+		remote.watchAvailability(updateAvailability)
+			.then((id) => {
+				if (disposed) remote.cancelWatchAvailability(id);
+				else availabilityWatchId = id;
+			})
+			.catch(() => {
+				if (!disposed) remotePlaybackAvailable = remote.state !== 'disconnected';
+			});
+
+		return () => {
+			disposed = true;
+			remote.removeEventListener('connecting', updateState);
+			remote.removeEventListener('connect', updateState);
+			remote.removeEventListener('disconnect', updateState);
+			if (availabilityWatchId !== null) remote.cancelWatchAvailability(availabilityWatchId);
+		};
+	});
+
+	async function chooseRemotePlayback() {
+		if (!audioEl || !remotePlaybackAvailable) return;
+		try {
+			await audioEl.remote.prompt();
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'NotAllowedError') return;
+			toast.error(t('player.remotePlaybackFailed'));
+		}
+	}
+
 	onMount(() => {
 		player.registerPlaybackFinalizer(async () => {
 			if (!audioEl) return;
@@ -1033,6 +1086,17 @@
 						</div>
 					{/if}
 				</div>
+				{#if remotePlaybackAvailable}
+					<button
+						class="ctrl"
+						class:active={remotePlaybackState !== 'disconnected'}
+						onclick={chooseRemotePlayback}
+						aria-label={t(remotePlaybackState === 'connected' ? 'player.remotePlaybackConnected' : 'player.remotePlayback')}
+						title={t(remotePlaybackState === 'connected' ? 'player.remotePlaybackConnected' : 'player.remotePlayback')}
+					>
+						<i class="ph ph-broadcast" aria-hidden="true"></i>
+					</button>
+				{/if}
 				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
 					<option value="" selected={!player.sleepTimerEndsAt && !player.sleepAtEpisodeEnd && !player.sleepAtChapterEnd}>◐ {t('player.sleepOff')}</option>
 					<option value="chapter" selected={player.sleepAtChapterEnd}>⏳ {t('player.sleepChapterEnd')}</option>
@@ -1116,6 +1180,18 @@
 					<button class="np-pill-btn" class:active={effectiveSkipSilence} onclick={toggleSkipSilence} aria-pressed={effectiveSkipSilence} aria-label={t('player.toggleSkipSilence')} title={t('player.toggleSkipSilence')}>
 						<i class="ph ph-waveform" aria-hidden="true"></i> {t('player.trimSilence')}
 					</button>
+					{#if remotePlaybackAvailable}
+						<button
+							class="np-pill-btn"
+							class:active={remotePlaybackState !== 'disconnected'}
+							onclick={chooseRemotePlayback}
+							aria-label={t(remotePlaybackState === 'connected' ? 'player.remotePlaybackConnected' : 'player.remotePlayback')}
+							title={t(remotePlaybackState === 'connected' ? 'player.remotePlaybackConnected' : 'player.remotePlayback')}
+						>
+							<i class="ph ph-broadcast" aria-hidden="true"></i>
+							{t(remotePlaybackState === 'connected' ? 'player.remotePlaybackConnected' : 'player.remotePlayback')}
+						</button>
+					{/if}
 					<div class="speed-selector" role="group" aria-label={t('player.speed')}>
 						{#each speeds as spd}
 							<button onclick={() => setSpeed(spd)} class:active={player.playbackSpeed === spd} aria-pressed={player.playbackSpeed === spd}>{spd}x</button>
