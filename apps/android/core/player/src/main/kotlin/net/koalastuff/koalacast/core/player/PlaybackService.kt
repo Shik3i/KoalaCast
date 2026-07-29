@@ -277,7 +277,7 @@ class PlaybackService : MediaLibraryService() {
             val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             scope.launch {
                 val resolved = mediaItems.mapNotNull { item ->
-                    storedTrack(item.mediaId)?.let { track -> playableItem(track) }
+                    resolveSessionMediaItem(item, ::storedTrack, ::playableItem)
                 }
                 if (resolved.isEmpty()) {
                     future.setException(UnsupportedOperationException("unknown media id"))
@@ -663,4 +663,16 @@ class PlaybackService : MediaLibraryService() {
         val durationMs: Long,
         val session: net.koalastuff.koalacast.core.model.ListeningSession?,
     )
+}
+
+internal suspend fun resolveSessionMediaItem(
+    item: MediaItem,
+    storedTrack: suspend (String) -> Track?,
+    playableItem: suspend (Track) -> MediaItem,
+): MediaItem? {
+    val track = TrackMediaItem.toTrack(item)
+        ?.takeIf { it.enclosureUrl.isNotBlank() }
+        ?: storedTrack(item.mediaId)
+        ?: return null
+    return playableItem(track)
 }
