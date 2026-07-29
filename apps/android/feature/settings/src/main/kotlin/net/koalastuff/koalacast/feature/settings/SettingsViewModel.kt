@@ -15,6 +15,7 @@ import net.koalastuff.koalacast.core.data.server.ServerUrl
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
+import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
@@ -155,6 +156,10 @@ class SettingsViewModel @Inject constructor(
 
     fun unhidePodcast(key: String) {
         viewModelScope.launch { preferences.unhidePodcast(key) }
+    }
+
+    fun setDefaultInboxMode(mode: InboxMode) {
+        viewModelScope.launch { preferences.setDefaultInboxMode(mode) }
     }
 
     fun setProxyImages(enabled: Boolean) {

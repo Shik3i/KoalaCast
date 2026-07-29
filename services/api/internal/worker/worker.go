@@ -24,12 +24,22 @@ type FeedWorker struct {
 	stopChan   chan struct{}
 	wg         sync.WaitGroup
 	mu         sync.Mutex
+	notifier   EpisodeNotifier
 
 	// Metrics
 	LastRunAt       time.Time
 	SuccessCount    int64
 	FailureCount    int64
 	IsWorkerRunning bool
+}
+
+type NewEpisode struct {
+	ID    string
+	Title string
+}
+
+type EpisodeNotifier interface {
+	NotifyNewEpisodes(context.Context, string, string, []NewEpisode)
 }
 
 func NewFeedWorker(database *db.DB, cfg *config.Config, logger *slog.Logger) *FeedWorker {
@@ -43,6 +53,18 @@ func NewFeedWorker(database *db.DB, cfg *config.Config, logger *slog.Logger) *Fe
 			ResponseTimeout: time.Duration(cfg.FeedRequestTimeoutMS) * time.Millisecond,
 		}),
 	}
+}
+
+func (w *FeedWorker) SetNotifier(notifier EpisodeNotifier) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.notifier = notifier
+}
+
+func (w *FeedWorker) episodeNotifier() EpisodeNotifier {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.notifier
 }
 
 // Metrics is an immutable snapshot of the worker's runtime counters, safe to
@@ -130,11 +152,36 @@ func (w *FeedWorker) RefreshScheduledFeeds(ctx context.Context) {
 
 	nowMs := time.Now().UnixMilli()
 
-	// Query podcasts due for refresh
+	// Background refresh is reserved for active subscriptions that explicitly
+	// requested new-episode notifications. Normal subscriptions and one-off
+	// Discover opens refresh on demand from GetEpisodes.
 	rows, err := w.db.SQL.QueryContext(ctx, `
-		SELECT id, feed_url, etag, last_modified, consecutive_error_count
-		FROM podcasts
-		WHERE next_scheduled_fetch_at <= ? OR last_successful_fetch_at = 0
+		SELECT p.id, p.feed_url, p.etag, p.last_modified, p.consecutive_error_count
+		FROM podcasts p
+		WHERE (p.next_scheduled_fetch_at <= ? OR p.last_successful_fetch_at = 0)
+		  AND EXISTS (
+			SELECT 1
+			FROM subscriptions s
+			WHERE s.podcast_id = p.id
+			  AND s.is_deleted = 0
+			  AND COALESCE((
+				SELECT CASE
+					WHEN sl.action = 'upsert'
+					THEN COALESCE(
+						json_extract(sl.payload_json, '$.notify_new_episodes'),
+						json_extract(sl.payload_json, '$.notifyNewEpisodes'),
+						0
+					)
+					ELSE 0
+				END
+				FROM sync_log sl
+				WHERE sl.user_id = s.user_id
+				  AND sl.entity_type = 'podcast_settings'
+				  AND sl.entity_id = p.id
+				ORDER BY sl.server_cursor DESC
+				LIMIT 1
+			  ), 0) = 1
+		  )
 		LIMIT 50
 	`, nowMs)
 	if err != nil {
@@ -200,6 +247,8 @@ func (w *FeedWorker) RefreshScheduledFeeds(ctx context.Context) {
 
 func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, etag, lastModified string) error {
 	nowMs := time.Now().UnixMilli()
+	var existingEpisodeCount int
+	_ = w.db.SQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM episodes WHERE podcast_id = ?", podcastID).Scan(&existingEpisodeCount)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {
@@ -292,7 +341,9 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 	}
 
 	// Insert or Update Episodes using StableIdentityKey
-	for _, ep := range parsedFeed.Episodes {
+	maxEpisodes := config.EffectiveFeedMaxStoredEpisodes(w.cfg.FeedMaxStoredEpisodes)
+	newEpisodes := make([]NewEpisode, 0)
+	for _, ep := range rss.RecentEpisodes(parsedFeed.Episodes, maxEpisodes) {
 		var pubDateUnix int64
 		if ep.HasPubDate {
 			pubDateUnix = ep.PubDate.Unix()
@@ -319,6 +370,10 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 				transcriptsJSON = string(b)
 			}
 		}
+		contentEncoded := ep.ContentEncoded
+		if contentEncoded == ep.Description {
+			contentEncoded = ""
+		}
 		if err == sql.ErrNoRows {
 			episodeID := uuid.New().String()
 			_, err = tx.ExecContext(ctx, `
@@ -329,12 +384,13 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 					episode_type, explicit, link, transcripts, chapters_url, created_at
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`, episodeID, podcastID, ep.StableKey, ep.GUID, ep.FallbackHash, ep.Title, ep.Description,
-				ep.ContentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
+				contentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
 				ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber,
 				ep.EpisodeType, explicitInt, ep.Link, transcriptsJSON, ep.ChaptersURL, nowMs)
 			if err != nil {
 				return fmt.Errorf("failed to insert episode: %w", err)
 			}
+			newEpisodes = append(newEpisodes, NewEpisode{ID: episodeID, Title: ep.Title})
 		} else if err == nil {
 			_, err = tx.ExecContext(ctx, `
 				UPDATE episodes
@@ -356,7 +412,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 					transcripts = ?,
 					chapters_url = ?
 				WHERE id = ?
-			`, ep.Title, ep.Description, ep.ContentEncoded, pubDateUnix, hasPubDateInt,
+			`, ep.Title, ep.Description, contentEncoded, pubDateUnix, hasPubDateInt,
 				ep.DurationMS, ep.EnclosureURL, ep.EnclosureType, ep.EnclosureLength,
 				ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber, ep.EpisodeType,
 				explicitInt, ep.Link, transcriptsJSON, ep.ChaptersURL, existingID)
@@ -365,8 +421,19 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 			}
 		}
 	}
+	if _, err := db.PrunePodcastEpisodes(ctx, tx, podcastID, maxEpisodes); err != nil {
+		return fmt.Errorf("failed to prune episode cache: %w", err)
+	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if existingEpisodeCount > 0 && len(newEpisodes) > 0 {
+		if notifier := w.episodeNotifier(); notifier != nil {
+			notifier.NotifyNewEpisodes(ctx, podcastID, parsedFeed.Title, newEpisodes)
+		}
+	}
+	return nil
 }
 
 func (w *FeedWorker) updateFeedError(podcastID, category string, httpStatus int, errorMsg string) {

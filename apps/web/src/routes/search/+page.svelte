@@ -286,7 +286,8 @@
 				feed_url: feedUrl || '',
 				title: pod.title || pod.trackName,
 				artwork_url: pod.artwork_url || pod.artworkUrl600,
-				added_at: Date.now()
+				added_at: Date.now(),
+				inbox_mode: prefs.defaultInboxMode
 			});
 
 			subscribedIds = [...new Set([...subscribedIds, podId])];
@@ -334,7 +335,8 @@
 				feed_url: data.feed_url,
 				title: data.title,
 				artwork_url: data.artwork_url,
-				added_at: Date.now()
+				added_at: Date.now(),
+				inbox_mode: prefs.defaultInboxMode
 			});
 
 			subscribedIds = [...subscribedIds, data.id];

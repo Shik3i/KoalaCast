@@ -6,6 +6,8 @@ import { activatePodcastSettingsContext } from '$lib/stores/podcast-settings';
 import { audioDownloads } from '$lib/downloads/manager.svelte';
 
 let transition: Promise<void> = Promise.resolve();
+let requestedUserId: string | null | undefined;
+let activeUserId: string | null | undefined;
 const LAST_ACCOUNT_KEY = 'koalacast_last_account_id';
 
 export function getLastAccountContext(): string | null {
@@ -21,8 +23,14 @@ export function activateAccountContext(
 	userId: string | null,
 	options: { migrateGuest?: boolean } = {}
 ): Promise<void> {
+	// Route components may independently confirm the same authenticated session.
+	// Re-entering an already requested context used to stop active playback before
+	// reopening the exact same IndexedDB database.
+	if (requestedUserId === userId) return transition;
+	requestedUserId = userId;
 	sync.disable();
 	transition = transition.then(async () => {
+		if (activeUserId === userId) return;
 		if (player.isActive || player.isPlaying) await player.stop();
 		await switchLocalDataContext(userId, options);
 		prefs.activateContext(userId, options);
@@ -34,6 +42,7 @@ export function activateAccountContext(
 			if (userId) localStorage.setItem(LAST_ACCOUNT_KEY, userId);
 			else localStorage.removeItem(LAST_ACCOUNT_KEY);
 		} catch (_) {}
+		activeUserId = userId;
 		if (userId) sync.enable(userId);
 	});
 	return transition;

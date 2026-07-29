@@ -91,6 +91,13 @@ class LibraryRepositoryTest {
     }
 
     @Test
+    fun `subscribing applies the configured default inbox mode`() = runTest {
+        repository.subscribe(podcast(), InboxMode.LATEST)
+
+        assertEquals(InboxMode.LATEST, repository.subscriptionsSnapshot().single().inboxMode)
+    }
+
+    @Test
     fun `unsubscribing leaves a tombstone so sync cannot resurrect it`() = runTest {
         repository.subscribe(podcast())
         repository.unsubscribe("p1")

@@ -13,6 +13,7 @@ import (
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
+	pushservice "github.com/Shik3i/KoalaCast/services/api/internal/push"
 	"github.com/Shik3i/KoalaCast/services/api/internal/server/handlers"
 	customMiddleware "github.com/Shik3i/KoalaCast/services/api/internal/server/middleware"
 	"github.com/Shik3i/KoalaCast/services/api/internal/worker"
@@ -40,12 +41,16 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		PodcastIndex: podcastIdxClient,
 		Worker:       feedWorker,
 		MaxResponseB: cfg.FeedMaxResponseBytes,
+		MaxEpisodes:  cfg.FeedMaxStoredEpisodes,
 	}
 
 	authHandler := &handlers.AuthHandler{
 		DB:     database,
 		Config: cfg,
 	}
+	pushService := pushservice.NewService(database, cfg, logger)
+	feedWorker.SetNotifier(pushService)
+	pushHandler := &handlers.PushHandler{DB: database, Config: cfg}
 
 	syncHandler := &handlers.SyncHandler{
 		DB: database,
@@ -172,6 +177,9 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Delete("/auth/sessions/{id}", authHandler.RevokeSession)
 			r.Get("/stats/preferences", globalStatsHandler.GetPreference)
 			r.Put("/stats/preferences", globalStatsHandler.UpdatePreference)
+			r.Get("/push/config", pushHandler.GetConfig)
+			r.Post("/push/subscriptions", pushHandler.Subscribe)
+			r.Delete("/push/subscriptions", pushHandler.Unsubscribe)
 
 			// Cross-Device Sync Engine
 			r.Get("/sync", syncHandler.Pull)

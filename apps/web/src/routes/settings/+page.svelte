@@ -84,7 +84,6 @@
 					authUser = { username: me.username, role: me.role };
 					loadActiveSessions();
 					loadGlobalStatsPreference();
-					await activateLoggedInAccount(me.user_id);
 				}
 			}
 		} catch (_) {}
@@ -269,7 +268,8 @@
 					feed_url: feed.feed_url,
 					title: feed.title,
 					artwork_url: '',
-					added_at: now + index
+					added_at: now + index,
+					inbox_mode: prefs.defaultInboxMode
 				}))
 			);
 			opmlReport = {
@@ -506,6 +506,28 @@
 				onclick={() => prefs.setDateFormat('relative')}
 			>
 				<i class="ph ph-clock-countdown" aria-hidden="true"></i> {t('settings.dateRelative')}
+				</button>
+			</div>
+			<h4 class="date-heading preference-heading">{t('settings.newPodcastEpisodes')}</h4>
+			<p class="subtitle">{t('settings.newPodcastEpisodesHint')}</p>
+			<div class="theme-selector" role="group" aria-label={t('settings.newPodcastEpisodes')}>
+				<button
+					type="button"
+					class="theme-btn"
+					class:active={prefs.defaultInboxMode === 'all'}
+					aria-pressed={prefs.defaultInboxMode === 'all'}
+					onclick={() => prefs.setDefaultInboxMode('all')}
+				>
+					<i class="ph ph-stack" aria-hidden="true"></i> {t('settings.allEpisodes')}
+				</button>
+				<button
+					type="button"
+					class="theme-btn"
+					class:active={prefs.defaultInboxMode === 'latest'}
+					aria-pressed={prefs.defaultInboxMode === 'latest'}
+					onclick={() => prefs.setDefaultInboxMode('latest')}
+				>
+					<i class="ph ph-sparkle" aria-hidden="true"></i> {t('settings.latestEpisode')}
 				</button>
 			</div>
 		</div>
@@ -933,6 +955,7 @@
 	.audio-settings { display: grid; gap: .7rem; margin: 1rem 0 1.2rem; }
 	.audio-settings .consent-row { background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: 12px; }
 	.date-heading { margin: 0 0 .65rem; }
+	.preference-heading { margin-top: 1.25rem; }
 	.privacy-box.muted { opacity: .78; }
 
 	.subtitle {

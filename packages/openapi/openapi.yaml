@@ -19,6 +19,7 @@ tags:
   - name: Health
   - name: Proxy
   - name: Podcasts
+  - name: Push
   - name: Authentication
   - name: Sync
   - name: OPML
@@ -495,6 +496,78 @@ paths:
           $ref: '#/components/responses/BadGateway'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /api/v1/push/config:
+    get:
+      tags: [Push]
+      operationId: getWebPushConfig
+      summary: Read this server's Web Push capability
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: VAPID capability and public key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebPushConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/push/subscriptions:
+    post:
+      tags: [Push]
+      operationId: registerWebPushSubscription
+      summary: Register this browser's Push API subscription
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebPushSubscription'
+      responses:
+        '204':
+          description: Subscription registered
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: Web Push is not configured on this server
+    delete:
+      tags: [Push]
+      operationId: deleteWebPushSubscription
+      summary: Remove this browser's Push API subscription
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              additionalProperties: false
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+      responses:
+        '204':
+          description: Subscription removed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/v1/auth/register:
     post:
@@ -1253,6 +1326,42 @@ components:
         audio_effects_proxy_enabled:
           type: boolean
           description: Whether this self-hosted instance permits audio relay fallback for browser effects and downloads.
+
+    WebPushConfig:
+      type: object
+      required: [configured, vapid_public_key]
+      additionalProperties: false
+      properties:
+        configured:
+          type: boolean
+        vapid_public_key:
+          type: string
+          description: URL-safe base64-encoded VAPID public key; empty when Web Push is disabled.
+
+    WebPushSubscription:
+      type: object
+      required: [endpoint, keys]
+      additionalProperties: false
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        expirationTime:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+        locale:
+          type: string
+        keys:
+          type: object
+          required: [p256dh, auth]
+          additionalProperties: false
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
 
     Chapter:
       type: object

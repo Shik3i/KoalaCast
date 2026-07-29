@@ -33,4 +33,7 @@ KoalaCast enforces strict configuration rules to ensure self-hosters and securit
 | Registration Toggle | `KC_REGISTRATION_ENABLED` | Conditional | Hard override if set; DB setting used if unset |
 | Trusted Proxies | `TRUSTED_PROXIES` | No | CIDR list for reverse proxy IP header resolution |
 | Feed Worker Concurrency| `FEED_WORKER_CONCURRENCY` | No | Max parallel RSS feed fetchers |
+| Stored Episodes per Feed | `FEED_MAX_STORED_EPISODES` | No | Recent metadata rows retained per podcast; user-state references are preserved |
 | Podcast Index Key | `PODCAST_INDEX_KEY` | No | API key for catalog search |
+| Web Push VAPID Keys | `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` | No | Enables authenticated server-to-browser push delivery |
+| Web Push Contact | `WEB_PUSH_VAPID_SUBJECT` | No | VAPID contact URI, defaults to the public URL |

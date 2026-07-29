@@ -179,7 +179,10 @@
 		"folderFilter": "Podcast-Ordner",
 		"allFolders": "Alle Ordner",
 		"assignFolder": "{title} einem Ordner zuweisen",
-		"folderPrompt": "Ordner für {title}. Leer lassen, um die Ordnerzuordnung zu entfernen."
+		"folderPrompt": "Ordner für {title}. Leer lassen, um die Ordnerzuordnung zu entfernen.",
+		"playLatestUnheard": "Neueste ungehörte Folge von {title} abspielen",
+		"noUnplayedEpisodes": "Für diesen Podcast ist keine ungehörte Folge verfügbar.",
+		"playEpisodeError": "Die neueste ungehörte Folge konnte nicht geladen werden."
 	},
 	"inbox": {
 		"title": "Neu",
@@ -291,6 +294,10 @@
 		"paletteUltraviolet": "Ultraviolett",
 		"paletteUltravioletDescription": "Elektrischer Kontrast bei Nacht",
 		"episodeDates": "Datum der Folgen",
+		"newPodcastEpisodes": "Folgen neuer Podcasts",
+		"newPodcastEpisodesHint": "Standard für Podcasts, die du ab jetzt abonnierst. Einzelne Sendungen kannst du unter Neu weiterhin abweichend einstellen.",
+		"allEpisodes": "Alle aktuellen Folgen anzeigen",
+		"latestEpisode": "Nur die neueste Folge anzeigen",
 		"playback": "Wiedergabe",
 		"playbackHint": "Audioeinstellungen werden in diesem Browser gespeichert und gelten für alle Folgen.",
 		"volumeBoost": "Audio-Boost",
@@ -770,7 +777,7 @@
 			"autoDownload": "Neue Folgen automatisch herunterladen",
 			"notifications": "Browser-Benachrichtigung bei neuen Folgen",
 			"notificationsEnabled": "Benachrichtigungen für diese Sendung aktiviert.",
-			"notificationsDenied": "Benachrichtigungsberechtigung wurde nicht erteilt."
+			"notificationsDenied": "Benachrichtigungen konnten nicht aktiviert werden. Melde dich an, erlaube Browser-Benachrichtigungen und prüfe die Server-Konfiguration."
 		},
 		"library": {
 			"collections": "Sammlungen",
@@ -814,6 +821,9 @@
 		"podcasts": "Podcasts",
 		"episodes": "Folgen",
 		"dbSize": "DB-Größe",
+		"episodePayload": "Folgen-Nutzdaten",
+		"notificationFeeds": "Benachrichtigungs-Feeds",
+		"storageExplanation": "SQLite-Datei: {main} MB · WAL: {wal} MB. Folgen sind ein begrenzter Metadaten-Cache mit höchstens {limit} aktuellen Einträgen pro Podcast; gehörte, favorisierte oder eingereihte ältere Folgen bleiben erhalten. Bilder und Audiodateien liegen nicht in der Datenbank.",
 		"workerStatus": "Worker-Status",
 		"publicRegistration": "Öffentliche Registrierung",
 		"username": "Benutzername",

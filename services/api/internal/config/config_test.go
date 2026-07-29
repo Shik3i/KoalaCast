@@ -121,3 +121,25 @@ func TestConfig_AudioEffectsProxyOptIn(t *testing.T) {
 		t.Fatal("expected audio effects proxy to be enabled explicitly")
 	}
 }
+
+func TestConfig_WebPushRequiresCompleteValidVAPIDConfiguration(t *testing.T) {
+	t.Setenv("SESSION_SECRET", "a-very-secure-production-secret-with-at-least-32-characters")
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("WEB_PUSH_VAPID_PUBLIC_KEY", "public")
+	t.Setenv("WEB_PUSH_VAPID_PRIVATE_KEY", "")
+	t.Setenv("WEB_PUSH_VAPID_SUBJECT", "mailto:admin@example.com")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("expected an incomplete VAPID key pair to fail")
+	}
+
+	t.Setenv("WEB_PUSH_VAPID_PRIVATE_KEY", "private")
+	t.Setenv("WEB_PUSH_VAPID_SUBJECT", "http://cast.example")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("expected an insecure VAPID subject to fail")
+	}
+
+	t.Setenv("WEB_PUSH_VAPID_SUBJECT", "https://cast.example")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("expected HTTPS VAPID subject to succeed: %v", err)
+	}
+}

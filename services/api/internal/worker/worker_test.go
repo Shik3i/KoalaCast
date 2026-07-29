@@ -151,3 +151,61 @@ func TestFeedWorker_RefreshSingleFeed_304NotModified(t *testing.T) {
 		t.Errorf("expected consecutive_error_count to be 0 for 304 Not Modified, got %d", errorCount)
 	}
 }
+
+func TestFeedWorkerScheduledRefreshOnlyFetchesNotificationSubscriptions(t *testing.T) {
+	database, err := db.OpenDB(
+		filepath.Join(t.TempDir(), "scheduled.db"),
+		slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	feedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><rss version="2.0"><channel>
+			<title>Refreshed</title><description>Test</description>
+			<item><guid>new</guid><title>New</title><enclosure url="https://example.com/new.mp3"/></item>
+		</channel></rss>`))
+	}))
+	defer feedServer.Close()
+	now := time.Now().UnixMilli()
+	if _, err := database.SQL.Exec(`
+		INSERT INTO users (
+			id, username, normalized_username, password_hash, recovery_code_hash, created_at, updated_at
+		) VALUES ('scheduled-user', 'Scheduled', 'scheduled', 'hash', 'recovery', ?, ?);
+		INSERT INTO podcasts (id, feed_url, title, created_at, updated_at)
+		VALUES
+			('notify-podcast', ?, 'Notify old', ?, ?),
+			('ordinary-podcast', ?, 'Ordinary old', ?, ?);
+		INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at)
+		VALUES
+			('scheduled-user', 'notify-podcast', ?, ?),
+			('scheduled-user', 'ordinary-podcast', ?, ?);
+		INSERT INTO sync_log (
+			user_id, device_id, client_op_id, entity_type, entity_id, action,
+			payload_json, client_timestamp, server_timestamp, server_cursor
+		) VALUES (
+			'scheduled-user', 'web', 'notify-setting', 'podcast_settings',
+			'notify-podcast', 'upsert', '{"notifyNewEpisodes":true}', ?, ?, 1
+		)
+	`, now, now, feedServer.URL+"/notify", now, now, feedServer.URL+"/ordinary", now, now,
+		now, now, now, now, now, now); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		FeedWorkerConcurrency: 2,
+		FeedRequestTimeoutMS:  5000,
+		FeedMaxResponseBytes:  10485760,
+	}
+	feedWorker := NewFeedWorker(database, cfg, slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	feedWorker.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	feedWorker.RefreshScheduledFeeds(context.Background())
+
+	var notifyTitle, ordinaryTitle string
+	_ = database.SQL.QueryRow("SELECT title FROM podcasts WHERE id = 'notify-podcast'").Scan(&notifyTitle)
+	_ = database.SQL.QueryRow("SELECT title FROM podcasts WHERE id = 'ordinary-podcast'").Scan(&ordinaryTitle)
+	if notifyTitle != "Refreshed" || ordinaryTitle != "Ordinary old" {
+		t.Fatalf("notify=%q ordinary=%q", notifyTitle, ordinaryTitle)
+	}
+}

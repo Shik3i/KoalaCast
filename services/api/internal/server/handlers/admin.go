@@ -289,14 +289,64 @@ func (h *AdminHandler) SystemStatus(w http.ResponseWriter, r *http.Request) {
 	_ = h.DB.SQL.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM episodes").Scan(&episodeCount)
 
 	// Database File Size
-	var dbSizeBytes int64
+	var dbMainSizeBytes, dbWALSizeBytes int64
 	if fi, err := os.Stat(h.Config.DatabasePath); err == nil {
-		dbSizeBytes = fi.Size()
+		dbMainSizeBytes = fi.Size()
 	}
-	// Add WAL file size if present
 	if fi, err := os.Stat(h.Config.DatabasePath + "-wal"); err == nil {
-		dbSizeBytes += fi.Size()
+		dbWALSizeBytes = fi.Size()
 	}
+	dbSizeBytes := dbMainSizeBytes + dbWALSizeBytes
+
+	var episodePayloadBytes, podcastPayloadBytes int64
+	_ = h.DB.SQL.QueryRowContext(r.Context(), `
+		SELECT COALESCE(SUM(
+			LENGTH(title) + LENGTH(description) + LENGTH(content_encoded) +
+			LENGTH(enclosure_url) + LENGTH(artwork_url) + LENGTH(transcripts) +
+			LENGTH(chapters_url)
+		), 0)
+		FROM episodes
+	`).Scan(&episodePayloadBytes)
+	_ = h.DB.SQL.QueryRowContext(r.Context(), `
+		SELECT COALESCE(SUM(
+			LENGTH(title) + LENGTH(description) + LENGTH(author) +
+			LENGTH(artwork_url) + LENGTH(feed_url)
+		), 0)
+		FROM podcasts
+	`).Scan(&podcastPayloadBytes)
+
+	var maxEpisodesPerPodcast, notificationFeedCount int
+	_ = h.DB.SQL.QueryRowContext(r.Context(), `
+		SELECT COALESCE(MAX(episode_count), 0)
+		FROM (SELECT COUNT(*) AS episode_count FROM episodes GROUP BY podcast_id)
+	`).Scan(&maxEpisodesPerPodcast)
+	_ = h.DB.SQL.QueryRowContext(r.Context(), `
+		SELECT COUNT(DISTINCT p.id)
+		FROM podcasts p
+		WHERE EXISTS (
+			SELECT 1
+			FROM subscriptions s
+			WHERE s.podcast_id = p.id
+			  AND s.is_deleted = 0
+			  AND COALESCE((
+				SELECT CASE
+					WHEN sl.action = 'upsert'
+					THEN COALESCE(
+						json_extract(sl.payload_json, '$.notify_new_episodes'),
+						json_extract(sl.payload_json, '$.notifyNewEpisodes'),
+						0
+					)
+					ELSE 0
+				END
+				FROM sync_log sl
+				WHERE sl.user_id = s.user_id
+				  AND sl.entity_type = 'podcast_settings'
+				  AND sl.entity_id = p.id
+				ORDER BY sl.server_cursor DESC
+				LIMIT 1
+			  ), 0) = 1
+		)
+	`).Scan(&notificationFeedCount)
 
 	// Registration Effective Status. `registration_locked` means an environment
 	// override is in force and the DB toggle is ignored (so the UI disables it).
@@ -328,9 +378,16 @@ func (h *AdminHandler) SystemStatus(w http.ResponseWriter, r *http.Request) {
 		"version":                       "1.0.0",
 		"database_path":                 filepath.Base(h.Config.DatabasePath),
 		"database_size_bytes":           dbSizeBytes,
+		"database_main_size_bytes":      dbMainSizeBytes,
+		"database_wal_size_bytes":       dbWALSizeBytes,
+		"episode_payload_bytes":         episodePayloadBytes,
+		"podcast_payload_bytes":         podcastPayloadBytes,
 		"user_count":                    userCount,
 		"podcast_count":                 podcastCount,
 		"episode_count":                 episodeCount,
+		"max_episodes_per_podcast":      maxEpisodesPerPodcast,
+		"episode_retention_limit":       config.EffectiveFeedMaxStoredEpisodes(h.Config.FeedMaxStoredEpisodes),
+		"notification_feed_count":       notificationFeedCount,
 		"worker_running":                metrics.IsWorkerRunning,
 		"worker_last_run":               metrics.LastRunAt,
 		"worker_success_count":          metrics.SuccessCount,

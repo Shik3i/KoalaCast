@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
+import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.ui.component.AccentButton
@@ -93,6 +94,7 @@ fun SettingsScreen(
         onToggleLanguage = viewModel::toggleLanguage,
         onCycleGenre = viewModel::cycleGenre,
         onUnhidePodcast = viewModel::unhidePodcast,
+        onDefaultInboxModeChange = viewModel::setDefaultInboxMode,
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
@@ -124,6 +126,7 @@ internal fun SettingsContent(
     onToggleLanguage: (String) -> Unit,
     onCycleGenre: (String) -> Unit,
     onUnhidePodcast: (String) -> Unit,
+    onDefaultInboxModeChange: (InboxMode) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
@@ -328,6 +331,27 @@ internal fun SettingsContent(
                         }
                     }
             }
+        }
+
+        Hairline()
+
+        Section(title = stringResource(R.string.settings_new_podcasts_title)) {
+            Text(
+                text = stringResource(R.string.settings_new_podcasts_note),
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink3,
+            )
+            val inboxModes = listOf(InboxMode.ALL, InboxMode.LATEST)
+            SegmentedControl(
+                options = listOf(
+                    stringResource(R.string.settings_new_podcasts_all),
+                    stringResource(R.string.settings_new_podcasts_latest),
+                ),
+                selectedIndex = inboxModes.indexOf(
+                    prefs?.defaultInboxMode ?: InboxMode.ALL,
+                ),
+                onSelect = { onDefaultInboxModeChange(inboxModes[it]) },
+            )
         }
 
         Hairline()

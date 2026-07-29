@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
 	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
 	"github.com/Shik3i/KoalaCast/services/api/internal/lang"
@@ -29,6 +30,7 @@ type PodcastHandler struct {
 	ITunes         *itunes.ITunesClient
 	Worker         *worker.FeedWorker
 	MaxResponseB   int64
+	MaxEpisodes    int
 	FeedHTTPClient *http.Client
 	feedIngest     singleflight.Group
 }
@@ -393,6 +395,7 @@ func (h *PodcastHandler) ingestFeedURLOnce(ctx context.Context, feedURL string) 
 		var epCount int
 		_ = h.DB.SQL.QueryRowContext(ctx, "SELECT COUNT(*) FROM episodes WHERE podcast_id = ?", existingID).Scan(&epCount)
 		if epCount > 0 {
+			_, _ = h.DB.SQL.ExecContext(ctx, "UPDATE podcasts SET last_accessed_at = ? WHERE id = ?", time.Now().UnixMilli(), existingID)
 			return existingID, nil
 		}
 	}
@@ -466,28 +469,31 @@ func (h *PodcastHandler) ingestFeedURLOnce(ctx context.Context, feedURL string) 
 			INSERT INTO podcasts (
 				id, feed_url, title, description, author, artwork_url, link, language,
 				explicit, copyright, update_frequency_ms, last_fetch_attempt_at,
-				last_successful_fetch_at, next_scheduled_fetch_at, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				last_successful_fetch_at, next_scheduled_fetch_at, created_at, updated_at,
+				last_accessed_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, podcastID, canonicalURL, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author,
 			parsedFeed.ArtworkURL, parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright,
-			86400000, nowMs, nowMs, nowMs+86400000, nowMs, nowMs)
+			86400000, nowMs, nowMs, nowMs+86400000, nowMs, nowMs, nowMs)
 	} else {
 		// Refresh metadata on the existing (previously episode-less) record.
 		_, err = tx.ExecContext(ctx, `
 			UPDATE podcasts SET title = ?, description = ?, author = ?, artwork_url = ?,
 				link = ?, language = ?, explicit = ?, copyright = ?,
-				last_successful_fetch_at = ?, updated_at = ?
+				last_successful_fetch_at = ?, updated_at = ?, last_accessed_at = ?
 			WHERE id = ?
 		`, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author, parsedFeed.ArtworkURL,
 			parsedFeed.Link, parsedFeed.Language, explicitInt, parsedFeed.Copyright,
-			nowMs, nowMs, podcastID)
+			nowMs, nowMs, nowMs, podcastID)
 	}
 	if err != nil {
 		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to save podcast: " + err.Error()}
 	}
 
-	// Insert Episodes
-	for _, ep := range parsedFeed.Episodes {
+	// Episode rows are a bounded feed cache. Durable user state for older
+	// episodes is preserved by PrunePodcastEpisodes below.
+	maxEpisodes := config.EffectiveFeedMaxStoredEpisodes(h.MaxEpisodes)
+	for _, ep := range rss.RecentEpisodes(parsedFeed.Episodes, maxEpisodes) {
 		var pubDateUnix int64
 		if ep.HasPubDate {
 			pubDateUnix = ep.PubDate.Unix()
@@ -510,6 +516,10 @@ func (h *PodcastHandler) ingestFeedURLOnce(ctx context.Context, feedURL string) 
 				transcriptsJSON = string(b)
 			}
 		}
+		contentEncoded := ep.ContentEncoded
+		if contentEncoded == ep.Description {
+			contentEncoded = ""
+		}
 		_, err = tx.ExecContext(ctx, `
 			INSERT OR IGNORE INTO episodes (
 				id, podcast_id, stable_identity_key, guid, fallback_hash, title, description,
@@ -518,13 +528,16 @@ func (h *PodcastHandler) ingestFeedURLOnce(ctx context.Context, feedURL string) 
 				episode_type, explicit, link, transcripts, chapters_url, created_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, epID, podcastID, ep.StableKey, ep.GUID, ep.FallbackHash, ep.Title, ep.Description,
-			ep.ContentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
+			contentEncoded, pubDateUnix, hasPubDateInt, ep.DurationMS, ep.EnclosureURL,
 			ep.EnclosureType, ep.EnclosureLength, ep.ArtworkURL, ep.EpisodeNumber, ep.SeasonNumber,
 			ep.EpisodeType, epExplicit, ep.Link, transcriptsJSON, ep.ChaptersURL, nowMs)
 		if err != nil {
 			// Ignore individual episode duplicate collisions
 			continue
 		}
+	}
+	if _, err := db.PrunePodcastEpisodes(ctx, tx, podcastID, maxEpisodes); err != nil {
+		return "", &ingestError{Status: http.StatusInternalServerError, Msg: "failed to prune episode cache"}
 	}
 
 	for _, aliasURL := range []string{feedURL, canonicalURL} {
@@ -640,8 +653,35 @@ func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Requ
 	}
 
 	pod.Explicit = (explicitInt == 1)
+	_, _ = h.DB.SQL.ExecContext(r.Context(), "UPDATE podcasts SET last_accessed_at = ? WHERE id = ?", time.Now().UnixMilli(), pod.ID)
 
 	writePublicJSON(w, r, pod, "public, max-age=18000, stale-while-revalidate=86400")
+}
+
+const onDemandRefreshAge = 15 * time.Minute
+
+// refreshPodcastOnDemand keeps ordinary subscriptions fresh only while a
+// listener is actually using them. Scheduled background work is reserved for
+// subscriptions that requested notifications.
+func (h *PodcastHandler) refreshPodcastOnDemand(ctx context.Context, podcastID string) {
+	nowMs := time.Now().UnixMilli()
+	var feedURL, etag, lastModified string
+	var lastSuccessful int64
+	err := h.DB.SQL.QueryRowContext(ctx, `
+		SELECT feed_url, etag, last_modified, last_successful_fetch_at
+		FROM podcasts
+		WHERE id = ?
+	`, podcastID).Scan(&feedURL, &etag, &lastModified, &lastSuccessful)
+	if err != nil {
+		return
+	}
+	_, _ = h.DB.SQL.ExecContext(ctx, "UPDATE podcasts SET last_accessed_at = ? WHERE id = ?", nowMs, podcastID)
+	if h.Worker == nil || lastSuccessful > nowMs-onDemandRefreshAge.Milliseconds() {
+		return
+	}
+	_, _, _ = h.feedIngest.Do("refresh:"+podcastID, func() (any, error) {
+		return nil, h.Worker.RefreshSingleFeed(ctx, podcastID, feedURL, etag, lastModified)
+	})
 }
 
 func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -661,6 +701,7 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	h.refreshPodcastOnDemand(r.Context(), podcastID)
 
 	limitStr := r.URL.Query().Get("limit")
 	limit := 50
@@ -770,6 +811,7 @@ func (h *PodcastHandler) GetEpisode(w http.ResponseWriter, r *http.Request) {
 
 	ep.HasPubDate = (hasPubDateInt == 1)
 	ep.Explicit = (explicitInt == 1)
+	_, _ = h.DB.SQL.ExecContext(r.Context(), "UPDATE podcasts SET last_accessed_at = ? WHERE id = ?", time.Now().UnixMilli(), ep.PodcastID)
 	ep.Transcripts = []transcriptItem{}
 	if transcriptsJSON.Valid && transcriptsJSON.String != "" {
 		_ = json.Unmarshal([]byte(transcriptsJSON.String), &ep.Transcripts)

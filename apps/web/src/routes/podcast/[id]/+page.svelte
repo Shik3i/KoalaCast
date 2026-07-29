@@ -245,7 +245,9 @@
 						feed_url: podcast.feed_url,
 						title: podcast.title,
 						artwork_url: podcast.artwork_url || '',
-						added_at: Date.now()
+						added_at: imported.added_at,
+						inbox_mode: imported.inbox_mode ?? prefs.defaultInboxMode,
+						folder: imported.folder
 					});
 				}
 				isSubscribed = Boolean(imported) || subs.some((s) => s.podcast_id === podcast.id);
@@ -328,7 +330,8 @@
 					feed_url: podcast.feed_url,
 					title: podcast.title,
 					artwork_url: podcast.artwork_url,
-					added_at: Date.now()
+					added_at: Date.now(),
+					inbox_mode: prefs.defaultInboxMode
 				});
 				isSubscribed = true;
 				toast.success(t('toast.subscribed', { title: podcast.title }));

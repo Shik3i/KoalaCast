@@ -36,6 +36,7 @@ import net.koalastuff.koalacast.core.data.db.TombstoneDao
 import net.koalastuff.koalacast.core.model.SyncStatus
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.HiddenPodcast
+import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
@@ -525,6 +526,11 @@ class SyncRepository @Inject constructor(
                 } else {
                     current.hiddenPodcasts
                 },
+                defaultInboxMode = when (payload.string("default_inbox_mode")) {
+                    InboxMode.LATEST.name.lowercase() -> InboxMode.LATEST
+                    InboxMode.ALL.name.lowercase() -> InboxMode.ALL
+                    else -> current.defaultInboxMode
+                },
                 proxyImages = payload.booleanOr("proxy_images", current.proxyImages),
                 playbackSpeed = payload.floatOr("playback_speed", current.playbackSpeed),
                 downloadWifiOnly = payload.booleanOr(
@@ -717,6 +723,7 @@ class SyncRepository @Inject constructor(
                 },
             ),
         )
+        put("default_inbox_mode", item.defaultInboxMode.name.lowercase())
         put("proxy_images", item.proxyImages)
         put("playback_speed", item.playbackSpeed)
         put("download_wifi_only", item.downloadWifiOnly)

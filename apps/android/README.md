@@ -243,6 +243,8 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Mini-player + full-screen Now Playing** using the selected KoalaCast
       palette consistently.
 - [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
+- [x] **Inbox defaults** — choose `all` or `latest only` once for new
+      subscriptions, with per-podcast overrides and account sync.
 - [x] **Resume playback** from saved position (works offline via denormalised metadata).
 - [x] **Local-first persistence** (Room) — everything usable with no account.
 - [x] **Theme** — System / Light / Dark across all nine palettes, matching the web
@@ -278,7 +280,8 @@ Web has these today; Android should match:
 - [x] **🆕 "New / Inbox" feed** — a filtered page showing **only the newest unplayed
       episodes across all subscribed podcasts**, newest first, with an unplayed toggle
       and per-podcast `all` / `latest only` inclusion, plus downloaded, podcast, date,
-      mood and 25/40/60-minute session filters. It currently aggregates
+      mood and 25/40/60-minute session filters. A global default controls newly
+      added podcasts while existing per-podcast choices remain overrides. It currently aggregates
       `/podcasts/{id}/episodes` client-side; a batch server endpoint remains in
       `api_todo.md`.
 - [x] **Auto-download** newest N unplayed episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).

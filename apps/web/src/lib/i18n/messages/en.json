@@ -179,7 +179,10 @@
 		"folderFilter": "Podcast folders",
 		"allFolders": "All folders",
 		"assignFolder": "Assign {title} to a folder",
-		"folderPrompt": "Folder for {title}. Leave empty to remove it from a folder."
+		"folderPrompt": "Folder for {title}. Leave empty to remove it from a folder.",
+		"playLatestUnheard": "Play the latest unplayed episode of {title}",
+		"noUnplayedEpisodes": "No unplayed episode is available for this podcast.",
+		"playEpisodeError": "The latest unplayed episode could not be loaded."
 	},
 	"inbox": {
 		"title": "New",
@@ -291,6 +294,10 @@
 		"paletteUltraviolet": "Ultraviolet",
 		"paletteUltravioletDescription": "Electric contrast after dark",
 		"episodeDates": "Episode dates",
+		"newPodcastEpisodes": "New podcast episodes",
+		"newPodcastEpisodesHint": "Default for podcasts you subscribe to from now on. You can still override individual shows in New.",
+		"allEpisodes": "Show all recent episodes",
+		"latestEpisode": "Show only the latest episode",
 		"playback": "Playback",
 		"playbackHint": "Audio processing preferences are stored in this browser and apply to every episode.",
 		"volumeBoost": "Audio boost",
@@ -770,7 +777,7 @@
 			"autoDownload": "Auto-download new episodes",
 			"notifications": "Browser notification for new episodes",
 			"notificationsEnabled": "Notifications enabled for this show.",
-			"notificationsDenied": "Notification permission was not granted."
+			"notificationsDenied": "Notifications could not be enabled. Sign in, allow browser notifications and check the server configuration."
 		},
 		"library": {
 			"collections": "Collections",
@@ -814,6 +821,9 @@
 		"podcasts": "Podcasts",
 		"episodes": "Episodes",
 		"dbSize": "DB Size",
+		"episodePayload": "Episode payload",
+		"notificationFeeds": "Notification feeds",
+		"storageExplanation": "SQLite file: {main} MB · WAL: {wal} MB. Episodes are a bounded metadata cache with at most {limit} recent entries per podcast; older played, favorited or queued episodes are retained. Images and audio files are not stored in the database.",
 		"workerStatus": "Worker Status",
 		"publicRegistration": "Public Registration",
 		"username": "Username",

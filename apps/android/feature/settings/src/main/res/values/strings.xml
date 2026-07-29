@@ -28,6 +28,10 @@
     <string name="settings_interests_hidden">Hidden</string>
     <string name="settings_hidden_podcasts_title">Hidden podcasts</string>
     <string name="settings_hidden_podcasts_show">Show again</string>
+    <string name="settings_new_podcasts_title">New podcast episodes</string>
+    <string name="settings_new_podcasts_note">Default for podcasts you subscribe to from now on. You can still override individual shows in New.</string>
+    <string name="settings_new_podcasts_all">All recent episodes</string>
+    <string name="settings_new_podcasts_latest">Latest episode only</string>
 
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_proxy_images">Load cover art through your server</string>

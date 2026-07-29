@@ -28,6 +28,10 @@
     <string name="settings_interests_hidden">Ausgeblendet</string>
     <string name="settings_hidden_podcasts_title">Ausgeblendete Podcasts</string>
     <string name="settings_hidden_podcasts_show">Wieder anzeigen</string>
+    <string name="settings_new_podcasts_title">Folgen neuer Podcasts</string>
+    <string name="settings_new_podcasts_note">Standard für Podcasts, die du ab jetzt abonnierst. Einzelne Sendungen kannst du unter Neu weiterhin abweichend einstellen.</string>
+    <string name="settings_new_podcasts_all">Alle aktuellen Folgen</string>
+    <string name="settings_new_podcasts_latest">Nur die neueste Folge</string>
 
     <string name="settings_privacy_title">Privatsphäre</string>
     <string name="settings_proxy_images">Cover über deinen Server laden</string>

@@ -6,6 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -233,7 +234,8 @@ class AccountRepository @Inject constructor(
         feeds: List<Pair<String, String>>,
     ): DataResult<OpmlReport> = coroutineScope {
         val existingFeeds = library.subscriptionsSnapshot().mapTo(mutableSetOf()) { it.feedUrl }
-        library.subscribeImported(feeds)
+        val defaultInboxMode = preferences.preferences.first().defaultInboxMode
+        library.subscribeImported(feeds, defaultInboxMode)
         val semaphore = Semaphore(OPML_RESOLVE_CONCURRENCY)
         val results = feeds.map { (feedUrl, _) ->
             async {

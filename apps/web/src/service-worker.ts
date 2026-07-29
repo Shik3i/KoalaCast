@@ -36,6 +36,24 @@ const OFFLINE_FILES = new Set([
 	'/illustrations/empty-queue.webp'
 ]);
 
+sw.addEventListener('push', (event) => {
+	let payload: { title?: string; body?: string; tag?: string; url?: string } = {};
+	try {
+		payload = event.data?.json() || {};
+	} catch (_) {
+		payload = {};
+	}
+	event.waitUntil(
+		sw.registration.showNotification(payload.title || 'KoalaCast', {
+			body: payload.body || '',
+			icon: '/icon-192.png',
+			badge: '/icon-72.png',
+			tag: payload.tag || 'koalacast-update',
+			data: { url: payload.url || '/inbox' }
+		})
+	);
+});
+
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	const target = String(event.notification.data?.url || '/inbox');

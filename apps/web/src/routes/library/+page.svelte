@@ -6,6 +6,7 @@
 		getLocalSubscriptions,
 		removeLocalSubscription,
 		getRecentPlaybackStates,
+		getCompletedEpisodeIds,
 		reorderLocalQueue,
 		getLocalFavorites,
 		removeLocalFavorite,
@@ -39,6 +40,7 @@
 	let libraryQuery = $state('');
 	let librarySort = $state<'recent' | 'az'>('recent');
 	let activeCover = $state<string | null>(null);
+	let playingSubscriptionId = $state<string | null>(null);
 	let activeFolder = $state('');
 	let longPressTimer: number | null = null;
 	const libraryTabs = ['subscriptions', 'episodes', 'queue', 'favorites'] as const;
@@ -202,6 +204,62 @@
 		}
 	}
 
+	async function playLatestUnheard(subscription: LocalSubscription) {
+		if (playingSubscriptionId) return;
+		playingSubscriptionId = subscription.podcast_id;
+		try {
+			let podcastId = subscription.podcast_id;
+			if (subscription.feed_url && podcastId === subscription.feed_url) {
+				const resolution = await fetch('/api/v1/podcasts/feed', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ feed_url: subscription.feed_url })
+				});
+				if (!resolution.ok) throw new Error(`Feed resolution failed: ${resolution.status}`);
+				const resolved = await resolution.json();
+				if (!resolved.id) throw new Error('Feed resolution omitted podcast id');
+				podcastId = resolved.id;
+			}
+
+			const completedIds = await getCompletedEpisodeIds();
+			const pageSize = 200;
+			let offset = 0;
+			let episode: any = null;
+			while (!episode) {
+				const response = await fetch(
+					`/api/v1/podcasts/${encodeURIComponent(podcastId)}/episodes?limit=${pageSize}&offset=${offset}`,
+					{ cache: 'no-cache' }
+				);
+				if (!response.ok) throw new Error(`Episode lookup failed: ${response.status}`);
+				const data = await response.json();
+				const episodes = Array.isArray(data.episodes) ? data.episodes : [];
+				episode = episodes.find(
+					(item: any) => item.enclosure_url && !completedIds.has(item.id)
+				);
+				if (episode || episodes.length < pageSize) break;
+				offset += pageSize;
+			}
+
+			if (!episode) {
+				toast.info(t('library.noUnplayedEpisodes'));
+				return;
+			}
+			player.play({
+				episode_id: episode.id,
+				podcast_id: podcastId,
+				title: episode.title,
+				podcast_title: subscription.title,
+				artwork_url: episode.artwork_url || subscription.artwork_url,
+				enclosure_url: episode.enclosure_url,
+				duration_ms: episode.duration_ms || 0
+			});
+		} catch {
+			toast.error(t('library.playEpisodeError'));
+		} finally {
+			playingSubscriptionId = null;
+		}
+	}
+
 	async function assignFolder(subscription: LocalSubscription) {
 		const folder = window.prompt(
 			t('library.folderPrompt', { title: subscription.title }),
@@ -332,10 +390,16 @@
 							<h3 title={sub.title}>{sub.title}</h3>
 							<p>{t('library.subscribedHint')}</p>
 							<div class="actions">
-								<a href={podcastHref(sub)} class="round-action primary" aria-label={t('common.viewEpisodes')} title={t('common.viewEpisodes')}><i class="ph-fill ph-play" aria-hidden="true"></i></a>
-								<button class="round-action" onclick={() => goto(podcastHref(sub))} aria-label={t('library.openShow', { title: sub.title })} title={t('library.openShow', { title: sub.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
+								<button
+									type="button"
+									class="round-action primary"
+									disabled={playingSubscriptionId !== null}
+									onclick={() => playLatestUnheard(sub)}
+									aria-label={t('library.playLatestUnheard', { title: sub.title })}
+									title={t('library.playLatestUnheard', { title: sub.title })}
+								><i class={playingSubscriptionId === sub.podcast_id ? 'ph ph-spinner spinner' : 'ph-fill ph-play'} aria-hidden="true"></i></button>
 								<button class="round-action" onclick={() => assignFolder(sub)} aria-label={t('library.assignFolder', { title: sub.title })} title={sub.folder || t('library.assignFolder', { title: sub.title })}><i class="ph ph-folder-simple" aria-hidden="true"></i></button>
-								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')} title={t('common.unsubscribe')}><i class="ph ph-dots-three" aria-hidden="true"></i></button>
+								<button class="round-action" onclick={() => handleUnsubscribe(sub.podcast_id)} aria-label={t('common.unsubscribe')} title={t('common.unsubscribe')}><i class="ph ph-minus-circle" aria-hidden="true"></i></button>
 							</div>
 						</div>
 					</article>
@@ -831,7 +895,7 @@
 	.collection-tabs { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-hair); }
 	.tabs button { min-height: 44px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); }
 	.tabs button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
-	.podcast-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+	.podcast-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
 	.podcast-card.quiet-cover-card {
 		position: relative;
 		aspect-ratio: 1;
@@ -867,8 +931,13 @@
 	.quiet-cover-card .round-action {
 		display: grid;
 		place-items: center;
+		flex: 0 0 44px;
 		width: 44px;
 		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
+		aspect-ratio: 1;
+		box-sizing: border-box;
 		padding: 0;
 		border: 1px solid #4a6558;
 		border-radius: 50%;
@@ -903,5 +972,8 @@
 		.quiet-cover-card .cover-overlay p { display: none; }
 		.quiet-cover-card .cover-overlay { opacity: 1; pointer-events: auto; background: linear-gradient(0deg, rgba(5,10,7,.96) 8%, rgba(5,10,7,.52) 58%, transparent 78%); }
 		.tabs button, .reorder-btn, .ep-remove { min-height: 44px; min-width: 44px; }
+	}
+	@media (max-width: 380px) {
+		.podcast-grid { grid-template-columns: 1fr; }
 	}
 </style>

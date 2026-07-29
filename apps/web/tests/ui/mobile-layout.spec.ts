@@ -48,6 +48,121 @@ test('settings start as a compact overview', async ({ page }) => {
 	await expect(page.locator('details.card[open]')).toHaveCount(0);
 });
 
+test('personalization content scrolls above its action bar', async ({ page }) => {
+	await page.addInitScript(() => localStorage.removeItem('koalacast_onboarded'));
+	await page.goto('/');
+	const card = page.locator('.ob-card');
+	const scroll = page.locator('.ob-scroll');
+	const actions = page.locator('.ob-actions');
+	await expect(card).toBeVisible();
+	const geometry = await page.evaluate(() => {
+		const cardBox = document.querySelector('.ob-card')?.getBoundingClientRect();
+		const scrollBox = document.querySelector('.ob-scroll')?.getBoundingClientRect();
+		const actionBox = document.querySelector('.ob-actions')?.getBoundingClientRect();
+		return cardBox && scrollBox && actionBox
+			? {
+				cardTop: cardBox.top,
+				cardBottom: cardBox.bottom,
+				scrollBottom: scrollBox.bottom,
+				actionTop: actionBox.top,
+				viewportHeight: window.innerHeight
+			}
+			: null;
+	});
+	expect(geometry).not.toBeNull();
+	expect(geometry!.cardTop).toBeGreaterThanOrEqual(0);
+	expect(geometry!.cardBottom).toBeLessThanOrEqual(geometry!.viewportHeight);
+	expect(geometry!.scrollBottom).toBeLessThanOrEqual(geometry!.actionTop + 1);
+});
+
+test('new podcast mode applies to imports and library actions stay circular', async ({ page }) => {
+	await page.goto('/settings#playback');
+	const latestMode = page.getByRole('button', {
+		name: 'Show only the latest episode',
+		exact: true
+	});
+	await latestMode.click();
+	await expect(latestMode).toHaveAttribute('aria-pressed', 'true');
+
+	await page.goto('/settings#opml');
+	await page.locator('#opml input[type="file"]').setInputFiles({
+		name: 'library-layout.opml',
+		mimeType: 'text/xml',
+		buffer: Buffer.from(
+			'<?xml version="1.0"?><opml version="2.0"><body><outline text="Layout Test" xmlUrl="https://example.org/layout-test.xml"/></body></opml>'
+		)
+	});
+	await expect(page.getByText('Successfully imported')).toBeVisible();
+
+	await page.goto('/library');
+	const card = page.locator('.quiet-cover-card');
+	await expect(card).toHaveCount(1);
+	await card.hover();
+	const actions = card.locator('.round-action');
+	await expect(actions).toHaveCount(3);
+	const geometry = await actions.evaluateAll((elements) =>
+		elements.map((element) => {
+			const box = element.getBoundingClientRect();
+			return { width: box.width, height: box.height };
+		})
+	);
+	for (const box of geometry) {
+		expect(box.width).toBe(44);
+		expect(box.height).toBe(44);
+	}
+
+	const inboxMode = await page.evaluate(async () => {
+		const request = indexedDB.open('koalacast_local_db');
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+		const transaction = db.transaction('subscriptions', 'readonly');
+		const read = transaction.objectStore('subscriptions').getAll();
+		const subscriptions = await new Promise<Array<{ inbox_mode?: string }>>((resolve, reject) => {
+			read.onsuccess = () => resolve(read.result);
+			read.onerror = () => reject(read.error);
+		});
+		db.close();
+		return subscriptions[0]?.inbox_mode;
+	});
+	expect(inboxMode).toBe('latest');
+
+	await page.evaluate(() => {
+		const nativeFetch = window.fetch.bind(window);
+		window.fetch = async (input, init) => {
+			const url = String(input instanceof Request ? input.url : input);
+			if (url.endsWith('/api/v1/podcasts/feed')) {
+				return new Response(JSON.stringify({ id: 'layout-test' }), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			if (url.includes('/api/v1/podcasts/layout-test/episodes')) {
+				return new Response(JSON.stringify({
+					episodes: [{
+						id: 'layout-episode',
+						podcast_id: 'layout-test',
+						title: 'Newest unplayed layout episode',
+						enclosure_url: 'https://example.org/layout-episode.mp3',
+						duration_ms: 60_000
+					}]
+				}), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
+			return nativeFetch(input, init);
+		};
+	});
+	await page.getByRole('button', {
+		name: 'Play the latest unplayed episode of Layout Test',
+		exact: true
+	}).click();
+	await expect(page.locator('.player-bar .track-title')).toHaveText('Newest unplayed layout episode');
+	await expect(page).toHaveURL(/\/library$/);
+});
+
 test('library sections remain visible without horizontal scrolling', async ({ page }) => {
 	await page.goto('/library');
 	const tabs = page.locator('.collection-tabs');

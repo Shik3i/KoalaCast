@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -29,6 +30,10 @@ type Config struct {
 	FeedWorkerConcurrency    int
 	FeedRequestTimeoutMS     int
 	FeedMaxResponseBytes     int64
+	FeedMaxStoredEpisodes    int
+	WebPushVAPIDPublicKey    string
+	WebPushVAPIDPrivateKey   string
+	WebPushVAPIDSubject      string
 	AllowedCORSOrigins       []string
 	AudioEffectsProxyEnabled bool
 }
@@ -59,11 +64,21 @@ func LoadConfig() (*Config, error) {
 		FeedWorkerConcurrency:    getEnvInt("FEED_WORKER_CONCURRENCY", 5),
 		FeedRequestTimeoutMS:     getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
 		FeedMaxResponseBytes:     int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),
+		FeedMaxStoredEpisodes:    getEnvInt("FEED_MAX_STORED_EPISODES", 200),
+		WebPushVAPIDPublicKey:    strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PUBLIC_KEY")),
+		WebPushVAPIDPrivateKey:   strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PRIVATE_KEY")),
+		WebPushVAPIDSubject:      getEnv("WEB_PUSH_VAPID_SUBJECT", getEnv("PUBLIC_BASE_URL", "http://localhost:3000")),
 		AudioEffectsProxyEnabled: getEnvBool("KC_AUDIO_EFFECTS_PROXY_ENABLED", false),
 		// Secure cookies default ON in production; a deployment terminating TLS
 		// elsewhere (e.g. plain-HTTP local demo behind a proxy) can opt out with
 		// SECURE_COOKIES=false.
 		SecureCookies: getEnvBool("SECURE_COOKIES", appEnv == "production"),
+	}
+	if (cfg.WebPushVAPIDPublicKey == "") != (cfg.WebPushVAPIDPrivateKey == "") {
+		return nil, fmt.Errorf("WEB_PUSH_VAPID_PUBLIC_KEY and WEB_PUSH_VAPID_PRIVATE_KEY must be configured together")
+	}
+	if cfg.WebPushVAPIDPublicKey != "" && !validVAPIDSubject(cfg.WebPushVAPIDSubject) {
+		return nil, fmt.Errorf("WEB_PUSH_VAPID_SUBJECT must be an https: or mailto: contact URI")
 	}
 
 	// Parse LogLevel
@@ -123,6 +138,34 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func validVAPIDSubject(subject string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(subject))
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+		return parsed.Host != ""
+	case "mailto":
+		return parsed.Opaque != "" || parsed.Path != ""
+	default:
+		return false
+	}
+}
+
+func EffectiveFeedMaxStoredEpisodes(configured int) int {
+	if configured <= 0 {
+		return 200
+	}
+	if configured < 20 {
+		return 20
+	}
+	if configured > 2000 {
+		return 2000
+	}
+	return configured
 }
 
 func getEnv(key, defaultVal string) string {

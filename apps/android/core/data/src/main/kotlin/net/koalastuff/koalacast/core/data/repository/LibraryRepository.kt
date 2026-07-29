@@ -52,8 +52,10 @@ class LibraryRepository @Inject constructor(
     fun isSubscribed(podcastId: String): Flow<Boolean> =
         subscriptions.observeIsSubscribed(podcastId)
 
-    suspend fun subscribe(podcast: Podcast) {
-        subscriptions.upsert(podcast.toSubscription(clock.nowMs()).toEntity())
+    suspend fun subscribe(podcast: Podcast, inboxMode: InboxMode = InboxMode.ALL) {
+        subscriptions.upsert(
+            podcast.toSubscription(clock.nowMs()).copy(inboxMode = inboxMode).toEntity(),
+        )
         // Re-subscribing must clear the old tombstone, or the next sync would
         // delete the subscription again.
         tombstones.delete(TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, podcast.id))
@@ -64,6 +66,7 @@ class LibraryRepository @Inject constructor(
         feedUrl: String,
         title: String,
         artworkUrl: String,
+        inboxMode: InboxMode = InboxMode.ALL,
     ) {
         subscriptions.upsert(
             SubscriptionEntity(
@@ -72,12 +75,16 @@ class LibraryRepository @Inject constructor(
                 title = title.ifBlank { "Podcast" },
                 artworkUrl = artworkUrl,
                 addedAt = clock.nowMs(),
+                inboxMode = inboxMode.storageValue(),
             ),
         )
         tombstones.delete(TombstoneEntity.idFor(TombstoneEntity.TYPE_SUBSCRIPTION, podcastId))
     }
 
-    suspend fun subscribeImported(feeds: List<Pair<String, String>>) {
+    suspend fun subscribeImported(
+        feeds: List<Pair<String, String>>,
+        inboxMode: InboxMode = InboxMode.ALL,
+    ) {
         if (feeds.isEmpty()) return
         val now = clock.nowMs()
         feeds.forEachIndexed { index, (feedUrl, title) ->
@@ -89,6 +96,7 @@ class LibraryRepository @Inject constructor(
                         title = title.ifBlank { "Podcast" },
                         artworkUrl = "",
                         addedAt = now + index,
+                        inboxMode = inboxMode.storageValue(),
                     ),
                 )
             }
@@ -154,13 +162,7 @@ class LibraryRepository @Inject constructor(
     }
 
     suspend fun setInboxMode(podcastId: String, mode: InboxMode) {
-        subscriptions.setInboxMode(
-            podcastId,
-            when (mode) {
-                InboxMode.LATEST -> SubscriptionEntity.INBOX_MODE_LATEST
-                InboxMode.ALL -> SubscriptionEntity.INBOX_MODE_ALL
-            },
-        )
+        subscriptions.setInboxMode(podcastId, mode.storageValue())
     }
 
     // ---- Favourites ----
@@ -172,6 +174,11 @@ class LibraryRepository @Inject constructor(
         favorites.observeEpisodeIds().map { it.toSet() }
 
     fun isFavorite(episodeId: String): Flow<Boolean> = favorites.observeIsFavorite(episodeId)
+
+    private fun InboxMode.storageValue(): String = when (this) {
+        InboxMode.LATEST -> SubscriptionEntity.INBOX_MODE_LATEST
+        InboxMode.ALL -> SubscriptionEntity.INBOX_MODE_ALL
+    }
 
     suspend fun addFavorite(track: Track) {
         favorites.upsert(

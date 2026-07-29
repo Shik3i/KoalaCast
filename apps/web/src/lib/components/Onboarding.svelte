@@ -30,39 +30,41 @@
 
 <div class="ob-overlay" transition:fade={{ duration: 180 }} role="dialog" aria-modal="true" aria-label={t('onboarding.dialogLabel')}>
 	<div class="ob-card" bind:this={cardEl} tabindex="-1" transition:scale={{ duration: 240, start: 0.96 }}>
-		<span class="ob-badge"><i class="ph-fill ph-sparkle" aria-hidden="true"></i> {t('onboarding.badge')}</span>
-		<h2>{t('onboarding.title')}</h2>
-		<p>{t('onboarding.intro')}</p>
+		<div class="ob-scroll">
+			<span class="ob-badge"><i class="ph-fill ph-sparkle" aria-hidden="true"></i> {t('onboarding.badge')}</span>
+			<h2>{t('onboarding.title')}</h2>
+			<p>{t('onboarding.intro')}</p>
 
-		<!-- Spoken Languages Section -->
-		<div class="ob-section">
-			<h3 class="section-title"><i class="ph ph-translate" aria-hidden="true"></i> {t('onboarding.spokenLanguages')}</h3>
-			<div class="ob-lang-grid">
-				{#each SUPPORTED_LANGUAGES as lang}
-					<button
-						type="button"
-						class="ob-chip lang-chip"
-						class:on={prefs.languages.includes(lang.code)}
-						aria-pressed={prefs.languages.includes(lang.code)}
-						onclick={() => prefs.toggleLanguage(lang.code)}
-					>
-						<span class="flag-emoji">{lang.flag}</span>
-						<span>{lang.name}</span>
-					</button>
-				{/each}
+			<!-- Spoken Languages Section -->
+			<div class="ob-section">
+				<h3 class="section-title"><i class="ph ph-translate" aria-hidden="true"></i> {t('onboarding.spokenLanguages')}</h3>
+				<div class="ob-lang-grid">
+					{#each SUPPORTED_LANGUAGES as lang}
+						<button
+							type="button"
+							class="ob-chip lang-chip"
+							class:on={prefs.languages.includes(lang.code)}
+							aria-pressed={prefs.languages.includes(lang.code)}
+							onclick={() => prefs.toggleLanguage(lang.code)}
+						>
+							<span class="flag-emoji">{lang.flag}</span>
+							<span>{lang.name}</span>
+						</button>
+					{/each}
+				</div>
 			</div>
-		</div>
 
-		<!-- Topic Interests Section -->
-		<div class="ob-section">
-			<h3 class="section-title"><i class="ph ph-sparkle" aria-hidden="true"></i> {t('onboarding.topicInterests')}</h3>
-			<div class="ob-grid">
-				{#each GENRES as g (g.name)}
-					<button type="button" class="ob-chip" class:on={prefs.interests.includes(g.name)} aria-pressed={prefs.interests.includes(g.name)} onclick={() => prefs.toggleInterest(g.name)}>
-						<i class="ph {g.icon}" aria-hidden="true"></i>
-						{genreLabel(g.name)}
-					</button>
-				{/each}
+			<!-- Topic Interests Section -->
+			<div class="ob-section">
+				<h3 class="section-title"><i class="ph ph-sparkle" aria-hidden="true"></i> {t('onboarding.topicInterests')}</h3>
+				<div class="ob-grid">
+					{#each GENRES as g (g.name)}
+						<button type="button" class="ob-chip" class:on={prefs.interests.includes(g.name)} aria-pressed={prefs.interests.includes(g.name)} onclick={() => prefs.toggleInterest(g.name)}>
+							<i class="ph {g.icon}" aria-hidden="true"></i>
+							{genreLabel(g.name)}
+						</button>
+					{/each}
+				</div>
 			</div>
 		</div>
 
@@ -92,14 +94,15 @@
 	.ob-card {
 		width: min(720px, 100%);
 		max-height: 90vh;
-		overflow-y: auto;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr) auto;
+		overflow: hidden;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		border-radius: 8px;
 		box-shadow: var(--shadow-xl);
-		padding: 2rem;
-		scroll-padding-bottom: 5.5rem;
 	}
+	.ob-scroll { min-height: 0; overflow-y: auto; padding: 2rem 2rem 0; }
 	.ob-card:focus { outline: none; }
 	.ob-badge {
 		display: inline-flex;
@@ -115,7 +118,7 @@
 		border-radius: 4px;
 	}
 	.ob-card h2 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; margin: 0.9rem 0 0.4rem; letter-spacing: -0.02em; }
-	.ob-card > p { color: var(--text-secondary); line-height: 1.55; margin-bottom: 1.5rem; }
+	.ob-scroll > p { color: var(--text-secondary); line-height: 1.55; margin-bottom: 1.5rem; }
 
 	.ob-section {
 		margin-bottom: 1.5rem;
@@ -171,14 +174,12 @@
 	}
 
 	.ob-actions {
-		position: sticky;
-		bottom: 0;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		gap: 1rem;
-		margin-top: 1.75rem;
-		padding: 1rem 0 0;
+		margin-top: 0;
+		padding: 1rem 2rem 2rem;
 		background: var(--bg-surface);
 		box-shadow: 0 -12px 18px color-mix(in srgb, var(--bg-surface) 88%, transparent);
 		border-top: 1px solid var(--border-subtle);
@@ -207,8 +208,9 @@
 	.ob-done:hover { filter: brightness(1.08); transform: translateY(-1px); }
 	@media (max-width: 560px) {
 		.ob-overlay { padding: 0; place-items: stretch; }
-		.ob-card { width: 100%; max-height: 100dvh; border-radius: 0; padding: 1rem; }
-		.ob-actions { bottom: 0; margin-inline: -1rem; margin-bottom: -1rem; padding: 1rem; }
+		.ob-card { width: 100%; max-height: 100dvh; border-radius: 0; }
+		.ob-scroll { padding: 1rem 1rem 0; }
+		.ob-actions { padding: 1rem; }
 		.ob-lang-grid, .ob-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 </style>

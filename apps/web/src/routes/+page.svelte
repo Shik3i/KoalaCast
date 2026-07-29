@@ -454,7 +454,8 @@
 				feed_url: podcast.feed_url || '',
 				title: podcast.title,
 				artwork_url: podcast.artwork_url,
-				added_at: Date.now()
+				added_at: Date.now(),
+				inbox_mode: prefs.defaultInboxMode
 			});
 			subscribedIds = [...new Set([...subscribedIds, id])];
 			if (podcast.feed_url) subscribedFeeds = [...new Set([...subscribedFeeds, podcast.feed_url])];

@@ -129,3 +129,54 @@ test('desktop progress track and interaction area both stay compact', async ({
 	expect(metrics.paintedTrackHeight).toBe(4);
 	expect(metrics.backgroundClip).toBe('content-box');
 });
+
+test('signed-in settings navigation keeps playback and the rail footer visible', async ({
+	page
+}, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop-player');
+	await page.route('**/api/v1/auth/status', async (route) => {
+		await route.fulfill({
+			json: {
+				authenticated: true,
+				user_id: 'player-regression-user',
+				username: 'Player QA',
+				role: 'user'
+			}
+		});
+	});
+	await page.route('**/api/v1/sync**', async (route) => {
+		if (route.request().method() === 'GET') {
+			await route.fulfill({ json: { changesets: [], next_cursor: 0, has_more: false } });
+		} else {
+			await route.fulfill({ json: { accepted: [], rejected: [], next_cursor: 0 } });
+		}
+	});
+
+	await page.goto('/podcast/test-show');
+	await page.getByRole('button', { name: 'Play episode', exact: true }).click();
+	await expect(page.locator('.player-bar .track-title')).toHaveText('The first useful episode');
+
+	await page.goto('/settings');
+	await expect(page.locator('.player-bar .track-title')).toHaveText('The first useful episode');
+	await expect(page.locator('audio')).toHaveCount(1);
+
+	const footerGeometry = async () => page.evaluate(() => {
+		const footer = document.querySelector('.quiet-rail .rail-bottom small')?.getBoundingClientRect();
+		const player = document.querySelector('.player-bar')?.getBoundingClientRect();
+		return footer && player ? { footerBottom: footer.bottom, playerTop: player.top } : null;
+	});
+	let geometry = await footerGeometry();
+	expect(geometry).not.toBeNull();
+	expect(geometry!.footerBottom).toBeLessThanOrEqual(geometry!.playerTop - 8);
+
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await page.locator('audio').evaluate((audio) => {
+		(audio as HTMLAudioElement).src = 'https://127.0.0.1:9/missing-audio.mp3';
+		(audio as HTMLAudioElement).load();
+	});
+	await expect(page.getByRole('alert')).toBeVisible();
+	await expect.poll(async () => {
+		geometry = await footerGeometry();
+		return geometry ? geometry.footerBottom <= geometry.playerTop - 8 : false;
+	}).toBe(true);
+});

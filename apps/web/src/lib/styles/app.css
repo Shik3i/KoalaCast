@@ -959,9 +959,12 @@ p { text-wrap: pretty; }
 .offline-banner { position: sticky; top: 0; z-index: 80; display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 6px 12px; background: var(--color-warning-bg); color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
 
 .quiet-app.has-player .quiet-main,
-.quiet-app.has-player .quiet-rail,
 .quiet-app.has-player .running-order {
-	padding-bottom: 89px;
+	padding-bottom: var(--player-bar-height, 89px);
+}
+.quiet-app.has-player .quiet-rail {
+	/* Keep the legal block above normal and expanded/error transport states. */
+	padding-bottom: calc(var(--player-bar-height, 89px) + 20px);
 }
 
 .quiet-rail {

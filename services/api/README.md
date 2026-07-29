@@ -78,6 +78,8 @@ All application routes are under `/api/v1`:
 | GET | `/podcasts/{id}` | — | Podcast details (numeric iTunes IDs are resolved & ingested on demand) |
 | GET | `/podcasts/{id}/episodes` | — | Paginated episodes |
 | GET | `/episodes/{id}` | — | Single episode |
+| GET | `/push/config` | ✓ | Web-Push availability and public VAPID key |
+| POST/DELETE | `/push/subscriptions` | ✓ | Register or remove this browser's Push API endpoint |
 | POST | `/auth/register` · `/auth/login` · `/auth/device/login` · `/auth/recovery/verify` | rate-limited | Accounts |
 | GET/POST/DELETE | `/auth/me` · `/auth/logout` · `/auth/sessions` | session | Session management |
 | GET/POST | `/sync` · `/sync/merge` | session | Cross-device sync |

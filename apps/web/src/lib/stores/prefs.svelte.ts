@@ -13,6 +13,7 @@ import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
 import { storedPlaybackSpeed } from '$lib/player/playback-speed';
 
 export type DateFormat = 'absolute' | 'relative';
+export type DefaultInboxMode = 'all' | 'latest';
 export interface HiddenPodcastPreference {
 	key: string;
 	title: string;
@@ -22,6 +23,7 @@ const KEY = 'koalacast_date_format';
 const INTERESTS_KEY = 'koalacast_interests';
 const HIDDEN_KEY = 'koalacast_hidden_genres';
 const HIDDEN_PODCASTS_KEY = 'koalacast_hidden_podcasts';
+const DEFAULT_INBOX_MODE_KEY = 'koalacast_default_inbox_mode';
 const LANGUAGES_KEY = 'koalacast_preferred_languages';
 const UI_LANGUAGE_KEY = 'koalacast_ui_language';
 const ONBOARDED_KEY = 'koalacast_onboarded';
@@ -35,6 +37,7 @@ const ACCOUNT_SCOPED_KEYS = [
 	INTERESTS_KEY,
 	HIDDEN_KEY,
 	HIDDEN_PODCASTS_KEY,
+	DEFAULT_INBOX_MODE_KEY,
 	LANGUAGES_KEY,
 	UI_LANGUAGE_KEY,
 	VOLUME_BOOST_KEY,
@@ -129,6 +132,11 @@ function initialHiddenPodcasts(): HiddenPodcastPreference[] {
 	}
 }
 
+function initialDefaultInboxMode(): DefaultInboxMode {
+	if (typeof localStorage === 'undefined') return 'all';
+	return localStorage.getItem(scopedKey(DEFAULT_INBOX_MODE_KEY)) === 'latest' ? 'latest' : 'all';
+}
+
 export function podcastPreferenceKey(feedUrl?: string, id?: string): string {
 	const feed = feedUrl?.trim().toLowerCase();
 	if (feed) return `feed:${feed}`;
@@ -148,6 +156,9 @@ class Prefs {
 	// Vetoed genres — podcasts in these are hidden from discover and search.
 	hiddenGenres = $state<string[]>(initialHidden());
 	hiddenPodcasts = $state<HiddenPodcastPreference[]>(initialHiddenPodcasts());
+	// Used for future subscriptions only. Each subscribed show can still override
+	// this from Inbox.
+	defaultInboxMode = $state<DefaultInboxMode>(initialDefaultInboxMode());
 	// Spoken languages Discover and Search are filtered to (ISO 639-1 codes).
 	languages = $state<string[]>(initialLanguages());
 	// Interface language, independent of the content languages above. The active
@@ -185,6 +196,7 @@ class Prefs {
 		this.interests = initialInterests();
 		this.hiddenGenres = initialHidden();
 		this.hiddenPodcasts = initialHiddenPodcasts();
+		this.defaultInboxMode = initialDefaultInboxMode();
 		this.languages = initialLanguages();
 		this.uiLanguage = initialUILanguage(this.languages);
 		this.volumeBoost = initialBoolean(VOLUME_BOOST_KEY);
@@ -266,6 +278,14 @@ class Prefs {
 		this.#touch();
 	}
 
+	setDefaultInboxMode(mode: DefaultInboxMode) {
+		this.defaultInboxMode = mode;
+		try {
+			localStorage.setItem(scopedKey(DEFAULT_INBOX_MODE_KEY), mode);
+		} catch (_) {}
+		this.#touch();
+	}
+
 	#persistInterests() {
 		try {
 			localStorage.setItem(scopedKey(INTERESTS_KEY), JSON.stringify(this.interests));
@@ -331,6 +351,7 @@ class Prefs {
 			interests: [...this.interests],
 			hidden_genres: [...this.hiddenGenres],
 			hidden_podcasts: this.hiddenPodcasts.map((podcast) => ({ ...podcast })),
+			default_inbox_mode: this.defaultInboxMode,
 			languages: [...this.languages],
 			ui_language: this.uiLanguage,
 			volume_boost: this.volumeBoost,
@@ -345,6 +366,7 @@ class Prefs {
 		this.interests = [];
 		this.hiddenGenres = [];
 		this.hiddenPodcasts = [];
+		this.defaultInboxMode = 'all';
 		this.languages = detectBrowserLanguages();
 		this.uiLanguage = initialUILanguage(this.languages);
 		this.volumeBoost = false;
@@ -385,6 +407,9 @@ class Prefs {
 					typeof (item as Record<string, unknown>).title === 'string'
 			);
 		}
+		if (payload.default_inbox_mode === 'all' || payload.default_inbox_mode === 'latest') {
+			this.defaultInboxMode = payload.default_inbox_mode;
+		}
 		if (typeof payload.ui_language === 'string' && isSupportedLocale(payload.ui_language)) {
 			this.uiLanguage = payload.ui_language;
 		}
@@ -407,6 +432,7 @@ class Prefs {
 				scopedKey(HIDDEN_PODCASTS_KEY),
 				JSON.stringify(this.hiddenPodcasts)
 			);
+			localStorage.setItem(scopedKey(DEFAULT_INBOX_MODE_KEY), this.defaultInboxMode);
 			localStorage.setItem(scopedKey(UI_LANGUAGE_KEY), this.uiLanguage);
 			localStorage.setItem(scopedKey(VOLUME_BOOST_KEY), this.volumeBoost ? '1' : '0');
 			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), this.skipSilence ? '1' : '0');

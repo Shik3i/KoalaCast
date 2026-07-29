@@ -43,6 +43,7 @@
 	let loadErrorCode = $state('');
 	let expanded = $state(false);
 	let nowPlayingDialog: HTMLElement | null = $state(null);
+	let playerBarElement: HTMLElement | null = $state(null);
 	let previousFocus: HTMLElement | null = null;
 	let showAccent = $state<string | null>(null);
 	let isFav = $state(false);
@@ -720,6 +721,25 @@
 		if (!track) expanded = false;
 	});
 
+	// Audio errors and narrower desktop layouts can make the transport taller
+	// than its normal 89px. Publish the real height for the surrounding shell.
+	$effect(() => {
+		if (!playerBarElement || typeof ResizeObserver === 'undefined') return;
+		const updateHeight = () => {
+			document.documentElement.style.setProperty(
+				'--player-bar-height',
+				`${Math.ceil(playerBarElement?.getBoundingClientRect().height || 89)}px`
+			);
+		};
+		const observer = new ResizeObserver(updateHeight);
+		observer.observe(playerBarElement);
+		updateHeight();
+		return () => {
+			observer.disconnect();
+			document.documentElement.style.removeProperty('--player-bar-height');
+		};
+	});
+
 	$effect(() => {
 		if (!expanded || !nowPlayingDialog) return;
 		previousFocus = document.activeElement as HTMLElement | null;
@@ -980,7 +1000,7 @@
 
 {#if track}
 	<div class="player-shell" style={accentVars}>
-		<div class="player-bar">
+		<div class="player-bar" bind:this={playerBarElement}>
 			<!-- Seek progress line spanning the top of the bar -->
 			<div class="progress-track" style="--progress: {progressPercent}%"></div>
 

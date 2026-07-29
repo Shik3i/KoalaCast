@@ -17,6 +17,7 @@ import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.HiddenPodcast
+import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
@@ -92,6 +93,13 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setDefaultInboxMode(mode: InboxMode) {
+        dataStore.edit {
+            it[Keys.defaultInboxMode(owner())] = mode.name.lowercase()
+            it.touch(owner())
+        }
+    }
+
     suspend fun setProxyImages(enabled: Boolean) {
         dataStore.edit { it[Keys.proxyImages(owner())] = enabled; it.touch(owner()) }
     }
@@ -155,6 +163,7 @@ class PreferencesRepository @Inject constructor(
             it[Keys.hiddenGenres(owner)] = preferences.hiddenGenres - preferences.interests
             it[Keys.hiddenPodcasts(owner)] =
                 preferences.hiddenPodcasts.mapTo(mutableSetOf(), ::encodeHiddenPodcast)
+            it[Keys.defaultInboxMode(owner)] = preferences.defaultInboxMode.name.lowercase()
             it[Keys.proxyImages(owner)] = preferences.proxyImages
             it[Keys.playbackSpeed(owner)] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
             it[Keys.downloadWifiOnly(owner)] = preferences.downloadWifiOnly
@@ -177,6 +186,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.interests(owner))
             it.remove(Keys.hiddenGenres(owner))
             it.remove(Keys.hiddenPodcasts(owner))
+            it.remove(Keys.defaultInboxMode(owner))
             it.remove(Keys.proxyImages(owner))
             it.remove(Keys.playbackSpeed(owner))
             it.remove(Keys.downloadWifiOnly(owner))
@@ -200,6 +210,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.interests(owner), Keys.LEGACY_INTERESTS)
             it.copyIfAbsent(Keys.hiddenGenres(owner), Keys.LEGACY_HIDDEN_GENRES)
             it.copyIfAbsent(Keys.hiddenPodcasts(owner), Keys.LEGACY_HIDDEN_PODCASTS)
+            it.copyIfAbsent(Keys.defaultInboxMode(owner), Keys.LEGACY_DEFAULT_INBOX_MODE)
             it.remove(Keys.LEGACY_CATEGORY)
             it.copyIfAbsent(Keys.proxyImages(owner), Keys.LEGACY_PROXY_IMAGES)
             it.copyIfAbsent(Keys.playbackSpeed(owner), Keys.LEGACY_PLAYBACK_SPEED)
@@ -231,6 +242,11 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(
                 Keys.hiddenPodcasts(ownerId),
                 Keys.hiddenPodcasts(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.defaultInboxMode(ownerId),
+                Keys.defaultInboxMode(null),
                 removeSource = false,
             )
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(null), removeSource = false)
@@ -280,6 +296,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.interests(ownerId), Keys.interests(userId))
             it.copyIfAbsent(Keys.hiddenGenres(ownerId), Keys.hiddenGenres(userId))
             it.copyIfAbsent(Keys.hiddenPodcasts(ownerId), Keys.hiddenPodcasts(userId))
+            it.copyIfAbsent(Keys.defaultInboxMode(ownerId), Keys.defaultInboxMode(userId))
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(userId))
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(userId))
             it.copyIfAbsent(Keys.downloadWifiOnly(ownerId), Keys.downloadWifiOnly(userId))
@@ -308,6 +325,10 @@ class PreferencesRepository @Inject constructor(
         hiddenGenres = this[Keys.hiddenGenres(owner)] ?: emptySet(),
         hiddenPodcasts = this[Keys.hiddenPodcasts(owner)].orEmpty()
             .mapNotNullTo(mutableSetOf(), ::decodeHiddenPodcast),
+        defaultInboxMode = when (this[Keys.defaultInboxMode(owner)]) {
+            InboxMode.LATEST.name.lowercase() -> InboxMode.LATEST
+            else -> InboxMode.ALL
+        },
         proxyImages = this[Keys.proxyImages(owner)] ?: true,
         playbackSpeed = this[Keys.playbackSpeed(owner)] ?: 1f,
         downloadWifiOnly = this[Keys.downloadWifiOnly(owner)] ?: true,
@@ -331,6 +352,7 @@ class PreferencesRepository @Inject constructor(
         fun interests(owner: String?) = stringSetPreferencesKey(scoped("interests", owner))
         fun hiddenGenres(owner: String?) = stringSetPreferencesKey(scoped("hidden_genres", owner))
         fun hiddenPodcasts(owner: String?) = stringSetPreferencesKey(scoped("hidden_podcasts", owner))
+        fun defaultInboxMode(owner: String?) = stringPreferencesKey(scoped("default_inbox_mode", owner))
         fun proxyImages(owner: String?) = booleanPreferencesKey(scoped("proxy_images", owner))
         fun playbackSpeed(owner: String?) = floatPreferencesKey(scoped("playback_speed", owner))
         fun downloadWifiOnly(owner: String?) = booleanPreferencesKey(scoped("download_wifi_only", owner))
@@ -350,6 +372,7 @@ class PreferencesRepository @Inject constructor(
         val LEGACY_INTERESTS = stringSetPreferencesKey("interests")
         val LEGACY_HIDDEN_GENRES = stringSetPreferencesKey("hidden_genres")
         val LEGACY_HIDDEN_PODCASTS = stringSetPreferencesKey("hidden_podcasts")
+        val LEGACY_DEFAULT_INBOX_MODE = stringPreferencesKey("default_inbox_mode")
         val LEGACY_CATEGORY = stringPreferencesKey("category")
         val LEGACY_PROXY_IMAGES = booleanPreferencesKey("proxy_images")
         val LEGACY_PLAYBACK_SPEED = floatPreferencesKey("playback_speed")

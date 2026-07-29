@@ -154,10 +154,25 @@
 						<span class="lbl">{t('admin.dbSize')}</span>
 					</div>
 					<div class="metric-box">
+						<span class="val">{(systemStatus.episode_payload_bytes / (1024 * 1024)).toFixed(2)} MB</span>
+						<span class="lbl">{t('admin.episodePayload')}</span>
+					</div>
+					<div class="metric-box">
+						<span class="val">{systemStatus.notification_feed_count}</span>
+						<span class="lbl">{t('admin.notificationFeeds')}</span>
+					</div>
+					<div class="metric-box">
 						<span class="val">{systemStatus.worker_running ? t('admin.workerActive') : t('admin.workerStopped')}</span>
 						<span class="lbl">{t('admin.workerStatus')}</span>
 					</div>
 				</div>
+				<p class="metric-note">
+					{t('admin.storageExplanation', {
+						main: (systemStatus.database_main_size_bytes / (1024 * 1024)).toFixed(2),
+						wal: (systemStatus.database_wal_size_bytes / (1024 * 1024)).toFixed(2),
+						limit: systemStatus.episode_retention_limit
+					})}
+				</p>
 			{/if}
 		</section>
 
@@ -342,6 +357,12 @@
 		font: 600 10px/1 var(--font-mono);
 		letter-spacing: .01em;
 
+	}
+	.metric-note {
+		margin-top: 12px;
+		color: var(--ink-4);
+		font-size: 11px;
+		line-height: 1.55;
 	}
 
 	/* Let wide tables scroll on their own instead of blowing out the mobile layout. */

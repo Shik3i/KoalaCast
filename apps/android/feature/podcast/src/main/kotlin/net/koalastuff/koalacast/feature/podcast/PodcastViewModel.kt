@@ -233,7 +233,10 @@ class PodcastViewModel @Inject constructor(
             if (_state.value.subscribed) {
                 library.unsubscribe(podcast.id)
             } else {
-                library.subscribe(podcast)
+                library.subscribe(
+                    podcast,
+                    preferences.preferences.first().defaultInboxMode,
+                )
             }
         }
     }

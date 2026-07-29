@@ -11,15 +11,16 @@ This document records shipped behavior. Proposed work belongs in
 | Area | Status | Current behavior |
 | :--- | :--- | :--- |
 | **Web application** | Implemented | SvelteKit 5 static SPA, served by the Go application. Responsive three-column layout with resizable/collapsible side rails and mobile navigation. |
-| **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language filters, multi-select preferred/hidden genres, per-podcast hiding, clear/reset behavior, and subscription-aware Inbox. |
+| **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language filters, multi-select preferred/hidden genres, account-synced per-podcast hiding, clear/reset behavior, and subscription-aware Inbox. |
 | **Playback** | Implemented | HTML audio + Media Session, compatible-browser Remote Playback, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, timestamp bookmarks, and handoff links. |
 | **Local-first storage** | Implemented | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. |
-| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. Named queues, folders, and timestamp bookmarks remain local. |
+| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. The default Inbox mode for new subscriptions is account-scoped; each podcast can override it. Named queues, folders, and timestamp bookmarks remain local. |
 | **Statistics** | Implemented | Personal listening duration, sessions, podcasts, speed and time-saved metrics. Signed-in users can separately opt into global aggregates, podcast rankings, and the listener leaderboard; participation defaults to off. |
 | **Themes and accessibility** | Implemented | System/light/dark modes, nine palettes (Fjord default; Eucalyptus retained), scalable/resizable layout, reduced motion, focus treatment, tooltips, accessible names, and English/German UI. |
 | **SEO and sharing** | Implemented | Canonical/robots metadata, sitemap with Git-derived `lastmod`, WebSite/SoftwareApplication JSON-LD, `llms.txt`, `llms-full.txt`, and 1200×630 Open Graph/Twitter artwork. |
-| **Admin** | Implemented | Registration policy, users, suspension, session revocation, feed health/manual refresh, and system metrics. |
-| **Feeds and metadata** | Implemented | RSS 2.0/Atom, Podcasting 2.0 chapters/transcripts, stable episode identity, ETag/304 refresh, backoff, SSRF protection, response limits, and privacy-preserving metadata/image proxying. |
+| **Admin** | Implemented | Registration policy, users, suspension, session revocation, feed health/manual refresh, and system metrics including SQLite main/WAL and metadata-payload breakdowns. |
+| **Feeds and metadata** | Implemented | RSS 2.0/Atom, Podcasting 2.0 chapters/transcripts, stable episode identity, ETag/304 refresh, backoff, SSRF protection, response limits, bounded recent-episode retention, on-demand refresh for regular subscriptions, notification-only background refresh, and privacy-preserving metadata/image proxying. |
+| **Notifications** | Implemented | VAPID Web Push wakes the service worker and shows system notifications while the site is closed; foreground notifications remain available as a fallback. |
 | **API and persistence** | Implemented | Go/chi API, SQLite WAL, embedded migrations, health/readiness endpoints, request IDs, rate limiting, and static SPA serving from one process. |
 
 ## Android
