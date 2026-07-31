@@ -85,23 +85,27 @@ processor into the chain preserves skip-silence and variable speed.
 
 ---
 
-## Settings sync drops the other client's keys
+## Settings sync no longer drops the other client's keys
 
-**Status:** known bug.
+**Status:** fixed. Kept here because the invariant is easy to break again.
 
 Both clients push the whole `settings` entity and the server keeps the last write
-(`services/api/internal/server/handlers/sync.go`), but their payloads do not
-overlap: Android sends `theme_mode`, `palette`, `proxy_images`, `start_screen` and
-the download policy; the web client sends `date_format` and `ui_language`. Each
-push therefore erases the other client's keys from the server.
+without merging (`services/api/internal/server/handlers/sync.go`), but their
+payloads do not overlap: Android sends `theme_mode`, `palette`, `proxy_images`,
+`start_screen` and the download policy; the web client sends `date_format` and
+`ui_language`. Each push used to erase the other client's keys.
 
-Nothing is lost locally, because both clients ignore unknown keys and keep their
-current value — but a freshly installed device restores only whatever the last
-writer happened to know about. The web client also stores theme and palette in
-unscoped `localStorage`, so they are not account-scoped at all.
+Unknown keys are now remembered when a payload is applied and handed back when one
+is pushed — `SyncedSettings.kt` on Android, `settings-merge.ts` on the web.
 
-Fix: carry unknown keys through on push instead of rebuilding the payload from
-known fields. Both clients have to do it for the fix to hold.
+**The invariant:** a key added to a client's payload must be added to that client's
+owned-key set in the same change. Miss it and the client stores its own key as
+foreign and writes it twice. Both sides have a test asserting the owned set matches
+what the payload writes; keep it that way.
+
+Still open, and separate: the web client stores theme and palette in unscoped
+`localStorage`, so they are not account-scoped and never enter the synced blob at
+all.
 
 ---
 

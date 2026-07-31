@@ -180,16 +180,15 @@ New preference `visualizer`, plumbed exactly like `startScreen` was:
 - `PreferencesRepository` — scoped key, setter, `applySynced`, `resetSynced`,
   `migrateGuestToAccount`, `migrateUserScope`
 - `SyncRepository` — `visualizer` in `settingsPayload` and `applySettings`
+- `SyncedSettings.ownedKeys` — and its test's expected set
 
 No server change: the `settings` entity payload is stored opaquely
 (`services/api/internal/server/handlers/sync.go`).
 
-**Caveat, and it is not this feature's fault:** the two clients each push a
-complete `settings` blob, last-writer-wins, and their key sets do not overlap.
-A key only Android writes is erased from the server the next time the web client
-pushes. `visualizer` inherits that bug. See the settings-sync note in
-[roadmap.md](../roadmap.md); it should be fixed before this ships, or the preset
-will silently reset on a fresh install.
+One invariant to respect: `visualizer` must be added to `SyncedSettings.ownedKeys`
+in the same change that adds it to the payload, or this client stores its own key
+as foreign and writes it twice. See the settings-sync note in
+[roadmap.md](../roadmap.md) for why that machinery exists.
 
 ---
 
