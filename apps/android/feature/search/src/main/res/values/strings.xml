@@ -17,5 +17,6 @@
     <string name="search_idle_body">Search by show, host or topic — or paste a feed URL to add a podcast the directories do not list.</string>
     <string name="search_empty_title">Nothing matched</string>
     <string name="search_empty_body">Try fewer words, or widen the language and category filters.</string>
-    <string name="search_hide_podcast_named">Hide %1$s</string>
+    <string name="search_hide_podcast">Hide podcast</string>
+    <string name="search_hidden_notice">Hidden: %1$s</string>
 </resources>

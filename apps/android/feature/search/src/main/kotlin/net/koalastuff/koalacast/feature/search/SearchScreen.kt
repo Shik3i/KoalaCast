@@ -36,10 +36,13 @@ import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
+import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
+import net.koalastuff.koalacast.core.ui.component.OverflowMenu
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
+import net.koalastuff.koalacast.core.ui.component.UndoBanner
 import net.koalastuff.koalacast.core.ui.genre.GENRES
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
@@ -77,6 +80,8 @@ fun SearchScreen(
         onRetry = viewModel::retry,
         onOpenPodcast = onOpenPodcast,
         onHidePodcast = viewModel::hidePodcast,
+        onUndoHide = viewModel::undoHide,
+        onDismissUndo = viewModel::dismissUndo,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -96,6 +101,8 @@ internal fun SearchContent(
     onRetry: () -> Unit,
     onOpenPodcast: (String, String?) -> Unit,
     onHidePodcast: (PodcastSummary) -> Unit,
+    onUndoHide: () -> Unit,
+    onDismissUndo: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -104,10 +111,9 @@ internal fun SearchContent(
     val activeFilterCount = state.languages.size + if (state.category.isNotBlank()) 1 else 0
     var showFilters by rememberSaveable { mutableStateOf(false) }
 
+    Box(modifier = modifier.fillMaxSize().background(colors.bgPanel)) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.bgPanel),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
         item(key = "field") {
@@ -243,6 +249,19 @@ internal fun SearchContent(
                 )
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
+        }
+    }
+
+        // Over the list rather than in it: the row that was hidden may be far from
+        // the top, and a reversal nobody can see is not a reversal.
+        state.lastHidden?.let { hidden ->
+            UndoBanner(
+                text = stringResource(R.string.search_hidden_notice, hidden.title),
+                actionLabel = stringResource(CoreR.string.action_undo),
+                onAction = onUndoHide,
+                onDismiss = onDismissUndo,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
 }
@@ -398,10 +417,16 @@ private fun ResultRow(show: PodcastSummary, onClick: () -> Unit, onHide: () -> U
                 style = KoalaTheme.type.monoSmall,
             )
         }
-        IconButtonSquare(
-            icon = PhosphorIcons.X,
-            contentDescription = stringResource(R.string.search_hide_podcast_named, show.title),
-            onClick = onHide,
+        OverflowMenu(
+            contentDescription = stringResource(CoreR.string.action_more_options_named, show.title),
+            actions = listOf(
+                MenuAction(
+                    label = stringResource(R.string.search_hide_podcast),
+                    icon = PhosphorIcons.X,
+                    destructive = true,
+                    onClick = onHide,
+                ),
+            ),
             boxSize = 36.dp,
             iconSize = 16.dp,
         )
