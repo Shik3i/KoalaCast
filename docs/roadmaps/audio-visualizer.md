@@ -60,34 +60,36 @@ This removes the part that is normally the expensive half of the feature: no
 back-pressure design. If the service is ever moved to its own process, this
 roadmap needs rewriting before anything else.
 
-### The one real risk
+### The pipeline risk — settled
 
-`ExoPlayer.Builder(this)` is currently constructed without a custom
-`RenderersFactory` (`PlaybackService.onCreate`), and two shipped features live in
-the default audio pipeline:
+Two shipped features live in the default audio pipeline, and replacing the
+processor chain naively breaks both:
 
 - `skipSilenceEnabled` — `SilenceSkippingAudioProcessor`
 - variable playback speed — `SonicAudioProcessor`
 
-Replacing the processor chain naively breaks both. The documented path is
-`DefaultAudioSink.DefaultAudioProcessorChain(vararg custom)`, which applies
-custom processors *before* silence skipping and speed adjustment. That should
-preserve both, but it is the single assumption in this document that has not
-been verified against a running player, and everything else depends on it.
+`DefaultAudioSink.DefaultAudioProcessorChain(vararg custom)` applies custom
+processors *before* those two, and measurement on a device confirms both survive:
+at 2× with skip-silence off, position advanced 1.997× wall clock; with it on,
+2.124×. Exceeding 2× *is* the silence being skipped, so the stage is still doing
+its job rather than merely failing quietly.
 
-**Verify it first.** See "Phase 0".
+Ordering also resolved itself: the tap sits after Sonic, so the envelope is the
+time-compressed audio the listener actually hears at 1.5×, not the file as
+published.
 
-Two ordering questions to settle while verifying, because they change what the
-listener sees:
+### The mistake worth not repeating
 
-- Placing the tap *before* silence skipping means the visualiser shows the audio
-  as published, including gaps the player is about to remove — motion during
-  silence that never reaches the speaker.
-- Placing it *after* Sonic means the amplitude envelope is time-compressed at
-  1.5×, which is what the listener is actually hearing.
+A hand-written `BaseAudioProcessor` looks like the obvious way to observe audio.
+It is not: the pass-through half is easy to get wrong, and
+`replaceOutputBuffer(n).put(inputBuffer)` can be handed its own buffer and dies
+with `IllegalArgumentException: The source buffer is this buffer` — which surfaces
+as `ERROR_CODE_FAILED_RUNTIME_CHECK` and no audio at all.
 
-The second is almost certainly right. The API makes the first easier. Resolve
-this with ears, not reasoning.
+Media3 already ships that half correctly as `TeeAudioProcessor`
+(`androidx.media3.exoplayer.audio`, *not* `common.audio`). Use it. An
+implementation that can only read is also structurally incapable of changing what
+the listener hears, which is the right property for a decoration.
 
 ---
 
@@ -194,17 +196,16 @@ as foreign and writes it twice. See the settings-sync note in
 
 ## Delivery sequence
 
-**Phase 0 — de-risk the pipeline (~1 day).**
-A custom `AudioProcessor` that only counts buffers, wired through
-`DefaultAudioProcessorChain`, plus a throwaway numeric readout. Success is not
-"it draws something" — it is: skip-silence still skips, speed still changes
-pitch-corrected, volume boost still boosts, downloads still play, gapless
-transitions still work. If this phase fails, the whole approach is wrong and
-nothing below is worth planning.
+**Phase 0 — de-risk the pipeline. Done.**
+`AmplitudeTap` + `AmplitudeBufferSink` in `core:player`, wired through
+`DefaultAudioProcessorChain`. Verified on a device: no playback errors, speed
+exact at 2×, skip-silence measurably still skipping, envelope varying with speech
+between 0.07 and 0.61. Dormant by default (`AmplitudeTap.listening = false`).
 
 **Phase 1 — signal (~1 day).**
-RMS, ring buffer, `StateFlow`, subscription gating. Verified with a temporary
-debug readout, not a pretty preset.
+The current tap publishes a single smoothed level, which is all the Level preset
+needs. Waveform needs history: a fixed-size ring buffer, plus subscription gating
+driven by the preset preference rather than the current always-false flag.
 
 **Phase 2 — plumbing (~½ day).**
 Preference, sync, Settings section, live previews. Mechanically identical to the
