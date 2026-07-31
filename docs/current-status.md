@@ -1,6 +1,6 @@
 # KoalaCast Current Implementation Status
 
-**Last updated:** July 29, 2026
+**Last updated:** July 31, 2026
 **License:** MIT
 
 This document records shipped behavior. Proposed work belongs in
@@ -12,9 +12,9 @@ This document records shipped behavior. Proposed work belongs in
 | :--- | :--- | :--- |
 | **Web application** | Implemented | SvelteKit 5 static SPA, served by the Go application. Responsive three-column layout with resizable/collapsible side rails and mobile navigation. |
 | **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language filters, multi-select preferred/hidden genres, account-synced per-podcast hiding, clear/reset behavior, and subscription-aware Inbox. |
-| **Playback** | Implemented | HTML audio + Media Session, compatible-browser Remote Playback, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, timestamp bookmarks, and handoff links. |
+| **Playback** | Implemented | HTML audio + Media Session, compatible-browser Remote Playback, speed control, skip controls, sleep timer, silence trimming, volume boost, chapters, transcripts, queue, keyboard shortcuts, timestamp bookmarks, and handoff links. Web Audio effects need CORS, so blocked enclosures are first retried against the host their redirect chain resolves to and only fall back to the audio relay when that host refuses too. |
 | **Local-first storage** | Implemented | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. |
-| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. The default Inbox mode for new subscriptions is account-scoped; each podcast can override it. Named queues, folders, and timestamp bookmarks remain local. |
+| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. Each client carries the other's unknown settings keys through a push, so a client that does not understand a key no longer deletes it from the server. The default Inbox mode for new subscriptions is account-scoped; each podcast can override it. Named queues, folders, and timestamp bookmarks remain local. |
 | **Statistics** | Implemented | Personal listening duration, sessions, podcasts, speed and time-saved metrics. Signed-in users can separately opt into global aggregates, podcast rankings, and the listener leaderboard; participation defaults to off. |
 | **Themes and accessibility** | Implemented | System/light/dark modes, nine palettes (Fjord default; Eucalyptus retained), scalable/resizable layout, reduced motion, focus treatment, tooltips, accessible names, and English/German UI. |
 | **SEO and sharing** | Implemented | Canonical/robots metadata, sitemap with Git-derived `lastmod`, WebSite/SoftwareApplication JSON-LD, `llms.txt`, `llms-full.txt`, and 1200×630 Open Graph/Twitter artwork. |
@@ -31,8 +31,12 @@ hiding, playback, Room local-first library,
 resumable downloads, Inbox, profile statistics, accounts, device-token sync,
 OPML, global statistics, Android Auto/Wear browse support, a home-screen widget,
 chapters, dynamic artwork palettes, advanced download policies, timestamp
-bookmarks, handoff links, named queues, and podcast folders. Additional
-UI/integration test coverage remains desirable. The detailed live checklist is
+bookmarks, handoff links, named queues, and podcast folders. Destructive
+actions sit behind a menu or a confirmation, the start screen is selectable,
+sign-in is offered during onboarding, and the player fits one screen with an
+optional amplitude visualiser (off by default) fed by a Media3 tap on the
+app's own decoded PCM. Additional UI/integration test coverage remains
+desirable. The detailed live checklist is
 [`apps/android/README.md`](../apps/android/README.md).
 
 ## Delivery and quality gates
