@@ -35,6 +35,9 @@
     <string name="library_named_queue_save">Speichern</string>
     <string name="library_named_queue_count">%1$d Folgen</string>
     <string name="library_named_queue_delete">Benannte Warteschlange %1$s löschen</string>
+    <string name="library_named_queue_delete_title">Warteschlange löschen?</string>
+    <string name="library_named_queue_delete_body">„%1$s“ ist danach endgültig weg. Die Folgen darin bleiben unberührt.</string>
+    <string name="library_named_queue_delete_confirm">Löschen</string>
     <string name="library_all_folders">Alle Ordner</string>
     <string name="library_manage_title">%1$s verwalten</string>
     <string name="library_folder_name">Ordner</string>

@@ -16,6 +16,8 @@
     <string name="account_copy">Code kopieren</string>
     <string name="account_recovery_saved">Ich habe den Wiederherstellungscode gespeichert</string>
     <string name="account_sign_out">Abmelden</string>
+    <string name="account_sign_out_title">Abmelden?</string>
+    <string name="account_sign_out_body">Dieses Gerät synchronisiert dann nicht mehr als %1$s, und die lokale Kopie der Bibliothek wird gelöscht. Noch nicht synchronisierte Änderungen gehen verloren.</string>
     <string name="account_sync_off">Sync aus</string>
     <string name="account_sync_now">Jetzt synchronisieren</string>
     <string name="account_syncing">Synchronisiere…</string>
@@ -27,6 +29,8 @@
     <string name="account_no_sessions">Aktive Sitzungen konnten nicht geladen werden.</string>
     <string name="account_current">Aktuell</string>
     <string name="account_revoke">Widerrufen</string>
+    <string name="account_revoke_title">Sitzung widerrufen?</string>
+    <string name="account_revoke_body">%1$s wird sofort abgemeldet und muss sich für weitere Synchronisierung neu anmelden.</string>
     <string name="account_opml">OPML-Abonnements</string>
     <string name="account_opml_body">Import funktioniert ohne Konto. Der Export wird aus den lokalen Abos dieses Geräts erzeugt.</string>
     <string name="account_opml_import">OPML importieren</string>

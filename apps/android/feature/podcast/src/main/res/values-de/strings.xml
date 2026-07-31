@@ -10,6 +10,9 @@
 
     <string name="podcast_subscribe">Abonnieren</string>
     <string name="podcast_subscribed">Abonniert</string>
+    <string name="podcast_unsubscribe_title">Abo beenden?</string>
+    <string name="podcast_unsubscribe_body">%1$s verschwindet aus deiner Bibliothek. Die Wiedergabe-Einstellungen und Inbox-Einträge dieser Sendung gehen mit; heruntergeladene Folgen bleiben.</string>
+    <string name="podcast_unsubscribe_confirm">Abo beenden</string>
     <string name="podcast_options_show">Optionen</string>
     <string name="podcast_options_hide">Schließen</string>
     <string name="podcast_played">Gehört</string>
@@ -35,6 +38,10 @@
     <string name="podcast_auto_queue">Neueste ungehörte Folge automatisch einreihen</string>
     <string name="podcast_mark_all_played">Alle als gehört</string>
     <string name="podcast_mark_all_unplayed">Alle als ungehört</string>
+    <string name="podcast_mark_all_played_title">Alle Folgen als gehört markieren?</string>
+    <string name="podcast_mark_all_played_body">Alle %1$d geladenen Folgen gelten als gehört, ihre Wiedergabepositionen werden zurückgesetzt.</string>
+    <string name="podcast_mark_all_unplayed_title">Alle Folgen als ungehört markieren?</string>
+    <string name="podcast_mark_all_unplayed_body">Alle %1$d geladenen Folgen gelten wieder als ungehört, ihre Wiedergabepositionen werden zurückgesetzt.</string>
     <string name="podcast_auto_download">Neue Folgen herunterladen</string>
     <string name="podcast_auto_download_note">Holt neue Folgen über WLAN, sobald sie erscheinen.</string>
     <string name="podcast_auto_download_needs_sub">Abonniere die Sendung, um neue Folgen automatisch zu laden.</string>

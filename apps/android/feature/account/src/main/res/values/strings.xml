@@ -16,6 +16,8 @@
     <string name="account_copy">Copy code</string>
     <string name="account_recovery_saved">I saved my recovery code</string>
     <string name="account_sign_out">Sign out</string>
+    <string name="account_sign_out_title">Sign out?</string>
+    <string name="account_sign_out_body">This device stops syncing as %1$s and its copy of the account\'s library is cleared. Anything not yet synced is lost.</string>
     <string name="account_sync_off">Sync off</string>
     <string name="account_sync_now">Sync now</string>
     <string name="account_syncing">Syncing…</string>
@@ -27,6 +29,8 @@
     <string name="account_no_sessions">No active sessions could be loaded.</string>
     <string name="account_current">Current</string>
     <string name="account_revoke">Revoke</string>
+    <string name="account_revoke_title">Revoke this session?</string>
+    <string name="account_revoke_body">%1$s is signed out immediately and has to sign in again to keep syncing.</string>
     <string name="account_opml">OPML subscriptions</string>
     <string name="account_opml_body">Import works without an account. Export is generated from this device’s local subscriptions.</string>
     <string name="account_opml_import">Import OPML</string>

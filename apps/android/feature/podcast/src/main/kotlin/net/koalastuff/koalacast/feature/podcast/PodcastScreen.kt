@@ -52,6 +52,7 @@ import net.koalastuff.koalacast.core.ui.component.ArtworkAccent
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
 import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.AccentButton
+import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.MonoText
@@ -165,6 +166,30 @@ internal fun PodcastContent(
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val colors = KoalaTheme.colors
+    var markAllTarget by rememberSaveable { mutableStateOf<Boolean?>(null) }
+
+    markAllTarget?.let { played ->
+        ConfirmDialog(
+            title = stringResource(
+                if (played) R.string.podcast_mark_all_played_title
+                else R.string.podcast_mark_all_unplayed_title,
+            ),
+            body = stringResource(
+                if (played) R.string.podcast_mark_all_played_body
+                else R.string.podcast_mark_all_unplayed_body,
+                state.episodes.size,
+            ),
+            confirmLabel = stringResource(
+                if (played) R.string.podcast_mark_all_played
+                else R.string.podcast_mark_all_unplayed,
+            ),
+            onConfirm = {
+                markAllTarget = null
+                if (played) onMarkAllPlayed() else onMarkAllUnplayed()
+            },
+            onDismiss = { markAllTarget = null },
+        )
+    }
 
     LazyColumn(
         modifier = modifier
@@ -240,14 +265,16 @@ internal fun PodcastContent(
                             style = KoalaTheme.type.monoSmall,
                         )
                     }
+                    // Both rewrite the played state of every episode in the show;
+                    // neither is worth doing by accident on the way past.
                     Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
                         OutlineButton(
                             text = stringResource(R.string.podcast_mark_all_played),
-                            onClick = onMarkAllPlayed,
+                            onClick = { markAllTarget = true },
                         )
                         OutlineButton(
                             text = stringResource(R.string.podcast_mark_all_unplayed),
-                            onClick = onMarkAllUnplayed,
+                            onClick = { markAllTarget = false },
                         )
                     }
                 }
@@ -335,6 +362,23 @@ private fun PodcastHeader(
 ) {
     val colors = KoalaTheme.colors
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    // Unsubscribing throws away this show's per-podcast settings and inbox state,
+    // and the control sits where "subscribe" was a tap earlier — so it asks.
+    var confirmUnsubscribe by rememberSaveable { mutableStateOf(false) }
+
+    if (confirmUnsubscribe) {
+        ConfirmDialog(
+            title = stringResource(R.string.podcast_unsubscribe_title),
+            body = stringResource(R.string.podcast_unsubscribe_body, podcast.title),
+            confirmLabel = stringResource(R.string.podcast_unsubscribe_confirm),
+            onConfirm = {
+                confirmUnsubscribe = false
+                onToggleSubscribe()
+            },
+            onDismiss = { confirmUnsubscribe = false },
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -399,7 +443,7 @@ private fun PodcastHeader(
                 if (subscribed) {
                     OutlineButton(
                         text = stringResource(R.string.podcast_subscribed),
-                        onClick = onToggleSubscribe,
+                        onClick = { confirmUnsubscribe = true },
                         modifier = Modifier.weight(1f),
                         leadingIcon = PhosphorIcons.Check,
                     )
@@ -443,7 +487,7 @@ private fun PodcastHeader(
                         style = KoalaTheme.type.monoSmall,
                     )
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
-                        listOf(null, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                        listOf(null, 1f, 1.15f, 1.25f, 1.5f, 2f).forEach { speed ->
                             KoalaChip(
                                 label = speed?.let { "${it}×" }
                                     ?: stringResource(R.string.podcast_speed_default),
