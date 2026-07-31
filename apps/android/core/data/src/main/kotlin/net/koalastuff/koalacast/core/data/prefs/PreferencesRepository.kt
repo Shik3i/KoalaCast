@@ -151,6 +151,20 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
+    /**
+     * The keys of the synced settings blob that this client does not understand —
+     * the web client's `date_format` and `ui_language` today, whatever ships next
+     * tomorrow. Stored verbatim so a push can hand them back untouched instead of
+     * deleting them from the server, which is what rebuilding the whole payload
+     * from known fields used to do.
+     */
+    suspend fun foreignSettings(): String =
+        dataStore.data.first()[Keys.foreignSettings(owner())].orEmpty()
+
+    suspend fun setForeignSettings(json: String) {
+        dataStore.edit { it[Keys.foreignSettings(owner())] = json }
+    }
+
     suspend fun syncSnapshot(): Pair<UserPreferences, Long> {
         val values = dataStore.data.first()
         val owner = owner()
@@ -204,6 +218,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.downloadConcurrency(owner))
             it.remove(Keys.downloadBudgetMb(owner))
             it.remove(Keys.settingsUpdatedAt(owner))
+            it.remove(Keys.foreignSettings(owner))
         }
     }
 
@@ -291,6 +306,11 @@ class PreferencesRepository @Inject constructor(
                 Keys.settingsUpdatedAt(null),
                 removeSource = false,
             )
+            it.copyIfAbsent(
+                Keys.foreignSettings(ownerId),
+                Keys.foreignSettings(null),
+                removeSource = false,
+            )
             it[Keys.GUEST_PREFS_MERGED] = true
         }
     }
@@ -316,6 +336,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.downloadConcurrency(ownerId), Keys.downloadConcurrency(userId))
             it.copyIfAbsent(Keys.downloadBudgetMb(ownerId), Keys.downloadBudgetMb(userId))
             it.copyIfAbsent(Keys.settingsUpdatedAt(ownerId), Keys.settingsUpdatedAt(userId))
+            it.copyIfAbsent(Keys.foreignSettings(ownerId), Keys.foreignSettings(userId))
         }
     }
 
@@ -376,6 +397,7 @@ class PreferencesRepository @Inject constructor(
         val DOWNLOAD_STORAGE = stringPreferencesKey("download_storage")
         val DOWNLOAD_TREE_URI = stringPreferencesKey("download_tree_uri")
         fun settingsUpdatedAt(owner: String?) = longPreferencesKey(scoped("settings_updated_at", owner))
+        fun foreignSettings(owner: String?) = stringPreferencesKey(scoped("settings_foreign", owner))
         fun migrationComplete(owner: String?) = booleanPreferencesKey(scoped("legacy_migrated", owner))
         val LEGACY_THEME_MODE = stringPreferencesKey("theme_mode")
         val LEGACY_PALETTE = stringPreferencesKey("palette")

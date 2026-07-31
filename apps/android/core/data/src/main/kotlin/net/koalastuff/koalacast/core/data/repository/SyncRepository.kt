@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -331,7 +332,10 @@ class SyncRepository @Inject constructor(
                 type = "settings",
                 entityId = "global",
                 timestamp = settingsUpdatedAt,
-                payload = settingsPayload(settings, settingsUpdatedAt),
+                payload = SyncedSettings.merge(
+                    owned = settingsPayload(settings, settingsUpdatedAt),
+                    foreign = foreignSettings(),
+                ),
             )
         }
         tombstones.getAll()
@@ -503,6 +507,14 @@ class SyncRepository @Inject constructor(
         if (updatedAt <= 0) return
         val (current, localUpdatedAt) = preferences.syncSnapshot()
         if (!authoritative && localUpdatedAt >= updatedAt) return
+
+        // Keep whatever this payload carries for other clients, so the next push
+        // from this device hands it back rather than dropping it. Only recorded
+        // once the payload has won, so it stays in step with the accepted
+        // updated_at rather than resurrecting keys from a stale write.
+        val foreign = SyncedSettings.foreignOf(payload)
+        preferences.setForeignSettings(if (foreign.isEmpty()) "" else foreign.toString())
+
         preferences.applySynced(
             current.copy(
                 themeMode = payload.string("theme_mode").ifBlank {
@@ -708,6 +720,12 @@ class SyncRepository @Inject constructor(
         put("auto_download", item.autoDownload)
         put("updated_at", item.updatedAt)
     }
+
+    /** The other client's keys, as stored by [applySettings]. */
+    private suspend fun foreignSettings(): JsonObject =
+        runCatching {
+            Json.parseToJsonElement(preferences.foreignSettings()) as? JsonObject
+        }.getOrNull() ?: JsonObject(emptyMap())
 
     private fun settingsPayload(item: UserPreferences, updatedAt: Long) = buildJsonObject {
         put("theme_mode", item.themeMode.name.lowercase())
