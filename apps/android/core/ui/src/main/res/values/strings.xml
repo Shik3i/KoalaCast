@@ -9,6 +9,11 @@
     <string name="action_retry">Try again</string>
     <string name="action_back">Back</string>
     <string name="action_clear">Clear</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_more_options">More options</string>
+    <string name="action_more_options_named">More options for %1$s</string>
 
     <string name="error_offline_title">Can\'t reach your server</string>
     <string name="error_offline_body">KoalaCast could not connect to %1$s. Check the connection, or pick a different server in Settings.</string>

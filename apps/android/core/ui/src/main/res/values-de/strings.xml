@@ -7,6 +7,11 @@
     <string name="action_retry">Erneut versuchen</string>
     <string name="action_back">Zurück</string>
     <string name="action_clear">Leeren</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_dismiss">Schließen</string>
+    <string name="action_undo">Rückgängig</string>
+    <string name="action_more_options">Weitere Optionen</string>
+    <string name="action_more_options_named">Weitere Optionen für %1$s</string>
 
     <string name="error_offline_title">Server nicht erreichbar</string>
     <string name="error_offline_body">KoalaCast konnte %1$s nicht erreichen. Prüfe die Verbindung oder wähle in den Einstellungen einen anderen Server.</string>
