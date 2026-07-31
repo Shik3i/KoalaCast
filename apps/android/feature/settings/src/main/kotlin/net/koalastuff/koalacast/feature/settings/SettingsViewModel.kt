@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.ServerRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.server.ServerUrl
@@ -18,12 +19,15 @@ import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.PaletteId
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
 import javax.inject.Inject
 
 data class SettingsUiState(
     val preferences: UserPreferences? = null,
+    /** Null while signed out; drives the account row at the top of the screen. */
+    val accountName: String? = null,
     /** The URL being edited, which is only committed once it validates. */
     val serverDraft: String = "",
     val checkingServer: Boolean = false,
@@ -37,12 +41,19 @@ class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
     private val serverRepository: ServerRepository,
     private val downloads: DownloadRepository,
+    accounts: AccountRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            accounts.account.collect { account ->
+                _state.update { it.copy(accountName = account?.username) }
+            }
+        }
+
         viewModelScope.launch {
             preferences.preferences.collect { prefs ->
                 _state.update { current ->
@@ -160,6 +171,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setDefaultInboxMode(mode: InboxMode) {
         viewModelScope.launch { preferences.setDefaultInboxMode(mode) }
+    }
+
+    fun setStartScreen(screen: StartScreen) {
+        viewModelScope.launch { preferences.setStartScreen(screen) }
     }
 
     fun setProxyImages(enabled: Boolean) {

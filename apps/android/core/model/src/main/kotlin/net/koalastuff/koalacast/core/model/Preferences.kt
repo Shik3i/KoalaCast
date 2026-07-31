@@ -23,6 +23,8 @@ data class UserPreferences(
     val hiddenPodcasts: Set<HiddenPodcast>,
     /** Inbox mode assigned to subscriptions created from now on. */
     val defaultInboxMode: InboxMode,
+    /** The tab the app opens on. */
+    val startScreen: StartScreen,
     /**
      * Route cover art through the configured KoalaCast server instead of fetching it
      * straight from the publisher's CDN. Costs a hop, hides the listener's IP.
@@ -56,6 +58,24 @@ data class HiddenPodcast(
     val key: String,
     val title: String,
 )
+
+/**
+ * Where a cold start lands. Browsing and catching up are different habits, and
+ * which one the app should assume is not something it can guess.
+ */
+enum class StartScreen(val id: String) {
+    DISCOVER("discover"),
+    INBOX("inbox"),
+    LIBRARY("library"),
+    ;
+
+    companion object {
+        val DEFAULT = DISCOVER
+
+        fun fromId(value: String?): StartScreen =
+            entries.firstOrNull { it.id == value } ?: DEFAULT
+    }
+}
 
 enum class DownloadStorage(val id: String) {
     INTERNAL("internal"),

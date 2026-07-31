@@ -47,6 +47,7 @@ import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.Hairline
@@ -66,6 +67,7 @@ import net.koalastuff.koalacast.core.ui.theme.koalaColors
 
 @Composable
 fun SettingsScreen(
+    onOpenAccount: () -> Unit,
     onOpenPrivacy: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -95,7 +97,9 @@ fun SettingsScreen(
         onCycleGenre = viewModel::cycleGenre,
         onUnhidePodcast = viewModel::unhidePodcast,
         onDefaultInboxModeChange = viewModel::setDefaultInboxMode,
+        onStartScreenChange = viewModel::setStartScreen,
         onProxyImagesChange = viewModel::setProxyImages,
+        onOpenAccount = onOpenAccount,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
         onSkipSilenceChange = viewModel::setSkipSilence,
@@ -127,7 +131,9 @@ internal fun SettingsContent(
     onCycleGenre: (String) -> Unit,
     onUnhidePodcast: (String) -> Unit,
     onDefaultInboxModeChange: (InboxMode) -> Unit,
+    onStartScreenChange: (StartScreen) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
+    onOpenAccount: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
     onSkipSilenceChange: (Boolean) -> Unit,
@@ -157,6 +163,36 @@ internal fun SettingsContent(
             style = KoalaTheme.type.screenTitle,
             color = colors.inkStrong,
         )
+
+        // First section on the screen, and the only one that reads as an invitation
+        // rather than a switch: an account is what turns one device's library into
+        // a library, and nobody finds it if it hides under a stats dashboard.
+        Section(title = stringResource(R.string.settings_account_title)) {
+            Text(
+                text = if (state.accountName != null) {
+                    stringResource(R.string.settings_account_signed_in, state.accountName)
+                } else {
+                    stringResource(R.string.settings_account_signed_out_note)
+                },
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink3,
+            )
+            if (state.accountName != null) {
+                OutlineButton(
+                    text = stringResource(R.string.settings_account_manage),
+                    onClick = onOpenAccount,
+                    leadingIcon = PhosphorIcons.UserCircle,
+                )
+            } else {
+                AccentButton(
+                    text = stringResource(R.string.settings_account_sign_in),
+                    onClick = onOpenAccount,
+                    leadingIcon = PhosphorIcons.UserCircle,
+                )
+            }
+        }
+
+        Hairline()
 
         Section(title = stringResource(R.string.settings_server_title)) {
             KoalaTextField(
@@ -226,6 +262,26 @@ internal fun SettingsContent(
                 text = stringResource(R.string.settings_theme_note),
                 style = KoalaTheme.type.bodySmall,
                 color = colors.ink3,
+            )
+        }
+
+        Hairline()
+
+        Section(title = stringResource(R.string.settings_start_screen_title)) {
+            Text(
+                text = stringResource(R.string.settings_start_screen_note),
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink3,
+            )
+            val screens = StartScreen.entries
+            SegmentedControl(
+                options = listOf(
+                    stringResource(R.string.settings_start_screen_discover),
+                    stringResource(R.string.settings_start_screen_inbox),
+                    stringResource(R.string.settings_start_screen_library),
+                ),
+                selectedIndex = screens.indexOf(prefs?.startScreen ?: StartScreen.DEFAULT),
+                onSelect = { onStartScreenChange(screens[it]) },
             )
         }
 

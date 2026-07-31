@@ -19,6 +19,7 @@ import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
 import javax.inject.Inject
@@ -100,6 +101,10 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setStartScreen(screen: StartScreen) {
+        dataStore.edit { it[Keys.startScreen(owner())] = screen.id; it.touch(owner()) }
+    }
+
     suspend fun setProxyImages(enabled: Boolean) {
         dataStore.edit { it[Keys.proxyImages(owner())] = enabled; it.touch(owner()) }
     }
@@ -164,6 +169,7 @@ class PreferencesRepository @Inject constructor(
             it[Keys.hiddenPodcasts(owner)] =
                 preferences.hiddenPodcasts.mapTo(mutableSetOf(), ::encodeHiddenPodcast)
             it[Keys.defaultInboxMode(owner)] = preferences.defaultInboxMode.name.lowercase()
+            it[Keys.startScreen(owner)] = preferences.startScreen.id
             it[Keys.proxyImages(owner)] = preferences.proxyImages
             it[Keys.playbackSpeed(owner)] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
             it[Keys.downloadWifiOnly(owner)] = preferences.downloadWifiOnly
@@ -187,6 +193,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.hiddenGenres(owner))
             it.remove(Keys.hiddenPodcasts(owner))
             it.remove(Keys.defaultInboxMode(owner))
+            it.remove(Keys.startScreen(owner))
             it.remove(Keys.proxyImages(owner))
             it.remove(Keys.playbackSpeed(owner))
             it.remove(Keys.downloadWifiOnly(owner))
@@ -249,6 +256,7 @@ class PreferencesRepository @Inject constructor(
                 Keys.defaultInboxMode(null),
                 removeSource = false,
             )
+            it.copyIfAbsent(Keys.startScreen(ownerId), Keys.startScreen(null), removeSource = false)
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(null), removeSource = false)
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(null), removeSource = false)
             it.copyIfAbsent(
@@ -297,6 +305,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.hiddenGenres(ownerId), Keys.hiddenGenres(userId))
             it.copyIfAbsent(Keys.hiddenPodcasts(ownerId), Keys.hiddenPodcasts(userId))
             it.copyIfAbsent(Keys.defaultInboxMode(ownerId), Keys.defaultInboxMode(userId))
+            it.copyIfAbsent(Keys.startScreen(ownerId), Keys.startScreen(userId))
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(userId))
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(userId))
             it.copyIfAbsent(Keys.downloadWifiOnly(ownerId), Keys.downloadWifiOnly(userId))
@@ -329,6 +338,7 @@ class PreferencesRepository @Inject constructor(
             InboxMode.LATEST.name.lowercase() -> InboxMode.LATEST
             else -> InboxMode.ALL
         },
+        startScreen = StartScreen.fromId(this[Keys.startScreen(owner)]),
         proxyImages = this[Keys.proxyImages(owner)] ?: true,
         playbackSpeed = this[Keys.playbackSpeed(owner)] ?: 1f,
         downloadWifiOnly = this[Keys.downloadWifiOnly(owner)] ?: true,
@@ -353,6 +363,7 @@ class PreferencesRepository @Inject constructor(
         fun hiddenGenres(owner: String?) = stringSetPreferencesKey(scoped("hidden_genres", owner))
         fun hiddenPodcasts(owner: String?) = stringSetPreferencesKey(scoped("hidden_podcasts", owner))
         fun defaultInboxMode(owner: String?) = stringPreferencesKey(scoped("default_inbox_mode", owner))
+        fun startScreen(owner: String?) = stringPreferencesKey(scoped("start_screen", owner))
         fun proxyImages(owner: String?) = booleanPreferencesKey(scoped("proxy_images", owner))
         fun playbackSpeed(owner: String?) = floatPreferencesKey(scoped("playback_speed", owner))
         fun downloadWifiOnly(owner: String?) = booleanPreferencesKey(scoped("download_wifi_only", owner))

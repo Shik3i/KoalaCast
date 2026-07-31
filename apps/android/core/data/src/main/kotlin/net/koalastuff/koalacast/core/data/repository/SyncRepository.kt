@@ -38,6 +38,7 @@ import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
 import net.koalastuff.koalacast.core.model.UserPreferences
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
@@ -531,6 +532,8 @@ class SyncRepository @Inject constructor(
                     InboxMode.ALL.name.lowercase() -> InboxMode.ALL
                     else -> current.defaultInboxMode
                 },
+                startScreen = payload.string("start_screen").takeIf { it.isNotBlank() }
+                    ?.let(StartScreen::fromId) ?: current.startScreen,
                 proxyImages = payload.booleanOr("proxy_images", current.proxyImages),
                 playbackSpeed = payload.floatOr("playback_speed", current.playbackSpeed),
                 downloadWifiOnly = payload.booleanOr(
@@ -724,6 +727,7 @@ class SyncRepository @Inject constructor(
             ),
         )
         put("default_inbox_mode", item.defaultInboxMode.name.lowercase())
+        put("start_screen", item.startScreen.id)
         put("proxy_images", item.proxyImages)
         put("playback_speed", item.playbackSpeed)
         put("download_wifi_only", item.downloadWifiOnly)

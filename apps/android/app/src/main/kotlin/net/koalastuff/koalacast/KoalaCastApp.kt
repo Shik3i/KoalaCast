@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -36,6 +38,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
@@ -59,16 +62,19 @@ import net.koalastuff.koalacast.feature.search.SearchScreen
 import net.koalastuff.koalacast.feature.settings.SettingsScreen
 import net.koalastuff.koalacast.feature.settings.PrivacyScreen
 import net.koalastuff.koalacast.navigation.Routes
+import net.koalastuff.koalacast.navigation.route
 import net.koalastuff.koalacast.navigation.StatsScope
 import net.koalastuff.koalacast.navigation.TopLevelDestination
 
 /**
  * @param onboardingComplete null while DataStore is still being read; showing either
  *   graph before it is known would flash the wrong screen.
+ * @param startScreen the tab a cold start lands on, from Settings.
  */
 @Composable
 fun KoalaCastApp(
     onboardingComplete: Boolean?,
+    startScreen: StartScreen = StartScreen.DEFAULT,
     requestedEpisodeId: String? = null,
     onEpisodeRequestConsumed: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
@@ -79,6 +85,10 @@ fun KoalaCastApp(
         Box(modifier = Modifier.fillMaxSize().background(colors.bgApp))
         return
     }
+
+    // Read once. Changing the preference must not tear down the live back stack —
+    // it decides where the *next* cold start lands, not where this session goes.
+    val homeRoute = remember { startScreen.route() }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -100,15 +110,16 @@ fun KoalaCastApp(
         Box(modifier = Modifier.weight(1f)) {
             NavHost(
                 navController = navController,
-                startDestination = if (onboardingComplete) Routes.DISCOVER else Routes.ONBOARDING,
+                startDestination = if (onboardingComplete) homeRoute else Routes.ONBOARDING,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 composable(Routes.ONBOARDING) {
                     OnboardingScreen(
-                        onFinished = {
-                            navController.navigate(Routes.DISCOVER) {
+                        onFinished = { openAccount ->
+                            navController.navigate(homeRoute) {
                                 popUpTo(Routes.ONBOARDING) { inclusive = true }
                             }
+                            if (openAccount) navController.navigate(Routes.ACCOUNT)
                         },
                     )
                 }
@@ -159,6 +170,7 @@ fun KoalaCastApp(
 
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
+                        onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
                         onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                         contentPadding = statusBarPadding(),
                     )
@@ -266,7 +278,11 @@ fun KoalaCastApp(
                 currentRoute = currentRoute,
                 onSelect = { destination ->
                     navController.navigate(destination.route) {
-                        popUpTo(Routes.DISCOVER) { saveState = true }
+                        // Pops back to whichever tab the graph starts on, so the
+                        // back stack stays one level deep whatever "home" is.
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
                         launchSingleTop = true
                         restoreState = true
                     }

@@ -2,6 +2,18 @@
 <resources>
     <string name="settings_title">Einstellungen</string>
 
+    <string name="settings_account_title">Konto</string>
+    <string name="settings_account_signed_out_note">Du nutzt KoalaCast ohne Konto. Alles funktioniert, aber nichts verlässt dieses Gerät. Melde dich an, um Abos, Fortschritt und Einstellungen über deine Geräte hinweg zu synchronisieren.</string>
+    <string name="settings_account_signed_in">Angemeldet als %1$s.</string>
+    <string name="settings_account_sign_in">Anmelden oder Konto erstellen</string>
+    <string name="settings_account_manage">Konto verwalten</string>
+
+    <string name="settings_start_screen_title">Startbildschirm</string>
+    <string name="settings_start_screen_note">Mit welchem Tab KoalaCast startet.</string>
+    <string name="settings_start_screen_discover">Entdecken</string>
+    <string name="settings_start_screen_inbox">Neu</string>
+    <string name="settings_start_screen_library">Bibliothek</string>
+
     <string name="settings_server_title">KoalaCast-Server</string>
     <string name="settings_server_placeholder">cast.example.org</string>
     <string name="settings_server_note">Ein Serverwechsel ändert, was ein Konto bedeutet: Abos, Warteschlange und Fortschritt liegen pro Server, und eine Anmeldung auf einer Instanz gilt nicht auf einer anderen.</string>
