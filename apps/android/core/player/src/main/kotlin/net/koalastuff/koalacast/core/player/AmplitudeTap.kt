@@ -45,15 +45,53 @@ class AmplitudeTap @Inject constructor() {
     @Volatile
     var listening: Boolean = false
 
+    /**
+     * Recent history, oldest first, for styles that draw a shape rather than a
+     * level. A fixed array written round-robin: the audio thread must not allocate,
+     * and a reader that catches a half-updated slot sees one wrong bar for one
+     * frame, which nobody can perceive.
+     */
+    private val history = FloatArray(HISTORY)
+
+    @Volatile
+    private var writeIndex = 0
+
     /** Latest smoothed amplitude, 0..1. Zero whenever nothing is being decoded. */
     fun level(): Float = level
 
+    /**
+     * Copies the history into [out], oldest first, so the caller can render without
+     * allocating per frame. [out] may be any length; it is filled from the most
+     * recent samples backwards.
+     */
+    fun copyHistoryInto(out: FloatArray) {
+        val end = writeIndex
+        for (i in out.indices) {
+            // out[last] is the newest sample, walking backwards from the write head.
+            val age = out.size - 1 - i
+            val index = ((end - 1 - age) % HISTORY + HISTORY) % HISTORY
+            out[i] = history[index]
+        }
+    }
+
     internal fun publish(value: Float) {
         level = value
+        val index = writeIndex
+        history[index % HISTORY] = value
+        writeIndex = (index + 1) % HISTORY
     }
 
     internal fun reset() {
         level = 0f
+        history.fill(0f)
+    }
+
+    private companion object {
+        /**
+         * At roughly one sample per decoded buffer this covers a few seconds, which
+         * is as much past as a bar the width of a phone can show honestly.
+         */
+        const val HISTORY = 96
     }
 }
 

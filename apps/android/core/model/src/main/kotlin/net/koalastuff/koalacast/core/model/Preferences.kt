@@ -25,6 +25,8 @@ data class UserPreferences(
     val defaultInboxMode: InboxMode,
     /** The tab the app opens on. */
     val startScreen: StartScreen,
+    /** Which visualiser, if any, rides on the player's progress bar. */
+    val visualizer: VisualizerStyle,
     /**
      * Route cover art through the configured KoalaCast server instead of fetching it
      * straight from the publisher's CDN. Costs a hop, hides the listener's IP.
@@ -73,6 +75,32 @@ enum class StartScreen(val id: String) {
         val DEFAULT = DISCOVER
 
         fun fromId(value: String?): StartScreen =
+            entries.firstOrNull { it.id == value } ?: DEFAULT
+    }
+}
+
+/**
+ * What the player's progress bar does while audio plays. Off is the default and
+ * stays that way on update: an existing listener sees what they saw before, and
+ * nobody pays for an animation they did not ask for.
+ */
+enum class VisualizerStyle(val id: String) {
+    OFF("off"),
+
+    /** The bar keeps its shape; only its fill breathes with the audio. */
+    LEVEL("level"),
+
+    /** The bar becomes a running history of how loud the last few seconds were. */
+    WAVEFORM("waveform"),
+    ;
+
+    /** True when this style needs the amplitude tap doing arithmetic at all. */
+    val needsAudio: Boolean get() = this != OFF
+
+    companion object {
+        val DEFAULT = OFF
+
+        fun fromId(value: String?): VisualizerStyle =
             entries.firstOrNull { it.id == value } ?: DEFAULT
     }
 }

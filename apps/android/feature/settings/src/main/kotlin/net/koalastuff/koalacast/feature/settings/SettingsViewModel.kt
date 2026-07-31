@@ -21,6 +21,7 @@ import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
+import net.koalastuff.koalacast.core.model.VisualizerStyle
 import net.koalastuff.koalacast.core.model.UserPreferences
 import javax.inject.Inject
 
@@ -175,6 +176,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setStartScreen(screen: StartScreen) {
         viewModelScope.launch { preferences.setStartScreen(screen) }
+    }
+
+    fun setVisualizer(style: VisualizerStyle) {
+        viewModelScope.launch { preferences.setVisualizer(style) }
     }
 
     fun setProxyImages(enabled: Boolean) {

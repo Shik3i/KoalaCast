@@ -22,10 +22,15 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,8 +41,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Chapter
+import net.koalastuff.koalacast.core.model.VisualizerStyle
 import net.koalastuff.koalacast.core.player.PlaybackUiState
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
@@ -45,6 +54,7 @@ import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.MenuButton
+import net.koalastuff.koalacast.core.ui.component.VisualizerTrack
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
@@ -66,10 +76,40 @@ fun NowPlayingScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val chapters by viewModel.chapters.collectAsStateWithLifecycle()
+    val style by viewModel.visualizer.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Motion for its own sake is exactly what the system's animation scale is for,
+    // so honouring it means falling back to the plain bar rather than slowing down.
+    val effectiveStyle = remember(style, context) {
+        if (style.needsAudio && animationsDisabled(context)) VisualizerStyle.OFF else style
+    }
+
+    // The tap does no arithmetic unless something is drawing it, and "something" has
+    // to include being on screen — not merely having been opened once.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, effectiveStyle) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.setVisualizerActive(effectiveStyle.needsAudio)
+                Lifecycle.Event.ON_STOP -> viewModel.setVisualizerActive(false)
+                else -> Unit
+            }
+        }
+        viewModel.setVisualizerActive(effectiveStyle.needsAudio)
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.setVisualizerActive(false)
+        }
+    }
 
     NowPlayingContent(
         state = state,
         chapters = chapters,
+        visualizer = effectiveStyle,
+        amplitude = { viewModel.amplitudeLevel() },
+        amplitudeHistory = viewModel::copyAmplitudeHistory,
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
         onTogglePlayPause = viewModel::togglePlayPause,
@@ -88,6 +128,9 @@ internal fun NowPlayingContent(
     state: PlaybackUiState,
     modifier: Modifier = Modifier,
     chapters: List<Chapter> = emptyList(),
+    visualizer: VisualizerStyle = VisualizerStyle.OFF,
+    amplitude: () -> Float = { 0f },
+    amplitudeHistory: (FloatArray) -> Unit = {},
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -214,6 +257,10 @@ internal fun NowPlayingContent(
             durationMs = state.durationMs,
             chapters = chapters,
             onSeekTo = onSeekTo,
+            visualizer = visualizer,
+            playing = state.isPlaying,
+            amplitude = amplitude,
+            amplitudeHistory = amplitudeHistory,
         )
 
         Row(
@@ -275,6 +322,10 @@ private fun Scrubber(
     durationMs: Long,
     chapters: List<Chapter>,
     onSeekTo: (Long) -> Unit,
+    visualizer: VisualizerStyle = VisualizerStyle.OFF,
+    playing: Boolean = false,
+    amplitude: () -> Float = { 0f },
+    amplitudeHistory: (FloatArray) -> Unit = {},
 ) {
     val colors = KoalaTheme.colors
     // While a drag is in flight the slider follows the finger, not the player,
@@ -285,6 +336,29 @@ private fun Scrubber(
 
     val markers = remember(chapters, durationMs) {
         ChapterState.markerFractions(chapters, durationMs)
+    }
+
+    // Sampled on the frame clock rather than pushed from the audio thread: the
+    // renderer decides when it needs a value, and a paused player needs none.
+    var level by remember { mutableFloatStateOf(0f) }
+    val history = remember { FloatArray(WAVEFORM_BARS) }
+    var historyRevision by remember { mutableIntStateOf(0) }
+    LaunchedEffect(visualizer, playing) {
+        if (!visualizer.needsAudio || !playing) {
+            level = 0f
+            return@LaunchedEffect
+        }
+        while (true) {
+            withFrameNanos {
+                level = amplitude()
+                if (visualizer == VisualizerStyle.WAVEFORM) {
+                    amplitudeHistory(history)
+                    // FloatArray is mutated in place, so Compose needs a separate
+                    // signal that its contents changed.
+                    historyRevision++
+                }
+            }
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
@@ -314,17 +388,31 @@ private fun Scrubber(
                         ),
                 )
             },
+            // The visualiser lives in the track slot, so the thumb, the drag
+            // gesture, the chapter markers and the time codes are untouched by it:
+            // whatever it draws, this is still the control you seek with.
             track = { sliderState ->
-                SliderDefaults.Track(
-                    sliderState = sliderState,
-                    modifier = Modifier.height(4.dp),
-                    colors = SliderDefaults.colors(
-                        activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
-                        inactiveTrackColor = colors.track,
-                    ),
-                    drawStopIndicator = null,
-                    thumbTrackGapSize = 0.dp,
-                )
+                if (visualizer.needsAudio) {
+                    @Suppress("UNUSED_EXPRESSION")
+                    historyRevision
+                    VisualizerTrack(
+                        style = visualizer,
+                        fraction = fraction,
+                        level = level,
+                        history = history,
+                    )
+                } else {
+                    SliderDefaults.Track(
+                        sliderState = sliderState,
+                        modifier = Modifier.height(4.dp),
+                        colors = SliderDefaults.colors(
+                            activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
+                            inactiveTrackColor = colors.track,
+                        ),
+                        drawStopIndicator = null,
+                        thumbTrackGapSize = 0.dp,
+                    )
+                }
             },
         )
             // Drawn over the slider rather than inside it: Material's Slider has
@@ -500,6 +588,21 @@ private fun SleepTimerButton(
         iconSize = 18.dp,
     )
 }
+
+/**
+ * True when the system has animations turned off. A visualiser is motion for its
+ * own sake, which is the category that setting exists for, so it steps aside
+ * entirely rather than animating more slowly.
+ */
+private fun animationsDisabled(context: android.content.Context): Boolean =
+    android.provider.Settings.Global.getFloat(
+        context.contentResolver,
+        android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f,
+    ) == 0f
+
+/** How many bars the waveform draws. Wider than this and each bar is a hairline. */
+private const val WAVEFORM_BARS = 48
 
 /** The playhead. Small enough to sit on a 4dp track without swallowing it. */
 private val THUMB_DIAMETER = 12.dp

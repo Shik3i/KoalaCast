@@ -72,8 +72,8 @@ the filemask above already excludes it. Keep it that way.
 
 ## Audio visualisers on the Android player
 
-**Status:** proposed. Detailed plan:
-[roadmaps/audio-visualizer.md](roadmaps/audio-visualizer.md).
+**Status:** Off / Level / Waveform shipped; Bars and Blade open. Detailed plan and
+findings: [roadmaps/audio-visualizer.md](roadmaps/audio-visualizer.md).
 
 Palette-aware visualisers selectable in Settings beside the colour palette, riding
 on the player's progress bar or replacing it. Fed by a custom Media3

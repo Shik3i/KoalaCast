@@ -14,6 +14,12 @@
     <string name="settings_start_screen_inbox">Neu</string>
     <string name="settings_start_screen_library">Bibliothek</string>
 
+    <string name="settings_visualizer_title">Visualisierung</string>
+    <string name="settings_visualizer_note">Was der Fortschrittsbalken des Players während der Wiedergabe macht. Er bleibt in jedem Fall ein Fortschrittsbalken — du siehst und setzt weiterhin, wo du bist.</string>
+    <string name="settings_visualizer_off">Aus</string>
+    <string name="settings_visualizer_level">Pegel</string>
+    <string name="settings_visualizer_waveform">Wellenform</string>
+
     <string name="settings_server_title">KoalaCast-Server</string>
     <string name="settings_server_placeholder">cast.example.org</string>
     <string name="settings_server_note">Ein Serverwechsel ändert, was ein Konto bedeutet: Abos, Warteschlange und Fortschritt liegen pro Server, und eine Anmeldung auf einer Instanz gilt nicht auf einer anderen.</string>

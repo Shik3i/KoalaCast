@@ -33,6 +33,7 @@ internal object SyncedSettings {
         "hidden_podcasts",
         "default_inbox_mode",
         "start_screen",
+        "visualizer",
         "proxy_images",
         "playback_speed",
         "download_wifi_only",

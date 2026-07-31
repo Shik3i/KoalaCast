@@ -49,6 +49,7 @@ import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
+import net.koalastuff.koalacast.core.model.VisualizerStyle
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
@@ -57,6 +58,7 @@ import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
+import net.koalastuff.koalacast.core.ui.component.VisualizerPreview
 import net.koalastuff.koalacast.core.ui.genre.GENRES
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
@@ -98,6 +100,7 @@ fun SettingsScreen(
         onUnhidePodcast = viewModel::unhidePodcast,
         onDefaultInboxModeChange = viewModel::setDefaultInboxMode,
         onStartScreenChange = viewModel::setStartScreen,
+        onVisualizerChange = viewModel::setVisualizer,
         onProxyImagesChange = viewModel::setProxyImages,
         onOpenAccount = onOpenAccount,
         onOpenPrivacy = onOpenPrivacy,
@@ -132,6 +135,7 @@ internal fun SettingsContent(
     onUnhidePodcast: (String) -> Unit,
     onDefaultInboxModeChange: (InboxMode) -> Unit,
     onStartScreenChange: (StartScreen) -> Unit,
+    onVisualizerChange: (VisualizerStyle) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
     onOpenAccount: () -> Unit,
     onOpenPrivacy: () -> Unit,
@@ -297,6 +301,25 @@ internal fun SettingsContent(
                 selected = prefs?.palette ?: PaletteId.DEFAULT,
                 onSelect = onPaletteChange,
             )
+        }
+
+        Hairline()
+
+        Section(title = stringResource(R.string.settings_visualizer_title)) {
+            Text(
+                text = stringResource(R.string.settings_visualizer_note),
+                style = KoalaTheme.type.bodySmall,
+                color = colors.ink3,
+            )
+            // Each row draws itself in its own style, the way the palette picker
+            // shows palettes in their own colours: the choice is made by looking.
+            VisualizerStyle.entries.forEach { style ->
+                VisualizerRow(
+                    style = style,
+                    selected = (prefs?.visualizer ?: VisualizerStyle.DEFAULT) == style,
+                    onSelect = { onVisualizerChange(style) },
+                )
+            }
         }
 
         Hairline()
@@ -666,6 +689,56 @@ private fun PalettePicker(
             }
         }
     }
+}
+
+@Composable
+private fun VisualizerRow(
+    style: VisualizerStyle,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    val colors = KoalaTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KoalaShapes.card)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) colors.accentInk else colors.borderHair,
+                shape = KoalaShapes.card,
+            )
+            .clickable(role = Role.RadioButton, onClick = onSelect)
+            .padding(KoalaSpacing.gap),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+        ) {
+            Text(
+                text = stringResource(style.labelRes()),
+                style = KoalaTheme.type.listTitle,
+                color = colors.inkStrong,
+            )
+            VisualizerPreview(style = style)
+        }
+        if (selected) {
+            PhosphorIcon(
+                icon = PhosphorIcons.CheckCircleFill,
+                contentDescription = null,
+                tint = colors.accentInk,
+                size = 18.dp,
+            )
+        }
+    }
+}
+
+@StringRes
+private fun VisualizerStyle.labelRes(): Int = when (this) {
+    VisualizerStyle.OFF -> R.string.settings_visualizer_off
+    VisualizerStyle.LEVEL -> R.string.settings_visualizer_level
+    VisualizerStyle.WAVEFORM -> R.string.settings_visualizer_waveform
 }
 
 @StringRes

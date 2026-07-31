@@ -1,6 +1,6 @@
 # Audio visualiser roadmap
 
-**Status:** proposed, not started.
+**Status:** Off / Level / Waveform shipped on Android. Bars and Blade open.
 
 Palette-aware audio visualisers on the Android player, chosen in Settings next to
 the colour palette. A visualiser either rides on the progress bar or replaces it,
@@ -202,27 +202,36 @@ as foreign and writes it twice. See the settings-sync note in
 exact at 2×, skip-silence measurably still skipping, envelope varying with speech
 between 0.07 and 0.61. Dormant by default (`AmplitudeTap.listening = false`).
 
-**Phase 1 — signal (~1 day).**
-The current tap publishes a single smoothed level, which is all the Level preset
-needs. Waveform needs history: a fixed-size ring buffer, plus subscription gating
-driven by the preset preference rather than the current always-false flag.
+**Phase 1 — signal. Done.**
+Fixed-size ring buffer in `AmplitudeTap`, copied out per frame into a caller-owned
+array so rendering allocates nothing. Gating is driven by the preset preference
+and by the player screen's lifecycle, so the tap does no arithmetic when nothing
+is drawing it or the screen is merely backgrounded.
 
-**Phase 2 — plumbing (~½ day).**
-Preference, sync, Settings section, live previews. Mechanically identical to the
-start-screen preference; the shape is known.
+**Phase 2 — plumbing. Done.**
+`VisualizerStyle` preference, synced (and added to `SyncedSettings.ownedKeys`),
+with a Settings section whose rows each render themselves in their own style.
 
-**Phase 3 — presets (~2–4 h each).**
-Level first — it is the most conservative and validates that a visualiser can
-live inside the `Slider` track slot without disturbing seeking. Then Waveform,
-Bars, Blade.
+**Phase 3 — presets. Level and Waveform done; Bars and Blade open (~2–4 h each).**
+Both live in the `Slider` track slot, so the thumb, the drag gesture, the chapter
+markers and the time codes are untouched.
 
-**Phase 4 — hardening (~½ day).**
-Reduced-motion, remote-playback fallback, battery measurement, `clearAndSetSemantics`
-audit.
+One thing Waveform forced into the open: the wave runs on *recent time* and the
+progress fill runs on *episode position*, and colouring the wave by progress
+claims that audio played two seconds ago is still ahead of the listener. They get
+separate bands rather than one overlay. Any future preset that draws history has
+the same problem and needs the same answer.
 
-Roughly **3–5 days** for real audio plus four presets. A decoration-only version
-driven by position and `isPlaying` is about a day, but it visibly lies during
-speech pauses — which is exactly when a listener looks at it.
+**Phase 4 — hardening. Partly done.**
+Reduced motion is honoured (`ANIMATOR_DURATION_SCALE == 0` falls back to the plain
+bar) and the presets are `clearAndSetSemantics`, so TalkBack never reads bars.
+Still open: remote-playback fallback, and a battery measurement — including the
+cost of the `TeeAudioProcessor` buffer copy that happens even with the visualiser
+off.
+
+Still open beyond that: the amplitude curve is untuned. `GAIN`, `ATTACK` and
+`RELEASE` in `AmplitudeTap` were picked to look plausible on one device with one
+show; they want an hour of sitting with real content rather than more reasoning.
 
 ---
 

@@ -14,6 +14,12 @@
     <string name="settings_start_screen_inbox">New</string>
     <string name="settings_start_screen_library">Library</string>
 
+    <string name="settings_visualizer_title">Visualiser</string>
+    <string name="settings_visualizer_note">What the player\'s progress bar does while audio plays. It stays a progress bar either way — you can still see and set where you are.</string>
+    <string name="settings_visualizer_off">Off</string>
+    <string name="settings_visualizer_level">Level</string>
+    <string name="settings_visualizer_waveform">Waveform</string>
+
     <string name="settings_server_title">KoalaCast server</string>
     <string name="settings_server_placeholder">cast.example.org</string>
     <string name="settings_server_note">Switching servers changes what an account means: subscriptions, queue and progress are stored per server, and a sign-in on one instance does not carry to another.</string>

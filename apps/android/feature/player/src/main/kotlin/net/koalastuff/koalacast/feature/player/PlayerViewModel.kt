@@ -10,9 +10,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.model.DataResult
+import net.koalastuff.koalacast.core.model.VisualizerStyle
+import net.koalastuff.koalacast.core.player.AmplitudeTap
 import net.koalastuff.koalacast.core.player.PlayerConnection
 import javax.inject.Inject
 
@@ -25,9 +30,16 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val player: PlayerConnection,
     private val podcasts: PodcastRepository,
+    private val amplitudeTap: AmplitudeTap,
+    preferences: PreferencesRepository,
 ) : ViewModel() {
 
     val state: StateFlow<PlaybackUiState> = player.state
+
+    val visualizer: StateFlow<VisualizerStyle> = preferences.preferences
+        .map { it.visualizer }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VisualizerStyle.DEFAULT)
 
     private val _chapters = MutableStateFlow<List<Chapter>>(emptyList())
     val chapters: StateFlow<List<Chapter>> = _chapters.asStateFlow()
@@ -64,6 +76,18 @@ class PlayerViewModel @Inject constructor(
     fun seekForward() = player.seekForward()
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)
     fun setSpeed(speed: Float) = player.setSpeed(speed)
+
+    /**
+     * The tap costs nothing while nothing is drawing it, so the screen turns it on
+     * as it appears and off as it leaves — including when it is merely backgrounded.
+     */
+    fun setVisualizerActive(active: Boolean) {
+        amplitudeTap.listening = active
+    }
+
+    fun amplitudeLevel(): Float = amplitudeTap.level()
+
+    fun copyAmplitudeHistory(out: FloatArray) = amplitudeTap.copyHistoryInto(out)
     fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
         if (!atChapterEnd) {
             player.setSleepTimer(minutes, atEpisodeEnd, atChapterEnd = false)
