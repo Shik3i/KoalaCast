@@ -70,6 +70,41 @@ the filemask above already excludes it. Keep it that way.
 
 ---
 
+## Audio visualisers on the Android player
+
+**Status:** proposed. Detailed plan:
+[roadmaps/audio-visualizer.md](roadmaps/audio-visualizer.md).
+
+Palette-aware visualisers selectable in Settings beside the colour palette, riding
+on the player's progress bar or replacing it. Fed by a custom Media3
+`AudioProcessor` reading the app's own decoded PCM — deliberately *not* by
+`android.media.audiofx.Visualizer`, which would require `RECORD_AUDIO`.
+
+The plan's Phase 0 exists to answer the only open question: whether inserting a
+processor into the chain preserves skip-silence and variable speed.
+
+---
+
+## Settings sync drops the other client's keys
+
+**Status:** known bug.
+
+Both clients push the whole `settings` entity and the server keeps the last write
+(`services/api/internal/server/handlers/sync.go`), but their payloads do not
+overlap: Android sends `theme_mode`, `palette`, `proxy_images`, `start_screen` and
+the download policy; the web client sends `date_format` and `ui_language`. Each
+push therefore erases the other client's keys from the server.
+
+Nothing is lost locally, because both clients ignore unknown keys and keep their
+current value — but a freshly installed device restores only whatever the last
+writer happened to know about. The web client also stores theme and palette in
+unscoped `localStorage`, so they are not account-scoped at all.
+
+Fix: carry unknown keys through on push instead of rebuilding the payload from
+known fields. Both clients have to do it for the fix to hold.
+
+---
+
 ## Native Android P7
 
 **Status:** P0–P6 shipped. The remaining platform and delight work is tracked in
