@@ -37,7 +37,6 @@ data class InboxUiState(
     val subscriptions: List<Subscription> = emptyList(),
     val rawEpisodes: List<InboxEpisode> = emptyList(),
     val completedIds: Set<String> = emptySet(),
-    val unplayedOnly: Boolean = true,
     val downloadedOnly: Boolean = false,
     val downloadedIds: Set<String> = emptySet(),
     val downloadStates: Map<String, DownloadState> = emptyMap(),
@@ -58,7 +57,10 @@ data class InboxUiState(
                 rawEpisodes,
                 completedIds,
                 InboxFilter(
-                    unplayedOnly = unplayedOnly,
+                    // Not a filter — the definition of the screen. "New" that can
+                    // show episodes you have already heard is just the library
+                    // sorted by date, and there is a tab for that.
+                    unplayedOnly = true,
                     downloadedOnly = downloadedOnly,
                     podcastId = selectedPodcastId,
                     dateRange = dateRange,
@@ -88,7 +90,6 @@ class InboxViewModel @Inject constructor(
     private val filterPrefs = context.getSharedPreferences("inbox-filters", Context.MODE_PRIVATE)
     private val _state = MutableStateFlow(
         InboxUiState(
-            unplayedOnly = filterPrefs.getBoolean("unplayed", true),
             downloadedOnly = filterPrefs.getBoolean("downloaded", false),
             selectedPodcastId = filterPrefs.getString("podcast", null),
             dateRange = enumPreference("date", InboxDateRange.ALL),
@@ -240,11 +241,6 @@ class InboxViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    fun setUnplayedOnly(enabled: Boolean) {
-        _state.update { it.copy(unplayedOnly = enabled) }
-        filterPrefs.edit().putBoolean("unplayed", enabled).apply()
     }
 
     fun setDownloadedOnly(enabled: Boolean) =
