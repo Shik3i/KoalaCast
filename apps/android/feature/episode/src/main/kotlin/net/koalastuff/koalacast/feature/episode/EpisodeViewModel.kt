@@ -50,6 +50,8 @@ data class EpisodeUiState(
     val chapters: List<Chapter> = emptyList(),
     val chaptersError: Boolean = false,
     val downloadState: DownloadState? = null,
+    /** 0-100 while a download runs, so the control can show it rather than a colour. */
+    val downloadPercent: Int = 0,
     val timeBookmarks: List<TimeBookmark> = emptyList(),
     val bookmarkPositionMs: Long = 0,
 ) {
@@ -119,7 +121,13 @@ class EpisodeViewModel @Inject constructor(
                 progress.completedEpisodeIds,
                 downloads.download(episodeId),
             ) { favorite, queued, completed, download ->
-                LocalState(favorite, episodeId in queued, episodeId in completed, download?.state)
+                LocalState(
+                    favorite,
+                    episodeId in queued,
+                    episodeId in completed,
+                    download?.state,
+                    download?.progressPercent ?: 0,
+                )
             }.collect { local ->
                 _state.update {
                     it.copy(
@@ -127,6 +135,7 @@ class EpisodeViewModel @Inject constructor(
                         isQueued = local.queued,
                         isPlayed = local.played,
                         downloadState = local.downloadState,
+                        downloadPercent = local.downloadPercent,
                     )
                 }
             }
@@ -138,6 +147,7 @@ class EpisodeViewModel @Inject constructor(
         val queued: Boolean,
         val played: Boolean,
         val downloadState: DownloadState?,
+        val downloadPercent: Int,
     )
 
     fun retry() = load(force = true)

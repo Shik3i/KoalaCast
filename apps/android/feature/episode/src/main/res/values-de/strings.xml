@@ -10,6 +10,8 @@
     <string name="episode_queued_short">In Queue</string>
     <string name="episode_save_short">Merken</string>
     <string name="episode_played_short">Gehört</string>
+    <string name="episode_downloaded_short">Geladen</string>
+    <string name="episode_downloading_short">Lädt…</string>
     <string name="episode_download_short">Laden</string>
     <string name="episode_save">Folge merken</string>
     <string name="episode_unsave">Aus Gemerkt entfernen</string>

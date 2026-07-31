@@ -35,6 +35,7 @@ fun EpisodeProgressButton(
     progressPercent: Int,
     current: Boolean,
     contentDescription: String,
+    playing: Boolean = current,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
@@ -89,11 +90,18 @@ fun EpisodeProgressButton(
             )
         }
 
-        PhosphorIcon(
-            icon = if (current) PhosphorIcons.Waveform else PhosphorIcons.PlayFill,
-            contentDescription = contentDescription,
-            tint = if (current) accent else colors.ink2,
-            size = size * 0.38f,
-        )
+        // A moving mark rather than a static waveform glyph: in a list, "this is
+        // the current episode" and "and it is playing right now" are different
+        // facts, and only motion carries the second one.
+        if (current) {
+            PlayingEqualizer(playing = playing, tint = accent, size = size * 0.34f)
+        } else {
+            PhosphorIcon(
+                icon = PhosphorIcons.PlayFill,
+                contentDescription = contentDescription,
+                tint = colors.ink2,
+                size = size * 0.38f,
+            )
+        }
     }
 }

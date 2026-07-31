@@ -1,5 +1,12 @@
 package net.koalastuff.koalacast.feature.player
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -193,16 +200,29 @@ internal fun PlayButton(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        PhosphorIcon(
-            // Buffering keeps the pause glyph rather than swapping in a spinner:
-            // the transport must not flicker on every stall.
-            icon = if (isPlaying || isBuffering) PhosphorIcons.PauseFill else PhosphorIcons.PlayFill,
-            contentDescription = stringResource(
-                if (isPlaying) R.string.player_pause else R.string.player_play,
-            ),
-            tint = glyph,
-            size = size * 0.42f,
-        )
+        // Crossfaded and slightly scaled rather than swapped: the glyph replacing
+        // itself between frames is the single most-pressed control in the app and
+        // reads as a jump. Short enough that it never delays the tap.
+        val showPause = isPlaying || isBuffering
+        AnimatedContent(
+            targetState = showPause,
+            transitionSpec = {
+                (fadeIn(tween(140)) + scaleIn(tween(140), initialScale = 0.7f))
+                    .togetherWith(fadeOut(tween(110)) + scaleOut(tween(110), targetScale = 0.7f))
+            },
+            label = "playPause",
+        ) { pause ->
+            PhosphorIcon(
+                // Buffering keeps the pause glyph rather than swapping in a spinner:
+                // the transport must not flicker on every stall.
+                icon = if (pause) PhosphorIcons.PauseFill else PhosphorIcons.PlayFill,
+                contentDescription = stringResource(
+                    if (isPlaying) R.string.player_pause else R.string.player_play,
+                ),
+                tint = glyph,
+                size = size * 0.42f,
+            )
+        }
     }
 }
 
