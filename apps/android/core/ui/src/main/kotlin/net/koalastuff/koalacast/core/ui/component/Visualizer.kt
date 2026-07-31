@@ -81,44 +81,48 @@ fun VisualizerTrack(
                 .clearAndSetSemantics { },
         ) {
             if (history.isEmpty()) return@Canvas
-            // Two different axes share this row, so they get their own bands
-            // rather than one confusing overlay: the wave runs on *recent time*
-            // and every bar in it has just been heard, while progress runs on
-            // *episode position*. Colouring the wave by progress would claim that
-            // audio played two seconds ago is still ahead of the listener.
-            val trackHeight = PROGRESS_HEIGHT_PX
-            val waveHeight = size.height - trackHeight - PROGRESS_GAP_PX
+            // Two different axes share this row: the wave runs on *recent time* and
+            // every bar in it has just been heard, while progress runs on *episode
+            // position*. Colouring the wave by progress would claim that audio
+            // played two seconds ago is still ahead of the listener, so they stay
+            // visually separate — but both centre on the same line.
+            //
+            // That shared centre is not cosmetic. Material centres the slider's
+            // thumb in the track slot's height, so a progress bar drawn anywhere
+            // else leaves the thumb floating off it.
+            val centre = size.height / 2f
             val gap = GAP_PX
             val barWidth = max(1f, (size.width - gap * (history.size - 1)) / history.size)
-            val centre = waveHeight / 2f
+            val waveHeight = size.height - PROGRESS_HEIGHT_PX
+
+            // Wave first, mirrored around the centre line, so the progress bar can
+            // sit on top of it and stay the most legible thing in the row.
             history.forEachIndexed { index, amplitude ->
                 val x = index * (barWidth + gap)
                 // A floor rather than zero: silence should read as a quiet bar, not
                 // as a hole in the track.
                 val bar = max(MIN_BAR_PX, waveHeight * amplitude.coerceIn(0f, 1f))
                 drawRoundRect(
-                    color = active,
+                    color = active.copy(alpha = WAVE_ALPHA),
                     topLeft = Offset(x, centre - bar / 2f),
                     size = Size(barWidth, bar),
                     cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
                 )
             }
 
-            // The progress bar itself, unchanged in meaning and still the thing the
-            // thumb rides on.
-            val trackTop = size.height - trackHeight
-            val radius = CornerRadius(trackHeight / 2f, trackHeight / 2f)
+            val trackTop = centre - PROGRESS_HEIGHT_PX / 2f
+            val radius = CornerRadius(PROGRESS_HEIGHT_PX / 2f, PROGRESS_HEIGHT_PX / 2f)
             drawRoundRect(
                 color = inactive,
                 topLeft = Offset(0f, trackTop),
-                size = Size(size.width, trackHeight),
+                size = Size(size.width, PROGRESS_HEIGHT_PX),
                 cornerRadius = radius,
             )
             if (played > 0f) {
                 drawRoundRect(
                     color = active,
                     topLeft = Offset(0f, trackTop),
-                    size = Size(size.width * played, trackHeight),
+                    size = Size(size.width * played, PROGRESS_HEIGHT_PX),
                     cornerRadius = radius,
                 )
             }
@@ -158,4 +162,6 @@ private const val BASE_THICKNESS = 0.4f
 private const val GAP_PX = 2f
 private const val MIN_BAR_PX = 2f
 private const val PROGRESS_HEIGHT_PX = 8f
-private const val PROGRESS_GAP_PX = 8f
+
+/** The wave is context around the bar, not a competing element. */
+private const val WAVE_ALPHA = 0.45f

@@ -291,18 +291,27 @@ internal fun NowPlayingContent(
         // The secondary controls, as one quiet row of affordances rather than a
         // stack of open panels: speed cycles in place, the sleep timer unfolds
         // its options only when asked for them.
+        // Equal weights rather than SpaceBetween: with three items of different
+        // widths, "space between" centres nothing — the middle control drifts
+        // wherever its neighbours leave room. Three equal columns put the sleep
+        // timer on the screen's centre line, under the play button.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SpeedButton(speed = state.speed, onSetSpeed = onSetSpeed)
-            SleepTimerButton(state = state, onSetSleepTimer = onSetSleepTimer)
-            MonoText(
-                text = stringResource(R.string.player_up_next_count, state.upNextCount),
-                color = colors.ink4,
-                style = KoalaTheme.type.monoSmall,
-            )
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                SpeedButton(speed = state.speed, onSetSpeed = onSetSpeed)
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                SleepTimerButton(state = state, onSetSleepTimer = onSetSleepTimer)
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                MonoText(
+                    text = stringResource(R.string.player_up_next_count, state.upNextCount),
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                )
+            }
         }
 
         if (chapters.isNotEmpty()) {

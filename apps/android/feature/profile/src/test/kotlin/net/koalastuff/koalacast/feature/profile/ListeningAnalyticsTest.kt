@@ -2,6 +2,7 @@ package net.koalastuff.koalacast.feature.profile
 
 import net.koalastuff.koalacast.core.model.ListeningSession
 import net.koalastuff.koalacast.core.model.PlaybackProgress
+import net.koalastuff.koalacast.core.model.Track
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -42,7 +43,9 @@ class ListeningAnalyticsTest {
         assertEquals(3_000, stats.totalSavedMs)
         assertEquals(2, stats.longestStreak)
         assertEquals(3, stats.activeDays)
-        assertEquals(1, stats.completedCount)
+        // "done" carries the completed flag but no listening session, which is what
+        // "mark as played" leaves behind. It no longer counts as finished.
+        assertEquals(0, stats.completedCount)
         assertEquals(1, stats.showTotals.size)
         assertEquals(3, stats.showTotals.first().episodes)
         assertEquals("Technology", stats.categoryTotals.first().label)
@@ -62,6 +65,85 @@ class ListeningAnalyticsTest {
 
         assertEquals(listOf(4, 3, 2, 1), heatmapDays(analytics, today).takeLast(4).map { it.second })
     }
+
+    /**
+     * The complaint this guards: clearing a backlog with "mark as played" reported
+     * two dozen finished episodes nobody had listened to.
+     */
+    @Test
+    fun `marking an episode played without listening does not count as finished`() {
+        val listened = mapOf("barely" to 30_000L)
+
+        val result = finishedByListening(
+            progressWithDuration("barely", completed = true, durationMs = 30 * 60_000L),
+            listened,
+        )
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `an episode listened most of the way through counts as finished`() {
+        val listened = mapOf("heard" to 20 * 60_000L)
+
+        val result = finishedByListening(
+            progressWithDuration("heard", completed = true, durationMs = 30 * 60_000L),
+            listened,
+        )
+
+        assertEquals(true, result)
+    }
+
+    /** Skipping the outro must not cost the listener a finished episode. */
+    @Test
+    fun `finishing after skipping the last minutes still counts`() {
+        val listened = mapOf("skipped" to 16 * 60_000L)
+
+        val result = finishedByListening(
+            progressWithDuration("skipped", completed = true, durationMs = 30 * 60_000L),
+            listened,
+        )
+
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `an unfinished episode never counts however long it was played`() {
+        val listened = mapOf("partial" to 60 * 60_000L)
+
+        val result = finishedByListening(
+            progressWithDuration("partial", completed = false, durationMs = 30 * 60_000L),
+            listened,
+        )
+
+        assertEquals(false, result)
+    }
+
+    /** Feeds that publish no duration fall back to an absolute floor. */
+    @Test
+    fun `without a known duration a real listen still counts`() {
+        assertEquals(
+            false,
+            finishedByListening(progress("unknown", completed = true), mapOf("unknown" to 60_000L)),
+        )
+        assertEquals(
+            true,
+            finishedByListening(progress("unknown", completed = true), mapOf("unknown" to 10 * 60_000L)),
+        )
+    }
+
+    private fun progressWithDuration(id: String, completed: Boolean, durationMs: Long) =
+        progress(id, completed).copy(
+            track = Track(
+                episodeId = id,
+                podcastId = "show",
+                title = id,
+                podcastTitle = "Show",
+                artworkUrl = "",
+                enclosureUrl = "",
+                durationMs = durationMs,
+            ),
+        )
 
     private fun session(id: String, start: ZonedDateTime, wallMs: Long) = ListeningSession(
         id = id,

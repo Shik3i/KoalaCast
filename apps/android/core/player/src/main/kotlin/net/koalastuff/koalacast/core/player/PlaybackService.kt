@@ -1,5 +1,6 @@
 package net.koalastuff.koalacast.core.player
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
 import android.media.audiofx.LoudnessEnhancer
@@ -99,6 +100,23 @@ class PlaybackService : MediaLibraryService() {
     private var playerListener: PlayerListener? = null
 
     /**
+     * Reopens the app from the notification. Resolved by package rather than by
+     * class so this module does not have to depend on `:app`, and SINGLE_TOP so it
+     * returns to the running task instead of stacking a second copy.
+     */
+    private fun appLaunchIntent(): PendingIntent {
+        val launch = packageManager.getLaunchIntentForPackage(packageName)
+            ?.apply { addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP) }
+            ?: Intent(Intent.ACTION_MAIN)
+        return PendingIntent.getActivity(
+            this,
+            0,
+            launch,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
+    /**
      * The default renderers, with the amplitude tap spliced into the audio chain.
      *
      * `DefaultAudioProcessorChain` applies the processors handed to it *before* its
@@ -150,6 +168,9 @@ class PlaybackService : MediaLibraryService() {
         playerListener = listener
         player.addListener(listener)
         mediaSession = MediaLibrarySession.Builder(this, player, LibraryCallback())
+            // Without this the notification and the lock screen are dead ends: the
+            // transport buttons work, but tapping the artwork does nothing at all.
+            .setSessionActivity(appLaunchIntent())
             .build()
 
         scope.launch {

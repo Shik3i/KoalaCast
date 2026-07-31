@@ -21,6 +21,12 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
             add("testImplementation", libs.findLibrary("junit").get())
             add("testImplementation", libs.findLibrary("kotlinx-coroutines-test").get())
             add("testImplementation", libs.findLibrary("turbine").get())
+            // Every library module is given an instrumentation runner above, so
+            // `connectedDebugAndroidTest` builds a test APK for all of them — and
+            // the ones with no androidTest sources died with ClassNotFoundException
+            // because the runner itself was never on their classpath. That made the
+            // aggregate task unusable repo-wide, not just for the empty modules.
+            add("androidTestImplementation", libs.findLibrary("androidx-test-runner").get())
         }
     }
 }

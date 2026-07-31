@@ -45,6 +45,11 @@ fun summarizeListening(
     states: List<PlaybackProgress>,
     zoneId: ZoneId = ZoneId.systemDefault(),
 ): ListeningAnalytics {
+    val listenedByEpisode = sessions
+        .groupBy(ListeningSession::episodeId)
+        .mapValues { (_, episodeSessions) ->
+            episodeSessions.sumOf(ListeningSession::audioListenedMs)
+        }
     val byDay = mutableMapOf<LocalDate, Double>()
     val weekdayTotals = DoubleArray(7)
     val hourTotals = DoubleArray(24)
@@ -100,7 +105,7 @@ fun summarizeListening(
         averageSpeed = if (totalWallMs > 0) speedWeightedMs.toDouble() / totalWallMs else 1.0,
         activeDays = dayTotals.size,
         longestStreak = longestStreak(dayTotals.keys),
-        completedCount = states.count(PlaybackProgress::completed),
+        completedCount = states.count { finishedByListening(it, listenedByEpisode) },
         showTotals = shows.values
             .map { ShowTotal(it.id, it.title, it.listeningMs, it.episodeIds.size) }
             .sortedByDescending(ShowTotal::listeningMs)
@@ -114,6 +119,38 @@ fun summarizeListening(
         byDay = dayTotals,
     )
 }
+
+/**
+ * Whether an episode counts as *finished* in the statistics.
+ *
+ * "Mark as played" is a library gesture: it clears an episode out of New, and it
+ * has to keep doing that whether or not a second of it was heard. But it also sets
+ * `completed`, and counting that as a finished episode inflated the figure with
+ * episodes nobody listened to — twenty-odd "completed" for someone who had cleared
+ * a backlog.
+ *
+ * So the statistic asks the listening record instead of the flag. Half the episode
+ * rather than all of it, because finishing normally involves skipping an outro, a
+ * sponsor read, or the last thirty seconds of goodbyes — demanding 100% would swap
+ * one wrong number for another. Episodes whose length never made it into the
+ * database fall back to an absolute minimum.
+ */
+internal fun finishedByListening(
+    state: PlaybackProgress,
+    listenedByEpisode: Map<String, Long>,
+): Boolean {
+    if (!state.completed) return false
+    val listenedMs = listenedByEpisode[state.episodeId] ?: 0L
+    val durationMs = state.track?.durationMs ?: 0L
+    return if (durationMs > 0) {
+        listenedMs >= durationMs * MIN_FINISHED_FRACTION
+    } else {
+        listenedMs >= MIN_FINISHED_MS
+    }
+}
+
+private const val MIN_FINISHED_FRACTION = 0.5
+private const val MIN_FINISHED_MS = 5L * 60 * 1000
 
 fun rangeFloor(range: StatsRange, now: ZonedDateTime): Long =
     when (range) {

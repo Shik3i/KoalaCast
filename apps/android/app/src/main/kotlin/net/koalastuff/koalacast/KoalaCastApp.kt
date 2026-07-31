@@ -104,8 +104,6 @@ fun KoalaCastApp(
         onEpisodeRequestConsumed()
     }
 
-    BackHandler(enabled = nowPlayingExpanded) { nowPlayingExpanded = false }
-
     Column(modifier = Modifier.fillMaxSize().background(colors.bgApp)) {
         Box(modifier = Modifier.weight(1f)) {
             NavHost(
@@ -292,6 +290,12 @@ fun KoalaCastApp(
     }
 
     if (nowPlayingExpanded) {
+        // Registered here rather than beside the state it reads, and that placement
+        // is the whole fix: the dispatcher invokes the most recently added enabled
+        // callback, and NavHost adds its own. Declared before the NavHost, this lost
+        // every race — back popped the graph underneath while the player stayed up.
+        BackHandler { nowPlayingExpanded = false }
+
         NowPlayingScreen(
             onCollapse = { nowPlayingExpanded = false },
             onOpenEpisode = { episodeId ->
