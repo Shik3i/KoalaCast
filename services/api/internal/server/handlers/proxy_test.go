@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -238,5 +239,102 @@ func TestProxyHandler_GetImageProxyReturnsFallbackWhenUpstreamFails(t *testing.T
 	}
 	if rec.Body.Len() < 1000 {
 		t.Errorf("expected embedded WebP fallback body, got %d bytes", rec.Body.Len())
+	}
+}
+
+// A tracker prefix that blocks CORS in front of a CDN that allows it is the
+// common shape of a podcast enclosure, and the browser cannot follow that chain
+// itself: a failed CORS request tells it nothing about where it landed. Resolving
+// it here is what lets the listener's audio keep streaming from the publisher
+// instead of being pulled through this instance.
+func TestGetAudioResolveFollowsRedirectAndReportsCORS(t *testing.T) {
+	const browserOrigin = "https://cast.example"
+
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Range"); got != "bytes=0-0" {
+			t.Errorf("expected a ranged probe, got Range=%q", got)
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	}))
+	defer cdn.Close()
+
+	tracker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Deliberately no Access-Control-Allow-Origin, like a real prefix tracker.
+		http.Redirect(w, r, cdn.URL+"/episode.mp3", http.StatusFound)
+	}))
+	defer tracker.Close()
+
+	proxy := NewProxyHandler(false)
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	// The safe client's redirect policy rejects loopback literals outright, which
+	// is right in production and impossible to test against httptest. Relax it for
+	// the hop only; SSRF behaviour has its own tests in the rss package.
+	proxy.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("too many redirects")
+		}
+		return nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/proxy/audio/resolve?url="+tracker.URL+"/redirect.mp3&origin="+browserOrigin, nil)
+	rec := httptest.NewRecorder()
+
+	proxy.GetAudioResolve(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	var resp audioResolveResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.URL != cdn.URL+"/episode.mp3" {
+		t.Errorf("expected the CDN URL, got %q", resp.URL)
+	}
+	if !resp.Redirected {
+		t.Error("expected redirected=true")
+	}
+	if !resp.CORSAllowed {
+		t.Error("expected cors_allowed=true for a wildcard Access-Control-Allow-Origin")
+	}
+}
+
+// A host that allows nobody must be reported as such, so the client falls back to
+// the proxy rather than loading a source Web Audio will silently mute.
+func TestGetAudioResolveReportsMissingCORS(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	}))
+	defer upstream.Close()
+
+	proxy := NewProxyHandler(false)
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/proxy/audio/resolve?url="+upstream.URL+"/a.mp3&origin=https://cast.example", nil)
+	rec := httptest.NewRecorder()
+	proxy.GetAudioResolve(rec, req)
+
+	var resp audioResolveResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.CORSAllowed {
+		t.Error("expected cors_allowed=false when the host sends no ACAO header")
+	}
+}
+
+func TestGetAudioResolveRejectsNonHTTPURL(t *testing.T) {
+	proxy := NewProxyHandler(false)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/audio/resolve?url=file:///etc/passwd", nil)
+	rec := httptest.NewRecorder()
+	proxy.GetAudioResolve(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for a non-http scheme, got %d", rec.Code)
 	}
 }

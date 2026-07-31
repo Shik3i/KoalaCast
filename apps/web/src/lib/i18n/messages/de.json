@@ -107,6 +107,7 @@
 		"subscribeError": "Abonnieren fehlgeschlagen. Bitte versuche es erneut.",
 		"hide": "Ausblenden",
 		"hidePodcast": "{title} ausblenden",
+		"confirmHidePodcast": "{title} aus Entdecken und Suche ausblenden? In den Einstellungen kannst du sie zurückholen.",
 		"podcastHidden": "{title} wird in Discover und Suche nicht mehr angezeigt.",
 		"openError": "Dieser Podcast-Feed konnte nicht geöffnet werden. Suche nach einer anderen Quelle."
 	},

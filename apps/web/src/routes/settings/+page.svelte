@@ -107,12 +107,12 @@
 
 	function handleThemeChange(mode: ThemeMode) {
 		currentTheme = mode;
-		setTheme(mode);
+		prefs.setThemeMode(mode);
 	}
 
 	function handlePaletteChange(palette: PaletteId) {
 		currentPalette = palette;
-		setPalette(palette);
+		prefs.setPaletteId(palette);
 	}
 
 	async function handleRegister(e: Event) {

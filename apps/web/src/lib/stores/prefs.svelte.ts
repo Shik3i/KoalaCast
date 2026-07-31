@@ -12,6 +12,15 @@ import {
 import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
 import { storedPlaybackSpeed } from '$lib/player/playback-speed';
 import { foreignSettingsOf, mergeForeignSettings } from './settings-merge';
+import {
+	getStoredPalette,
+	getStoredTheme,
+	isPaletteId,
+	setPalette,
+	setTheme,
+	type PaletteId,
+	type ThemeMode
+} from '$lib/theme';
 
 export type DateFormat = 'absolute' | 'relative';
 export type DefaultInboxMode = 'all' | 'latest';
@@ -297,6 +306,21 @@ class Prefs {
 		this.#touch();
 	}
 
+	/**
+	 * Appearance is applied by `theme.ts` (which the boot script also reads, to
+	 * avoid a flash of the wrong theme); these wrappers exist so changing it also
+	 * marks the settings blob dirty and reaches the account's other devices.
+	 */
+	setThemeMode(mode: ThemeMode) {
+		setTheme(mode);
+		this.#touch();
+	}
+
+	setPaletteId(palette: PaletteId) {
+		setPalette(palette);
+		this.#touch();
+	}
+
 	setDefaultInboxMode(mode: DefaultInboxMode) {
 		this.defaultInboxMode = mode;
 		try {
@@ -368,6 +392,12 @@ class Prefs {
 		return mergeForeignSettings(
 			{
 				date_format: this.dateFormat,
+				// Appearance lives in unscoped localStorage so the boot script can
+				// apply it before first paint, but it still belongs to the account:
+				// the Android client has always synced both, and a browser that
+				// never sent them made every push delete them from the server.
+				theme_mode: getStoredTheme(),
+				palette: getStoredPalette(),
 				interests: [...this.interests],
 				hidden_genres: [...this.hiddenGenres],
 				hidden_podcasts: this.hiddenPodcasts.map((podcast) => ({ ...podcast })),
@@ -412,6 +442,12 @@ class Prefs {
 		const languages = normalizeLanguageList(Array.isArray(payload.languages) ? payload.languages : []);
 		if (payload.date_format === 'relative' || payload.date_format === 'absolute') {
 			this.dateFormat = payload.date_format;
+		}
+		if (payload.theme_mode === 'dark' || payload.theme_mode === 'light' || payload.theme_mode === 'system') {
+			setTheme(payload.theme_mode as ThemeMode);
+		}
+		if (typeof payload.palette === 'string' && isPaletteId(payload.palette)) {
+			setPalette(payload.palette);
 		}
 		this.languages = languages.length ? languages : this.languages;
 		if (Array.isArray(payload.interests)) {

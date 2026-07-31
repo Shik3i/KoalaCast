@@ -21,6 +21,8 @@
  */
 export const OWNED_SETTINGS_KEYS = new Set([
 	'date_format',
+	'theme_mode',
+	'palette',
 	'interests',
 	'hidden_genres',
 	'hidden_podcasts',

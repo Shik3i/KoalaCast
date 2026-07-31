@@ -29,7 +29,8 @@
 	import {
 		audioEffectsProxyUrl,
 		isCrossOriginAudio,
-		publisherAllowsAudioEffects
+		publisherAllowsAudioEffects,
+		resolveAudioRedirect
 	} from '$lib/audio/source';
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
 
@@ -254,6 +255,18 @@
 			const result = { source, crossOrigin: true };
 			graphSources.set(source, result);
 			return result;
+		}
+		// Prefix trackers (podtrac, chartable, pdst.fm) rarely send CORS headers
+		// even when the CDN behind them does, and the browser cannot follow the
+		// chain to find out. Ask the server where it ends up and try that host
+		// directly — the episode still streams from the publisher.
+		const resolved = await resolveAudioRedirect(source, location.origin);
+		if (resolved?.corsAllowed && resolved.url !== source) {
+			if (await publisherAllowsAudioEffects(resolved.url, location.origin)) {
+				const result = { source: resolved.url, crossOrigin: true };
+				graphSources.set(source, result);
+				return result;
+			}
 		}
 		if (await audioEffectsRelayEnabled()) {
 			const result = { source: audioEffectsProxyUrl(source), crossOrigin: false };

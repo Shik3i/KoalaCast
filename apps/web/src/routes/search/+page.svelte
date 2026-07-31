@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { confirmDialog } from '$lib/stores/confirm.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { reveal } from '$lib/actions/reveal';
 	import { optimizeArtwork } from '$lib/artwork';
@@ -301,8 +302,12 @@
 		}
 	}
 
-	function hidePodcast(pod: any) {
+	// Hiding a show removes it from Discover and Search until the listener digs it
+	// back out of Settings, and the control sits one click from "open" and
+	// "subscribe". It asks first, the way the Android client does.
+	async function hidePodcast(pod: any) {
 		const title = pod.title || pod.trackName || '';
+		if (!(await confirmDialog.ask(t('discover.confirmHidePodcast', { title })))) return;
 		prefs.hidePodcast({
 			feedUrl: pod.feed_url || pod.feedUrl,
 			id: pod.id,
