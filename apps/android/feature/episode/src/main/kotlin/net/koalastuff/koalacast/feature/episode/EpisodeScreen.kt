@@ -36,6 +36,7 @@ import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
+import net.koalastuff.koalacast.core.ui.component.LabelledIconAction
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.ShowNotes
@@ -219,32 +220,41 @@ internal fun EpisodeContent(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            IconButtonSquare(
+                            // Named, not just drawn: a heart, a tick and a tray say
+                            // nothing definite to someone opening their first episode.
+                            LabelledIconAction(
                                 icon = if (state.isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
+                                label = stringResource(
+                                    if (state.isQueued) R.string.episode_queued_short
+                                    else R.string.episode_queue_short,
+                                ),
                                 contentDescription = stringResource(
                                     if (state.isQueued) R.string.episode_queued else R.string.episode_queue,
                                 ),
                                 onClick = onToggleQueue,
                                 tint = if (state.isQueued) colors.accentInk else colors.ink3,
                             )
-                            IconButtonSquare(
+                            LabelledIconAction(
                                 icon = if (state.isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
+                                label = stringResource(R.string.episode_save_short),
                                 contentDescription = stringResource(
                                     if (state.isFavorite) R.string.episode_unsave else R.string.episode_save,
                                 ),
                                 onClick = onToggleFavorite,
                                 tint = if (state.isFavorite) colors.accentInk else colors.ink3,
                             )
-                            IconButtonSquare(
+                            LabelledIconAction(
                                 icon = if (state.isPlayed) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
+                                label = stringResource(R.string.episode_played_short),
                                 contentDescription = stringResource(
                                     if (state.isPlayed) R.string.episode_mark_unplayed else R.string.episode_mark_played,
                                 ),
                                 onClick = onTogglePlayed,
                                 tint = if (state.isPlayed) colors.accentInk else colors.ink3,
                             )
-                            IconButtonSquare(
+                            LabelledIconAction(
                                 icon = PhosphorIcons.DownloadSimple,
+                                label = stringResource(R.string.episode_download_short),
                                 contentDescription = stringResource(
                                     when (state.downloadState) {
                                         net.koalastuff.koalacast.core.model.DownloadState.DONE ->

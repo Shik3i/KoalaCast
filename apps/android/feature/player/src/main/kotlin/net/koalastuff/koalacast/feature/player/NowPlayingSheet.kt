@@ -5,18 +5,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -42,8 +43,10 @@ import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
-import net.koalastuff.koalacast.core.ui.component.SegmentedControl
+import net.koalastuff.koalacast.core.ui.component.MenuAction
+import net.koalastuff.koalacast.core.ui.component.MenuButton
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.spotlightGlow
@@ -74,7 +77,7 @@ fun NowPlayingScreen(
         onSeekBack = viewModel::seekBack,
         onSeekForward = viewModel::seekForward,
         onSeekTo = viewModel::seekTo,
-        onCycleSpeed = viewModel::cycleSpeed,
+        onSetSpeed = viewModel::setSpeed,
         onSetSleepTimer = viewModel::setSleepTimer,
         modifier = modifier,
     )
@@ -92,13 +95,17 @@ internal fun NowPlayingContent(
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onSeekTo: (Long) -> Unit,
-    onCycleSpeed: () -> Unit,
+    onSetSpeed: (Float) -> Unit,
     onSetSleepTimer: (Int?, Boolean, Boolean) -> Unit,
 ) {
     val colors = KoalaTheme.colors
     val context = LocalContext.current
     val track = state.track
 
+    // Deliberately not scrollable. Everything a listener reaches for mid-episode —
+    // scrubber, transport, speed, sleep timer — has to be one tap away, and a
+    // control that has to be scrolled into view is not. The artwork is the only
+    // element that gives ground: it takes whatever height is left over.
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -106,9 +113,9 @@ internal fun NowPlayingContent(
             .spotlightGlow(colors.accentFill)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = KoalaSpacing.screenH),
-        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapLarge),
+            .padding(horizontal = KoalaSpacing.screenH)
+            .padding(bottom = KoalaSpacing.gap),
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -132,16 +139,22 @@ internal fun NowPlayingContent(
             return@Column
         }
 
-        CoverArt(
-            url = track.artworkUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxWidth(0.78f)
-                .widthIn(max = 420.dp)
-                .aspectRatio(1f)
-                .align(Alignment.CenterHorizontally),
-            sizeHint = 512.dp,
-        )
+        BoxWithConstraints(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            // A square that fits both ways: the design's 78% of the width on a
+            // roomy screen, capped by whatever height the controls left behind.
+            val side = minOf(maxWidth * 0.78f, maxHeight, 420.dp)
+            if (side >= MIN_ARTWORK) {
+                CoverArt(
+                    url = track.artworkUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(side),
+                    sizeHint = 512.dp,
+                )
+            }
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
             MonoText(
@@ -228,18 +241,16 @@ internal fun NowPlayingContent(
             )
         }
 
+        // The secondary controls, as one quiet row of affordances rather than a
+        // stack of open panels: speed cycles in place, the sleep timer unfolds
+        // its options only when asked for them.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.clickable(onClick = onCycleSpeed)) {
-                MonoText(
-                    text = Format.speed(state.speed),
-                    color = colors.ink2,
-                    style = KoalaTheme.type.monoStrong,
-                )
-            }
+            SpeedButton(speed = state.speed, onSetSpeed = onSetSpeed)
+            SleepTimerButton(state = state, onSetSleepTimer = onSetSleepTimer)
             MonoText(
                 text = stringResource(R.string.player_up_next_count, state.upNextCount),
                 color = colors.ink4,
@@ -254,8 +265,6 @@ internal fun NowPlayingContent(
                 onSeekTo = onSeekTo,
             )
         }
-
-        SleepTimerRow(state = state, onSetSleepTimer = onSetSleepTimer)
     }
 }
 
@@ -292,6 +301,19 @@ private fun Scrubber(
                 activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
                 inactiveTrackColor = colors.track,
             ),
+            // Material 3 draws a 4x44dp bar for the handle, which on a 4dp track
+            // reads as a scroll bar rather than a playhead. A dot barely wider than
+            // the track is what the rest of the app's progress indicators imply.
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(THUMB_DIAMETER)
+                        .background(
+                            color = if (colors.isDark) colors.ink else colors.inkStrong,
+                            shape = CircleShape,
+                        ),
+                )
+            },
             track = { sliderState ->
                 SliderDefaults.Track(
                     sliderState = sliderState,
@@ -391,58 +413,104 @@ private fun ChapterRow(
     }
 }
 
+/**
+ * Speed as a named menu rather than a chip that cycles. "1×" tapped blind and
+ * landing on 1.25× teaches nothing; a titled list of speeds says what the control
+ * is and what it can be set to.
+ */
 @Composable
-private fun SleepTimerRow(
+private fun SpeedButton(speed: Float, onSetSpeed: (Float) -> Unit) {
+    // Stops at 2×: past that speech stops being speech. 1.15× is the step most
+    // listeners actually settle on, so it earns a place next to 1×.
+    val steps = listOf(0.8f, 1f, 1.15f, 1.25f, 1.5f, 1.75f, 2f)
+    MenuButton(
+        icon = PhosphorIcons.Waveform,
+        contentDescription = stringResource(R.string.player_speed),
+        actions = steps.map { step ->
+            MenuAction(
+                label = Format.speed(step),
+                onClick = { onSetSpeed(step) },
+                selected = kotlin.math.abs(step - speed) < 0.01f,
+            )
+        },
+        label = Format.speed(speed),
+        active = kotlin.math.abs(speed - 1f) >= 0.01f,
+        iconSize = 16.dp,
+    )
+}
+
+/**
+ * A moon that opens the six choices, the way every other podcast player does it.
+ * Armed, it wears its setting as a label so the state is readable without
+ * opening anything; off, it is a single unobtrusive icon.
+ */
+@Composable
+private fun SleepTimerButton(
     state: PlaybackUiState,
     onSetSleepTimer: (Int?, Boolean, Boolean) -> Unit,
 ) {
-    val options = listOf<Int?>(null, 5, 15, 30)
-    val selectedIndex = when {
-        state.sleepAtChapterEnd -> 4
-        state.sleepAtEpisodeEnd -> 5
-        else -> options.indexOf(state.sleepMinutes).takeIf { it >= 0 } ?: 0
-    }
+    val minuteOptions = listOf(5, 15, 30, 60)
+    val sleepMinutes = state.sleepMinutes
+    val armed = sleepMinutes != null || state.sleepAtChapterEnd || state.sleepAtEpisodeEnd
 
-    Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            PhosphorIcon(
-                icon = PhosphorIcons.Moon,
-                contentDescription = null,
-                tint = KoalaTheme.colors.ink4,
-                size = 15.dp,
-            )
-            MonoText(
-                text = stringResource(R.string.player_sleep_timer),
-                color = KoalaTheme.colors.ink4,
-                style = KoalaTheme.type.monoSmall,
+    val actions = buildList {
+        add(
+            MenuAction(
+                label = stringResource(R.string.player_sleep_off),
+                onClick = { onSetSleepTimer(null, false, false) },
+                selected = !armed,
+            ),
+        )
+        minuteOptions.forEach { minutes ->
+            add(
+                MenuAction(
+                    label = stringResource(R.string.player_sleep_minutes, minutes),
+                    onClick = { onSetSleepTimer(minutes, false, false) },
+                    selected = sleepMinutes == minutes,
+                ),
             )
         }
-        SegmentedControl(
-            options = listOf(
-                stringResource(R.string.player_sleep_off),
-                stringResource(R.string.player_sleep_minutes, 5),
-                stringResource(R.string.player_sleep_minutes, 15),
-                stringResource(R.string.player_sleep_minutes, 30),
-                stringResource(R.string.player_sleep_chapter_end),
-                stringResource(R.string.player_sleep_episode_end),
+        add(
+            MenuAction(
+                label = stringResource(R.string.player_sleep_chapter_end),
+                onClick = { onSetSleepTimer(null, false, true) },
+                selected = state.sleepAtChapterEnd,
             ),
-            selectedIndex = selectedIndex,
-            onSelect = { index ->
-                when (index) {
-                    4 -> onSetSleepTimer(null, false, true)
-                    5 -> onSetSleepTimer(null, true, false)
-                    else -> onSetSleepTimer(options[index], false, false)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
+        )
+        add(
+            MenuAction(
+                label = stringResource(R.string.player_sleep_episode_end),
+                onClick = { onSetSleepTimer(null, true, false) },
+                selected = state.sleepAtEpisodeEnd,
+            ),
         )
     }
+
+    MenuButton(
+        icon = PhosphorIcons.Moon,
+        contentDescription = stringResource(R.string.player_sleep_timer),
+        actions = actions,
+        label = when {
+            sleepMinutes != null -> stringResource(R.string.player_sleep_minutes, sleepMinutes)
+            state.sleepAtChapterEnd -> stringResource(R.string.player_sleep_chapter_end)
+            state.sleepAtEpisodeEnd -> stringResource(R.string.player_sleep_episode_end)
+            else -> null
+        },
+        active = armed,
+        iconSize = 18.dp,
+    )
 }
 
+/** The playhead. Small enough to sit on a 4dp track without swallowing it. */
+private val THUMB_DIAMETER = 12.dp
+
+/**
+ * Below this the artwork is a smudge rather than a picture, so a very short
+ * viewport (landscape, split screen) drops it and keeps the controls whole.
+ */
+private val MIN_ARTWORK = 72.dp
+
 /** Material's Slider insets its track by half a thumb; the markers must match. */
-private val SLIDER_THUMB_INSET = 10.dp
+private val SLIDER_THUMB_INSET = THUMB_DIAMETER / 2
 private const val MARKER_WIDTH_PX = 2f
 private const val MARKER_HALF_HEIGHT_PX = 5f

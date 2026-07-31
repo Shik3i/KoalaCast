@@ -63,7 +63,7 @@ class PlayerViewModel @Inject constructor(
     fun seekBack() = player.seekBack()
     fun seekForward() = player.seekForward()
     fun seekTo(positionMs: Long) = player.seekTo(positionMs)
-    fun cycleSpeed() = player.cycleSpeed()
+    fun setSpeed(speed: Float) = player.setSpeed(speed)
     fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
         if (!atChapterEnd) {
             player.setSleepTimer(minutes, atEpisodeEnd, atChapterEnd = false)

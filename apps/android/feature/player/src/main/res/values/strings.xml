@@ -8,6 +8,7 @@
     <string name="player_nothing_playing">Nothing is playing.</string>
     <string name="player_up_next_count">%1$d up next</string>
     <string name="player_sleep_timer">Sleep timer</string>
+    <string name="player_speed">Playback speed</string>
     <string name="player_sleep_off">Off</string>
     <string name="player_sleep_minutes">%1$d min</string>
     <string name="player_sleep_chapter_end">End of chapter</string>
