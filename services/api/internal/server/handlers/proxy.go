@@ -135,6 +135,10 @@ const maxDecodedPixels = 40 * 1000 * 1000
 const imageProxyTimeout = 8 * time.Second
 const maxAudioDownloadBytes = int64(2 * 1024 * 1024 * 1024)
 
+// A redirect chain plus one ranged byte. Generous enough for a cold CDN, short
+// enough that the client can fall back rather than stall before playback.
+const audioResolveTimeout = 8 * time.Second
+
 //go:embed assets/cover-placeholder.webp
 var imageFallbackWebP []byte
 
@@ -211,6 +215,78 @@ func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodHead {
 		_, _ = io.Copy(w, io.LimitReader(resp.Body, maxAudioDownloadBytes+1))
 	}
+}
+
+// GetAudioResolve follows an enclosure's redirect chain and reports where it ends
+// up and whether that host allows cross-origin reads.
+//
+// Podcast enclosures are routinely published behind prefix trackers (podtrac,
+// chartable, pdst.fm). Those prefixes rarely send Access-Control-Allow-Origin,
+// while the CDN they redirect to usually does — so the browser gives up on a URL
+// whose real host would have worked. Web Audio needs CORS for silence skipping,
+// volume boost and visualisers, and there is no client-side way around that: the
+// browser refuses to expose cross-origin samples, deliberately.
+//
+// Resolving the chain here costs one ranged byte and lets the client stream the
+// audio *directly* from the final host. The listener's audio still never passes
+// through this server; only the redirect lookup does.
+func (h *ProxyHandler) GetAudioResolve(w http.ResponseWriter, r *http.Request) {
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
+	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
+		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
+		return
+	}
+
+	origin := strings.TrimSpace(r.URL.Query().Get("origin"))
+
+	ctx, cancel := context.WithTimeout(r.Context(), audioResolveTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
+		return
+	}
+	req.Header.Set("User-Agent", "KoalaCast/1.0 Podcast Player")
+	req.Header.Set("Accept", "audio/*,application/octet-stream;q=0.8")
+	// One byte is enough to complete the redirect chain and read the CORS headers
+	// without pulling an episode through this process.
+	req.Header.Set("Range", "bytes=0-0")
+	if origin != "" {
+		// Ask as the browser would, so the answer reflects what the browser will
+		// actually be told rather than what the CDN returns to an originless client.
+		req.Header.Set("Origin", origin)
+	}
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		http.Error(w, `{"error":"audio upstream unavailable"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+
+	finalURL := rawURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+
+	allowOrigin := resp.Header.Get("Access-Control-Allow-Origin")
+	corsAllowed := allowOrigin == "*" || (origin != "" && strings.EqualFold(allowOrigin, origin))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_ = json.NewEncoder(w).Encode(audioResolveResponse{
+		URL:         finalURL,
+		Redirected:  finalURL != rawURL,
+		CORSAllowed: corsAllowed,
+	})
+}
+
+type audioResolveResponse struct {
+	URL         string `json:"url"`
+	Redirected  bool   `json:"redirected"`
+	CORSAllowed bool   `json:"cors_allowed"`
 }
 
 // GetImageProxy fetches an external image, resizes it, converts/compresses it to optimized JPEG,

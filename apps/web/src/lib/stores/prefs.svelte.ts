@@ -11,6 +11,16 @@ import {
 // this store, and importing it back would create a cycle.
 import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
 import { storedPlaybackSpeed } from '$lib/player/playback-speed';
+import { foreignSettingsOf, mergeForeignSettings } from './settings-merge';
+import {
+	getStoredPalette,
+	getStoredTheme,
+	isPaletteId,
+	setPalette,
+	setTheme,
+	type PaletteId,
+	type ThemeMode
+} from '$lib/theme';
 
 export type DateFormat = 'absolute' | 'relative';
 export type DefaultInboxMode = 'all' | 'latest';
@@ -31,6 +41,7 @@ const VOLUME_BOOST_KEY = 'koalacast_volume_boost';
 const SKIP_SILENCE_KEY = 'koalacast_skip_silence';
 const PLAYBACK_SPEED_KEY = 'koalacast_playback_speed';
 const SETTINGS_UPDATED_AT_KEY = 'koalacast_settings_updated_at';
+const FOREIGN_SETTINGS_KEY = 'koalacast_settings_foreign';
 const GUEST_MIGRATION_KEY = 'koalacast_guest_preferences_migrated';
 const ACCOUNT_SCOPED_KEYS = [
 	KEY,
@@ -43,8 +54,21 @@ const ACCOUNT_SCOPED_KEYS = [
 	VOLUME_BOOST_KEY,
 	SKIP_SILENCE_KEY,
 	PLAYBACK_SPEED_KEY,
-	SETTINGS_UPDATED_AT_KEY
+	SETTINGS_UPDATED_AT_KEY,
+	FOREIGN_SETTINGS_KEY
 ];
+
+function initialForeignSettings(): Record<string, unknown> {
+	if (typeof localStorage === 'undefined') return {};
+	try {
+		const raw = localStorage.getItem(scopedKey(FOREIGN_SETTINGS_KEY));
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+	} catch (_) {
+		return {};
+	}
+}
 let activeOwner: string | null = null;
 
 function scopedKey(key: string, owner = activeOwner): string {
@@ -174,6 +198,9 @@ class Prefs {
 			? 0
 			: Math.max(0, Number(localStorage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0)
 	);
+	// Settings keys owned by another client, kept verbatim so pushing from here
+	// does not delete them from the server. Not $state: nothing renders them.
+	#foreignSettings: Record<string, unknown> = initialForeignSettings();
 
 	activateContext(userId: string | null, options: { migrateGuest?: boolean } = {}) {
 		if (
@@ -192,6 +219,7 @@ class Prefs {
 			localStorage.setItem(GUEST_MIGRATION_KEY, '1');
 		}
 		activeOwner = userId;
+		this.#foreignSettings = initialForeignSettings();
 		this.dateFormat = initialFormat();
 		this.interests = initialInterests();
 		this.hiddenGenres = initialHidden();
@@ -278,6 +306,21 @@ class Prefs {
 		this.#touch();
 	}
 
+	/**
+	 * Appearance is applied by `theme.ts` (which the boot script also reads, to
+	 * avoid a flash of the wrong theme); these wrappers exist so changing it also
+	 * marks the settings blob dirty and reaches the account's other devices.
+	 */
+	setThemeMode(mode: ThemeMode) {
+		setTheme(mode);
+		this.#touch();
+	}
+
+	setPaletteId(palette: PaletteId) {
+		setPalette(palette);
+		this.#touch();
+	}
+
 	setDefaultInboxMode(mode: DefaultInboxMode) {
 		this.defaultInboxMode = mode;
 		try {
@@ -346,22 +389,32 @@ class Prefs {
 	}
 
 	syncPayload() {
-		return {
-			date_format: this.dateFormat,
-			interests: [...this.interests],
-			hidden_genres: [...this.hiddenGenres],
-			hidden_podcasts: this.hiddenPodcasts.map((podcast) => ({ ...podcast })),
-			default_inbox_mode: this.defaultInboxMode,
-			languages: [...this.languages],
-			ui_language: this.uiLanguage,
-			volume_boost: this.volumeBoost,
-			skip_silence: this.skipSilence,
-			playback_speed: this.playbackSpeed,
-			updated_at: this.updatedAt
-		};
+		return mergeForeignSettings(
+			{
+				date_format: this.dateFormat,
+				// Appearance lives in unscoped localStorage so the boot script can
+				// apply it before first paint, but it still belongs to the account:
+				// the Android client has always synced both, and a browser that
+				// never sent them made every push delete them from the server.
+				theme_mode: getStoredTheme(),
+				palette: getStoredPalette(),
+				interests: [...this.interests],
+				hidden_genres: [...this.hiddenGenres],
+				hidden_podcasts: this.hiddenPodcasts.map((podcast) => ({ ...podcast })),
+				default_inbox_mode: this.defaultInboxMode,
+				languages: [...this.languages],
+				ui_language: this.uiLanguage,
+				volume_boost: this.volumeBoost,
+				skip_silence: this.skipSilence,
+				playback_speed: this.playbackSpeed,
+				updated_at: this.updatedAt
+			},
+			this.#foreignSettings
+		);
 	}
 
 	resetSynced() {
+		this.#foreignSettings = {};
 		this.dateFormat = 'absolute';
 		this.interests = [];
 		this.hiddenGenres = [];
@@ -383,9 +436,18 @@ class Prefs {
 	applySynced(payload: Record<string, unknown>, options: { authoritative?: boolean } = {}) {
 		const updatedAt = Math.max(0, Number(payload.updated_at) || 0);
 		if (!updatedAt || (!options.authoritative && this.updatedAt >= updatedAt)) return;
+		// Recorded only once the payload has won, so the snapshot stays in step with
+		// the accepted updated_at rather than resurrecting keys from a stale write.
+		this.#foreignSettings = foreignSettingsOf(payload);
 		const languages = normalizeLanguageList(Array.isArray(payload.languages) ? payload.languages : []);
 		if (payload.date_format === 'relative' || payload.date_format === 'absolute') {
 			this.dateFormat = payload.date_format;
+		}
+		if (payload.theme_mode === 'dark' || payload.theme_mode === 'light' || payload.theme_mode === 'system') {
+			setTheme(payload.theme_mode as ThemeMode);
+		}
+		if (typeof payload.palette === 'string' && isPaletteId(payload.palette)) {
+			setPalette(payload.palette);
 		}
 		this.languages = languages.length ? languages : this.languages;
 		if (Array.isArray(payload.interests)) {
@@ -438,6 +500,10 @@ class Prefs {
 			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), this.skipSilence ? '1' : '0');
 			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
 			localStorage.setItem(scopedKey(SETTINGS_UPDATED_AT_KEY), String(this.updatedAt));
+			localStorage.setItem(
+				scopedKey(FOREIGN_SETTINGS_KEY),
+				JSON.stringify(this.#foreignSettings)
+			);
 		} catch (_) {}
 	}
 

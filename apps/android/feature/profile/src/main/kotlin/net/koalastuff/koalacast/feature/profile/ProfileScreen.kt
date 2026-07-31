@@ -37,6 +37,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
@@ -126,11 +127,15 @@ internal fun ProfileContent(
                     .background(colors.accentFill, KoalaShapes.round),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("KC", style = KoalaTheme.type.sectionTitle, color = colors.accentOn)
+                Text(
+                    text = state.accountName?.take(2)?.uppercase() ?: "KC",
+                    style = KoalaTheme.type.sectionTitle,
+                    color = colors.accentOn,
+                )
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.profile_title),
+                    text = state.accountName ?: stringResource(R.string.profile_title),
                     style = KoalaTheme.type.screenTitle,
                     color = colors.inkStrong,
                 )
@@ -145,6 +150,12 @@ internal fun ProfileContent(
                 contentDescription = stringResource(R.string.profile_settings),
                 onClick = onOpenSettings,
             )
+        }
+
+        // Signed out, this is the loudest thing on the screen and says what an
+        // account is for. Signed in, it collapses back into a plain link.
+        if (state.accountName == null) {
+            SignInCard(onOpenAccount = onOpenAccount)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
@@ -326,6 +337,34 @@ internal fun ProfileContent(
             color = colors.ink3,
         )
         OutlineButton(text = stringResource(R.string.profile_export), onClick = onExport)
+    }
+}
+
+@Composable
+private fun SignInCard(onOpenAccount: () -> Unit) {
+    val colors = KoalaTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.accentWash, KoalaShapes.card)
+            .padding(KoalaSpacing.gap),
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+    ) {
+        Text(
+            text = stringResource(R.string.profile_sign_in_title),
+            style = KoalaTheme.type.sectionTitle,
+            color = colors.inkStrong,
+        )
+        Text(
+            text = stringResource(R.string.profile_sign_in_body),
+            style = KoalaTheme.type.bodySmall,
+            color = colors.ink3,
+        )
+        AccentButton(
+            text = stringResource(R.string.profile_sign_in_action),
+            onClick = onOpenAccount,
+            leadingIcon = PhosphorIcons.UserCircle,
+        )
     }
 }
 

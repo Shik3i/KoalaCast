@@ -35,6 +35,7 @@ import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.QueueEntry
 import net.koalastuff.koalacast.core.model.Track
 import net.koalastuff.koalacast.core.model.NamedQueue
+import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
@@ -234,6 +235,22 @@ private fun QueueList(
     val context = LocalContext.current
     val totalMs = items.sumOf { it.track.durationMs }
     var queueName by remember { mutableStateOf("") }
+    // A saved queue is the only thing on this screen that cannot be rebuilt from
+    // what is still on the device, so deleting one asks first.
+    var pendingDelete by remember { mutableStateOf<NamedQueue?>(null) }
+
+    pendingDelete?.let { target ->
+        ConfirmDialog(
+            title = stringResource(R.string.library_named_queue_delete_title),
+            body = stringResource(R.string.library_named_queue_delete_body, target.name),
+            confirmLabel = stringResource(R.string.library_named_queue_delete_confirm),
+            onConfirm = {
+                pendingDelete = null
+                onDeleteNamedQueue(target.id)
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
 
     LazyColumn {
         item(key = "named-queues") {
@@ -300,7 +317,7 @@ private fun QueueList(
                                 R.string.library_named_queue_delete,
                                 saved.name,
                             ),
-                            onClick = { onDeleteNamedQueue(saved.id) },
+                            onClick = { pendingDelete = saved },
                             bordered = false,
                         )
                     }

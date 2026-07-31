@@ -3,6 +3,9 @@
     <string name="profile_title">Hörprofil</string>
     <string name="profile_settings">Einstellungen</string>
     <string name="profile_account">Konto</string>
+    <string name="profile_sign_in_title">Über deine Geräte hinweg synchronisieren</string>
+    <string name="profile_sign_in_body">Ein KoalaCast-Konto hält Abos, Hörfortschritt und Einstellungen zwischen Handy und Web im Gleichklang. Nur Benutzername und Passwort — keine E-Mail-Adresse nötig.</string>
+    <string name="profile_sign_in_action">Anmelden oder Konto erstellen</string>
     <string name="profile_downloads">Downloads</string>
     <string name="profile_tracking_starts">Aufzeichnung beginnt mit der ersten Wiedergabe</string>
     <plurals name="profile_subscriptions">

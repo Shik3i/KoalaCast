@@ -107,6 +107,7 @@
 		"subscribeError": "Could not subscribe. Please try again.",
 		"hide": "Hide",
 		"hidePodcast": "Hide {title}",
+		"confirmHidePodcast": "Hide {title} from Discover and Search? You can bring it back in Settings.",
 		"podcastHidden": "{title} is hidden from Discover and Search.",
 		"openError": "This podcast feed could not be opened. Try searching for another source."
 	},

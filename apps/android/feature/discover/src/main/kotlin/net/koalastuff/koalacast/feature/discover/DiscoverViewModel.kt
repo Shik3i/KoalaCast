@@ -45,6 +45,8 @@ data class DiscoverUiState(
     val category: String = "",
     val chart: List<PodcastSummary> = emptyList(),
     val spotlight: Spotlight? = null,
+    /** The show hidden most recently, while the reversal is still on offer. */
+    val lastHidden: HiddenPodcast? = null,
 )
 
 @HiltViewModel
@@ -78,12 +80,27 @@ class DiscoverViewModel @Inject constructor(
             it.copy(
                 chart = visible,
                 spotlight = visible.firstOrNull()?.let(::Spotlight),
+                lastHidden = HiddenPodcast(key = key, title = show.title),
             )
         }
         visible.firstOrNull()?.let(::loadSpotlightEpisode)
         viewModelScope.launch {
             preferences.hidePodcast(HiddenPodcast(key = key, title = show.title))
         }
+    }
+
+    /** Puts the show back where it was, without a trip through Settings. */
+    fun undoHide() {
+        val hidden = _state.value.lastHidden ?: return
+        _state.update { it.copy(lastHidden = null) }
+        viewModelScope.launch {
+            preferences.unhidePodcast(hidden.key)
+            load(force = false)
+        }
+    }
+
+    fun dismissUndo() {
+        _state.update { it.copy(lastHidden = null) }
     }
 
     private fun load(force: Boolean) {

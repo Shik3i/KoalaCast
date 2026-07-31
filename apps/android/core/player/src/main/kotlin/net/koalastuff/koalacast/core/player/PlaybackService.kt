@@ -1,7 +1,7 @@
 package net.koalastuff.koalacast.core.player
 
 import android.content.Intent
-import android.os.Bundle
+import android.os.Bundle
 import android.media.audiofx.LoudnessEnhancer
 import androidx.media3.common.AudioAttributes
 import androidx.annotation.OptIn
@@ -10,7 +10,11 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
@@ -20,8 +24,8 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
-import com.google.common.collect.ImmutableList
-import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -71,6 +75,7 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var artworkUrls: ArtworkUrls
     @Inject lateinit var clock: Clock
     @Inject lateinit var accountStore: SecureAccountStore
+    @Inject lateinit var amplitudeTap: AmplitudeTap
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val recorder = ListeningSessionRecorder()
@@ -83,8 +88,8 @@ class PlaybackService : MediaLibraryService() {
     private var automaticSeekTargetMs: Long? = null
     private var sleepAtEpisodeEnd = false
     private var sleepAtPositionMs: Long? = null
-    private var loudnessEnhancer: LoudnessEnhancer? = null
-    private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var boostedSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var boostWanted: Boolean = false
     private var activeTrack: Track? = null
     private var activePlaybackOwnerId: String? = null
@@ -93,10 +98,39 @@ class PlaybackService : MediaLibraryService() {
 
     private var playerListener: PlayerListener? = null
 
+    /**
+     * The default renderers, with the amplitude tap spliced into the audio chain.
+     *
+     * `DefaultAudioProcessorChain` applies the processors handed to it *before* its
+     * own silence-skipping and Sonic speed/pitch stages, so both of those keep
+     * working — this app depends on them for `skipSilenceEnabled` and variable
+     * playback speed, and losing either silently would be far worse than having no
+     * visualiser. Placing the tap after Sonic also means the envelope is the
+     * time-compressed audio the listener is actually hearing at 1.5x, rather than
+     * the file as published.
+     */
+    private fun amplitudeRenderersFactory() =
+        object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean,
+            ): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessorChain(
+                        DefaultAudioSink.DefaultAudioProcessorChain(
+                            TeeAudioProcessor(AmplitudeBufferSink(amplitudeTap)),
+                        ),
+                    )
+                    .build()
+        }
+
     override fun onCreate() {
         super.onCreate()
 
-        val player = ExoPlayer.Builder(this)
+        val player = ExoPlayer.Builder(this, amplitudeRenderersFactory())
             // ±15/30 s, which Media3 renders as the notification's seek buttons.
             .setSeekBackIncrementMs(SEEK_BACK_MS)
             .setSeekForwardIncrementMs(SEEK_FORWARD_MS)

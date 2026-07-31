@@ -10,6 +10,9 @@
 
     <string name="podcast_subscribe">Subscribe</string>
     <string name="podcast_subscribed">Subscribed</string>
+    <string name="podcast_unsubscribe_title">Unsubscribe?</string>
+    <string name="podcast_unsubscribe_body">%1$s will leave your library. Its playback settings and inbox entries go with it; downloaded episodes stay.</string>
+    <string name="podcast_unsubscribe_confirm">Unsubscribe</string>
     <string name="podcast_options_show">Options</string>
     <string name="podcast_options_hide">Close</string>
     <string name="podcast_played">Played</string>
@@ -35,6 +38,10 @@
     <string name="podcast_auto_queue">Automatically queue the newest unplayed episode</string>
     <string name="podcast_mark_all_played">Mark all played</string>
     <string name="podcast_mark_all_unplayed">Mark all unplayed</string>
+    <string name="podcast_mark_all_played_title">Mark every episode as played?</string>
+    <string name="podcast_mark_all_played_body">All %1$d loaded episodes count as heard and their playback positions are cleared.</string>
+    <string name="podcast_mark_all_unplayed_title">Mark every episode as unplayed?</string>
+    <string name="podcast_mark_all_unplayed_body">All %1$d loaded episodes return to unheard and their playback positions are cleared.</string>
     <string name="podcast_auto_download">Download new episodes</string>
     <string name="podcast_auto_download_note">Fetches the newest episodes over Wi-Fi as they appear.</string>
     <string name="podcast_auto_download_needs_sub">Follow this show to download its new episodes automatically.</string>

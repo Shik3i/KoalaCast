@@ -37,13 +37,15 @@ import net.koalastuff.koalacast.core.ui.component.AccentBadge
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
-import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
+import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
+import net.koalastuff.koalacast.core.ui.component.OverflowMenu
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
+import net.koalastuff.koalacast.core.ui.component.UndoBanner
 import net.koalastuff.koalacast.core.ui.genre.GENRES
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
@@ -71,6 +73,8 @@ fun DiscoverScreen(
         onOpenPodcast = onOpenPodcast,
         onOpenEpisode = onOpenEpisode,
         onHidePodcast = viewModel::hidePodcast,
+        onUndoHide = viewModel::undoHide,
+        onDismissUndo = viewModel::dismissUndo,
         onRetry = viewModel::retry,
         modifier = modifier,
         contentPadding = contentPadding,
@@ -85,16 +89,17 @@ internal fun DiscoverContent(
     onOpenPodcast: (String, String?) -> Unit,
     onOpenEpisode: (String) -> Unit,
     onHidePodcast: (PodcastSummary) -> Unit,
+    onUndoHide: () -> Unit,
+    onDismissUndo: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val colors = KoalaTheme.colors
 
+    Box(modifier = modifier.fillMaxSize().background(colors.bgPanel)) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.bgPanel),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
         item(key = "search") {
@@ -180,6 +185,19 @@ internal fun DiscoverContent(
             }
         }
     }
+
+        // Over the list rather than in it: the row that was hidden may be far from
+        // the top, and a reversal nobody can see is not a reversal.
+        state.lastHidden?.let { hidden ->
+            UndoBanner(
+                text = stringResource(R.string.discover_hidden_notice, hidden.title),
+                actionLabel = stringResource(CoreR.string.action_undo),
+                onAction = onUndoHide,
+                onDismiss = onDismissUndo,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
 }
 
 @Composable
@@ -253,7 +271,10 @@ private fun SpotlightCard(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             AccentButton(
                 text = stringResource(R.string.discover_open_show),
                 onClick = onOpenShow,
@@ -264,9 +285,22 @@ private fun SpotlightCard(
                     onClick = onOpenEpisode,
                 )
             }
-            OutlineButton(
-                text = stringResource(R.string.discover_hide_podcast),
-                onClick = onHide,
+            // Hiding lives behind the "…" rather than beside the two positive
+            // actions: it is the one control here that cannot be undone by
+            // pressing it again.
+            OverflowMenu(
+                contentDescription = stringResource(
+                    CoreR.string.action_more_options_named,
+                    spotlight.show.title,
+                ),
+                actions = listOf(
+                    MenuAction(
+                        label = stringResource(R.string.discover_hide_podcast),
+                        icon = PhosphorIcons.X,
+                        destructive = true,
+                        onClick = onHide,
+                    ),
+                ),
             )
         }
     }
@@ -344,10 +378,16 @@ private fun ChartRow(
                 style = KoalaTheme.type.monoSmall,
             )
         }
-        IconButtonSquare(
-            icon = PhosphorIcons.X,
-            contentDescription = stringResource(R.string.discover_hide_podcast_named, show.title),
-            onClick = onHide,
+        OverflowMenu(
+            contentDescription = stringResource(CoreR.string.action_more_options_named, show.title),
+            actions = listOf(
+                MenuAction(
+                    label = stringResource(R.string.discover_hide_podcast),
+                    icon = PhosphorIcons.X,
+                    destructive = true,
+                    onClick = onHide,
+                ),
+            ),
             boxSize = 36.dp,
             iconSize = 16.dp,
         )

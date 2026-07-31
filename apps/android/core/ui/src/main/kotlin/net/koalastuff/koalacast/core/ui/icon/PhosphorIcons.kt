@@ -147,6 +147,9 @@ object PhosphorIcons {
     /** phosphor regular/dots-six-vertical */
     val DotsSixVertical: ImageVector by lazy { phosphor("DotsSixVertical", "M104,60A12,12,0,1,1,92,48,12,12,0,0,1,104,60Zm60,12a12,12,0,1,0-12-12A12,12,0,0,0,164,72ZM92,116a12,12,0,1,0,12,12A12,12,0,0,0,92,116Zm72,0a12,12,0,1,0,12,12A12,12,0,0,0,164,116ZM92,184a12,12,0,1,0,12,12A12,12,0,0,0,92,184Zm72,0a12,12,0,1,0,12,12A12,12,0,0,0,164,184Z") }
 
+    /** phosphor regular/dots-three-vertical */
+    val DotsThreeVertical: ImageVector by lazy { phosphor("DotsThreeVertical", "M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM128,72a12,12,0,1,0-12-12A12,12,0,0,0,128,72Zm0,112a12,12,0,1,0,12,12A12,12,0,0,0,128,184Z") }
+
     /** phosphor fill/check-circle-fill */
     val CheckCircleFill: ImageVector by lazy { phosphor("CheckCircleFill", "M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm45.66,85.66-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32Z") }
 

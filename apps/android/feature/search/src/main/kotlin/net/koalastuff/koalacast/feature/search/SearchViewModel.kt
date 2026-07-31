@@ -46,6 +46,8 @@ data class SearchUiState(
     val feedUrlCandidate: String? = null,
     val addingFeed: Boolean = false,
     val addedPodcastId: String? = null,
+    /** The show hidden most recently, while the reversal is still on offer. */
+    val lastHidden: HiddenPodcast? = null,
 )
 
 internal data class SearchRequest(
@@ -130,11 +132,31 @@ class SearchViewModel @Inject constructor(
             it.copy(
                 results = it.results.filterNot { result -> result.preferenceKey() == key },
                 hiddenPodcasts = it.hiddenPodcasts + HiddenPodcast(key, show.title),
+                lastHidden = HiddenPodcast(key, show.title),
             )
         }
         viewModelScope.launch {
             preferences.hidePodcast(HiddenPodcast(key = key, title = show.title))
         }
+    }
+
+    /** Puts the show back into the results, without a trip through Settings. */
+    fun undoHide() {
+        val hidden = _state.value.lastHidden ?: return
+        _state.update {
+            it.copy(
+                hiddenPodcasts = it.hiddenPodcasts.filterNot { p -> p.key == hidden.key }.toSet(),
+                lastHidden = null,
+            )
+        }
+        viewModelScope.launch {
+            preferences.unhidePodcast(hidden.key)
+            retry()
+        }
+    }
+
+    fun dismissUndo() {
+        _state.update { it.copy(lastHidden = null) }
     }
 
     /** Drops both filters so the search covers everything the server can see. */

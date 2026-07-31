@@ -5,7 +5,7 @@
     <string name="discover_open_show">Open show</string>
     <string name="discover_open_episode">Latest episode</string>
     <string name="discover_hide_podcast">Hide podcast</string>
-    <string name="discover_hide_podcast_named">Hide %1$s</string>
+    <string name="discover_hidden_notice">Hidden: %1$s</string>
     <string name="discover_chart_title">Top &amp; trending</string>
     <plurals name="discover_chart_count">
         <item quantity="one">%1$d show</item>

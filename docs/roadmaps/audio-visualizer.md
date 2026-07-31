@@ -1,0 +1,263 @@
+# Audio visualiser roadmap
+
+**Status:** Off / Level / Waveform shipped on Android. Bars and Blade open.
+
+Palette-aware audio visualisers on the Android player, chosen in Settings next to
+the colour palette. A visualiser either rides on the progress bar or replaces it,
+depending on the preset.
+
+---
+
+## Product contract
+
+1. **No new permissions.** Not one. The visualiser is decoration; it may not cost
+   the listener anything they would have to think about.
+2. **Never the source of truth for position.** Whatever the visualiser draws, the
+   listener can still see and set where they are in the episode. Presets that
+   replace the progress bar must still be a progress bar.
+3. **Off is a first-class choice, and it is the default.** An existing listener
+   who updates the app sees exactly what they saw before.
+4. **Palette-correct by construction.** A preset consumes design tokens only. It
+   is never allowed to name a colour.
+5. **Silence looks like silence.** If the visualiser cannot see real audio (remote
+   playback, an unexpected sink), it degrades to the plain bar rather than
+   inventing motion.
+
+---
+
+## Why not the obvious API
+
+`android.media.audiofx.Visualizer` is the API every tutorial reaches for, and it
+requires `android.permission.RECORD_AUDIO`.
+
+That is disqualifying here, not merely inconvenient. Onboarding tells the listener
+that KoalaCast keeps their listening on the device; the Play Store data-safety
+form would then have to declare microphone access; and a large share of listeners
+would decline the prompt and get a broken feature. A decoration is not worth any
+of that.
+
+Note the asymmetry that makes this easy to get wrong: `LoudnessEnhancer`, which
+the service already attaches to the audio session for volume boost
+(`PlaybackService.attachLoudnessEnhancer`), needs no such permission. "We already
+use `audiofx`" does not imply `Visualizer` is free.
+
+---
+
+## The approach
+
+A custom `androidx.media3.common.audio.AudioProcessor` inserted into the
+ExoPlayer audio pipeline. It sees the app's own decoded PCM, so there is nothing
+to ask permission for.
+
+### What makes this cheap here
+
+`PlaybackService` declares no `android:process` in the manifest, so it runs in the
+**same process as the UI**. The processor can publish into a singleton
+`StateFlow` that Compose collects directly.
+
+This removes the part that is normally the expensive half of the feature: no
+`MediaSession` custom events at frame rate, no `Bundle` marshalling, no IPC
+back-pressure design. If the service is ever moved to its own process, this
+roadmap needs rewriting before anything else.
+
+### The pipeline risk — settled
+
+Two shipped features live in the default audio pipeline, and replacing the
+processor chain naively breaks both:
+
+- `skipSilenceEnabled` — `SilenceSkippingAudioProcessor`
+- variable playback speed — `SonicAudioProcessor`
+
+`DefaultAudioSink.DefaultAudioProcessorChain(vararg custom)` applies custom
+processors *before* those two, and measurement on a device confirms both survive:
+at 2× with skip-silence off, position advanced 1.997× wall clock; with it on,
+2.124×. Exceeding 2× *is* the silence being skipped, so the stage is still doing
+its job rather than merely failing quietly.
+
+Ordering also resolved itself: the tap sits after Sonic, so the envelope is the
+time-compressed audio the listener actually hears at 1.5×, not the file as
+published.
+
+### The mistake worth not repeating
+
+A hand-written `BaseAudioProcessor` looks like the obvious way to observe audio.
+It is not: the pass-through half is easy to get wrong, and
+`replaceOutputBuffer(n).put(inputBuffer)` can be handed its own buffer and dies
+with `IllegalArgumentException: The source buffer is this buffer` — which surfaces
+as `ERROR_CODE_FAILED_RUNTIME_CHECK` and no audio at all.
+
+Media3 already ships that half correctly as `TeeAudioProcessor`
+(`androidx.media3.exoplayer.audio`, *not* `common.audio`). Use it. An
+implementation that can only read is also structurally incapable of changing what
+the listener hears, which is the right property for a decoration.
+
+---
+
+## Signal design
+
+Per processed buffer, compute one `Float` — RMS over the frame, normalised and
+smoothed — and push it into a fixed-size ring buffer. No FFT.
+
+Constraints on the processor, which runs on the audio thread:
+
+- **Zero allocation per buffer.** A pre-allocated `FloatArray` ring, primitive
+  arithmetic, no boxing, no lambdas capturing.
+- **Never blocks.** No locks, no channel that can suspend. A single writer and a
+  volatile write index; a torn read shows one stale frame, which is invisible at
+  60 Hz and infinitely better than a glitch in the audio.
+- **Cheap when nobody is looking.** The processor stays in the chain but
+  short-circuits to a passthrough when the preset is Off or no visualiser is
+  subscribed. It must not cost battery for the listeners who never enable it.
+
+The UI samples this ring on the Compose frame clock, not on a timer of its own,
+and only while the player is resumed.
+
+### Deliberately excluded: FFT
+
+A spectrum needs a radix-2 FFT (nothing suitable is in the version catalogue, so
+it would be hand-written or a new dependency) and costs 1–2 days. For speech it
+looks busier without saying more than the amplitude envelope does. Revisit only
+if a preset genuinely needs frequency content — a spectrum-shaped preset can be
+faked convincingly from a single amplitude value plus per-band phase offsets.
+
+---
+
+## Where it attaches in the UI
+
+Both insertion points already exist and need no restructuring:
+
+- **Full player** — `NowPlayingSheet.Scrubber` overrides Material's `Slider`
+  `track` slot. That slot is the hook; the thumb, the seek gesture, the chapter
+  markers and the time codes all stay exactly as they are.
+- **Mini player and library rows** — `core/ui/component/ProgressTrack.kt`.
+
+The mini player deliberately stays plain. It is on screen almost always, and an
+animation there is a battery cost paid during every episode. Visualisers run on
+the full player only, and only while it is resumed.
+
+### Palette
+
+Nothing new is required. `KoalaTheme.colors` already carries `accentFill`,
+`accentInk`, `track`, `dataBar` and `borderUi`, generated from the web client's
+CSS (`make android-palettes`). A preset that uses only those tokens is correct in
+all nine palettes and in both light and dark, for free.
+
+The design system's own constraint applies: "No shadows anywhere: depth comes
+from surface value plus hairlines." Glow-heavy presets fight that. The existing
+`spotlightGlow` modifier is the sanctioned exception and is the only glow
+primitive presets may use.
+
+---
+
+## Presets
+
+| Preset | Relationship to the bar | Signal |
+| --- | --- | --- |
+| **Off** | is the bar | none |
+| **Level** | the fill breathes with amplitude | RMS, heavy smoothing |
+| **Waveform** | RMS history behind the played portion | ring buffer |
+| **Bars** | replaces the bar | RMS + per-band phase offsets |
+| **Blade** | replaces the bar | RMS drives flicker; length is progress |
+
+**Blade** is the "energy sword" idea: the played portion is a lit blade, the
+playhead is its tip, the unplayed portion is the hilt track, and amplitude
+modulates a subtle flicker along the edge.
+
+Ship it under a generic name. The visual is unproblematic; "Lightsaber" is a
+Lucasfilm trademark and does not belong in a released product's settings screen.
+"Blade" or "Plasma" carries the same idea with none of the exposure.
+
+---
+
+## Settings
+
+A `Visualiser` section immediately after `Color palette` in `SettingsScreen`,
+following the palette picker's pattern: each row renders **itself** in its own
+preset, animating against a canned amplitude loop, so the choice is made by
+looking rather than by reading a name.
+
+New preference `visualizer`, plumbed exactly like `startScreen` was:
+
+- `core/model/Preferences.kt` — enum with a stable `id`, plus `DEFAULT = OFF`
+- `PreferencesRepository` — scoped key, setter, `applySynced`, `resetSynced`,
+  `migrateGuestToAccount`, `migrateUserScope`
+- `SyncRepository` — `visualizer` in `settingsPayload` and `applySettings`
+- `SyncedSettings.ownedKeys` — and its test's expected set
+
+No server change: the `settings` entity payload is stored opaquely
+(`services/api/internal/server/handlers/sync.go`).
+
+One invariant to respect: `visualizer` must be added to `SyncedSettings.ownedKeys`
+in the same change that adds it to the payload, or this client stores its own key
+as foreign and writes it twice. See the settings-sync note in
+[roadmap.md](../roadmap.md) for why that machinery exists.
+
+---
+
+## Delivery sequence
+
+**Phase 0 — de-risk the pipeline. Done.**
+`AmplitudeTap` + `AmplitudeBufferSink` in `core:player`, wired through
+`DefaultAudioProcessorChain`. Verified on a device: no playback errors, speed
+exact at 2×, skip-silence measurably still skipping, envelope varying with speech
+between 0.07 and 0.61. Dormant by default (`AmplitudeTap.listening = false`).
+
+**Phase 1 — signal. Done.**
+Fixed-size ring buffer in `AmplitudeTap`, copied out per frame into a caller-owned
+array so rendering allocates nothing. Gating is driven by the preset preference
+and by the player screen's lifecycle, so the tap does no arithmetic when nothing
+is drawing it or the screen is merely backgrounded.
+
+**Phase 2 — plumbing. Done.**
+`VisualizerStyle` preference, synced (and added to `SyncedSettings.ownedKeys`),
+with a Settings section whose rows each render themselves in their own style.
+
+**Phase 3 — presets. Level and Waveform done; Bars and Blade open (~2–4 h each).**
+Both live in the `Slider` track slot, so the thumb, the drag gesture, the chapter
+markers and the time codes are untouched.
+
+One thing Waveform forced into the open: the wave runs on *recent time* and the
+progress fill runs on *episode position*, and colouring the wave by progress
+claims that audio played two seconds ago is still ahead of the listener. They get
+separate bands rather than one overlay. Any future preset that draws history has
+the same problem and needs the same answer.
+
+**Phase 4 — hardening. Partly done.**
+Reduced motion is honoured (`ANIMATOR_DURATION_SCALE == 0` falls back to the plain
+bar) and the presets are `clearAndSetSemantics`, so TalkBack never reads bars.
+Still open: remote-playback fallback, and a battery measurement — including the
+cost of the `TeeAudioProcessor` buffer copy that happens even with the visualiser
+off.
+
+Still open beyond that: the amplitude curve is untuned. `GAIN`, `ATTACK` and
+`RELEASE` in `AmplitudeTap` were picked to look plausible on one device with one
+show; they want an hour of sitting with real content rather than more reasoning.
+
+---
+
+## Hardening details
+
+- **Reduced motion.** Respect `Settings.Global.ANIMATOR_DURATION_SCALE == 0` by
+  falling back to the static bar. A visualiser is motion for its own sake, which
+  is the category that setting exists for.
+- **Accessibility.** `ProgressTrack` is `clearAndSetSemantics { }` on purpose —
+  the same number is always available as text. Presets must stay equally silent;
+  TalkBack must never describe bars.
+- **Remote playback.** No local PCM means no signal. Fall back to the plain bar.
+  Not reachable on Android today, but the web client already has a remote
+  playback picker, so plan for it rather than discover it.
+- **Battery.** Measure before and after on a real device with the screen on and
+  the player open. If a preset costs meaningfully more than the static bar, that
+  is a bug in the preset, not a cost to accept.
+
+---
+
+## Explicit non-goals
+
+- Microphone or system-output capture, in any form, for any preset.
+- Visualisers in the mini player, notification, widget, or Android Auto.
+- Per-podcast visualiser overrides. This is a theme choice, not a playback
+  setting.
+- Web parity in the same change. The web client can do this far more cheaply with
+  a WebAudio `AnalyserNode`; if it follows, preset names and token mapping should
+  be shared the way the palettes already are, rather than reinvented.

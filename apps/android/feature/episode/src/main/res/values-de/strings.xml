@@ -5,6 +5,12 @@
 
     <string name="episode_queue">Zur Warteschlange</string>
     <string name="episode_queued">In der Warteschlange</string>
+    <!-- Beschriftungen unter den Aktions-Icons. Ein Wort, damit vier nebeneinander passen. -->
+    <string name="episode_queue_short">Queue</string>
+    <string name="episode_queued_short">In Queue</string>
+    <string name="episode_save_short">Merken</string>
+    <string name="episode_played_short">Gehört</string>
+    <string name="episode_download_short">Laden</string>
     <string name="episode_save">Folge merken</string>
     <string name="episode_unsave">Aus Gemerkt entfernen</string>
     <string name="episode_mark_played">Als gehört markieren</string>

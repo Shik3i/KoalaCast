@@ -110,6 +110,9 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Use(audioProxyLimiter.Limit)
 			r.Get("/proxy/audio", proxyHandler.GetAudioProxy)
 			r.Head("/proxy/audio", proxyHandler.GetAudioProxy)
+			// Resolves a redirect chain so the browser can stream from the final
+			// host itself. Not gated on the audio proxy: it moves no audio.
+			r.Get("/proxy/audio/resolve", proxyHandler.GetAudioResolve)
 		})
 
 		// Podcasts & Discovery. Discover and Search proxy out to iTunes / Podcast

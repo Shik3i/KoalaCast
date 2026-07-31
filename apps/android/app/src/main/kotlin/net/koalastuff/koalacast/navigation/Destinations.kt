@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.vector.ImageVector
 import net.koalastuff.koalacast.R
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 
 /**
@@ -34,6 +35,13 @@ object Routes {
         "podcast?podcastId=${Uri.encode(podcastId.orEmpty())}&feedUrl=${Uri.encode(feedUrl)}"
 
     fun episode(episodeId: String): String = "episode/${Uri.encode(episodeId)}"
+}
+
+/** The stored start-screen choice, resolved against the graph's actual routes. */
+fun StartScreen.route(): String = when (this) {
+    StartScreen.DISCOVER -> Routes.DISCOVER
+    StartScreen.INBOX -> Routes.INBOX
+    StartScreen.LIBRARY -> Routes.LIBRARY
 }
 
 /**

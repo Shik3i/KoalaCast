@@ -35,6 +35,9 @@
     <string name="library_named_queue_save">Save</string>
     <string name="library_named_queue_count">%1$d episodes</string>
     <string name="library_named_queue_delete">Delete named queue %1$s</string>
+    <string name="library_named_queue_delete_title">Delete this queue?</string>
+    <string name="library_named_queue_delete_body">“%1$s” is removed for good. The episodes in it are untouched.</string>
+    <string name="library_named_queue_delete_confirm">Delete</string>
     <string name="library_all_folders">All folders</string>
     <string name="library_manage_title">Manage %1$s</string>
     <string name="library_folder_name">Folder</string>

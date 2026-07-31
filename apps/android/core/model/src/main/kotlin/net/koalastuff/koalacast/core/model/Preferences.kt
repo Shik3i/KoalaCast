@@ -23,6 +23,10 @@ data class UserPreferences(
     val hiddenPodcasts: Set<HiddenPodcast>,
     /** Inbox mode assigned to subscriptions created from now on. */
     val defaultInboxMode: InboxMode,
+    /** The tab the app opens on. */
+    val startScreen: StartScreen,
+    /** Which visualiser, if any, rides on the player's progress bar. */
+    val visualizer: VisualizerStyle,
     /**
      * Route cover art through the configured KoalaCast server instead of fetching it
      * straight from the publisher's CDN. Costs a hop, hides the listener's IP.
@@ -56,6 +60,50 @@ data class HiddenPodcast(
     val key: String,
     val title: String,
 )
+
+/**
+ * Where a cold start lands. Browsing and catching up are different habits, and
+ * which one the app should assume is not something it can guess.
+ */
+enum class StartScreen(val id: String) {
+    DISCOVER("discover"),
+    INBOX("inbox"),
+    LIBRARY("library"),
+    ;
+
+    companion object {
+        val DEFAULT = DISCOVER
+
+        fun fromId(value: String?): StartScreen =
+            entries.firstOrNull { it.id == value } ?: DEFAULT
+    }
+}
+
+/**
+ * What the player's progress bar does while audio plays. Off is the default and
+ * stays that way on update: an existing listener sees what they saw before, and
+ * nobody pays for an animation they did not ask for.
+ */
+enum class VisualizerStyle(val id: String) {
+    OFF("off"),
+
+    /** The bar keeps its shape; only its fill breathes with the audio. */
+    LEVEL("level"),
+
+    /** The bar becomes a running history of how loud the last few seconds were. */
+    WAVEFORM("waveform"),
+    ;
+
+    /** True when this style needs the amplitude tap doing arithmetic at all. */
+    val needsAudio: Boolean get() = this != OFF
+
+    companion object {
+        val DEFAULT = OFF
+
+        fun fromId(value: String?): VisualizerStyle =
+            entries.firstOrNull { it.id == value } ?: DEFAULT
+    }
+}
 
 enum class DownloadStorage(val id: String) {
     INTERNAL("internal"),

@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -47,6 +48,7 @@ import net.koalastuff.koalacast.core.model.AccountSession
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.SyncStatus
 import net.koalastuff.koalacast.core.ui.component.AccentButton
+import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
@@ -416,6 +418,23 @@ private fun SignedInContent(
     onGlobalStats: (Boolean) -> Unit,
 ) {
     val account = checkNotNull(state.account)
+    // Signing out clears this device's copy of the account's data, and anything
+    // not yet pushed goes with it. Never one tap away.
+    var confirmSignOut by remember { mutableStateOf(false) }
+
+    if (confirmSignOut) {
+        ConfirmDialog(
+            title = stringResource(R.string.account_sign_out_title),
+            body = stringResource(R.string.account_sign_out_body, account.username),
+            confirmLabel = stringResource(R.string.account_sign_out),
+            onConfirm = {
+                confirmSignOut = false
+                onLogout()
+            },
+            onDismiss = { confirmSignOut = false },
+        )
+    }
+
     Section(account.username) {
         MonoText(
             text = account.userId,
@@ -430,7 +449,7 @@ private fun SignedInContent(
             )
             OutlineButton(
                 text = stringResource(R.string.account_sign_out),
-                onClick = onLogout,
+                onClick = { confirmSignOut = true },
                 enabled = !state.busy,
             )
         }
@@ -485,6 +504,22 @@ private fun SignedInContent(
 private fun SessionRow(session: AccountSession, onRevoke: (String) -> Unit) {
     val formatted = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
         .format(Date(session.lastUsedAtMs))
+    val label = session.deviceName.ifBlank { session.deviceType.ifBlank { session.kind } }
+    var confirmRevoke by remember { mutableStateOf(false) }
+
+    if (confirmRevoke) {
+        ConfirmDialog(
+            title = stringResource(R.string.account_revoke_title),
+            body = stringResource(R.string.account_revoke_body, label),
+            confirmLabel = stringResource(R.string.account_revoke),
+            onConfirm = {
+                confirmRevoke = false
+                onRevoke(session.id)
+            },
+            onDismiss = { confirmRevoke = false },
+        )
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = KoalaSpacing.gapSmall),
         horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
@@ -492,7 +527,7 @@ private fun SessionRow(session: AccountSession, onRevoke: (String) -> Unit) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = session.deviceName.ifBlank { session.deviceType.ifBlank { session.kind } },
+                text = label,
                 style = KoalaTheme.type.label,
                 color = KoalaTheme.colors.ink2,
             )
@@ -513,7 +548,7 @@ private fun SessionRow(session: AccountSession, onRevoke: (String) -> Unit) {
         } else {
             OutlineButton(
                 text = stringResource(R.string.account_revoke),
-                onClick = { onRevoke(session.id) },
+                onClick = { confirmRevoke = true },
             )
         }
     }

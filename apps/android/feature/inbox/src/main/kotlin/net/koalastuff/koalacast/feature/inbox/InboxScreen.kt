@@ -2,10 +2,12 @@ package net.koalastuff.koalacast.feature.inbox
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -36,13 +37,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.Subscription
+import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
 import net.koalastuff.koalacast.core.ui.component.CoverArt
-import net.koalastuff.koalacast.core.ui.component.EmptyState
+import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
+import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
+import net.koalastuff.koalacast.core.ui.component.OverflowMenu
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
@@ -66,7 +70,6 @@ fun InboxScreen(
         state = state,
         onRefresh = viewModel::refresh,
         onToggleSettings = viewModel::toggleSettings,
-        onSetUnplayedOnly = viewModel::setUnplayedOnly,
         onSetDownloadedOnly = viewModel::setDownloadedOnly,
         onSetPodcastFilter = viewModel::setPodcastFilter,
         onSetDateRange = viewModel::setDateRange,
@@ -94,7 +97,6 @@ internal fun InboxContent(
     state: InboxUiState,
     onRefresh: () -> Unit,
     onToggleSettings: () -> Unit,
-    onSetUnplayedOnly: (Boolean) -> Unit,
     onSetDownloadedOnly: (Boolean) -> Unit,
     onSetPodcastFilter: (String?) -> Unit,
     onSetDateRange: (InboxDateRange) -> Unit,
@@ -118,6 +120,21 @@ internal fun InboxContent(
     val colors = KoalaTheme.colors
     val feed = state.feed
     var showFilters by rememberSaveable { mutableStateOf(false) }
+    var confirmMarkAll by rememberSaveable { mutableStateOf(false) }
+
+    if (confirmMarkAll) {
+        ConfirmDialog(
+            title = stringResource(R.string.inbox_mark_all_title),
+            body = stringResource(R.string.inbox_mark_all_body, feed.size),
+            confirmLabel = stringResource(R.string.inbox_mark_all_confirm),
+            onConfirm = {
+                confirmMarkAll = false
+                onMarkAllPlayed()
+            },
+            onDismiss = { confirmMarkAll = false },
+        )
+    }
+
     val activeFilterCount = listOf(
         state.downloadedOnly,
         state.selectedPodcastId != null,
@@ -150,18 +167,17 @@ internal fun InboxContent(
                     color = colors.ink3,
                 )
                 if (state.subscriptions.isNotEmpty()) {
+                    // One row that fits. The previous version scrolled sideways,
+                    // which hid half its controls behind a gesture nothing
+                    // advertised: everything past the third button was invisible
+                    // and there was no edge, arrow or cut-off item to suggest
+                    // otherwise. Filters stay in reach; the rarer two move into
+                    // the overflow.
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        KoalaChip(
-                            label = stringResource(R.string.inbox_unplayed_only),
-                            selected = state.unplayedOnly,
-                            onClick = { onSetUnplayedOnly(!state.unplayedOnly) },
-                        )
                         OutlineButton(
                             text = if (activeFilterCount > 0) {
                                 stringResource(R.string.inbox_filters_active, activeFilterCount)
@@ -175,16 +191,22 @@ internal fun InboxContent(
                                 PhosphorIcons.Funnel
                             },
                         )
-                        IconButtonSquare(
-                            icon = PhosphorIcons.SlidersHorizontal,
-                            contentDescription = stringResource(R.string.inbox_settings),
-                            onClick = onToggleSettings,
-                        )
-                        IconButtonSquare(
-                            icon = PhosphorIcons.CheckCircle,
-                            contentDescription = stringResource(R.string.inbox_mark_all),
-                            onClick = onMarkAllPlayed,
-                            enabled = feed.isNotEmpty(),
+                        OverflowMenu(
+                            contentDescription = stringResource(R.string.inbox_more_options),
+                            actions = listOf(
+                                MenuAction(
+                                    label = stringResource(R.string.inbox_settings),
+                                    icon = PhosphorIcons.SlidersHorizontal,
+                                    onClick = onToggleSettings,
+                                ),
+                                MenuAction(
+                                    label = stringResource(R.string.inbox_mark_all),
+                                    icon = PhosphorIcons.CheckCircle,
+                                    destructive = true,
+                                    enabled = feed.isNotEmpty(),
+                                    onClick = { confirmMarkAll = true },
+                                ),
+                            ),
                         )
                     }
                     if (showFilters) {
@@ -233,10 +255,7 @@ internal fun InboxContent(
             feed.isEmpty() -> item(key = "empty") {
                 EmptyState(
                     title = stringResource(R.string.inbox_empty_title),
-                    body = stringResource(
-                        if (state.unplayedOnly) R.string.inbox_empty_caught_up
-                        else R.string.inbox_empty_recent,
-                    ),
+                    body = stringResource(R.string.inbox_empty_caught_up),
                     icon = PhosphorIcons.CheckCircle,
                     actionLabel = if (state.failedFeeds > 0) stringResource(R.string.inbox_retry) else null,
                     onAction = if (state.failedFeeds > 0) onRefresh else null,
@@ -290,10 +309,11 @@ private fun InboxFilters(
     onQueueSession: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-    ) {
+
+    // Every group wraps instead of scrolling, and every group says what it is.
+    // Four unlabelled rows of chips that each run off the right edge is a
+    // guessing game played sideways.
+    FilterGroup(stringResource(R.string.inbox_filter_content)) {
         KoalaChip(
             label = stringResource(R.string.inbox_downloaded),
             selected = state.downloadedOnly,
@@ -304,7 +324,7 @@ private fun InboxFilters(
             selected = state.hideSpecials,
             onClick = { onSetHideSpecials(!state.hideSpecials) },
         )
-        Column {
+        Box {
             KoalaChip(
                 label = state.subscriptions.firstOrNull {
                     it.podcastId == state.selectedPodcastId
@@ -332,10 +352,7 @@ private fun InboxFilters(
             }
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-    ) {
+    FilterGroup(stringResource(R.string.inbox_filter_date)) {
         InboxDateRange.entries.forEach { range ->
             KoalaChip(
                 label = stringResource(
@@ -351,10 +368,7 @@ private fun InboxFilters(
             )
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-    ) {
+    FilterGroup(stringResource(R.string.inbox_filter_mood)) {
         InboxMood.entries.forEach { mood ->
             KoalaChip(
                 label = stringResource(
@@ -371,11 +385,7 @@ private fun InboxFilters(
             )
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    FilterGroup(stringResource(R.string.inbox_filter_session)) {
         listOf(null, 25, 40, 60).forEach { minutes ->
             KoalaChip(
                 label = minutes?.let { stringResource(R.string.inbox_minutes, it) }
@@ -392,6 +402,27 @@ private fun InboxFilters(
             )
         }
     }
+}
+
+/** A named set of filter chips that wraps onto as many lines as it needs. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterGroup(
+    title: String,
+    content: @Composable FlowRowScope.() -> Unit,
+) {
+    MonoText(
+        text = title,
+        color = KoalaTheme.colors.ink4,
+        style = KoalaTheme.type.monoSmall,
+        modifier = Modifier.padding(top = KoalaSpacing.gapSmall),
+    )
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+        content = content,
+    )
 }
 
 @Composable

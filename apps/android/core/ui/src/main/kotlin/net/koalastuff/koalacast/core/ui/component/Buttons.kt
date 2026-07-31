@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
@@ -132,6 +133,47 @@ fun IconButtonSquare(
         ) {
             PhosphorIcon(icon = icon, contentDescription = contentDescription, tint = tint, size = iconSize)
         }
+    }
+}
+
+/**
+ * An icon with its name written under it. A content description satisfies a screen
+ * reader but leaves a sighted first-time user guessing at a row of glyphs, so
+ * anything whose meaning is not universal gets the word too.
+ */
+@Composable
+fun LabelledIconAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = label,
+    tint: Color = KoalaTheme.colors.ink3,
+    enabled: Boolean = true,
+    iconSize: Dp = 20.dp,
+) {
+    val content = if (enabled) tint else KoalaTheme.colors.ink4
+    Column(
+        modifier = modifier
+            .clip(KoalaShapes.chip)
+            .clickableRow(enabled = enabled, onClick = onClick)
+            .defaultMinSize(minWidth = KoalaSpacing.minTouchTarget, minHeight = KoalaSpacing.minTouchTarget)
+            .padding(horizontal = KoalaSpacing.gapSmall, vertical = KoalaSpacing.gapSmall),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
+    ) {
+        PhosphorIcon(
+            icon = icon,
+            contentDescription = contentDescription,
+            tint = content,
+            size = iconSize,
+        )
+        MonoText(
+            text = label,
+            color = content,
+            style = KoalaTheme.type.monoSmall,
+            maxLines = 1,
+        )
     }
 }
 

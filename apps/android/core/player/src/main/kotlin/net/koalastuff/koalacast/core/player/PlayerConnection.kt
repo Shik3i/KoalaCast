@@ -233,17 +233,6 @@ class PlayerConnection @Inject constructor(
     fun seekForward() = onController { it.seekForward() }
 
     /** Cycles 1 → 1.25 → 1.5 → 1.75 → 2 → 1, as the design specifies. */
-    fun cycleSpeed() {
-        val next = when (_state.value.speed) {
-            in 0f..1.0f -> 1.25f
-            in 1.0f..1.25f -> 1.5f
-            in 1.25f..1.5f -> 1.75f
-            in 1.5f..1.75f -> 2f
-            else -> 1f
-        }
-        setSpeed(next)
-    }
-
     fun setSpeed(speed: Float) {
         val clamped = speed.coerceIn(0.5f, 3f)
         onController { it.playbackParameters = PlaybackParameters(clamped) }

@@ -5,6 +5,12 @@
 
     <string name="episode_queue">Add to queue</string>
     <string name="episode_queued">In your queue</string>
+    <!-- Labels under the action icons. Kept to one word so four fit across a phone. -->
+    <string name="episode_queue_short">Queue</string>
+    <string name="episode_queued_short">Queued</string>
+    <string name="episode_save_short">Save</string>
+    <string name="episode_played_short">Played</string>
+    <string name="episode_download_short">Download</string>
     <string name="episode_save">Save episode</string>
     <string name="episode_unsave">Remove from saved</string>
     <string name="episode_mark_played">Mark as played</string>

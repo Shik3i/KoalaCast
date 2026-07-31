@@ -9,7 +9,10 @@
     <string name="onboarding_use_official">Use the official instance</string>
     <string name="onboarding_use_emulator">Local server (emulator)</string>
 
-    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_continue">Continue without an account</string>
+    <string name="onboarding_account_label">Account</string>
+    <string name="onboarding_account_body">An account syncs subscriptions, listening progress and settings between your phone and the web. It needs nothing but a username and a password — no email, no phone number. You can also add one later in Settings.</string>
+    <string name="onboarding_account_continue">Sign in or create account</string>
     <string name="onboarding_checking">Checking…</string>
 
     <string name="onboarding_cleartext_warning">This address uses plain HTTP. Traffic to it is unencrypted, which is fine on your own network and unsafe over the internet.</string>

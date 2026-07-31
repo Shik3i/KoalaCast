@@ -19,7 +19,9 @@ import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.PaletteId
+import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
+import net.koalastuff.koalacast.core.model.VisualizerStyle
 import net.koalastuff.koalacast.core.model.UserPreferences
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -100,6 +102,14 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setStartScreen(screen: StartScreen) {
+        dataStore.edit { it[Keys.startScreen(owner())] = screen.id; it.touch(owner()) }
+    }
+
+    suspend fun setVisualizer(style: VisualizerStyle) {
+        dataStore.edit { it[Keys.visualizer(owner())] = style.id; it.touch(owner()) }
+    }
+
     suspend fun setProxyImages(enabled: Boolean) {
         dataStore.edit { it[Keys.proxyImages(owner())] = enabled; it.touch(owner()) }
     }
@@ -146,6 +156,20 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
+    /**
+     * The keys of the synced settings blob that this client does not understand —
+     * the web client's `date_format` and `ui_language` today, whatever ships next
+     * tomorrow. Stored verbatim so a push can hand them back untouched instead of
+     * deleting them from the server, which is what rebuilding the whole payload
+     * from known fields used to do.
+     */
+    suspend fun foreignSettings(): String =
+        dataStore.data.first()[Keys.foreignSettings(owner())].orEmpty()
+
+    suspend fun setForeignSettings(json: String) {
+        dataStore.edit { it[Keys.foreignSettings(owner())] = json }
+    }
+
     suspend fun syncSnapshot(): Pair<UserPreferences, Long> {
         val values = dataStore.data.first()
         val owner = owner()
@@ -164,6 +188,8 @@ class PreferencesRepository @Inject constructor(
             it[Keys.hiddenPodcasts(owner)] =
                 preferences.hiddenPodcasts.mapTo(mutableSetOf(), ::encodeHiddenPodcast)
             it[Keys.defaultInboxMode(owner)] = preferences.defaultInboxMode.name.lowercase()
+            it[Keys.startScreen(owner)] = preferences.startScreen.id
+            it[Keys.visualizer(owner)] = preferences.visualizer.id
             it[Keys.proxyImages(owner)] = preferences.proxyImages
             it[Keys.playbackSpeed(owner)] = preferences.playbackSpeed.coerceIn(0.5f, 3f)
             it[Keys.downloadWifiOnly(owner)] = preferences.downloadWifiOnly
@@ -187,6 +213,8 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.hiddenGenres(owner))
             it.remove(Keys.hiddenPodcasts(owner))
             it.remove(Keys.defaultInboxMode(owner))
+            it.remove(Keys.startScreen(owner))
+            it.remove(Keys.visualizer(owner))
             it.remove(Keys.proxyImages(owner))
             it.remove(Keys.playbackSpeed(owner))
             it.remove(Keys.downloadWifiOnly(owner))
@@ -197,6 +225,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.downloadConcurrency(owner))
             it.remove(Keys.downloadBudgetMb(owner))
             it.remove(Keys.settingsUpdatedAt(owner))
+            it.remove(Keys.foreignSettings(owner))
         }
     }
 
@@ -249,6 +278,8 @@ class PreferencesRepository @Inject constructor(
                 Keys.defaultInboxMode(null),
                 removeSource = false,
             )
+            it.copyIfAbsent(Keys.startScreen(ownerId), Keys.startScreen(null), removeSource = false)
+            it.copyIfAbsent(Keys.visualizer(ownerId), Keys.visualizer(null), removeSource = false)
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(null), removeSource = false)
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(null), removeSource = false)
             it.copyIfAbsent(
@@ -283,6 +314,11 @@ class PreferencesRepository @Inject constructor(
                 Keys.settingsUpdatedAt(null),
                 removeSource = false,
             )
+            it.copyIfAbsent(
+                Keys.foreignSettings(ownerId),
+                Keys.foreignSettings(null),
+                removeSource = false,
+            )
             it[Keys.GUEST_PREFS_MERGED] = true
         }
     }
@@ -297,6 +333,8 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.hiddenGenres(ownerId), Keys.hiddenGenres(userId))
             it.copyIfAbsent(Keys.hiddenPodcasts(ownerId), Keys.hiddenPodcasts(userId))
             it.copyIfAbsent(Keys.defaultInboxMode(ownerId), Keys.defaultInboxMode(userId))
+            it.copyIfAbsent(Keys.startScreen(ownerId), Keys.startScreen(userId))
+            it.copyIfAbsent(Keys.visualizer(ownerId), Keys.visualizer(userId))
             it.copyIfAbsent(Keys.proxyImages(ownerId), Keys.proxyImages(userId))
             it.copyIfAbsent(Keys.playbackSpeed(ownerId), Keys.playbackSpeed(userId))
             it.copyIfAbsent(Keys.downloadWifiOnly(ownerId), Keys.downloadWifiOnly(userId))
@@ -307,6 +345,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.downloadConcurrency(ownerId), Keys.downloadConcurrency(userId))
             it.copyIfAbsent(Keys.downloadBudgetMb(ownerId), Keys.downloadBudgetMb(userId))
             it.copyIfAbsent(Keys.settingsUpdatedAt(ownerId), Keys.settingsUpdatedAt(userId))
+            it.copyIfAbsent(Keys.foreignSettings(ownerId), Keys.foreignSettings(userId))
         }
     }
 
@@ -329,6 +368,8 @@ class PreferencesRepository @Inject constructor(
             InboxMode.LATEST.name.lowercase() -> InboxMode.LATEST
             else -> InboxMode.ALL
         },
+        startScreen = StartScreen.fromId(this[Keys.startScreen(owner)]),
+        visualizer = VisualizerStyle.fromId(this[Keys.visualizer(owner)]),
         proxyImages = this[Keys.proxyImages(owner)] ?: true,
         playbackSpeed = this[Keys.playbackSpeed(owner)] ?: 1f,
         downloadWifiOnly = this[Keys.downloadWifiOnly(owner)] ?: true,
@@ -353,6 +394,8 @@ class PreferencesRepository @Inject constructor(
         fun hiddenGenres(owner: String?) = stringSetPreferencesKey(scoped("hidden_genres", owner))
         fun hiddenPodcasts(owner: String?) = stringSetPreferencesKey(scoped("hidden_podcasts", owner))
         fun defaultInboxMode(owner: String?) = stringPreferencesKey(scoped("default_inbox_mode", owner))
+        fun startScreen(owner: String?) = stringPreferencesKey(scoped("start_screen", owner))
+        fun visualizer(owner: String?) = stringPreferencesKey(scoped("visualizer", owner))
         fun proxyImages(owner: String?) = booleanPreferencesKey(scoped("proxy_images", owner))
         fun playbackSpeed(owner: String?) = floatPreferencesKey(scoped("playback_speed", owner))
         fun downloadWifiOnly(owner: String?) = booleanPreferencesKey(scoped("download_wifi_only", owner))
@@ -365,6 +408,7 @@ class PreferencesRepository @Inject constructor(
         val DOWNLOAD_STORAGE = stringPreferencesKey("download_storage")
         val DOWNLOAD_TREE_URI = stringPreferencesKey("download_tree_uri")
         fun settingsUpdatedAt(owner: String?) = longPreferencesKey(scoped("settings_updated_at", owner))
+        fun foreignSettings(owner: String?) = stringPreferencesKey(scoped("settings_foreign", owner))
         fun migrationComplete(owner: String?) = booleanPreferencesKey(scoped("legacy_migrated", owner))
         val LEGACY_THEME_MODE = stringPreferencesKey("theme_mode")
         val LEGACY_PALETTE = stringPreferencesKey("palette")

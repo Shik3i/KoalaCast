@@ -29,7 +29,8 @@
 	import {
 		audioEffectsProxyUrl,
 		isCrossOriginAudio,
-		publisherAllowsAudioEffects
+		publisherAllowsAudioEffects,
+		resolveAudioRedirect
 	} from '$lib/audio/source';
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
 
@@ -255,6 +256,18 @@
 			graphSources.set(source, result);
 			return result;
 		}
+		// Prefix trackers (podtrac, chartable, pdst.fm) rarely send CORS headers
+		// even when the CDN behind them does, and the browser cannot follow the
+		// chain to find out. Ask the server where it ends up and try that host
+		// directly — the episode still streams from the publisher.
+		const resolved = await resolveAudioRedirect(source, location.origin);
+		if (resolved?.corsAllowed && resolved.url !== source) {
+			if (await publisherAllowsAudioEffects(resolved.url, location.origin)) {
+				const result = { source: resolved.url, crossOrigin: true };
+				graphSources.set(source, result);
+				return result;
+			}
+		}
 		if (await audioEffectsRelayEnabled()) {
 			const result = { source: audioEffectsProxyUrl(source), crossOrigin: false };
 			graphSources.set(source, result);
@@ -320,6 +333,7 @@
 		await saveProgress('PROGRESS_TICK');
 		audioEl.pause();
 		audioEngine.destroy();
+		applyVolume();
 		audioElementGeneration++;
 		await tick();
 		if (wasPlaying) player.playToken++;
@@ -345,6 +359,7 @@
 		}
 		audioEngine.skipSilence = effectiveSkipSilence;
 		audioEngine.setVolumeBoost(effectiveVolumeBoost);
+		applyVolume();
 		const running = await audioEngine.resume();
 		if (running) await element.play().catch(() => {});
 	}
@@ -819,10 +834,31 @@
 			: '--show-accent:var(--accent-green);--show-accent-soft:color-mix(in srgb, var(--accent-green) 22%, transparent);'
 	);
 
-	// Keep the audio element's volume in sync with the store.
+	// Keep the output volume in sync with the store.
+	//
+	// Which knob depends on whether the Web Audio graph is running. The element's
+	// own volume sits before the compressor, so with volume boost on it gets
+	// squashed — the slider then moves the output by about half as many dB as it
+	// should and feels broken. While the graph exists the element stays wide open
+	// and the volume is applied by a gain node at the end of the chain instead.
 	$effect(() => {
-		if (audioEl) audioEl.volume = player.volume;
+		// Both reads have to happen here so the effect re-runs when the element is
+		// recreated, not only when the volume changes.
+		const element = audioEl;
+		const volume = player.volume;
+		audioEngine.setVolume(volume);
+		if (element) element.volume = audioEngine.initialized ? 1 : volume;
 	});
+
+	/**
+	 * Called at the two moments the graph appears or goes away, because
+	 * `audioEngine.initialized` is not reactive state and the effect above cannot
+	 * see it change.
+	 */
+	function applyVolume() {
+		audioEngine.setVolume(player.volume);
+		if (audioEl) audioEl.volume = audioEngine.initialized ? 1 : player.volume;
+	}
 
 	$effect(() => {
 		const element = audioEl;

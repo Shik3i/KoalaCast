@@ -70,6 +70,45 @@ the filemask above already excludes it. Keep it that way.
 
 ---
 
+## Audio visualisers on the Android player
+
+**Status:** Off / Level / Waveform shipped; Bars and Blade open. Detailed plan and
+findings: [roadmaps/audio-visualizer.md](roadmaps/audio-visualizer.md).
+
+Palette-aware visualisers selectable in Settings beside the colour palette, riding
+on the player's progress bar or replacing it. Fed by a custom Media3
+`AudioProcessor` reading the app's own decoded PCM — deliberately *not* by
+`android.media.audiofx.Visualizer`, which would require `RECORD_AUDIO`.
+
+The plan's Phase 0 exists to answer the only open question: whether inserting a
+processor into the chain preserves skip-silence and variable speed.
+
+---
+
+## Settings sync no longer drops the other client's keys
+
+**Status:** fixed. Kept here because the invariant is easy to break again.
+
+Both clients push the whole `settings` entity and the server keeps the last write
+without merging (`services/api/internal/server/handlers/sync.go`), but their
+payloads do not overlap: Android sends `theme_mode`, `palette`, `proxy_images`,
+`start_screen` and the download policy; the web client sends `date_format` and
+`ui_language`. Each push used to erase the other client's keys.
+
+Unknown keys are now remembered when a payload is applied and handed back when one
+is pushed — `SyncedSettings.kt` on Android, `settings-merge.ts` on the web.
+
+**The invariant:** a key added to a client's payload must be added to that client's
+owned-key set in the same change. Miss it and the client stores its own key as
+foreign and writes it twice. Both sides have a test asserting the owned set matches
+what the payload writes; keep it that way.
+
+Still open, and separate: the web client stores theme and palette in unscoped
+`localStorage`, so they are not account-scoped and never enter the synced blob at
+all.
+
+---
+
 ## Native Android P7
 
 **Status:** P0–P6 shipped. The remaining platform and delight work is tracked in
