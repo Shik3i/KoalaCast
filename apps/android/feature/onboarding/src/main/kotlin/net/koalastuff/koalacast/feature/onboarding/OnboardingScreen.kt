@@ -19,6 +19,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +37,7 @@ import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
@@ -45,16 +49,21 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
  * levels down, because self-hosting is a first-class path for this project — the
  * official instance is offered as the one-tap default, not assumed.
  */
+/**
+ * @param onFinished carries whether the listener asked to reach the account screen
+ *   straight away, so the choice made here is not silently dropped.
+ */
 @Composable
 fun OnboardingScreen(
-    onFinished: () -> Unit,
+    onFinished: (openAccount: Boolean) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var wantsAccount by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.finished) {
-        if (state.finished) onFinished()
+        if (state.finished) onFinished(wantsAccount)
     }
 
     OnboardingContent(
@@ -62,7 +71,10 @@ fun OnboardingScreen(
         onUrlChange = viewModel::onUrlChange,
         onUseOfficial = viewModel::useOfficialInstance,
         onUseEmulator = viewModel::useEmulatorLoopback,
-        onConfirm = viewModel::confirm,
+        onConfirm = { withAccount ->
+            wantsAccount = withAccount
+            viewModel.confirm()
+        },
         modifier = modifier,
     )
 }
@@ -73,7 +85,7 @@ internal fun OnboardingContent(
     onUrlChange: (String) -> Unit,
     onUseOfficial: () -> Unit,
     onUseEmulator: () -> Unit,
-    onConfirm: () -> Unit,
+    onConfirm: (withAccount: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KoalaTheme.colors
@@ -119,7 +131,7 @@ internal fun OnboardingContent(
             leadingIcon = PhosphorIcons.HardDrives,
             keyboardType = KeyboardType.Uri,
             imeAction = ImeAction.Go,
-            onImeAction = onConfirm,
+            onImeAction = { onConfirm(false) },
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
@@ -153,13 +165,33 @@ internal fun OnboardingContent(
             )
         }
 
+        // Both ways forward are offered here, side by side. An account that only
+        // ever appears three taps deep inside a stats screen may as well not
+        // exist for someone opening the app for the first time.
+        MonoText(
+            text = stringResource(R.string.onboarding_account_label),
+            color = colors.ink4,
+            style = KoalaTheme.type.monoSmall,
+        )
+        Text(
+            text = stringResource(R.string.onboarding_account_body),
+            style = KoalaTheme.type.bodySmall,
+            color = colors.ink3,
+        )
         AccentButton(
             text = if (state.checking) {
                 stringResource(R.string.onboarding_checking)
             } else {
-                stringResource(R.string.onboarding_continue)
+                stringResource(R.string.onboarding_account_continue)
             },
-            onClick = onConfirm,
+            onClick = { onConfirm(true) },
+            enabled = !state.checking && state.url.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            leadingIcon = PhosphorIcons.UserCircle,
+        )
+        OutlineButton(
+            text = stringResource(R.string.onboarding_continue),
+            onClick = { onConfirm(false) },
             enabled = !state.checking && state.url.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         )

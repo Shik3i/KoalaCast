@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.model.ListeningSession
@@ -23,6 +24,8 @@ data class ProfileUiState(
     val stats: ListeningAnalytics = ListeningAnalytics(),
     val touchedShows: Int = 0,
     val averagePerActiveDayMs: Long = 0,
+    /** Null while signed out. The header says so rather than staying silent. */
+    val accountName: String? = null,
 ) {
     val firstListeningAtMs get() = sessions.firstOrNull()?.startedAtMs
 }
@@ -31,6 +34,7 @@ data class ProfileUiState(
 class ProfileViewModel @Inject constructor(
     progress: ProgressRepository,
     library: LibraryRepository,
+    accounts: AccountRepository,
 ) : ViewModel() {
 
     private val range = MutableStateFlow(StatsRange.YEAR)
@@ -40,7 +44,8 @@ class ProfileViewModel @Inject constructor(
         progress.allProgress,
         library.allSubscriptions,
         range,
-    ) { sessions, history, subscriptions, selectedRange ->
+        accounts.account,
+    ) { sessions, history, subscriptions, selectedRange, account ->
         val floor = rangeFloor(selectedRange, ZonedDateTime.now())
         val stats = summarizeListening(
             sessions.filter { it.startedAtMs >= floor },
@@ -55,6 +60,7 @@ class ProfileViewModel @Inject constructor(
             touchedShows = sessions.mapTo(mutableSetOf(), ListeningSession::podcastId).size,
             averagePerActiveDayMs =
                 if (stats.activeDays > 0) stats.totalWallMs / stats.activeDays else 0,
+            accountName = account?.username,
         )
     }.stateIn(
         scope = viewModelScope,

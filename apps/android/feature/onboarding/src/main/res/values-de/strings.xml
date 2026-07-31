@@ -9,7 +9,10 @@
     <string name="onboarding_use_official">Offizielle Instanz</string>
     <string name="onboarding_use_emulator">Lokaler Server (Emulator)</string>
 
-    <string name="onboarding_continue">Weiter</string>
+    <string name="onboarding_continue">Ohne Konto fortfahren</string>
+    <string name="onboarding_account_label">Konto</string>
+    <string name="onboarding_account_body">Ein Konto synchronisiert Abos, Hörfortschritt und Einstellungen zwischen Handy und Web. Nötig sind nur ein Benutzername und ein Passwort — keine E-Mail, keine Telefonnummer. Du kannst es auch später in den Einstellungen anlegen.</string>
+    <string name="onboarding_account_continue">Anmelden oder Konto erstellen</string>
     <string name="onboarding_checking">Prüfe …</string>
 
     <string name="onboarding_cleartext_warning">Diese Adresse nutzt einfaches HTTP. Der Verkehr dorthin ist unverschlüsselt – im eigenen Netz in Ordnung, über das Internet unsicher.</string>

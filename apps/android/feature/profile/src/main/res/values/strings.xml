@@ -3,6 +3,9 @@
     <string name="profile_title">Listening profile</string>
     <string name="profile_settings">Settings</string>
     <string name="profile_account">Account</string>
+    <string name="profile_sign_in_title">Sync across your devices</string>
+    <string name="profile_sign_in_body">A KoalaCast account keeps subscriptions, listening progress and settings in step between your phone and the web. Username and password only — no email address needed.</string>
+    <string name="profile_sign_in_action">Sign in or create account</string>
     <string name="profile_downloads">Downloads</string>
     <string name="profile_tracking_starts">Tracking starts with your first play</string>
     <plurals name="profile_subscriptions">
