@@ -103,18 +103,16 @@ owned-key set in the same change. Miss it and the client stores its own key as
 foreign and writes it twice. Both sides have a test asserting the owned set matches
 what the payload writes; keep it that way.
 
-Still open, and separate: the web client stores theme and palette in unscoped
-`localStorage`, so they are not account-scoped and never enter the synced blob at
-all.
+Theme and palette stay readable from unscoped `localStorage` for pre-paint boot,
+but their current values now enter the account settings blob and synchronize.
 
 ---
 
 ## Native Android P7
 
-**Status:** P0–P6 shipped. The remaining platform and delight work is tracked in
-[`apps/android/README.md`](../apps/android/README.md): Android Auto, a
-home-screen widget, chapter UI, dynamic artwork palettes, advanced download
-policies, and broader UI/integration test coverage. Architecture:
+**Status:** P0–P7 shipped. Remaining batch-API optimisation and broader
+UI/integration coverage are tracked in [`api_todo.md`](../api_todo.md) and
+[`apps/android/README.md`](../apps/android/README.md). Architecture:
 [android-architecture.md](android-architecture.md).
 
 ---

@@ -22,6 +22,10 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             add("testImplementation", libs.findLibrary("junit").get())
             add("testImplementation", libs.findLibrary("kotlinx-coroutines-test").get())
             add("testImplementation", libs.findLibrary("turbine").get())
+            // The app module declares an instrumentation runner too, so it needs the
+            // runner on its androidTest classpath for the same reason the libraries
+            // do — see AndroidLibraryConventionPlugin.
+            add("androidTestImplementation", libs.findLibrary("androidx-test-runner").get())
         }
     }
 }

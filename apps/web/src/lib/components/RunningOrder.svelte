@@ -12,6 +12,10 @@
 	onMount(() => {
 		player.loadQueue();
 		listeningSession.load();
+	});
+
+	$effect(() => {
+		if (!player.current && player.queue.length === 0) return;
 		const timer = window.setInterval(() => (now = Date.now()), 1_000);
 		return () => window.clearInterval(timer);
 	});

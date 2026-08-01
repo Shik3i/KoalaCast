@@ -30,7 +30,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +50,7 @@ import net.koalastuff.koalacast.core.player.PlaybackUiState
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.MenuButton
@@ -61,6 +61,7 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.spotlightGlow
 import net.koalastuff.koalacast.core.ui.util.Format
+import kotlinx.coroutines.delay
 
 /**
  * The full-screen transport. The desktop design puts these controls in a bar
@@ -162,13 +163,16 @@ internal fun NowPlayingContent(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButtonPlain(
                 icon = PhosphorIcons.CaretDown,
                 contentDescription = stringResource(R.string.player_collapse),
                 onClick = onCollapse,
             )
+            // Top right, where listeners expect the system output picker.
+            CastButton()
         }
 
         if (track == null) {
@@ -204,7 +208,9 @@ internal fun NowPlayingContent(
                 text = track.podcastTitle,
                 color = colors.accentInk,
                 style = KoalaTheme.type.monoSmall,
-                modifier = Modifier.clickable { onOpenEpisode(track.episodeId) },
+                modifier = Modifier
+                    .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+                    .clickable { onOpenEpisode(track.episodeId) },
             )
             Text(
                 text = track.title,
@@ -243,11 +249,9 @@ internal fun NowPlayingContent(
                     color = colors.ink4,
                     style = KoalaTheme.type.monoSmall,
                 )
-                Text(
+                OutlineButton(
                     text = stringResource(R.string.player_retry),
-                    modifier = Modifier.clickable(onClick = onRetry),
-                    style = KoalaTheme.type.bodySmall,
-                    color = colors.accentInk,
+                    onClick = onRetry,
                 )
             }
         }
@@ -291,18 +295,27 @@ internal fun NowPlayingContent(
         // The secondary controls, as one quiet row of affordances rather than a
         // stack of open panels: speed cycles in place, the sleep timer unfolds
         // its options only when asked for them.
+        // Equal weights rather than SpaceBetween: with three items of different
+        // widths, "space between" centres nothing — the middle control drifts
+        // wherever its neighbours leave room. Three equal columns put the sleep
+        // timer on the screen's centre line, under the play button.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SpeedButton(speed = state.speed, onSetSpeed = onSetSpeed)
-            SleepTimerButton(state = state, onSetSleepTimer = onSetSleepTimer)
-            MonoText(
-                text = stringResource(R.string.player_up_next_count, state.upNextCount),
-                color = colors.ink4,
-                style = KoalaTheme.type.monoSmall,
-            )
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                SpeedButton(speed = state.speed, onSetSpeed = onSetSpeed)
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                SleepTimerButton(state = state, onSetSleepTimer = onSetSleepTimer)
+            }
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                MonoText(
+                    text = stringResource(R.string.player_up_next_count, state.upNextCount),
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                )
+            }
         }
 
         if (chapters.isNotEmpty()) {
@@ -349,14 +362,13 @@ private fun Scrubber(
             return@LaunchedEffect
         }
         while (true) {
-            withFrameNanos {
-                level = amplitude()
-                if (visualizer == VisualizerStyle.WAVEFORM) {
-                    amplitudeHistory(history)
-                    // FloatArray is mutated in place, so Compose needs a separate
-                    // signal that its contents changed.
-                    historyRevision++
-                }
+            delay(VISUALIZER_SAMPLE_MS)
+            level = amplitude()
+            if (visualizer == VisualizerStyle.WAVEFORM) {
+                amplitudeHistory(history)
+                // FloatArray is mutated in place, so Compose needs a separate
+                // signal that its contents changed.
+                historyRevision++
             }
         }
     }
@@ -603,6 +615,7 @@ private fun animationsDisabled(context: android.content.Context): Boolean =
 
 /** How many bars the waveform draws. Wider than this and each bar is a hairline. */
 private const val WAVEFORM_BARS = 48
+private const val VISUALIZER_SAMPLE_MS = 33L
 
 /** The playhead. Small enough to sit on a 4dp track without swallowing it. */
 private val THUMB_DIAMETER = 12.dp

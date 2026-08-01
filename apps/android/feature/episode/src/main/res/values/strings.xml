@@ -10,6 +10,8 @@
     <string name="episode_queued_short">Queued</string>
     <string name="episode_save_short">Save</string>
     <string name="episode_played_short">Played</string>
+    <string name="episode_downloaded_short">Downloaded</string>
+    <string name="episode_downloading_short">Loading…</string>
     <string name="episode_download_short">Download</string>
     <string name="episode_save">Save episode</string>
     <string name="episode_unsave">Remove from saved</string>

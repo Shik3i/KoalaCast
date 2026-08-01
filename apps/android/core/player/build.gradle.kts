@@ -13,6 +13,7 @@ dependencies {
 
     api(libs.media3.exoplayer)
     api(libs.media3.session)
+    api(libs.media3.cast)
     implementation(libs.androidx.core.ktx)
     implementation(libs.okhttp)
 

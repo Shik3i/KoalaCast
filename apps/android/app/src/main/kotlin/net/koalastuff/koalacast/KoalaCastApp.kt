@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeGesturesPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.activity.compose.BackHandler
@@ -104,8 +105,6 @@ fun KoalaCastApp(
         onEpisodeRequestConsumed()
     }
 
-    BackHandler(enabled = nowPlayingExpanded) { nowPlayingExpanded = false }
-
     Column(modifier = Modifier.fillMaxSize().background(colors.bgApp)) {
         Box(modifier = Modifier.weight(1f)) {
             NavHost(
@@ -170,6 +169,7 @@ fun KoalaCastApp(
 
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
+                        onBack = { navController.popBackStack() },
                         onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
                         onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                         contentPadding = statusBarPadding(),
@@ -270,7 +270,10 @@ fun KoalaCastApp(
         }
 
         if (currentRoute != Routes.ONBOARDING) {
-            MiniPlayer(onExpand = { nowPlayingExpanded = true })
+            MiniPlayer(
+                onExpand = { nowPlayingExpanded = true },
+                modifier = if (showBottomBar) Modifier else Modifier.safeGesturesPadding(),
+            )
         }
 
         if (showBottomBar) {
@@ -292,6 +295,12 @@ fun KoalaCastApp(
     }
 
     if (nowPlayingExpanded) {
+        // Registered here rather than beside the state it reads, and that placement
+        // is the whole fix: the dispatcher invokes the most recently added enabled
+        // callback, and NavHost adds its own. Declared before the NavHost, this lost
+        // every race — back popped the graph underneath while the player stayed up.
+        BackHandler { nowPlayingExpanded = false }
+
         NowPlayingScreen(
             onCollapse = { nowPlayingExpanded = false },
             onOpenEpisode = { episodeId ->

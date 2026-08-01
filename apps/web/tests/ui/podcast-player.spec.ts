@@ -58,7 +58,7 @@ test.beforeEach(async ({ page }) => {
 			}
 		});
 	});
-	await page.route('**/api/v1/podcasts/test-show', async (route) => {
+	await page.route(/\/api\/v1\/podcasts\/test-show(?:\?.*)?$/, async (route) => {
 		await route.fulfill({
 			json: {
 				id: 'test-show',

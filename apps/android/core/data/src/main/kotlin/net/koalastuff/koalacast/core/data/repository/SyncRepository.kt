@@ -34,6 +34,7 @@ import net.koalastuff.koalacast.core.data.db.QueueItemEntity
 import net.koalastuff.koalacast.core.data.db.SubscriptionDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneDao
+import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.model.SyncStatus
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.HiddenPodcast
@@ -129,7 +130,7 @@ class SyncRepository @Inject constructor(
                     }
                     val snapshot = snapshotResponse.body()
                         ?: throw IOException("sync snapshot returned no body")
-                    applySnapshot(snapshot, generation)
+                    applySnapshot(snapshot, userId, generation)
                     cursor = snapshot.cursor.coerceAtLeast(0)
                     store.setCursor(userId, cursor)
                     recoveredFromSnapshot = true
@@ -152,7 +153,11 @@ class SyncRepository @Inject constructor(
         }
     }
 
-    private suspend fun applySnapshot(snapshot: SyncSnapshotResponse, generation: Long) {
+    private suspend fun applySnapshot(
+        snapshot: SyncSnapshotResponse,
+        userId: String,
+        generation: Long,
+    ) {
         if (snapshot.cursor < 0 ||
             snapshot.subscriptions.any {
                 it.string("podcast_id").isBlank() || it.long("added_at") <= 0
@@ -169,13 +174,15 @@ class SyncRepository @Inject constructor(
         ) {
             throw IOException("sync snapshot contains invalid records")
         }
+        val pushWatermark = store.pushWatermark(userId)
         database.withTransaction {
             ensureGeneration(generation)
             val localFolders = subscriptions.getAll().associate { it.podcastId to it.folder }
+            val pendingSubscriptions = subscriptions.getAll().filter { it.addedAt > pushWatermark }
+            val pendingFavorites = favorites.getAll().filter { it.addedAt > pushWatermark }
+            val pendingTombstones = tombstones.getAll().filter { it.deletedAt > pushWatermark }
             subscriptions.clear()
             favorites.clear()
-            playbackStates.clear()
-            listeningSessions.clear()
             queue.clear()
             podcastSettings.clear()
             tombstones.clear()
@@ -220,15 +227,34 @@ class SyncRepository @Inject constructor(
                     ),
                 )
             }
+            // A snapshot is authoritative only up to the last successful push.
+            // Retain newer local mutations that have not reached the server yet.
+            pendingSubscriptions.forEach { subscriptions.upsert(it) }
+            pendingFavorites.forEach { favorites.upsert(it) }
+            pendingTombstones.forEach { item ->
+                tombstones.upsert(item)
+                when (item.entityType) {
+                    TombstoneEntity.TYPE_SUBSCRIPTION -> subscriptions.delete(item.entityId)
+                    TombstoneEntity.TYPE_FAVORITE -> favorites.delete(item.entityId)
+                }
+            }
             snapshot.playbackStates.forEach { payload ->
                 val episodeId = payload.string("episode_id").ifBlank { payload.string("id") }
                 if (episodeId.isBlank()) return@forEach
-                playbackStates.upsert(playbackEntity(episodeId, payload, payload.long("last_played_at")))
+                val incomingAt = payload.long("last_played_at")
+                val existing = playbackStates.get(episodeId)
+                if (existing == null || incomingAt > existing.lastPlayedAt) {
+                    playbackStates.upsert(playbackEntity(episodeId, payload, incomingAt))
+                }
             }
             snapshot.listeningSessions.forEach { payload ->
                 val id = payload.string("id")
                 if (id.isBlank()) return@forEach
-                listeningSessions.upsert(listeningEntity(id, payload, payload.long("ended_at")))
+                val incomingAt = payload.long("ended_at")
+                val existing = listeningSessions.get(id)
+                if (existing == null || incomingAt > existing.endedAt) {
+                    listeningSessions.upsert(listeningEntity(id, payload, incomingAt))
+                }
             }
             store.resetQueueUpdatedAt()
             snapshot.queue.forEach { applyQueue(it, authoritative = true) }
@@ -245,9 +271,13 @@ class SyncRepository @Inject constructor(
     private suspend fun push(userId: String, deviceId: String, generation: Long) {
         ensureGeneration(generation)
         val previousWatermark = store.pushWatermark(userId)
+        val previousListeningWatermark = store.listeningSessionPushWatermark(userId)
         val nextWatermark = System.currentTimeMillis()
-        val operations = buildOperations(deviceId)
-            .filter { it.clientTimestamp > previousWatermark }
+        val operations = pendingSyncOperations(
+            operations = buildOperations(deviceId, listeningAfter = previousListeningWatermark),
+            generalWatermark = previousWatermark,
+            listeningWatermark = previousListeningWatermark,
+        )
         ensureGeneration(generation)
         operations.chunked(PUSH_BATCH).forEach { batch ->
             ensureGeneration(generation)
@@ -257,11 +287,15 @@ class SyncRepository @Inject constructor(
             if (!response.isSuccessful) throw IOException("sync push failed: ${response.code()}")
         }
         store.setPushWatermark(userId, nextWatermark)
+        store.setListeningSessionPushWatermark(userId, nextWatermark)
         // Cursor deliberately stays unchanged. The next pull re-reads our own
         // idempotent operations so a concurrent device cannot be skipped.
     }
 
-    internal suspend fun buildOperations(deviceId: String): List<SyncOperationDto> {
+    internal suspend fun buildOperations(
+        deviceId: String,
+        listeningAfter: Long? = null,
+    ): List<SyncOperationDto> {
         val operations = mutableListOf<SyncOperationDto>()
         subscriptions.getAll().forEach { item ->
             if (item.podcastId == item.feedUrl) return@forEach
@@ -294,7 +328,9 @@ class SyncRepository @Inject constructor(
                 payload = playbackPayload(item, deviceId),
             )
         }
-        listeningSessions.getAll().forEach { item ->
+        val sessions = listeningAfter?.let { listeningSessions.getEndedAfter(it) }
+            ?: listeningSessions.getAll()
+        sessions.forEach { item ->
             operations += operation(
                 id = "l:${item.id}:${item.endedAt}",
                 deviceId = deviceId,
@@ -380,6 +416,9 @@ class SyncRepository @Inject constructor(
             tombstones.delete("subscription:${change.entityId}")
             return
         }
+        // Pull happens before push. A local deletion that is still pending must
+        // not be erased by an older remote upsert encountered during that pull.
+        if (tombstones.get("subscription:${change.entityId}") != null) return
         val podcastId = payload.string("podcast_id").ifBlank { change.entityId }
         val localFolder = subscriptions.get(podcastId)?.folder.orEmpty()
         subscriptions.upsert(
@@ -406,6 +445,7 @@ class SyncRepository @Inject constructor(
             tombstones.delete("favorite:${change.entityId}")
             return
         }
+        if (tombstones.get("favorite:${change.entityId}") != null) return
         favorites.upsert(
             FavoriteEntity(
                 episodeId = payload.string("episode_id").ifBlank { change.entityId },
@@ -568,8 +608,13 @@ class SyncRepository @Inject constructor(
                     "download_concurrency",
                     current.downloadConcurrency,
                 ),
-                downloadBudgetBytes = payload.long("download_budget_bytes")
-                    .takeIf { it > 0 } ?: current.downloadBudgetBytes,
+                downloadBudgetBytes = if ("download_budget_bytes" in payload) {
+                    payload.longOrNull("download_budget_bytes")
+                        ?.coerceIn(0L, MAX_SYNCED_DOWNLOAD_BUDGET_BYTES)
+                        ?: current.downloadBudgetBytes
+                } else {
+                    current.downloadBudgetBytes
+                },
             ),
             updatedAt,
             force = authoritative,
@@ -815,5 +860,18 @@ class SyncRepository @Inject constructor(
     private companion object {
         const val PAGE_LIMIT = 500
         const val PUSH_BATCH = 250
+        const val MAX_SYNCED_DOWNLOAD_BUDGET_BYTES = 10L * 1024 * 1024 * 1024
+    }
+}
+
+internal fun pendingSyncOperations(
+    operations: List<SyncOperationDto>,
+    generalWatermark: Long,
+    listeningWatermark: Long,
+): List<SyncOperationDto> = operations.filter { operation ->
+    operation.clientTimestamp > if (operation.entityType == "listening_session") {
+        listeningWatermark
+    } else {
+        generalWatermark
     }
 }

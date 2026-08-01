@@ -489,6 +489,9 @@
 		<div class="mobile-title">
 			<strong>{t('quiet.nav.discover')}</strong>
 			<span>{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
+			<button class="language-switch" type="button" onclick={toggleUILanguage} aria-label={`${t('quiet.discover.changeLanguage')}: ${prefs.uiLanguage.toUpperCase()}`} title={t('quiet.discover.changeLanguage')}>
+				{prefs.uiLanguage.toUpperCase()}
+			</button>
 		</div>
 		<label class="global-search">
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
@@ -496,7 +499,7 @@
 			<kbd>⌘K</kbd>
 		</label>
 		<span class="edition-date">{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
-		<button class="language-switch" type="button" onclick={toggleUILanguage} aria-label={`${t('quiet.discover.changeLanguage')}: ${prefs.uiLanguage.toUpperCase()}`} title={t('quiet.discover.changeLanguage')}>
+		<button class="language-switch desktop-language-switch" type="button" onclick={toggleUILanguage} aria-label={`${t('quiet.discover.changeLanguage')}: ${prefs.uiLanguage.toUpperCase()}`} title={t('quiet.discover.changeLanguage')}>
 			{prefs.uiLanguage.toUpperCase()}
 		</button>
 	</header>
@@ -764,12 +767,11 @@
 			gap: 10px;
 			padding: 13px 16px 14px;
 		}
-		.mobile-title { display: flex; align-items: center; justify-content: space-between; }
+		.mobile-title { display: flex; align-items: center; gap: 10px; }
 		.mobile-title strong { font: 800 17px/1 var(--font-ui); }
-		.mobile-title span { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; }
-		.discover-topbar { position: relative; }
-		.discover-topbar .language-switch { position: absolute; top: 12px; right: 16px; }
-		.mobile-title { padding-right: 46px; }
+		.mobile-title span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; }
+		.mobile-title .language-switch { flex: 0 0 auto; }
+		.desktop-language-switch { display: none; }
 		.global-search kbd { display: none; }
 		.session-section { display: contents; }
 		.session-control { order: 1; padding: 16px; border-bottom: 1px solid var(--border-hair); }

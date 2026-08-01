@@ -136,7 +136,13 @@ class AccountViewModel @Inject constructor(
     fun setGlobalStats(enabled: Boolean) = launchAction {
         when (val result = accounts.setGlobalStatsPreference(enabled)) {
             is DataResult.Failure -> fail(result.error)
-            is DataResult.Success -> form.update { it.copy(globalStatsOptIn = result.data) }
+            is DataResult.Success -> {
+                form.update { it.copy(globalStatsOptIn = result.data) }
+                // Consent alone cannot make local listening visible to the
+                // aggregate. Upload existing sessions immediately so opening
+                // Community next does not show an apparently contradictory zero.
+                if (result.data) sync.syncNow()
+            }
         }
     }
 

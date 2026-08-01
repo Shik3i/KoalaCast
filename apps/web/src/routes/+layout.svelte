@@ -3,6 +3,7 @@
 	import '$lib/styles/phosphor-subset.css';
 	import '../lib/styles/app.css';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import RailResizer from '$lib/components/RailResizer.svelte';
 	import RunningOrder from '$lib/components/RunningOrder.svelte';
 	import Seo from '$lib/components/Seo.svelte';
@@ -20,7 +21,7 @@
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import { getLocalSubscriptions } from '$lib/idb/db';
-	import { preloadSubscriptionArtwork } from '$lib/artwork';
+	import { preloadSubscriptionArtwork, setArtworkProxyEnabled } from '$lib/artwork';
 
 	let { children } = $props();
 	let currentUser = $state<{ user_id: string; username: string; role: string } | null>(null);
@@ -32,10 +33,9 @@
 	const showRunningOrder = $derived(path === '/');
 	const appLinks = $derived([
 		{ href: '/', icon: 'ph-newspaper', label: t('quiet.nav.discover') },
-		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('nav.new') },
 		{ href: '/library', icon: 'ph-squares-four', label: t('nav.library') },
-		{ href: '/more', icon: 'ph-dots-three-circle', label: t('nav.profileMenu') }
+		{ href: '/profile', icon: 'ph-user-circle', label: t('nav.profileMenu') }
 	]);
 
 	onMount(async () => {
@@ -57,6 +57,16 @@
 			} else {
 				await activateAccountContext(null);
 			}
+		}
+		const startScreenMarker = 'koalacast_start_screen_applied';
+		try {
+			if (prefs.onboarded && location.pathname === '/' && sessionStorage.getItem(startScreenMarker) !== '1') {
+				sessionStorage.setItem(startScreenMarker, '1');
+				const destination = prefs.startScreen === 'inbox' ? '/inbox' : prefs.startScreen === 'library' ? '/library' : null;
+				if (destination) void goto(destination, { replaceState: true });
+			}
+		} catch (_) {
+			// Storage may be disabled; the app must still mount on the default route.
 		}
 		void getLocalSubscriptions().then(preloadSubscriptionArtwork);
 	});
@@ -120,6 +130,7 @@
 		document.documentElement.lang = locale;
 		document.documentElement.dir = getLocaleConfig(locale)?.rtl ? 'rtl' : 'ltr';
 	});
+	$effect(() => setArtworkProxyEnabled(prefs.proxyImages));
 
 	function active(href: string) {
 		return href === '/' ? path === '/' : path === href || path.startsWith(`${href}/`);

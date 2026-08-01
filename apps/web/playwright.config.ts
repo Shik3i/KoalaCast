@@ -4,10 +4,15 @@ export default defineConfig({
 	testDir: './tests/ui',
 	fullyParallel: false,
 	workers: 2,
+	globalTimeout: 180_000,
+	timeout: 20_000,
 	retries: process.env.CI ? 2 : 0,
 	reporter: process.env.CI ? [['html', { open: 'never' }], ['list']] : 'list',
 	use: {
 		baseURL: 'http://127.0.0.1:4173',
+		// Page routes are the API fixture layer in these tests. A registered PWA
+		// service worker would intercept first and leak requests to a real backend.
+		serviceWorkers: 'block',
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},

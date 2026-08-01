@@ -40,6 +40,7 @@ data class InboxUiState(
     val downloadedOnly: Boolean = false,
     val downloadedIds: Set<String> = emptySet(),
     val downloadStates: Map<String, DownloadState> = emptyMap(),
+    val downloadProgress: Map<String, Int> = emptyMap(),
     val selectedPodcastId: String? = null,
     val dateRange: InboxDateRange = InboxDateRange.ALL,
     val mood: InboxMood = InboxMood.ALL,
@@ -50,6 +51,7 @@ data class InboxUiState(
     val failedFeeds: Int = 0,
     val progressByEpisode: Map<String, Int> = emptyMap(),
     val currentEpisodeId: String? = null,
+    val currentEpisodePlaying: Boolean = false,
 ) {
     val feed: List<InboxEpisode>
         get() {
@@ -111,6 +113,9 @@ class InboxViewModel @Inject constructor(
                         downloadedIds = items.filter { item -> item.state == DownloadState.DONE }
                             .mapTo(mutableSetOf()) { item -> item.episodeId },
                         downloadStates = items.associate { item -> item.episodeId to item.state },
+                        downloadProgress = items.associate {
+                            item -> item.episodeId to item.progressPercent
+                        },
                     )
                 }
             }
@@ -125,9 +130,15 @@ class InboxViewModel @Inject constructor(
                     map[track.episodeId] = ((playback.positionMs * 100) / playback.durationMs)
                         .toInt().coerceIn(0, 100)
                 }
-                map to track?.episodeId
-            }.collect { (map, currentId) ->
-                _state.update { it.copy(progressByEpisode = map, currentEpisodeId = currentId) }
+                Triple(map, track?.episodeId, playback.isPlaying)
+            }.collect { (map, currentId, playing) ->
+                _state.update {
+                    it.copy(
+                        progressByEpisode = map,
+                        currentEpisodeId = currentId,
+                        currentEpisodePlaying = playing,
+                    )
+                }
             }
         }
         viewModelScope.launch {

@@ -63,13 +63,13 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		title: '4. Server Proxying & External Metadata',
 		icon: 'ph-arrows-merge',
 		paragraphs: [
-			'To protect your IP address from third-party networks and bypass CORS restrictions, KoalaCast handles external metadata through the backend proxy:'
+			'KoalaCast handles external metadata through the backend proxy where described below. Artwork protection is enabled by default and can be turned off in Settings; search, feed, chapter, and transcript requests remain proxied.'
 		],
 		proxyComparison: {
 			proxied: {
 				title: 'Proxied by KoalaCast Backend:',
 				items: [
-					{ label: 'Artwork Proxy (/api/v1/proxy/image)', text: 'Podcast cover images are fetched by the server, Catmull-Rom downscaled, compressed to JPEG, and cached in a 100MB RAM LRU cache. Third-party image hosts do not see client IP addresses.' },
+					{ label: 'Artwork Proxy (/api/v1/proxy/image)', text: 'When artwork protection is enabled, podcast cover images are fetched by the server, Catmull-Rom downscaled, compressed to JPEG, and cached in a 100MB RAM LRU cache. Third-party image hosts do not see client IP addresses.' },
 					{ label: 'Search & Discovery', text: 'Search queries (iTunes Search API & PodcastIndex API) are executed by the Go backend. Search APIs see only the KoalaCast server IP address.' },
 					{ label: 'RSS Feed Parsing', text: 'Podcast RSS XML feed files are fetched and parsed on the server side.' },
 					{ label: 'Chapters & Transcripts', text: 'Episode chapter JSON and WebVTT/SRT transcript files are fetched via CORS-safe proxy endpoints (/api/v1/proxy/chapters, /api/v1/proxy/transcript).' },
@@ -79,6 +79,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 			direct: {
 				title: 'Direct Connection (NOT Proxied):',
 				items: [
+					{ label: 'Artwork when protection is disabled', text: 'The browser loads cover images from the podcast image host, which receives your IP address and User-Agent header.' },
 					{ label: 'Audio Streams (MP3 / AAC)', text: "Normal playback without optional Web Audio effects is streamed directly from podcast publishers' CDNs (e.g. Libsyn, Megaphone, Podbean, Anchor, AWS S3)." },
 					{ label: 'Reasoning', text: 'Direct playback minimizes server latency and bandwidth. If a publisher blocks Web Audio and the instance operator has not enabled the optional relay, KoalaCast leaves the effect disabled and explains why instead of producing silence.' },
 					{ label: 'Publisher Metadata', text: "When playing an episode, the publisher's CDN receives standard HTTP GET requests directly from your browser, containing your IP address and User-Agent header as required for web audio delivery." }

@@ -45,6 +45,7 @@ data class PodcastUiState(
     val progressByEpisode: Map<String, Int> = emptyMap(),
     /** The episode the player currently holds, if any. */
     val currentEpisodeId: String? = null,
+    val currentEpisodePlaying: Boolean = false,
 )
 
 @HiltViewModel
@@ -203,9 +204,15 @@ class PodcastViewModel @Inject constructor(
                             .toInt()
                             .coerceIn(0, 100)
                 }
-                map to track?.episodeId
-            }.collect { (map, currentId) ->
-                _state.update { it.copy(progressByEpisode = map, currentEpisodeId = currentId) }
+                Triple(map, track?.episodeId, playback.isPlaying)
+            }.collect { (map, currentId, playing) ->
+                _state.update {
+                    it.copy(
+                        progressByEpisode = map,
+                        currentEpisodeId = currentId,
+                        currentEpisodePlaying = playing,
+                    )
+                }
             }
         }
     }

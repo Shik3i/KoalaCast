@@ -28,6 +28,13 @@ export function summarizeListening(
 	sessions: LocalListeningSession[],
 	states: LocalPlaybackState[]
 ): ListeningAnalytics {
+	const listenedByEpisode = new Map<string, number>();
+	for (const session of sessions) {
+		listenedByEpisode.set(
+			session.episode_id,
+			(listenedByEpisode.get(session.episode_id) ?? 0) + Math.max(0, session.audio_listened_ms)
+		);
+	}
 	const byDay = new Map<string, number>();
 	const weekdayTotals = Array(7).fill(0) as number[];
 	const hourTotals = Array(24).fill(0) as number[];
@@ -82,7 +89,7 @@ export function summarizeListening(
 		averageSpeed: totalWallMs ? speedWeightedMs / totalWallMs : 1,
 		activeDays: byDay.size,
 		longestStreak: longestStreak([...byDay.keys()]),
-		completedCount: states.filter((state) => state.completed).length,
+		completedCount: states.filter((state) => finishedByListening(state, listenedByEpisode)).length,
 		showTotals: [...shows.values()]
 			.map((show) => ({ id: show.id, title: show.title, ms: show.ms, episodes: show.episodes.size }))
 			.sort((a, b) => b.ms - a.ms)
@@ -95,6 +102,18 @@ export function summarizeListening(
 			.slice(0, 5),
 		byDay
 	};
+}
+
+export function finishedByListening(
+	state: LocalPlaybackState,
+	listenedByEpisode: ReadonlyMap<string, number>
+): boolean {
+	if (!state.completed) return false;
+	const listenedMs = listenedByEpisode.get(state.episode_id) ?? 0;
+	const durationMs = Math.max(0, state.duration_ms ?? 0);
+	return durationMs > 0
+		? listenedMs >= durationMs * 0.5
+		: listenedMs >= 5 * 60_000;
 }
 
 function distributeAcrossHours(

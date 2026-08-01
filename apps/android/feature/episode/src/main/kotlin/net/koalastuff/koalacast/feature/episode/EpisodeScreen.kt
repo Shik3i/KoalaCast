@@ -36,6 +36,7 @@ import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
+import net.koalastuff.koalacast.core.ui.component.LabelledDownloadAction
 import net.koalastuff.koalacast.core.ui.component.LabelledIconAction
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
@@ -252,9 +253,21 @@ internal fun EpisodeContent(
                                 onClick = onTogglePlayed,
                                 tint = if (state.isPlayed) colors.accentInk else colors.ink3,
                             )
-                            LabelledIconAction(
-                                icon = PhosphorIcons.DownloadSimple,
-                                label = stringResource(R.string.episode_download_short),
+                            // A ring rather than a flat icon: a download has a
+                            // duration, and the old control reported none of it.
+                            LabelledDownloadAction(
+                                state = state.downloadState,
+                                progressPercent = state.downloadPercent,
+                                label = stringResource(
+                                    when (state.downloadState) {
+                                        net.koalastuff.koalacast.core.model.DownloadState.DONE ->
+                                            R.string.episode_downloaded_short
+                                        net.koalastuff.koalacast.core.model.DownloadState.DOWNLOADING,
+                                        net.koalastuff.koalacast.core.model.DownloadState.QUEUED ->
+                                            R.string.episode_downloading_short
+                                        else -> R.string.episode_download_short
+                                    },
+                                ),
                                 contentDescription = stringResource(
                                     when (state.downloadState) {
                                         net.koalastuff.koalacast.core.model.DownloadState.DONE ->
@@ -266,10 +279,6 @@ internal fun EpisodeContent(
                                     },
                                 ),
                                 onClick = onToggleDownload,
-                                tint = if (
-                                    state.downloadState ==
-                                    net.koalastuff.koalacast.core.model.DownloadState.DONE
-                                ) colors.accentInk else colors.ink3,
                             )
                         }
                     }

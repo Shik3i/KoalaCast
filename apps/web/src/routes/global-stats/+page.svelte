@@ -78,7 +78,11 @@
 			const data = await res.json();
 			if (id === requestId) {
 				stats = data;
-				localStorage.setItem(`koalacast_global_stats_${range}`, JSON.stringify(data));
+				try {
+					localStorage.setItem(`koalacast_global_stats_${range}`, JSON.stringify(data));
+				} catch {
+					// Storage can be disabled. Fresh server data must still render.
+				}
 			}
 		} catch (_) {
 			if (id === requestId) {

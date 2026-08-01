@@ -18,6 +18,8 @@ import {
 	getLocalQueue,
 	getLocalQueueUpdatedAt,
 	getTombstones,
+	getTombstone,
+	acknowledgeTombstone,
 	getLocalPlaybackState,
 	saveLocalSubscription,
 	saveLocalPlaybackState,
@@ -39,6 +41,7 @@ import {
 	type PodcastPlaybackSettings
 } from '$lib/stores/podcast-settings';
 import { prefs } from '$lib/stores/prefs.svelte';
+import { shouldUploadListeningSession } from '$lib/stores/sync-selection';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
 
@@ -270,7 +273,7 @@ class SyncStore {
 		const snapshot = await res.json();
 		this.#assertRun(userId, generation, signal);
 		if (!Number.isFinite(snapshot.cursor)) throw new Error('sync snapshot missing cursor');
-		await replaceLocalSyncSnapshot(snapshot);
+		await replaceLocalSyncSnapshot(snapshot, this.#getPushWatermark(userId));
 		const queuePayloads = Array.isArray(snapshot.queue) ? snapshot.queue : [];
 		if (queuePayloads.length === 0) {
 			await replaceLocalQueueFromSync([], 0, { authoritative: true });
@@ -356,8 +359,10 @@ class SyncStore {
 		const listeningSessions = await getLocalListeningSessions();
 		const sessionWatermarks = this.#getSessionWatermarks(userId);
 		for (const session of listeningSessions) {
-			if (session.ended_at <= previousWatermark) continue;
-			if ((sessionWatermarks[session.id] || 0) >= session.ended_at) continue;
+			// Listening-session sync shipped after the general watermark. Its own
+			// per-session watermark must decide whether an older local session was
+			// uploaded; otherwise upgraded clients can never backfill their history.
+			if (!shouldUploadListeningSession(session.ended_at, sessionWatermarks[session.id])) continue;
 			ops.push({
 				client_op_id: `l:${session.id}:${session.ended_at}`,
 				device_id: dev,
@@ -475,7 +480,11 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 	if (cs.entity_type === 'subscription') {
 		if (isDelete) {
 			await removeLocalSubscriptionSilent(cs.entity_id);
+			await acknowledgeTombstone('subscription', cs.entity_id);
 		} else if (cs.payload && typeof cs.payload === 'object') {
+			// Pull precedes push. Keep a local deletion until its own delete
+			// operation has reached the server and comes back through the log.
+			if (await getTombstone('subscription', cs.entity_id)) return;
 			const p = cs.payload as Partial<LocalSubscription>;
 			await saveLocalSubscription({
 				podcast_id: p.podcast_id || cs.entity_id,
@@ -490,7 +499,9 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 	} else if (cs.entity_type === 'favorite') {
 		if (isDelete) {
 			await removeLocalFavoriteSilent(cs.entity_id);
+			await acknowledgeTombstone('favorite', cs.entity_id);
 		} else if (cs.payload && typeof cs.payload === 'object') {
+			if (await getTombstone('favorite', cs.entity_id)) return;
 			const p = cs.payload as Partial<LocalFavorite>;
 			await addLocalFavorite({
 				episode_id: p.episode_id || cs.entity_id,

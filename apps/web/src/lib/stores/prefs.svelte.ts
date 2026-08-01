@@ -24,6 +24,9 @@ import {
 
 export type DateFormat = 'absolute' | 'relative';
 export type DefaultInboxMode = 'all' | 'latest';
+export type StartScreen = 'discover' | 'inbox' | 'library';
+export type VisualizerStyle = 'off' | 'level' | 'waveform';
+export type DownloadRetention = 'keep' | 'finished' | '7d' | '14d' | '30d';
 export interface HiddenPodcastPreference {
 	key: string;
 	title: string;
@@ -40,6 +43,14 @@ const ONBOARDED_KEY = 'koalacast_onboarded';
 const VOLUME_BOOST_KEY = 'koalacast_volume_boost';
 const SKIP_SILENCE_KEY = 'koalacast_skip_silence';
 const PLAYBACK_SPEED_KEY = 'koalacast_playback_speed';
+const START_SCREEN_KEY = 'koalacast_start_screen';
+const VISUALIZER_KEY = 'koalacast_visualizer';
+const PROXY_IMAGES_KEY = 'koalacast_proxy_images';
+const DOWNLOAD_WIFI_ONLY_KEY = 'koalacast_download_wifi_only';
+const AUTO_DOWNLOAD_COUNT_KEY = 'koalacast_auto_download_count';
+const DOWNLOAD_RETENTION_KEY = 'koalacast_download_retention';
+const DOWNLOAD_CONCURRENCY_KEY = 'koalacast_download_concurrency';
+const DOWNLOAD_BUDGET_BYTES_KEY = 'koalacast_download_budget_bytes';
 const SETTINGS_UPDATED_AT_KEY = 'koalacast_settings_updated_at';
 const FOREIGN_SETTINGS_KEY = 'koalacast_settings_foreign';
 const GUEST_MIGRATION_KEY = 'koalacast_guest_preferences_migrated';
@@ -54,9 +65,26 @@ const ACCOUNT_SCOPED_KEYS = [
 	VOLUME_BOOST_KEY,
 	SKIP_SILENCE_KEY,
 	PLAYBACK_SPEED_KEY,
+	START_SCREEN_KEY,
+	VISUALIZER_KEY,
+	PROXY_IMAGES_KEY,
+	DOWNLOAD_WIFI_ONLY_KEY,
+	AUTO_DOWNLOAD_COUNT_KEY,
+	DOWNLOAD_RETENTION_KEY,
+	DOWNLOAD_CONCURRENCY_KEY,
+	DOWNLOAD_BUDGET_BYTES_KEY,
 	SETTINGS_UPDATED_AT_KEY,
 	FOREIGN_SETTINGS_KEY
 ];
+
+function preferenceStorage(): Storage | null {
+	if (
+		typeof localStorage === 'undefined' ||
+		typeof localStorage.getItem !== 'function' ||
+		typeof localStorage.setItem !== 'function'
+	) return null;
+	return localStorage;
+}
 
 function initialForeignSettings(): Record<string, unknown> {
 	if (typeof localStorage === 'undefined') return {};
@@ -84,9 +112,68 @@ function initialBoolean(key: string): boolean {
 	}
 }
 
+function initialBooleanWithDefault(key: string, fallback: boolean): boolean {
+	if (typeof localStorage === 'undefined') return fallback;
+	try {
+		const value = localStorage.getItem(scopedKey(key));
+		return value === null ? fallback : value === '1';
+	} catch (_) {
+		return fallback;
+	}
+}
+
+function initialNumber(key: string, fallback: number, min: number, max: number): number {
+	if (typeof localStorage === 'undefined') return fallback;
+	try {
+		const raw = localStorage.getItem(scopedKey(key));
+		if (raw === null) return fallback;
+		return clampedNumber(raw, fallback, min, max);
+	} catch (_) {
+		return fallback;
+	}
+}
+
+function clampedNumber(value: unknown, fallback: number, min: number, max: number): number {
+	const numeric = Number(value);
+	return Number.isFinite(numeric)
+		? Math.min(max, Math.max(min, Math.round(numeric)))
+		: fallback;
+}
+
+function initialStartScreen(): StartScreen {
+	if (typeof localStorage === 'undefined') return 'discover';
+	try {
+		const value = localStorage.getItem(scopedKey(START_SCREEN_KEY));
+		return value === 'inbox' || value === 'library' ? value : 'discover';
+	} catch (_) {
+		return 'discover';
+	}
+}
+
+function initialVisualizer(): VisualizerStyle {
+	if (typeof localStorage === 'undefined') return 'off';
+	try {
+		const value = localStorage.getItem(scopedKey(VISUALIZER_KEY));
+		return value === 'level' || value === 'waveform' ? value : 'off';
+	} catch (_) {
+		return 'off';
+	}
+}
+
+function initialDownloadRetention(): DownloadRetention {
+	if (typeof localStorage === 'undefined') return 'keep';
+	try {
+		const value = localStorage.getItem(scopedKey(DOWNLOAD_RETENTION_KEY));
+		return value === 'finished' || value === '7d' || value === '14d' || value === '30d' ? value : 'keep';
+	} catch (_) {
+		return 'keep';
+	}
+}
+
 function initialPlaybackSpeed(): number {
-	if (typeof localStorage === 'undefined') return 1;
-	return storedPlaybackSpeed(localStorage.getItem(scopedKey(PLAYBACK_SPEED_KEY)));
+	const storage = preferenceStorage();
+	if (!storage) return 1;
+	return storedPlaybackSpeed(storage.getItem(scopedKey(PLAYBACK_SPEED_KEY)));
 }
 
 // Reads the stored content languages, migrating the legacy storefront codes
@@ -107,8 +194,9 @@ function initialLanguages(): string[] {
 // first content language when it is one we have translations for, else to the
 // browser's own language.
 export function initialUILanguage(contentLanguages: string[] = initialLanguages()): string {
-	if (typeof localStorage === 'undefined') return 'en';
-	const stored = localStorage.getItem(scopedKey(UI_LANGUAGE_KEY));
+	const storage = preferenceStorage();
+	if (!storage) return 'en';
+	const stored = storage.getItem(scopedKey(UI_LANGUAGE_KEY));
 	if (stored && isSupportedLocale(stored)) return stored;
 	const fromContent = resolveLocale(contentLanguages[0]);
 	if (fromContent !== 'en') return fromContent;
@@ -116,8 +204,9 @@ export function initialUILanguage(contentLanguages: string[] = initialLanguages(
 }
 
 function initialFormat(): DateFormat {
-	if (typeof localStorage === 'undefined') return 'absolute';
-	return localStorage.getItem(scopedKey(KEY)) === 'relative' ? 'relative' : 'absolute';
+	const storage = preferenceStorage();
+	if (!storage) return 'absolute';
+	return storage.getItem(scopedKey(KEY)) === 'relative' ? 'relative' : 'absolute';
 }
 
 function initialInterests(): string[] {
@@ -157,8 +246,9 @@ function initialHiddenPodcasts(): HiddenPodcastPreference[] {
 }
 
 function initialDefaultInboxMode(): DefaultInboxMode {
-	if (typeof localStorage === 'undefined') return 'all';
-	return localStorage.getItem(scopedKey(DEFAULT_INBOX_MODE_KEY)) === 'latest' ? 'latest' : 'all';
+	const storage = preferenceStorage();
+	if (!storage) return 'all';
+	return storage.getItem(scopedKey(DEFAULT_INBOX_MODE_KEY)) === 'latest' ? 'latest' : 'all';
 }
 
 export function podcastPreferenceKey(feedUrl?: string, id?: string): string {
@@ -168,8 +258,9 @@ export function podcastPreferenceKey(feedUrl?: string, id?: string): string {
 }
 
 function initialOnboarded(): boolean {
-	if (typeof localStorage === 'undefined') return true; // never block SSR
-	return localStorage.getItem(ONBOARDED_KEY) === '1';
+	const storage = preferenceStorage();
+	if (!storage) return true; // never block SSR
+	return storage.getItem(ONBOARDED_KEY) === '1';
 }
 
 class Prefs {
@@ -193,30 +284,41 @@ class Prefs {
 	volumeBoost = $state<boolean>(initialBoolean(VOLUME_BOOST_KEY));
 	skipSilence = $state<boolean>(initialBoolean(SKIP_SILENCE_KEY));
 	playbackSpeed = $state<number>(initialPlaybackSpeed());
+	startScreen = $state<StartScreen>(initialStartScreen());
+	visualizer = $state<VisualizerStyle>(initialVisualizer());
+	proxyImages = $state<boolean>(initialBooleanWithDefault(PROXY_IMAGES_KEY, true));
+	downloadWifiOnly = $state<boolean>(initialBooleanWithDefault(DOWNLOAD_WIFI_ONLY_KEY, true));
+	autoDownloadCount = $state<number>(initialNumber(AUTO_DOWNLOAD_COUNT_KEY, 3, 1, 10));
+	downloadRetention = $state<DownloadRetention>(initialDownloadRetention());
+	downloadConcurrency = $state<number>(initialNumber(DOWNLOAD_CONCURRENCY_KEY, 2, 1, 4));
+	downloadBudgetBytes = $state<number>(
+		initialNumber(DOWNLOAD_BUDGET_BYTES_KEY, 2_048 * 1024 * 1024, 0, 10 * 1024 * 1024 * 1024)
+	);
 	updatedAt = $state<number>(
-		typeof localStorage === 'undefined'
+		preferenceStorage() === null
 			? 0
-			: Math.max(0, Number(localStorage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0)
+			: Math.max(0, Number(preferenceStorage()?.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0)
 	);
 	// Settings keys owned by another client, kept verbatim so pushing from here
 	// does not delete them from the server. Not $state: nothing renders them.
 	#foreignSettings: Record<string, unknown> = initialForeignSettings();
 
 	activateContext(userId: string | null, options: { migrateGuest?: boolean } = {}) {
+		const storage = preferenceStorage();
 		if (
-			typeof localStorage !== 'undefined' &&
+			storage &&
 			userId &&
 			options.migrateGuest &&
-			localStorage.getItem(GUEST_MIGRATION_KEY) !== '1'
+			storage.getItem(GUEST_MIGRATION_KEY) !== '1'
 		) {
 			for (const baseKey of ACCOUNT_SCOPED_KEYS) {
 				const target = scopedKey(baseKey, userId);
-				if (localStorage.getItem(target) === null) {
-					const legacy = localStorage.getItem(baseKey);
-					if (legacy !== null) localStorage.setItem(target, legacy);
+				if (storage.getItem(target) === null) {
+					const legacy = storage.getItem(baseKey);
+					if (legacy !== null) storage.setItem(target, legacy);
 				}
 			}
-			localStorage.setItem(GUEST_MIGRATION_KEY, '1');
+			storage.setItem(GUEST_MIGRATION_KEY, '1');
 		}
 		activeOwner = userId;
 		this.#foreignSettings = initialForeignSettings();
@@ -230,10 +332,23 @@ class Prefs {
 		this.volumeBoost = initialBoolean(VOLUME_BOOST_KEY);
 		this.skipSilence = initialBoolean(SKIP_SILENCE_KEY);
 		this.playbackSpeed = initialPlaybackSpeed();
+		this.startScreen = initialStartScreen();
+		this.visualizer = initialVisualizer();
+		this.proxyImages = initialBooleanWithDefault(PROXY_IMAGES_KEY, true);
+		this.downloadWifiOnly = initialBooleanWithDefault(DOWNLOAD_WIFI_ONLY_KEY, true);
+		this.autoDownloadCount = initialNumber(AUTO_DOWNLOAD_COUNT_KEY, 3, 1, 10);
+		this.downloadRetention = initialDownloadRetention();
+		this.downloadConcurrency = initialNumber(DOWNLOAD_CONCURRENCY_KEY, 2, 1, 4);
+		this.downloadBudgetBytes = initialNumber(
+			DOWNLOAD_BUDGET_BYTES_KEY,
+			2_048 * 1024 * 1024,
+			0,
+			10 * 1024 * 1024 * 1024
+		);
 		this.updatedAt =
-			typeof localStorage === 'undefined'
+			storage === null
 				? 0
-				: Math.max(0, Number(localStorage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0);
+				: Math.max(0, Number(storage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0);
 	}
 
 	#touch() {
@@ -303,6 +418,59 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
 		} catch (_) {}
+		this.#touch();
+	}
+
+	setStartScreen(value: StartScreen) {
+		this.startScreen = value;
+		try { localStorage.setItem(scopedKey(START_SCREEN_KEY), value); } catch (_) {}
+		this.#touch();
+	}
+
+	setVisualizer(value: VisualizerStyle) {
+		this.visualizer = value;
+		try { localStorage.setItem(scopedKey(VISUALIZER_KEY), value); } catch (_) {}
+		this.#touch();
+	}
+
+	setProxyImages(enabled: boolean) {
+		this.proxyImages = enabled;
+		try { localStorage.setItem(scopedKey(PROXY_IMAGES_KEY), enabled ? '1' : '0'); } catch (_) {}
+		this.#touch();
+	}
+
+	setDownloadWifiOnly(enabled: boolean) {
+		this.downloadWifiOnly = enabled;
+		try { localStorage.setItem(scopedKey(DOWNLOAD_WIFI_ONLY_KEY), enabled ? '1' : '0'); } catch (_) {}
+		this.#touch();
+	}
+
+	setAutoDownloadCount(value: number) {
+		this.autoDownloadCount = clampedNumber(value, this.autoDownloadCount, 1, 10);
+		try { localStorage.setItem(scopedKey(AUTO_DOWNLOAD_COUNT_KEY), String(this.autoDownloadCount)); } catch (_) {}
+		this.#touch();
+	}
+
+	setDownloadRetention(value: DownloadRetention) {
+		this.downloadRetention = value;
+		try { localStorage.setItem(scopedKey(DOWNLOAD_RETENTION_KEY), value); } catch (_) {}
+		this.#touch();
+	}
+
+	setDownloadConcurrency(value: number) {
+		this.downloadConcurrency = clampedNumber(value, this.downloadConcurrency, 1, 4);
+		try { localStorage.setItem(scopedKey(DOWNLOAD_CONCURRENCY_KEY), String(this.downloadConcurrency)); } catch (_) {}
+		this.#touch();
+	}
+
+	setDownloadBudgetBytes(value: number) {
+		this.downloadBudgetBytes = clampedNumber(
+			value,
+			this.downloadBudgetBytes,
+			0,
+			10 * 1024 * 1024 * 1024
+		);
+		try { localStorage.setItem(scopedKey(DOWNLOAD_BUDGET_BYTES_KEY), String(this.downloadBudgetBytes)); } catch (_) {}
 		this.#touch();
 	}
 
@@ -407,6 +575,14 @@ class Prefs {
 				volume_boost: this.volumeBoost,
 				skip_silence: this.skipSilence,
 				playback_speed: this.playbackSpeed,
+				start_screen: this.startScreen,
+				visualizer: this.visualizer,
+				proxy_images: this.proxyImages,
+				download_wifi_only: this.downloadWifiOnly,
+				auto_download_count: this.autoDownloadCount,
+				download_retention: this.downloadRetention,
+				download_concurrency: this.downloadConcurrency,
+				download_budget_bytes: this.downloadBudgetBytes,
 				updated_at: this.updatedAt
 			},
 			this.#foreignSettings
@@ -425,6 +601,14 @@ class Prefs {
 		this.volumeBoost = false;
 		this.skipSilence = false;
 		this.playbackSpeed = 1;
+		this.startScreen = 'discover';
+		this.visualizer = 'off';
+		this.proxyImages = true;
+		this.downloadWifiOnly = true;
+		this.autoDownloadCount = 3;
+		this.downloadRetention = 'keep';
+		this.downloadConcurrency = 2;
+		this.downloadBudgetBytes = 2_048 * 1024 * 1024;
 		this.updatedAt = 0;
 		try {
 			for (const baseKey of ACCOUNT_SCOPED_KEYS) {
@@ -484,6 +668,31 @@ class Prefs {
 		if (payload.playback_speed !== null && payload.playback_speed !== undefined) {
 			this.playbackSpeed = storedPlaybackSpeed(payload.playback_speed);
 		}
+		if (payload.start_screen === 'discover' || payload.start_screen === 'inbox' || payload.start_screen === 'library') {
+			this.startScreen = payload.start_screen;
+		}
+		if (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform') {
+			this.visualizer = payload.visualizer;
+		}
+		if (typeof payload.proxy_images === 'boolean') this.proxyImages = payload.proxy_images;
+		if (typeof payload.download_wifi_only === 'boolean') this.downloadWifiOnly = payload.download_wifi_only;
+		if (payload.auto_download_count !== null && payload.auto_download_count !== undefined) {
+			this.autoDownloadCount = clampedNumber(payload.auto_download_count, this.autoDownloadCount, 1, 10);
+		}
+		if (payload.download_retention === 'keep' || payload.download_retention === 'finished' || payload.download_retention === '7d' || payload.download_retention === '14d' || payload.download_retention === '30d') {
+			this.downloadRetention = payload.download_retention;
+		}
+		if (payload.download_concurrency !== null && payload.download_concurrency !== undefined) {
+			this.downloadConcurrency = clampedNumber(payload.download_concurrency, this.downloadConcurrency, 1, 4);
+		}
+		if (payload.download_budget_bytes !== null && payload.download_budget_bytes !== undefined) {
+			this.downloadBudgetBytes = clampedNumber(
+				payload.download_budget_bytes,
+				this.downloadBudgetBytes,
+				0,
+				10 * 1024 * 1024 * 1024
+			);
+		}
 		this.updatedAt = updatedAt;
 		try {
 			localStorage.setItem(scopedKey(KEY), this.dateFormat);
@@ -499,6 +708,14 @@ class Prefs {
 			localStorage.setItem(scopedKey(VOLUME_BOOST_KEY), this.volumeBoost ? '1' : '0');
 			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), this.skipSilence ? '1' : '0');
 			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
+			localStorage.setItem(scopedKey(START_SCREEN_KEY), this.startScreen);
+			localStorage.setItem(scopedKey(VISUALIZER_KEY), this.visualizer);
+			localStorage.setItem(scopedKey(PROXY_IMAGES_KEY), this.proxyImages ? '1' : '0');
+			localStorage.setItem(scopedKey(DOWNLOAD_WIFI_ONLY_KEY), this.downloadWifiOnly ? '1' : '0');
+			localStorage.setItem(scopedKey(AUTO_DOWNLOAD_COUNT_KEY), String(this.autoDownloadCount));
+			localStorage.setItem(scopedKey(DOWNLOAD_RETENTION_KEY), this.downloadRetention);
+			localStorage.setItem(scopedKey(DOWNLOAD_CONCURRENCY_KEY), String(this.downloadConcurrency));
+			localStorage.setItem(scopedKey(DOWNLOAD_BUDGET_BYTES_KEY), String(this.downloadBudgetBytes));
 			localStorage.setItem(scopedKey(SETTINGS_UPDATED_AT_KEY), String(this.updatedAt));
 			localStorage.setItem(
 				scopedKey(FOREIGN_SETTINGS_KEY),

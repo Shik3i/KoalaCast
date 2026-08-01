@@ -125,7 +125,7 @@ data class NamedQueueEntity(
  */
 @Entity(
     tableName = "listening_sessions",
-    indices = [Index("startedAt"), Index("podcastId")],
+    indices = [Index("startedAt"), Index("endedAt"), Index("podcastId")],
 )
 @Serializable
 data class ListeningSessionEntity(

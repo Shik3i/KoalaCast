@@ -48,7 +48,7 @@ func (h *PushHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request pushSubscriptionRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16*1024)).Decode(&request); err != nil {
+	if err := decodeLimitedJSON(w, r, 16*1024, &request); err != nil {
 		http.Error(w, `{"error":"invalid push subscription"}`, http.StatusBadRequest)
 		return
 	}
@@ -92,7 +92,7 @@ func (h *PushHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Endpoint string `json:"endpoint"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8*1024)).Decode(&request); err != nil || request.Endpoint == "" {
+	if err := decodeLimitedJSON(w, r, 8*1024, &request); err != nil || request.Endpoint == "" {
 		http.Error(w, `{"error":"invalid push subscription"}`, http.StatusBadRequest)
 		return
 	}

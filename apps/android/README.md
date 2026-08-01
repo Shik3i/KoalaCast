@@ -239,7 +239,8 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 - [x] **Episode screen** — sanitized show notes, play, queue, save, mark-played.
 - [x] **Player** — Media3/ExoPlayer: play/pause, skip ±15/+30, scrub, speed cycling,
       **sleep timer** (incl. end-of-episode), media notification, lock screen,
-      Bluetooth/media buttons, fine-grained speed, skip-silence and volume boost.
+      Bluetooth/media buttons, fine-grained speed, skip-silence, volume boost,
+      and Chromecast output transfer through Media3 Cast.
 - [x] **Mini-player + full-screen Now Playing** using the selected KoalaCast
       palette consistently.
 - [x] **Library** — Subscriptions, **In Progress (continue listening)**, Queue, Favourites.
@@ -258,7 +259,7 @@ Keep all time fields in **milliseconds (`Long`)** to match the server + web.
 
 Run `make android-release-check` from the repository root. It runs exactly what
 `.github/workflows/android-release.yml` runs — `./gradlew --no-daemon test lint
-assembleRelease` — and `lint` is the part that is easy to skip locally: a build
+assembleRelease bundleRelease` — and `lint` is the part that is easy to skip locally: a build
 and the unit tests can both pass while lint fails the release.
 
 ### 4.2 Feature parity with the web client

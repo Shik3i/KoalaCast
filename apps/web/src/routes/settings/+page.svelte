@@ -12,7 +12,7 @@
 		type ThemeMode
 	} from '$lib/theme';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
+	import { prefs, type DownloadRetention } from '$lib/stores/prefs.svelte';
 	import { sync } from '$lib/stores/sync.svelte';
 	import { activateAccountContext, activateLoggedInAccount } from '$lib/stores/account-context';
 	import { GENRES, genreLabel } from '$lib/genres';
@@ -228,6 +228,9 @@
 			if (!res.ok) throw new Error(`preference update failed: ${res.status}`);
 			const data = await res.json();
 			globalStatsOptIn = data.global_stats_opt_in === true;
+			// Make already-local listening sessions eligible immediately. Without
+			// this, Community can read as empty until the next 45-second sync tick.
+			if (globalStatsOptIn) await sync.syncNow();
 			toast.success(enabled ? t('settings.globalStatsEnabled') : t('settings.globalStatsDisabled'));
 		} catch (_) {
 			globalStatsOptIn = previous;
@@ -361,6 +364,7 @@
 		<a href="#appearance">{t('settings.appearance')}</a>
 		<a href="#discovery">{t('quiet.nav.discover')}</a>
 		<a href="#playback">{t('settings.playback')}</a>
+		<a href="#downloads">{t('settings.downloads')}</a>
 		<a href="#privacy">{t('settings.privacy')}</a>
 		<a href="#account">{t('settings.accountSync')}</a>
 		<a href="#data">{t('settings.dataManagement')}</a>
@@ -530,6 +534,52 @@
 					<i class="ph ph-sparkle" aria-hidden="true"></i> {t('settings.latestEpisode')}
 				</button>
 			</div>
+			<h4 class="date-heading preference-heading">{t('settings.startScreen')}</h4>
+			<p class="subtitle">{t('settings.startScreenHint')}</p>
+			<div class="theme-selector" role="group" aria-label={t('settings.startScreen')}>
+				{#each [
+					{ value: 'discover' as const, icon: 'ph-newspaper', label: t('quiet.nav.discover') },
+					{ value: 'inbox' as const, icon: 'ph-tray', label: t('nav.new') },
+					{ value: 'library' as const, icon: 'ph-squares-four', label: t('nav.library') }
+				] as option}
+					<button type="button" class="theme-btn" class:active={prefs.startScreen === option.value} aria-pressed={prefs.startScreen === option.value} onclick={() => prefs.setStartScreen(option.value)}>
+						<i class="ph {option.icon}" aria-hidden="true"></i> {option.label}
+					</button>
+				{/each}
+			</div>
+			<h4 class="date-heading preference-heading">{t('settings.visualizer')}</h4>
+			<p class="subtitle">{t('settings.visualizerHint')}</p>
+			<div class="theme-selector" role="group" aria-label={t('settings.visualizer')}>
+				{#each [
+					{ value: 'off' as const, icon: 'ph-minus', label: t('common.off') },
+					{ value: 'level' as const, icon: 'ph-chart-bar', label: t('settings.visualizerLevel') },
+					{ value: 'waveform' as const, icon: 'ph-waveform', label: t('settings.visualizerWaveform') }
+				] as option}
+					<button type="button" class="theme-btn" class:active={prefs.visualizer === option.value} aria-pressed={prefs.visualizer === option.value} onclick={() => prefs.setVisualizer(option.value)}>
+						<i class="ph {option.icon}" aria-hidden="true"></i> {option.label}
+					</button>
+				{/each}
+			</div>
+		</div>
+	</details>
+
+	<details class="card" id="downloads" name="settings-section">
+		<summary>
+			<span class="summary-icon"><i class="ph ph-download-simple" aria-hidden="true"></i></span>
+			<span class="summary-copy"><strong>{t('settings.downloads')}</strong><small>{t('settings.downloadsHint')}</small></span>
+			<span class="summary-value">{prefs.downloadConcurrency}×</span>
+			<i class="ph ph-caret-down summary-caret" aria-hidden="true"></i>
+		</summary>
+		<div class="card-content download-settings">
+			<div class="consent-row">
+				<div><h4>{t('settings.wifiOnly')}</h4><p>{t('settings.wifiOnlyHint')}</p></div>
+				<label class="consent-switch"><input type="checkbox" checked={prefs.downloadWifiOnly} onchange={(event) => prefs.setDownloadWifiOnly(event.currentTarget.checked)} aria-label={t('settings.wifiOnly')} /><span aria-hidden="true"></span></label>
+			</div>
+			<label class="select-setting"><span><strong>{t('settings.parallelDownloads')}</strong><small>{t('settings.parallelDownloadsHint')}</small></span><select value={prefs.downloadConcurrency} onchange={(event) => prefs.setDownloadConcurrency(Number(event.currentTarget.value))}>{#each [1, 2, 3, 4] as value}<option value={value}>{value}</option>{/each}</select></label>
+			<label class="select-setting"><span><strong>{t('settings.autoDownloadCount')}</strong><small>{t('settings.autoDownloadCountHint')}</small></span><select value={prefs.autoDownloadCount} onchange={(event) => prefs.setAutoDownloadCount(Number(event.currentTarget.value))}>{#each [1, 3, 5, 10] as value}<option value={value}>{value}</option>{/each}</select></label>
+			<label class="select-setting"><span><strong>{t('settings.downloadRetention')}</strong><small>{t('settings.downloadRetentionHint')}</small></span><select value={prefs.downloadRetention} onchange={(event) => prefs.setDownloadRetention(event.currentTarget.value as DownloadRetention)}><option value="keep">{t('settings.retentionKeep')}</option><option value="finished">{t('settings.retentionFinished')}</option><option value="7d">7 {t('settings.days')}</option><option value="14d">14 {t('settings.days')}</option><option value="30d">30 {t('settings.days')}</option></select></label>
+			<label class="select-setting"><span><strong>{t('settings.downloadBudget')}</strong><small>{t('settings.downloadBudgetHint')}</small></span><select value={prefs.downloadBudgetBytes} onchange={(event) => prefs.setDownloadBudgetBytes(Number(event.currentTarget.value))}><option value={0}>{t('settings.unlimited')}</option><option value={536870912}>512 MB</option><option value={1073741824}>1 GB</option><option value={2147483648}>2 GB</option><option value={5368709120}>5 GB</option></select></label>
+			<p class="platform-note">{t('settings.downloadPolicyPlatformHint')}</p>
 		</div>
 	</details>
 
@@ -675,7 +725,11 @@
 		<div class="card-content">
 			<div class="privacy-box">
 			<h4>{t('settings.localBrowserMode')}</h4>
-			<p>{t('settings.privacyBody')}</p>
+			<p>{t(authUser ? 'settings.privacyBodySignedIn' : 'settings.privacyBody')}</p>
+		</div>
+		<div class="consent-row">
+			<div><h4>{t('settings.proxyImages')}</h4><p>{t('settings.proxyImagesHint')}</p></div>
+			<label class="consent-switch"><input type="checkbox" checked={prefs.proxyImages} onchange={(event) => prefs.setProxyImages(event.currentTarget.checked)} aria-label={t('settings.proxyImages')} /><span aria-hidden="true"></span></label>
 		</div>
 		{#if authUser}
 			<div class="consent-row">
@@ -944,6 +998,12 @@
 	.consent-row h4 { margin-bottom: .35rem; }
 	.consent-row p { max-width: 60ch; color: var(--text-muted); font-size: .9rem; }
 	.consent-row a { display: inline-flex; gap: .3rem; align-items: center; margin-top: .65rem; color: var(--accent-green); font-weight: 700; font-size: .85rem; }
+	.download-settings { display: grid; gap: .8rem; }
+	.select-setting { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1rem; background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: 12px; }
+	.select-setting span { display: grid; gap: .25rem; }
+	.select-setting small, .platform-note { color: var(--text-muted); font-size: .84rem; }
+	.select-setting select { min-width: 8rem; min-height: 2.75rem; padding: .55rem .75rem; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-ui); border-radius: 9px; }
+	.platform-note { margin: 0; }
 	.consent-switch { display: flex; align-items: center; gap: .55rem; cursor: pointer; white-space: nowrap; }
 	.consent-switch input { position: absolute; opacity: 0; pointer-events: none; }
 	.consent-switch span { width: 42px; height: 24px; padding: 3px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--border-ui); transition: background .15s; }
@@ -1141,7 +1201,7 @@
 	.hidden-podcast-list { display: grid; gap: 8px; }
 	.hidden-podcast-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--border-row); }
 	.hidden-podcast-list strong { min-width: 0; overflow: hidden; color: var(--ink-2); text-overflow: ellipsis; white-space: nowrap; }
-	.hidden-podcast-list button { flex: 0 0 auto; min-height: 40px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-3); }
+	.hidden-podcast-list button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-3); }
 
 	.language-grid {
 		display: grid;
@@ -1376,6 +1436,8 @@
 		.summary-value { display: none; }
 		.card-content { padding: .8rem .75rem 1rem; }
 		.consent-row { align-items: flex-start; flex-direction: column; }
+		.select-setting { align-items: stretch; flex-direction: column; }
+		.select-setting select { width: 100%; }
 		.theme-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
 		.theme-btn { justify-content: center; min-width: 0; padding-inline: .45rem; }
 		.palette-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -54,6 +54,7 @@ import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.Hairline
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
+import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
@@ -66,9 +67,11 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.koalaColors
+import net.koalastuff.koalacast.core.ui.R as CoreUiR
 
 @Composable
 fun SettingsScreen(
+    onBack: () -> Unit,
     onOpenAccount: () -> Unit,
     onOpenPrivacy: () -> Unit,
     modifier: Modifier = Modifier,
@@ -102,6 +105,7 @@ fun SettingsScreen(
         onStartScreenChange = viewModel::setStartScreen,
         onVisualizerChange = viewModel::setVisualizer,
         onProxyImagesChange = viewModel::setProxyImages,
+        onBack = onBack,
         onOpenAccount = onOpenAccount,
         onOpenPrivacy = onOpenPrivacy,
         onDownloadWifiOnlyChange = viewModel::setDownloadWifiOnly,
@@ -147,6 +151,7 @@ internal fun SettingsContent(
     onDownloadConcurrencyChange: (Int) -> Unit,
     onDownloadBudgetMbChange: (Int) -> Unit,
     onDownloadStorageChange: (DownloadStorage) -> Unit,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -162,11 +167,22 @@ internal fun SettingsContent(
             .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.sectionV),
         verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSection),
     ) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = KoalaTheme.type.screenTitle,
-            color = colors.inkStrong,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButtonSquare(
+                icon = PhosphorIcons.CaretLeft,
+                contentDescription = stringResource(CoreUiR.string.action_back),
+                onClick = onBack,
+            )
+            Text(
+                text = stringResource(R.string.settings_title),
+                style = KoalaTheme.type.screenTitle,
+                color = colors.inkStrong,
+            )
+        }
 
         // First section on the screen, and the only one that reads as an invitation
         // rather than a switch: an account is what turns one device's library into

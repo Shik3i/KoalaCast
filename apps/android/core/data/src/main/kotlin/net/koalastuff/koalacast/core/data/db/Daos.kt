@@ -235,6 +235,9 @@ interface ListeningSessionDao {
     @Query("SELECT * FROM listening_sessions ORDER BY startedAt ASC")
     suspend fun getAll(): List<ListeningSessionEntity>
 
+    @Query("SELECT * FROM listening_sessions WHERE endedAt > :watermark ORDER BY startedAt ASC")
+    suspend fun getEndedAfter(watermark: Long): List<ListeningSessionEntity>
+
     @Query("SELECT * FROM listening_sessions WHERE id = :id")
     suspend fun get(id: String): ListeningSessionEntity?
 
@@ -250,6 +253,9 @@ interface TombstoneDao {
 
     @Query("SELECT * FROM tombstones")
     suspend fun getAll(): List<TombstoneEntity>
+
+    @Query("SELECT * FROM tombstones WHERE id = :id")
+    suspend fun get(id: String): TombstoneEntity?
 
     @Upsert
     suspend fun upsert(tombstone: TombstoneEntity)

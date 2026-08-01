@@ -223,6 +223,13 @@
 		<button onclick={exportData}><i class="ph ph-download-simple"></i> {t('profileStats.exportJson')}</button>
 	</section>
 	{/if}
+
+	<nav class="profile-actions" aria-label={t('nav.profileMenu')}>
+		<a href="/downloads"><i class="ph ph-download-simple" aria-hidden="true"></i><span>{t('downloads.title')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
+		<a href="/settings"><i class="ph ph-gear" aria-hidden="true"></i><span>{t('quiet.nav.settings')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
+		<a href="/account"><i class="ph ph-user-circle" aria-hidden="true"></i><span>{t('nav.account')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
+		<a href="/privacy"><i class="ph ph-shield-check" aria-hidden="true"></i><span>{t('footer.privacy')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
+	</nav>
 </div>
 
 <style>
@@ -285,6 +292,10 @@
 	.privacy-card { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 20px; padding: 18px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
 	.privacy-card h2 { margin: 5px 0; font-size: 17px; }.privacy-card p { max-width: 68ch; color: var(--ink-3); font-size: 13px; }
 	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 44px; padding: 9px 11px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
+	.profile-actions { display: grid; margin-top: 20px; border-top: 1px solid var(--border-row); }
+	.profile-actions a { display: grid; grid-template-columns: 28px minmax(0, 1fr) 20px; align-items: center; gap: 10px; min-height: 56px; border-bottom: 1px solid var(--border-row); color: var(--ink-2); }
+	.profile-actions a > i:first-child { color: var(--accent-ink); font-size: 20px; }
+	.profile-actions a > i:last-child { color: var(--ink-4); }
 	@media (max-width: 1050px) { .profile-analysis { grid-template-columns: 1fr; }.breakdowns { grid-template-columns: repeat(3,1fr); }.ranking-list a { grid-template-columns: 22px 36px minmax(0,1fr) 80px 46px; } }
 	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px 1fr; }.profile-avatar { width: 54px; height: 54px; }.range-tabs { grid-column: 1 / -1; overflow-x: auto; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
 	.stats-subnav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-row); padding-bottom: 12px; }

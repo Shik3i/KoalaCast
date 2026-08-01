@@ -24,7 +24,7 @@
     <string name="account_sync_retry">Retry sync</string>
     <string name="account_statistics">Community statistics</string>
     <string name="account_global_stats">Contribute anonymous aggregates</string>
-    <string name="account_global_stats_body">Opt in to global listening statistics. Raw sessions and account identifiers are never published.</string>
+    <string name="account_global_stats_body">Include your listening sessions in site-wide aggregates and show your username in the listener leaderboard. Episodes, timestamps, raw sessions, and account IDs are never published.</string>
     <string name="account_sessions">Active sessions and devices</string>
     <string name="account_no_sessions">No active sessions could be loaded.</string>
     <string name="account_current">Current</string>

@@ -105,7 +105,7 @@ export class AudioEngine {
 	}
 
 	public getLevel(): number | null {
-		if (!this.skipSilence || !this.analyserNode || !this.levelData) return null;
+		if (!this.analyserNode || !this.levelData) return null;
 		this.analyserNode.getByteTimeDomainData(this.levelData);
 		let sumSquares = 0;
 		for (let i = 0; i < this.levelData.length; i++) {

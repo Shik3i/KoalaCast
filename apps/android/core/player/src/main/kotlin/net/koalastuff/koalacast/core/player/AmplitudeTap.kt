@@ -10,6 +10,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.sqrt
 
+// Calibrated against spoken-word material: below -48 dBFS is effectively room
+// noise, ordinary speech occupies the middle, and mastered peaks retain headroom.
+private const val AMPLITUDE_NOISE_FLOOR = 0.004f
+private const val AMPLITUDE_GAIN = 3.8f
+// At ~11 ms per window: ~40 ms attack and ~550 ms release to bridge syllables.
+private const val AMPLITUDE_ATTACK = 0.42f
+private const val AMPLITUDE_RELEASE = 0.045f
+
 /**
  * How loud the audio is right now, as a 0..1 envelope, for anything that wants to
  * draw it.
@@ -138,40 +146,51 @@ internal class AmplitudeBufferSink(
         val order = buffer.order()
         buffer.order(ByteOrder.LITTLE_ENDIAN)
 
-        var sum = 0.0
-        var samples = 0
-        // Stride over samples rather than reading every one: an envelope does not
-        // get more truthful from 100x the arithmetic on the audio thread.
-        var index = position
-        while (index + 1 < limit) {
-            val sample = buffer.getShort(index) / Short.MAX_VALUE.toFloat()
-            sum += (sample * sample).toDouble()
-            samples++
-            index += SAMPLE_STRIDE_BYTES
+        // One value per buffer is far too coarse. The sink hands over a few hundred
+        // milliseconds at a time, so a single RMS per call updates roughly four
+        // times a second — which is exactly what "the animation only moves once a
+        // second" looks like. Each buffer is split into short windows instead, so
+        // the envelope has real temporal resolution and the history scrolls at a
+        // believable rate.
+        var windowStart = position
+        while (windowStart + 1 < limit) {
+            val windowEnd = minOf(windowStart + WINDOW_BYTES, limit)
+            var sum = 0.0
+            var samples = 0
+            var index = windowStart
+            // Stride within the window: an envelope does not get more truthful from
+            // 100x the arithmetic on the audio thread.
+            while (index + 1 < windowEnd) {
+                val sample = buffer.getShort(index) / Short.MAX_VALUE.toFloat()
+                sum += (sample * sample).toDouble()
+                samples++
+                index += SAMPLE_STRIDE_BYTES
+            }
+            if (samples > 0) {
+                val rms = sqrt(sum / samples).toFloat()
+                smoothed = nextAmplitude(smoothed, rms)
+                tap.publish(smoothed)
+            }
+            windowStart = windowEnd
         }
 
         buffer.order(order)
-        if (samples == 0) return
-
-        val rms = sqrt(sum / samples).toFloat()
-        val normalised = (rms * GAIN).coerceIn(0f, 1f)
-        // Fast attack, slow release: speech is mostly gaps, and an envelope that
-        // falls as fast as it rises reads as flicker rather than as level.
-        smoothed = if (normalised > smoothed) {
-            smoothed + (normalised - smoothed) * ATTACK
-        } else {
-            smoothed + (normalised - smoothed) * RELEASE
-        }
-        tap.publish(smoothed)
     }
 
     private companion object {
         /** Every 8th sample; at 44.1 kHz stereo that is still ~5 kHz of envelope. */
         const val SAMPLE_STRIDE_BYTES = 16
 
-        /** Speech RMS sits well below full scale, so the envelope is lifted. */
-        const val GAIN = 3.2f
-        const val ATTACK = 0.55f
-        const val RELEASE = 0.12f
+        /**
+         * ~11 ms of 44.1 kHz stereo per published value, so the history advances
+         * about 90 times a second rather than once per audio buffer.
+         */
+        const val WINDOW_BYTES = 2048
     }
+}
+
+internal fun nextAmplitude(previous: Float, rms: Float): Float {
+    val normalised = ((rms - AMPLITUDE_NOISE_FLOOR) * AMPLITUDE_GAIN).coerceIn(0f, 1f)
+    val blend = if (normalised > previous) AMPLITUDE_ATTACK else AMPLITUDE_RELEASE
+    return previous + (normalised - previous) * blend
 }

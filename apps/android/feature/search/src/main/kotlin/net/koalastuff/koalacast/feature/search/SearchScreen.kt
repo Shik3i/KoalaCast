@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -324,9 +325,12 @@ private fun FilterBlock(
                 style = KoalaTheme.type.monoSmall,
             )
             Box(
-                modifier = Modifier.clickable(
-                    onClick = if (fromSettings) onClearFilters else onResetFilters,
-                ),
+                modifier = Modifier
+                    .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+                    .clickable(
+                        onClick = if (fromSettings) onClearFilters else onResetFilters,
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
                 MonoText(
                     text = if (fromSettings) {

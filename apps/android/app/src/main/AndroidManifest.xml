@@ -2,11 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!--
-      INTERNET is the only permission the browsing build needs. Notifications and
-      foreground-service media permissions arrive with playback and downloads; they
-      are deliberately not declared before they are used.
-    -->
+    <!-- Network access, background playback/downloads, and the Android 13+
+         notification runtime permission used by media and download notifications. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Playback continues with the screen off and the app backgrounded. -->
@@ -33,6 +30,13 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="net.koalastuff.koalacast.KoalaCastOptionsProvider" />
+
+        <!-- Lets Android's media output switcher discover Cast routes. -->
+        <receiver android:name="androidx.mediarouter.media.MediaTransferReceiver" />
 
         <activity
             android:name=".MainActivity"

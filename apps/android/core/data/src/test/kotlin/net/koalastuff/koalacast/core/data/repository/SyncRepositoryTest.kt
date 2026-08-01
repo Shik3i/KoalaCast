@@ -7,9 +7,11 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
+import net.koalastuff.koalacast.core.data.db.ListeningSessionEntity
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
@@ -17,6 +19,7 @@ import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
 import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
 import net.koalastuff.koalacast.core.network.dto.SyncSnapshotResponse
+import net.koalastuff.koalacast.core.network.dto.SyncOperationDto
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -127,6 +130,37 @@ class SyncRepositoryTest {
     }
 
     @Test
+    fun `historical listening sessions use their own backfill watermark`() {
+        val historicalSession = syncOperation("listening_session", 100)
+        val historicalSubscription = syncOperation("subscription", 100)
+
+        val pending = pendingSyncOperations(
+            operations = listOf(historicalSession, historicalSubscription),
+            generalWatermark = 500,
+            listeningWatermark = 0,
+        )
+
+        assertEquals(listOf(historicalSession), pending)
+        assertTrue(
+            pendingSyncOperations(
+                operations = listOf(historicalSession),
+                generalWatermark = 500,
+                listeningWatermark = 100,
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `operation building does not rescan already uploaded listening history`() = runTest {
+        database.listeningSessionDao().upsert(listeningSession("old", endedAt = 100))
+        database.listeningSessionDao().upsert(listeningSession("new", endedAt = 600))
+
+        val operations = repository.buildOperations("device", listeningAfter = 500)
+
+        assertEquals(listOf("new"), operations.filter { it.entityType == "listening_session" }.map { it.entityId })
+    }
+
+    @Test
     fun `pull follows next cursor while server says more pages exist`() = runTest {
         val requestedCursors = mutableListOf<Long>()
         apiHandler = { method, args ->
@@ -179,7 +213,34 @@ class SyncRepositoryTest {
                 addedAt = 1,
             ),
         )
+        database.listeningSessionDao().upsert(
+            ListeningSessionEntity(
+                id = "local-unsynced",
+                episodeId = "local-episode",
+                podcastId = "local-show",
+                title = "Local episode",
+                podcastTitle = "Local show",
+                startedAt = 2,
+                endedAt = 3,
+                wallClockMs = 1,
+                audioListenedMs = 1,
+                speedSavedMs = 0,
+                silenceSavedMs = 0,
+                manualSkippedMs = 0,
+                introOutroSkippedMs = 0,
+                speedWeightedMs = 1,
+            ),
+        )
+        database.tombstoneDao().upsert(
+            TombstoneEntity(
+                id = "subscription:fresh",
+                entityType = "subscription",
+                entityId = "fresh",
+                deletedAt = 50,
+            ),
+        )
         store.setCursor(USER_ID, 12)
+        store.setPushWatermark(USER_ID, 40)
         var pullCalls = 0
         var snapshotCalls = 0
         apiHandler = { method, args ->
@@ -251,9 +312,14 @@ class SyncRepositoryTest {
         assertEquals(2, pullCalls)
         assertEquals(1, snapshotCalls)
         assertEquals(90L, store.cursor(USER_ID))
-        assertEquals(listOf("fresh"), database.subscriptionDao().getAll().map { it.podcastId })
+        assertTrue(database.subscriptionDao().getAll().isEmpty())
+        assertEquals("fresh", database.tombstoneDao().get("subscription:fresh")?.entityId)
         assertEquals(listOf("favorite"), database.favoriteDao().getAll().map { it.episodeId })
         assertEquals(42_000L, database.playbackStateDao().get("episode")!!.positionMs)
+        assertEquals(
+            setOf("local-unsynced", "session"),
+            database.listeningSessionDao().getAll().map { it.id }.toSet(),
+        )
         assertEquals(20L, database.listeningSessionDao().get("session")!!.endedAt)
     }
 
@@ -289,6 +355,28 @@ class SyncRepositoryTest {
         },
         clientTimestamp = cursor,
         serverCursor = cursor,
+    )
+
+    private fun syncOperation(type: String, timestamp: Long) = SyncOperationDto(
+        clientOpId = "$type:$timestamp",
+        deviceId = "device",
+        entityType = type,
+        action = "upsert",
+        entityId = type,
+        payload = JsonObject(emptyMap()),
+        clientTimestamp = timestamp,
+    )
+
+    private fun listeningSession(id: String, endedAt: Long) = ListeningSessionEntity(
+        id = id,
+        episodeId = "episode-$id",
+        podcastId = "show",
+        title = "Episode",
+        podcastTitle = "Show",
+        startedAt = endedAt - 10,
+        endedAt = endedAt,
+        wallClockMs = 10,
+        audioListenedMs = 10,
     )
 
     private companion object {

@@ -87,7 +87,7 @@ func (h *AdminHandler) ToggleRegistration(w http.ResponseWriter, r *http.Request
 	var req struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeLimitedJSON(w, r, 4*1024, &req); err != nil {
 		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
 		return
 	}
@@ -121,7 +121,7 @@ func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Suspend bool `json:"suspend"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeLimitedJSON(w, r, 4*1024, &req); err != nil {
 		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
 		return
 	}

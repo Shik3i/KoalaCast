@@ -4,9 +4,9 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * Both clients sync their preferences as a single `settings` entity, and the server
- * keeps only the newest write of the whole blob — it does not merge. Their key sets
- * do not overlap: Android owns the theme, palette, start screen and download
- * policy; the web client owns `date_format` and `ui_language`.
+ * keeps only the newest write of the whole blob — it does not merge. Both clients
+ * own the shared cross-device preferences; client-specific and future keys still
+ * need to survive a write from a client that does not understand them yet.
  *
  * A payload rebuilt purely from the fields *this* client understands therefore
  * deletes the other client's keys from the server on every push. Nothing breaks on

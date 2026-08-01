@@ -3,6 +3,9 @@ package net.koalastuff.koalacast
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import androidx.annotation.OptIn
+import androidx.media3.cast.Cast
+import androidx.media3.common.util.UnstableApi
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -73,8 +76,13 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
             .setWorkerFactory(workerFactory)
             .build()
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        // Media3 owns Cast session management and output transfers. Initialising
+        // here makes the route button usable before playback starts; failures are
+        // non-fatal on devices without Google Play services.
+        runCatching { Cast.getSingletonInstance(this).initialize() }
         runBlocking(Dispatchers.IO) {
             accountStore.setServerOrigin(preferences.serverUrl.first())
             val account = accountStore.account.value

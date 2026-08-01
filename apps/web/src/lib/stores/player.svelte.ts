@@ -57,6 +57,7 @@ class PlayerStore {
 	sleepTimerEndsAt = $state<number | null>(null);
 	sleepAtEpisodeEnd = $state(false);
 	sleepAtChapterEnd = $state(false);
+	sleepTimerValue = $state('');
 	isPlaying = $state(false);
 	positionMs = $state(0);
 	durationMs = $state(0);
@@ -133,10 +134,16 @@ class PlayerStore {
 	}
 
 	setSleepTimer(value: string) {
-		this.sleepAtEpisodeEnd = value === 'episode';
-		this.sleepAtChapterEnd = value === 'chapter';
-		if (value === '' || value === 'episode' || value === 'chapter') this.sleepTimerEndsAt = null;
-		else this.sleepTimerEndsAt = Date.now() + Number(value) * 60_000;
+		const supported = ['', 'chapter', 'episode', '15', '30', '45', '60'];
+		const nextValue = supported.includes(value) ? value : '';
+		this.sleepTimerValue = nextValue;
+		this.sleepAtEpisodeEnd = nextValue === 'episode';
+		this.sleepAtChapterEnd = nextValue === 'chapter';
+		if (nextValue === '' || nextValue === 'episode' || nextValue === 'chapter') {
+			this.sleepTimerEndsAt = null;
+		} else {
+			this.sleepTimerEndsAt = Date.now() + Number(nextValue) * 60_000;
+		}
 	}
 
 	async loadQueue() {
