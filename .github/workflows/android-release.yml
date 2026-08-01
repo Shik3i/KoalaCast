@@ -23,7 +23,7 @@ jobs:
   build:
     name: Build, attest & release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: write # create the GitHub Release and upload assets
       id-token: write # keyless signing for the artifact attestation
