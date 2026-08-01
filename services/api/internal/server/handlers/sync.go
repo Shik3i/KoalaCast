@@ -539,7 +539,7 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req SyncPushRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4*1024*1024)).Decode(&req); err != nil {
+	if err := decodeLimitedJSON(w, r, 4*1024*1024, &req); err != nil {
 		http.Error(w, `{"error":"invalid sync push payload"}`, http.StatusBadRequest)
 		return
 	}

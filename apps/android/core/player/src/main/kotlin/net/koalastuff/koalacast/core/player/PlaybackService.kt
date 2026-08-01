@@ -11,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.cast.CastPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
@@ -82,6 +83,7 @@ class PlaybackService : MediaLibraryService() {
     private val recorder = ListeningSessionRecorder()
 
     private var mediaSession: MediaLibrarySession? = null
+    private var localPlayer: ExoPlayer? = null
     private var positionTicker: Job? = null
     private var outroHandledEpisodeId: String? = null
     private var outroSettingsPodcastId: String? = null
@@ -148,7 +150,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
-        val player = ExoPlayer.Builder(this, amplitudeRenderersFactory())
+        val localPlayer = ExoPlayer.Builder(this, amplitudeRenderersFactory())
             // ±15/30 s, which Media3 renders as the notification's seek buttons.
             .setSeekBackIncrementMs(SEEK_BACK_MS)
             .setSeekForwardIncrementMs(SEEK_FORWARD_MS)
@@ -163,6 +165,17 @@ class PlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .setSkipSilenceEnabled(false)
             .build()
+        this.localPlayer = localPlayer
+
+        // One delegating player owns both local and remote playback. Keeping the
+        // listener and MediaSession on this wrapper preserves progress, analytics,
+        // queue advance and system controls across output transfers.
+        val player: Player = runCatching {
+            CastPlayer.Builder(this)
+                .setLocalPlayer(localPlayer)
+                .setTransferCallback(PodcastCastTransferCallback())
+                .build()
+        }.getOrDefault(localPlayer)
 
         val listener = PlayerListener(player)
         playerListener = listener
@@ -191,9 +204,9 @@ class PlaybackService : MediaLibraryService() {
             preferences.preferences.collect { prefs ->
                 val track = TrackMediaItem.toTrack(player.currentMediaItem)
                 val show = track?.let { library.podcastSettingsSnapshot(it.podcastId) }
-                player.skipSilenceEnabled = show?.skipSilence ?: prefs.skipSilence
+                localPlayer.skipSilenceEnabled = show?.skipSilence ?: prefs.skipSilence
                 boostWanted = show?.volumeBoost ?: prefs.volumeBoost
-                applyVolumeBoost(player, boostWanted)
+                applyVolumeBoost(localPlayer, boostWanted)
             }
         }
     }
@@ -479,25 +492,28 @@ class PlaybackService : MediaLibraryService() {
         if (finalPlayback != null) {
             runBlocking(Dispatchers.IO) { persist(finalPlayback) }
         }
+        val sessionPlayer = mediaSession?.player
         mediaSession?.run {
-            playerListener?.let { player.removeListener(it) }
-            player.release()
+            playerListener?.let { sessionPlayer?.removeListener(it) }
+            sessionPlayer?.release()
             release()
         }
+        if (sessionPlayer !== localPlayer) localPlayer?.release()
+        localPlayer = null
         playerListener = null
         mediaSession = null
         scope.cancel()
         super.onDestroy()
     }
 
-    private inner class PlayerListener(private val player: ExoPlayer) : Player.Listener {
+    private inner class PlayerListener(private val player: Player) : Player.Listener {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             publishWidgetState(player)
             if (isPlaying) {
                 // The session id is unset until the audio track is created, so the
                 // preference collector above may have run too early to attach.
-                applyVolumeBoost(player, boostWanted)
+                localPlayer?.let { applyVolumeBoost(it, boostWanted) }
                 TrackMediaItem.toTrack(player.currentMediaItem)?.let { track ->
                     recorder.start(
                         track,
@@ -575,9 +591,9 @@ class PlaybackService : MediaLibraryService() {
                 scope.launch {
                     val global = preferences.preferences.first()
                     val show = library.podcastSettingsSnapshot(track.podcastId)
-                    player.skipSilenceEnabled = show.skipSilence ?: global.skipSilence
+                    localPlayer?.skipSilenceEnabled = show.skipSilence ?: global.skipSilence
                     boostWanted = show.volumeBoost ?: global.volumeBoost
-                    applyVolumeBoost(player, boostWanted)
+                    localPlayer?.let { applyVolumeBoost(it, boostWanted) }
                 }
             }
             // The player's current item is already the new one here. Persisting
@@ -719,7 +735,7 @@ class PlaybackService : MediaLibraryService() {
      * An episode that ran to the end is finished, and the queue moves on — the
      * same behaviour the web client has.
      */
-    private fun onEpisodeFinished(player: ExoPlayer, advanceQueue: Boolean) {
+    private fun onEpisodeFinished(player: Player, advanceQueue: Boolean) {
         val finished = TrackMediaItem.toTrack(player.currentMediaItem)
         val session = recorder.stop(clock.nowMs(), player.currentPosition)
         val ownerId = activePlaybackOwnerId
@@ -753,7 +769,7 @@ class PlaybackService : MediaLibraryService() {
      * the service must apply the same resume, show speed, intro, artwork privacy
      * and offline-file rules itself.
      */
-    private suspend fun startQueuedTrack(player: ExoPlayer, track: Track) {
+    private suspend fun startQueuedTrack(player: Player, track: Track) {
         val settings = library.podcastSettingsSnapshot(track.podcastId)
         val savedPosition = progress.progressSnapshot(track.episodeId)
             ?.takeIf { !it.completed }

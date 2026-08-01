@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeGesturesPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.activity.compose.BackHandler
@@ -168,6 +169,7 @@ fun KoalaCastApp(
 
                 composable(Routes.SETTINGS) {
                     SettingsScreen(
+                        onBack = { navController.popBackStack() },
                         onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
                         onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                         contentPadding = statusBarPadding(),
@@ -268,7 +270,10 @@ fun KoalaCastApp(
         }
 
         if (currentRoute != Routes.ONBOARDING) {
-            MiniPlayer(onExpand = { nowPlayingExpanded = true })
+            MiniPlayer(
+                onExpand = { nowPlayingExpanded = true },
+                modifier = if (showBottomBar) Modifier else Modifier.safeGesturesPadding(),
+            )
         }
 
         if (showBottomBar) {

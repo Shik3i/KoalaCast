@@ -39,6 +39,7 @@ import net.koalastuff.koalacast.core.model.InboxMode
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
 import net.koalastuff.koalacast.core.ui.component.CoverArt
+import net.koalastuff.koalacast.core.ui.component.DownloadButton
 import net.koalastuff.koalacast.core.ui.component.EmptyState
 import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
@@ -279,10 +280,12 @@ internal fun InboxContent(
                             played = item.episode.id in state.completedIds,
                             progressPercent = state.progressByEpisode[item.episode.id] ?: 0,
                             isCurrent = item.episode.id == state.currentEpisodeId,
+                            playing = state.currentEpisodePlaying && item.episode.id == state.currentEpisodeId,
                             onOpen = { onOpenEpisode(item.episode.id) },
                             onPlay = { onPlay(item) },
                             onQueue = { onQueue(item) },
                             downloadState = state.downloadStates[item.episode.id],
+                            downloadProgress = state.downloadProgress[item.episode.id] ?: 0,
                             onDownload = { onDownload(item) },
                             onTogglePlayed = { onTogglePlayed(item) },
                             onMarkOlder = { played ->
@@ -522,10 +525,12 @@ private fun InboxEpisodeRow(
     played: Boolean,
     progressPercent: Int,
     isCurrent: Boolean,
+    playing: Boolean,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
     onQueue: () -> Unit,
     downloadState: DownloadState?,
+    downloadProgress: Int,
     onDownload: () -> Unit,
     onTogglePlayed: () -> Unit,
     onMarkOlder: (Boolean) -> Unit,
@@ -569,6 +574,7 @@ private fun InboxEpisodeRow(
                 EpisodeProgressButton(
                     progressPercent = if (played) 100 else progressPercent,
                     current = isCurrent,
+                    playing = playing,
                     contentDescription = stringResource(R.string.inbox_play),
                     onClick = onPlay,
                     size = 34.dp,
@@ -580,13 +586,9 @@ private fun InboxEpisodeRow(
                     boxSize = 30.dp,
                     iconSize = 16.dp,
                 )
-                IconButtonSquare(
-                    icon = when (downloadState) {
-                        DownloadState.QUEUED, DownloadState.DOWNLOADING ->
-                            PhosphorIcons.PauseFill
-                        DownloadState.DONE -> PhosphorIcons.Trash
-                        else -> PhosphorIcons.DownloadSimple
-                    },
+                DownloadButton(
+                    state = downloadState,
+                    progressPercent = downloadProgress,
                     contentDescription = stringResource(
                         when (downloadState) {
                             DownloadState.QUEUED, DownloadState.DOWNLOADING ->
@@ -596,13 +598,7 @@ private fun InboxEpisodeRow(
                         },
                     ),
                     onClick = onDownload,
-                    tint = if (downloadState == DownloadState.DONE) {
-                        colors.accentInk
-                    } else {
-                        colors.ink3
-                    },
-                    boxSize = 30.dp,
-                    iconSize = 16.dp,
+                    size = 34.dp,
                 )
                 IconButtonSquare(
                     icon = if (played) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,

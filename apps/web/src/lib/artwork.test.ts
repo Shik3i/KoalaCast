@@ -11,4 +11,10 @@ describe('optimizeArtwork', () => {
 			'/api/v1/proxy/image?url=https%3A%2F%2Fcdn.publisher.test%2Fcover.jpg&w=96'
 		);
 	});
+
+	it('returns the publisher URL when privacy proxying is disabled', () => {
+		expect(optimizeArtwork('//cdn.publisher.test/cover.jpg', 96, false)).toBe(
+			'https://cdn.publisher.test/cover.jpg'
+		);
+	});
 });

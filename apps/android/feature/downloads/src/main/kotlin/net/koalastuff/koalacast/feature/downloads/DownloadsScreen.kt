@@ -11,9 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +29,7 @@ import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.EpisodeDownload
 import net.koalastuff.koalacast.core.ui.R as CoreR
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
+import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
 import net.koalastuff.koalacast.core.ui.component.MonoText
 import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
@@ -114,46 +113,28 @@ fun DownloadsScreen(
         }
     }
     if (confirmRemoveAll) {
-        AlertDialog(
-            onDismissRequest = { confirmRemoveAll = false },
-            title = { Text(stringResource(R.string.downloads_remove_all_confirm_title)) },
-            text = { Text(stringResource(R.string.downloads_remove_all_confirm_body, items.size)) },
-            dismissButton = {
-                TextButton(onClick = { confirmRemoveAll = false }) {
-                    Text(stringResource(R.string.downloads_cancel))
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmRemoveAll = false
-                        viewModel.removeAll()
-                    },
-                ) {
-                    Text(stringResource(R.string.downloads_remove_all))
-                }
+        ConfirmDialog(
+            title = stringResource(R.string.downloads_remove_all_confirm_title),
+            body = stringResource(R.string.downloads_remove_all_confirm_body, items.size),
+            confirmLabel = stringResource(R.string.downloads_remove_all),
+            dismissLabel = stringResource(R.string.downloads_cancel),
+            onDismiss = { confirmRemoveAll = false },
+            onConfirm = {
+                confirmRemoveAll = false
+                viewModel.removeAll()
             },
         )
     }
     removeTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { removeTarget = null },
-            title = { Text(stringResource(R.string.downloads_remove_confirm_title)) },
-            text = { Text(stringResource(R.string.downloads_remove_confirm_body, target.track.title)) },
-            dismissButton = {
-                TextButton(onClick = { removeTarget = null }) {
-                    Text(stringResource(R.string.downloads_cancel))
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        removeTarget = null
-                        viewModel.remove(target)
-                    },
-                ) {
-                    Text(stringResource(R.string.downloads_remove))
-                }
+        ConfirmDialog(
+            title = stringResource(R.string.downloads_remove_confirm_title),
+            body = stringResource(R.string.downloads_remove_confirm_body, target.track.title),
+            confirmLabel = stringResource(R.string.downloads_remove),
+            dismissLabel = stringResource(R.string.downloads_cancel),
+            onDismiss = { removeTarget = null },
+            onConfirm = {
+                removeTarget = null
+                viewModel.remove(target)
             },
         )
     }

@@ -52,6 +52,30 @@ describe('summarizeListening', () => {
 		expect(summarizeListening(sessions, []).longestStreak).toBe(2);
 	});
 
+	it('does not count a manually played episode with less than five percent listened', () => {
+		const state = {
+			episode_id: 'e1',
+			podcast_id: 'p1',
+			completed: true,
+			duration_ms: 30 * 60_000
+		} as LocalPlaybackState;
+		const barelyStarted = session({ audio_listened_ms: 30_000 });
+
+		expect(summarizeListening([barelyStarted], [state]).completedCount).toBe(0);
+	});
+
+	it('counts a completed episode listened past the halfway point', () => {
+		const state = {
+			episode_id: 'e1',
+			podcast_id: 'p1',
+			completed: true,
+			duration_ms: 30 * 60_000
+		} as LocalPlaybackState;
+		const heard = session({ audio_listened_ms: 20 * 60_000 });
+
+		expect(summarizeListening([heard], [state]).completedCount).toBe(1);
+	});
+
 	it('splits one listening segment across hour and day boundaries', () => {
 		const start = new Date(2026, 6, 24, 23, 50).getTime();
 		const end = new Date(2026, 6, 25, 0, 10).getTime();

@@ -27,6 +27,7 @@ import net.koalastuff.koalacast.core.data.db.MIGRATION_7_8
 import net.koalastuff.koalacast.core.data.db.MIGRATION_8_9
 import net.koalastuff.koalacast.core.data.db.MIGRATION_9_10
 import net.koalastuff.koalacast.core.data.db.MIGRATION_10_11
+import net.koalastuff.koalacast.core.data.db.MIGRATION_11_12
 import net.koalastuff.koalacast.core.data.db.ContentCacheDao
 import net.koalastuff.koalacast.core.data.db.TimeBookmarkDao
 import net.koalastuff.koalacast.core.data.db.NamedQueueDao
@@ -56,6 +57,7 @@ object DatabaseModule {
                 MIGRATION_8_9,
                 MIGRATION_9_10,
                 MIGRATION_10_11,
+                MIGRATION_11_12,
             )
             .build()
 

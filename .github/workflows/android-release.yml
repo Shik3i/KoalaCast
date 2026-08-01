@@ -10,15 +10,7 @@ on:
   push:
     tags:
       - 'android-v*'
-  workflow_dispatch:
-    inputs:
-      gradle_task:
-        description: 'Gradle assembly task'
-        type: choice
-        default: assembleRelease
-        options:
-          - assembleRelease
-          - bundleRelease
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -84,7 +76,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon test lint "${{ github.event.inputs.gradle_task || 'assembleRelease' }}"
+          ./gradlew --no-daemon test lint assembleRelease bundleRelease
 
       - name: Collect artifacts
         id: artifacts

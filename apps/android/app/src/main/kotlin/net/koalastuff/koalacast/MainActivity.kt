@@ -47,9 +47,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val prefs by preferences.preferences.collectAsStateWithLifecycle(initialValue = null)
 
-            LaunchedEffect(prefs?.onboardingComplete) {
+            LaunchedEffect(Unit) {
                 if (
-                    prefs?.onboardingComplete == true &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(
                         this@MainActivity,

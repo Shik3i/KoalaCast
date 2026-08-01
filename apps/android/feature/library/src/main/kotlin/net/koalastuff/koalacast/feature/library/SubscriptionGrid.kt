@@ -11,12 +11,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,7 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.ui.component.CoverArt
+import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.EmptyState
+import net.koalastuff.koalacast.core.ui.component.OutlineButton
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
@@ -144,46 +144,38 @@ internal fun SubscriptionGrid(
                 )
             },
             text = {
-                OutlinedTextField(
-                    value = folderDraft,
-                    onValueChange = { folderDraft = it },
-                    label = { Text(stringResource(R.string.library_folder_name)) },
-                    supportingText = { Text(stringResource(R.string.library_folder_hint)) },
-                    singleLine = true,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onSetFolder(subscription.podcastId, folderDraft)
-                    pendingSubscription = null
-                }) {
-                    Text(
-                        text = stringResource(R.string.library_folder_save),
-                        color = KoalaTheme.colors.accentInk,
-                        style = KoalaTheme.type.label,
+                Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap)) {
+                    OutlinedTextField(
+                        value = folderDraft,
+                        onValueChange = { folderDraft = it },
+                        label = { Text(stringResource(R.string.library_folder_name)) },
+                        supportingText = { Text(stringResource(R.string.library_folder_hint)) },
+                        singleLine = true,
+                    )
+                    OutlineButton(
+                        text = stringResource(R.string.library_unsubscribe_confirm),
+                        onClick = {
+                            onUnsubscribe(subscription.podcastId)
+                            pendingSubscription = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        onUnsubscribe(subscription.podcastId)
+            confirmButton = {
+                AccentButton(
+                    text = stringResource(R.string.library_folder_save),
+                    onClick = {
+                        onSetFolder(subscription.podcastId, folderDraft)
                         pendingSubscription = null
-                    }) {
-                        Text(
-                            text = stringResource(R.string.library_unsubscribe_confirm),
-                            color = KoalaTheme.colors.ink3,
-                            style = KoalaTheme.type.label,
-                        )
-                    }
-                    TextButton(onClick = { pendingSubscription = null }) {
-                        Text(
-                            text = stringResource(R.string.library_cancel),
-                            color = KoalaTheme.colors.ink3,
-                            style = KoalaTheme.type.label,
-                        )
-                    }
-                }
+                    },
+                )
+            },
+            dismissButton = {
+                OutlineButton(
+                    text = stringResource(R.string.library_cancel),
+                    onClick = { pendingSubscription = null },
+                )
             },
         )
     }

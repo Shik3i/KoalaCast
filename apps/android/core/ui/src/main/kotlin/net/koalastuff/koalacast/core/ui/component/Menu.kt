@@ -272,10 +272,11 @@ fun UndoBanner(
             icon = PhosphorIcons.X,
             contentDescription = stringResource(R.string.action_dismiss),
             onClick = onDismiss,
-            tint = colors.ink4,
-            bordered = false,
-            boxSize = 28.dp,
-            iconSize = 14.dp,
+            tint = colors.ink2,
+            bordered = true,
+            boxSize = KoalaSpacing.minTouchTarget,
+            iconSize = 17.dp,
+            shape = KoalaShapes.card,
         )
     }
 }

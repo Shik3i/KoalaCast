@@ -10,6 +10,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.sqrt
 
+// Calibrated against spoken-word material: below -48 dBFS is effectively room
+// noise, ordinary speech occupies the middle, and mastered peaks retain headroom.
+private const val AMPLITUDE_NOISE_FLOOR = 0.004f
+private const val AMPLITUDE_GAIN = 3.8f
+// At ~11 ms per window: ~40 ms attack and ~550 ms release to bridge syllables.
+private const val AMPLITUDE_ATTACK = 0.42f
+private const val AMPLITUDE_RELEASE = 0.045f
+
 /**
  * How loud the audio is right now, as a 0..1 envelope, for anything that wants to
  * draw it.
@@ -160,14 +168,7 @@ internal class AmplitudeBufferSink(
             }
             if (samples > 0) {
                 val rms = sqrt(sum / samples).toFloat()
-                val normalised = (rms * GAIN).coerceIn(0f, 1f)
-                // Fast attack, slower release: speech is mostly gaps, and an
-                // envelope that falls as fast as it rises reads as flicker.
-                smoothed = if (normalised > smoothed) {
-                    smoothed + (normalised - smoothed) * ATTACK
-                } else {
-                    smoothed + (normalised - smoothed) * RELEASE
-                }
+                smoothed = nextAmplitude(smoothed, rms)
                 tap.publish(smoothed)
             }
             windowStart = windowEnd
@@ -185,12 +186,11 @@ internal class AmplitudeBufferSink(
          * about 90 times a second rather than once per audio buffer.
          */
         const val WINDOW_BYTES = 2048
-
-        /** Speech RMS sits well below full scale, so the envelope is lifted. */
-        const val GAIN = 3.2f
-
-        // Per window rather than per buffer now, so both are gentler than they look.
-        const val ATTACK = 0.35f
-        const val RELEASE = 0.06f
     }
+}
+
+internal fun nextAmplitude(previous: Float, rms: Float): Float {
+    val normalised = ((rms - AMPLITUDE_NOISE_FLOOR) * AMPLITUDE_GAIN).coerceIn(0f, 1f)
+    val blend = if (normalised > previous) AMPLITUDE_ATTACK else AMPLITUDE_RELEASE
+    return previous + (normalised - previous) * blend
 }

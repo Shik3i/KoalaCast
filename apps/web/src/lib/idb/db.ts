@@ -720,6 +720,22 @@ export async function getTombstones(): Promise<LocalTombstone[]> {
 	return db.getAll('tombstones');
 }
 
+export async function getTombstone(
+	entity_type: TombstoneEntity,
+	entity_id: string
+): Promise<LocalTombstone | undefined> {
+	const db = await getLocalDB();
+	return db.get('tombstones', tombstoneId(entity_type, entity_id));
+}
+
+export async function acknowledgeTombstone(
+	entity_type: TombstoneEntity,
+	entity_id: string
+): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('tombstones', tombstoneId(entity_type, entity_id));
+}
+
 // Removers used by the sync applier when a delete arrives from another device:
 // they must NOT create a new tombstone (that would echo the delete back out).
 export async function removeLocalSubscriptionSilent(podcast_id: string): Promise<void> {
@@ -786,9 +802,18 @@ function validateLocalSyncSnapshot(snapshot: LocalSyncSnapshot): void {
 	}
 }
 
-export async function replaceLocalSyncSnapshot(snapshot: LocalSyncSnapshot): Promise<void> {
+export async function replaceLocalSyncSnapshot(
+	snapshot: LocalSyncSnapshot,
+	pushWatermark: number
+): Promise<void> {
 	validateLocalSyncSnapshot(snapshot);
 	const db = await getLocalDB();
+	const pendingSubscriptions = (await db.getAll('subscriptions') as LocalSubscription[])
+		.filter((item) => item.added_at > pushWatermark);
+	const pendingFavorites = (await db.getAll('favorites') as LocalFavorite[])
+		.filter((item) => item.added_at > pushWatermark);
+	const pendingTombstones = (await db.getAll('tombstones') as LocalTombstone[])
+		.filter((item) => item.deleted_at > pushWatermark);
 	const stores = [
 		'subscriptions',
 		'favorites',
@@ -797,7 +822,12 @@ export async function replaceLocalSyncSnapshot(snapshot: LocalSyncSnapshot): Pro
 		'tombstones'
 	] as const;
 	const tx = db.transaction([...stores], 'readwrite');
-	for (const storeName of stores) await tx.objectStore(storeName).clear();
+	// Subscriptions/favorites are authoritative because both support deletes.
+	// Playback states and listening sessions are append/upsert-only: retain local
+	// records that may not have reached the server before cursor compaction.
+	for (const storeName of ['subscriptions', 'favorites', 'tombstones'] as const) {
+		await tx.objectStore(storeName).clear();
+	}
 	for (const item of snapshot.subscriptions ?? []) {
 		await tx.objectStore('subscriptions').put(item);
 	}
@@ -807,17 +837,44 @@ export async function replaceLocalSyncSnapshot(snapshot: LocalSyncSnapshot): Pro
 			categories: plainCategories(item.categories)
 		});
 	}
-	for (const item of snapshot.playback_states ?? []) {
-		await tx.objectStore('playback_states').put({
+	// Snapshot state ends at the server cursor. Local mutations newer than the
+	// last successful push still need to win and be uploaded on this sync run.
+	for (const item of pendingSubscriptions) {
+		await tx.objectStore('subscriptions').put(item);
+	}
+	for (const item of pendingFavorites) {
+		await tx.objectStore('favorites').put({
 			...item,
 			categories: plainCategories(item.categories)
 		});
 	}
+	for (const item of pendingTombstones) {
+		await tx.objectStore('tombstones').put(item);
+		if (item.entity_type === 'subscription') {
+			await tx.objectStore('subscriptions').delete(item.entity_id);
+		} else {
+			await tx.objectStore('favorites').delete(item.entity_id);
+		}
+	}
+	for (const item of snapshot.playback_states ?? []) {
+		const store = tx.objectStore('playback_states');
+		const existing = await store.get(item.episode_id);
+		if (!existing || item.last_played_at > existing.last_played_at) {
+			await store.put({
+				...item,
+				categories: plainCategories(item.categories)
+			});
+		}
+	}
 	for (const item of snapshot.listening_sessions ?? []) {
-		await tx.objectStore('listening_sessions').put({
-			...item,
-			categories: plainCategories(item.categories)
-		});
+		const store = tx.objectStore('listening_sessions');
+		const existing = await store.get(item.id);
+		if (!existing || item.ended_at > existing.ended_at) {
+			await store.put({
+				...item,
+				categories: plainCategories(item.categories)
+			});
+		}
 	}
 	await tx.done;
 }

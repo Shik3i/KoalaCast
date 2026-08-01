@@ -336,7 +336,7 @@ var numericIDPattern = regexp.MustCompile(`^\d+$`)
 
 func (h *PodcastHandler) AddFeed(w http.ResponseWriter, r *http.Request) {
 	var req AddFeedRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FeedURL == "" {
+	if err := decodeLimitedJSON(w, r, 4*1024, &req); err != nil || req.FeedURL == "" {
 		http.Error(w, `{"error":"valid 'feed_url' is required"}`, http.StatusBadRequest)
 		return
 	}

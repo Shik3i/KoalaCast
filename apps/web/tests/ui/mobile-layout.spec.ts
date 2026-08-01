@@ -30,6 +30,25 @@ for (const route of ['/settings', '/search', '/library?view=queue', '/downloads'
 	});
 }
 
+test('mobile navigation mirrors the Android destinations', async ({ page }) => {
+	await page.goto('/');
+	const navigation = page.locator('.quiet-mobile-nav');
+	await expect(navigation.getByRole('link')).toHaveCount(4);
+	expect((await navigation.getByRole('link').allTextContents()).map((label) => label.trim())).toEqual([
+		'Discover',
+		'New',
+		'Library',
+		'Profile'
+	]);
+	await expect(navigation.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile');
+});
+
+test('legacy more route redirects to profile actions', async ({ page }) => {
+	await page.goto('/more');
+	await expect(page).toHaveURL(/\/profile$/);
+	await expect(page.locator('.profile-actions').getByRole('link')).toHaveCount(4);
+});
+
 test('audio controls remain visible without consuming the settings screen', async ({ page }) => {
 	await page.goto('/settings#playback');
 	const playback = page.locator('#playback');
@@ -44,7 +63,7 @@ test('audio controls remain visible without consuming the settings screen', asyn
 
 test('settings start as a compact overview', async ({ page }) => {
 	await page.goto('/settings');
-	await expect(page.locator('details.card')).toHaveCount(10);
+	await expect(page.locator('details.card')).toHaveCount(11);
 	await expect(page.locator('details.card[open]')).toHaveCount(0);
 });
 

@@ -39,18 +39,23 @@ fun PlayingEqualizer(
     modifier: Modifier = Modifier,
     size: Dp = 16.dp,
 ) {
-    val transition = rememberInfiniteTransition(label = "equalizer")
-    // One shared clock with per-bar phase offsets: three independent animations
-    // would drift into looking random rather than rhythmic.
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "phase",
-    )
+    // A paused row must not keep the list recomposing. Start the clock only while
+    // motion is visible; one shared phase then drives every bar.
+    val phase = if (playing) {
+        val transition = rememberInfiniteTransition(label = "equalizer")
+        val animated by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "phase",
+        )
+        animated
+    } else {
+        0f
+    }
 
     Canvas(modifier = modifier.size(size).clearAndSetSemantics { }) {
         val bars = BAR_PHASES.size

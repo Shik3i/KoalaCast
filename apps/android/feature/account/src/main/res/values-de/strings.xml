@@ -24,7 +24,7 @@
     <string name="account_sync_retry">Sync wiederholen</string>
     <string name="account_statistics">Community-Statistik</string>
     <string name="account_global_stats">Anonyme Aggregate beitragen</string>
-    <string name="account_global_stats_body">Freiwillige Teilnahme an globalen Hörstatistiken. Rohsitzungen und Konto-IDs werden nie veröffentlicht.</string>
+    <string name="account_global_stats_body">Deine Hörsessions fließen in Gesamtwerte ein und dein Benutzername erscheint im Hörer-Leaderboard. Folgen, Zeitstempel, Rohsitzungen und Konto-IDs werden nie veröffentlicht.</string>
     <string name="account_sessions">Aktive Sitzungen und Geräte</string>
     <string name="account_no_sessions">Aktive Sitzungen konnten nicht geladen werden.</string>
     <string name="account_current">Aktuell</string>

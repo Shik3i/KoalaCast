@@ -90,9 +90,7 @@ func (h *GlobalStatsHandler) UpdatePreference(w http.ResponseWriter, r *http.Req
 	var body struct {
 		GlobalStatsOptIn *bool `json:"global_stats_opt_in"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&body); err != nil || body.GlobalStatsOptIn == nil {
+	if err := decodeLimitedJSONStrict(w, r, 4096, &body); err != nil || body.GlobalStatsOptIn == nil {
 		http.Error(w, `{"error":"global_stats_opt_in must be a boolean"}`, http.StatusBadRequest)
 		return
 	}
@@ -125,6 +123,9 @@ func (h *GlobalStatsHandler) UpdatePreference(w http.ResponseWriter, r *http.Req
 }
 
 func (h *GlobalStatsHandler) Global(w http.ResponseWriter, r *http.Request) {
+	// Consent changes and freshly synced sessions must be reflected on the next
+	// request. Do not let a browser or intermediary retain a pre-opt-in zero.
+	w.Header().Set("Cache-Control", "no-store")
 	rangeName, floor, ok := globalStatsRange(r.URL.Query().Get("range"), time.Now())
 	if !ok {
 		http.Error(w, `{"error":"range must be one of 90days, year, all"}`, http.StatusBadRequest)

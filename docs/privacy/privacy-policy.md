@@ -11,7 +11,7 @@ deployment's legal obligations.
 3. **No Personal Identification Required**: Accounts require only a self-chosen username and password. Email addresses and real names are never collected.
 4. **Local-First Architecture**: The web application is 100% functional without an account. Subscriptions, playback positions, queue, and settings remain stored locally in your browser's IndexedDB.
 5. **Direct Publisher Audio Streaming**: Audio media files (MP3, AAC, M4A) stream directly from podcast publishers (e.g. Libsyn, Megaphone, Anchor, Podbean) to your web browser or app. KoalaCast backend servers never proxy, intercept, or log audio playback requests.
-6. **Privacy-Preserving Proxying**: Podcast artwork, RSS feed XML, chapters, and transcripts are fetched through KoalaCast backend endpoints where applicable. Artwork uses an in-memory RAM LRU cache; audio remains direct.
+6. **Privacy-Preserving Proxying**: Podcast artwork is proxied by default and can be loaded directly only when the listener disables artwork protection in Settings. RSS feed XML, chapters, and transcripts are fetched through KoalaCast backend endpoints where applicable. Artwork uses an in-memory RAM LRU cache; audio remains direct.
 7. **Session IP Anonymization**: Active session records store only anonymized/truncated IP subnets (`/24` for IPv4, e.g. `192.168.1.0`, and `/48` for IPv6) to allow device recognition while preventing network tracking.
 8. **Global Statistics Are Opt-In**: Public aggregate statistics and listener rankings include only signed-in accounts that explicitly enable participation. The setting is off by default and can be revoked at any time.
 
@@ -34,7 +34,7 @@ deployment's legal obligations.
 | **Cross-Device Sync** | None | Automatic incremental sync |
 | **Server Metadata Use** | RSS/search/metadata proxying | Subscriptions, favorites, playback state, and listening-session sync |
 | **Audio Playback** | Direct publisher CDN | Direct publisher CDN |
-| **Artwork & RSS Parsing** | Proxied via KoalaCast RAM LRU cache | Proxied via KoalaCast RAM LRU cache |
+| **Artwork & RSS Parsing** | Artwork proxied by default; RSS proxied | Artwork proxied by default; RSS proxied |
 
 ## Optional Global Statistics
 

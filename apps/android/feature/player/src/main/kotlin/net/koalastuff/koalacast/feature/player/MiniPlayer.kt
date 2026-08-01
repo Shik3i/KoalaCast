@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -152,6 +155,7 @@ internal fun MiniPlayerContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(colors.bgPanel)
+                    .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
                     .clickable(onClick = onRetry)
                     .padding(horizontal = KoalaSpacing.gap, vertical = KoalaSpacing.gapTiny),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -191,37 +195,45 @@ internal fun PlayButton(
     val colors = KoalaTheme.colors
     val ground = if (colors.isDark) colors.accentFill else colors.accentInk
     val glyph = if (colors.isDark) colors.accentOn else colors.bgPanel
+    val showPause = isPlaying || isBuffering
+    val buttonDescription = stringResource(if (showPause) R.string.player_pause else R.string.player_play)
+    val touchSize = maxOf(size, KoalaSpacing.minTouchTarget)
 
     Box(
         modifier = modifier
-            .size(size)
+            .size(touchSize)
             .clip(KoalaShapes.round)
-            .background(ground)
+            .semantics { contentDescription = buttonDescription }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        // Crossfaded and slightly scaled rather than swapped: the glyph replacing
-        // itself between frames is the single most-pressed control in the app and
-        // reads as a jump. Short enough that it never delays the tap.
-        val showPause = isPlaying || isBuffering
-        AnimatedContent(
-            targetState = showPause,
-            transitionSpec = {
-                (fadeIn(tween(140)) + scaleIn(tween(140), initialScale = 0.7f))
-                    .togetherWith(fadeOut(tween(110)) + scaleOut(tween(110), targetScale = 0.7f))
-            },
-            label = "playPause",
-        ) { pause ->
-            PhosphorIcon(
-                // Buffering keeps the pause glyph rather than swapping in a spinner:
-                // the transport must not flicker on every stall.
-                icon = if (pause) PhosphorIcons.PauseFill else PhosphorIcons.PlayFill,
-                contentDescription = stringResource(
-                    if (isPlaying) R.string.player_pause else R.string.player_play,
-                ),
-                tint = glyph,
-                size = size * 0.42f,
-            )
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(KoalaShapes.round)
+                .background(ground),
+            contentAlignment = Alignment.Center,
+        ) {
+            // Crossfaded and slightly scaled rather than swapped: the glyph replacing
+            // itself between frames is the single most-pressed control in the app and
+            // reads as a jump. Short enough that it never delays the tap.
+            AnimatedContent(
+                targetState = showPause,
+                transitionSpec = {
+                    (fadeIn(tween(140)) + scaleIn(tween(140), initialScale = 0.7f))
+                        .togetherWith(fadeOut(tween(110)) + scaleOut(tween(110), targetScale = 0.7f))
+                },
+                label = "playPause",
+            ) { pause ->
+                PhosphorIcon(
+                    // Buffering keeps the pause glyph rather than swapping in a spinner:
+                    // the transport must not flicker on every stall.
+                    icon = if (pause) PhosphorIcons.PauseFill else PhosphorIcons.PlayFill,
+                    contentDescription = null,
+                    tint = glyph,
+                    size = size * 0.42f,
+                )
+            }
         }
     }
 }

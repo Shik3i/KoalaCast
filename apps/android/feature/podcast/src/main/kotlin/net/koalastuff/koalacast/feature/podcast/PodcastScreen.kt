@@ -294,6 +294,7 @@ internal fun PodcastContent(
                         state.progressByEpisode[episode.id] ?: 0
                     },
                     isCurrent = episode.id == state.currentEpisodeId,
+                    playing = state.currentEpisodePlaying && episode.id == state.currentEpisodeId,
                     onClick = { onOpenEpisode(episode.id) },
                     onPlay = { onPlay(episode) },
                     onToggleFavorite = { onToggleFavorite(episode) },
@@ -648,6 +649,7 @@ private fun EpisodeRow(
     isPlayed: Boolean,
     progressPercent: Int,
     isCurrent: Boolean,
+    playing: Boolean,
     onClick: () -> Unit,
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -723,6 +725,7 @@ private fun EpisodeRow(
             EpisodeProgressButton(
                 progressPercent = progressPercent,
                 current = isCurrent,
+                playing = playing,
                 contentDescription = stringResource(R.string.podcast_action_play),
                 onClick = onPlay,
                 size = 38.dp,

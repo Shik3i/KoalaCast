@@ -1,10 +1,18 @@
 /**
- * Routes podcast artwork images through the privacy-first backend image proxy.
- * Resizes images on the server, compresses them, and caches them in server RAM
- * plus the browser/service-worker cache.
- * Eliminates 100% of third-party IP leakage and reduces network payloads from 1MB to ~15KB.
+ * Routes podcast artwork through the backend image proxy by default. The user
+ * may opt into direct publisher-host requests from Privacy settings.
  */
-export function optimizeArtwork(url: string | null | undefined, targetSize = 300): string {
+let proxyImagesEnabled = true;
+
+export function setArtworkProxyEnabled(enabled: boolean): void {
+	proxyImagesEnabled = enabled;
+}
+
+export function optimizeArtwork(
+	url: string | null | undefined,
+	targetSize = 300,
+	proxyImages = proxyImagesEnabled
+): string {
 	if (!url) return '/cover-placeholder.webp';
 
 	// A protocol-relative URL (`//cdn.example/cover.jpg`) is remote, not a local
@@ -16,6 +24,7 @@ export function optimizeArtwork(url: string | null | undefined, targetSize = 300
 	const normalized = url.startsWith('//')
 		? `${typeof location === 'undefined' ? 'https:' : location.protocol}${url}`
 		: url;
+	if (!proxyImages) return normalized;
 
 	return `/api/v1/proxy/image?url=${encodeURIComponent(normalized)}&w=${targetSize}`;
 }

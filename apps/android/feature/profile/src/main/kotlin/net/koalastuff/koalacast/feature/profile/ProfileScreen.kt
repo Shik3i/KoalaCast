@@ -143,6 +143,7 @@ internal fun ProfileContent(
                     text = profileSummary(state),
                     color = colors.ink4,
                     style = KoalaTheme.type.monoSmall,
+                    maxLines = 2,
                 )
             }
             IconButtonSquare(

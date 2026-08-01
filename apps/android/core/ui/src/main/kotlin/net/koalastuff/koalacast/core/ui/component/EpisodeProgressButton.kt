@@ -13,9 +13,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 
 /**
@@ -35,7 +38,7 @@ fun EpisodeProgressButton(
     progressPercent: Int,
     current: Boolean,
     contentDescription: String,
-    playing: Boolean = current,
+    playing: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
@@ -46,11 +49,14 @@ fun EpisodeProgressButton(
     // constant is what makes a 1% sliver visible at all.
     val ringWidth = 3.dp
     val accent = if (colors.isDark) colors.accentFill else colors.accentInk
+    val buttonDescription = contentDescription
+    val touchSize = maxOf(size, KoalaSpacing.minTouchTarget)
 
     Box(
         modifier = modifier
-            .size(size)
+            .size(touchSize)
             .clip(CircleShape)
+            .semantics { this.contentDescription = buttonDescription }
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -98,7 +104,7 @@ fun EpisodeProgressButton(
         } else {
             PhosphorIcon(
                 icon = PhosphorIcons.PlayFill,
-                contentDescription = contentDescription,
+                contentDescription = null,
                 tint = colors.ink2,
                 size = size * 0.38f,
             )

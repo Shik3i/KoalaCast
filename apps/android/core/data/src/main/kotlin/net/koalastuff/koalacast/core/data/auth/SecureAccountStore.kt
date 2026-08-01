@@ -130,6 +130,23 @@ class SecureAccountStore @Inject constructor(
         prefs.edit { putLong(scopedKey("push_watermark", userId), timestamp.coerceAtLeast(0)) }
     }
 
+    /**
+     * Listening telemetry was added after the general sync watermark. Keeping a
+     * separate watermark lets upgraded installations backfill older sessions
+     * once instead of silently treating them as already uploaded.
+     */
+    fun listeningSessionPushWatermark(userId: String): Long =
+        scopedLong("listening_session_push_watermark", userId)
+
+    fun setListeningSessionPushWatermark(userId: String, timestamp: Long) {
+        prefs.edit {
+            putLong(
+                scopedKey("listening_session_push_watermark", userId),
+                timestamp.coerceAtLeast(0),
+            )
+        }
+    }
+
     fun queueUpdatedAt(): Long = prefs.getLong(queueUpdatedAtKey(), 0)
 
     fun markQueueUpdated(timestamp: Long = System.currentTimeMillis()) {

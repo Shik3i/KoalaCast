@@ -3,8 +3,7 @@
 //
 // Both clients sync their preferences as a single `settings` entity and the server
 // keeps only the newest write of the whole thing — it does not merge. Their key
-// sets do not overlap: the web client owns `date_format` and `ui_language`, the
-// Android client owns the theme, palette, start screen and download policy.
+// sets can grow independently, so unknown keys must survive every write.
 //
 // A payload rebuilt purely from the fields *this* client understands therefore
 // deletes the other client's keys from the server on every push. Nothing breaks on
@@ -32,6 +31,14 @@ export const OWNED_SETTINGS_KEYS = new Set([
 	'volume_boost',
 	'skip_silence',
 	'playback_speed',
+	'start_screen',
+	'visualizer',
+	'proxy_images',
+	'download_wifi_only',
+	'auto_download_count',
+	'download_retention',
+	'download_concurrency',
+	'download_budget_bytes',
 	'updated_at'
 ]);
 

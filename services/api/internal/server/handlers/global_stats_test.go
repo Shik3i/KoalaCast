@@ -92,6 +92,46 @@ func TestGlobalStatsPreferenceOptOutRemovesUserImmediately(t *testing.T) {
 	}
 }
 
+func TestGlobalStatsOptInIncludesPreexistingSessions(t *testing.T) {
+	database, handler := newGlobalStatsTestHandler(t)
+	now := time.Now().UnixMilli()
+	seedGlobalStatsUser(t, database, "user-1", "Listener", false, now)
+	seedGlobalSession(t, database, "user-1", "session-1", "podcast-1", "Show", now, 90_000)
+
+	authCtx := context.WithValue(
+		context.Background(),
+		customMiddleware.UserContextKey,
+		&customMiddleware.AuthUser{ID: "user-1", Username: "Listener"},
+	)
+	preferenceRequest := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/stats/preferences",
+		bytes.NewBufferString(`{"global_stats_opt_in":true}`),
+	).WithContext(authCtx)
+	preferenceResponse := httptest.NewRecorder()
+	handler.UpdatePreference(preferenceResponse, preferenceRequest)
+	if preferenceResponse.Code != http.StatusOK {
+		t.Fatalf("preference status=%d body=%s", preferenceResponse.Code, preferenceResponse.Body.String())
+	}
+
+	globalRequest := httptest.NewRequest(http.MethodGet, "/api/v1/stats/global?range=all", nil)
+	globalResponse := httptest.NewRecorder()
+	handler.Global(globalResponse, globalRequest)
+	var result struct {
+		Participants int   `json:"participants"`
+		TotalWallMS  int64 `json:"total_wall_ms"`
+	}
+	if err := json.NewDecoder(globalResponse.Body).Decode(&result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if result.Participants != 1 || result.TotalWallMS != 90_000 {
+		t.Fatalf("preexisting session missing after opt-in: %+v", result)
+	}
+	if cacheControl := globalResponse.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("Cache-Control=%q, want no-store", cacheControl)
+	}
+}
+
 func newGlobalStatsTestHandler(t *testing.T) (*db.DB, *GlobalStatsHandler) {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))

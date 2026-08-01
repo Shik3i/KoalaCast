@@ -60,8 +60,8 @@ tidy:
 
 ## android-release-check: Run exactly what the Android release workflow runs
 android-release-check:
-	@echo "==> Running the release gate (test, lint, assembleRelease)..."
-	@cd apps/android && ./gradlew --no-daemon test lint assembleRelease
+	@echo "==> Running the release gate (test, lint, APK and AAB)..."
+	@cd apps/android && ./gradlew --no-daemon test lint assembleRelease bundleRelease
 
 ## android-palettes: Regenerate the Android colour palettes from the web stylesheet
 android-palettes:

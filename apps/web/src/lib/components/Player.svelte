@@ -55,6 +55,7 @@
 	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
 	let remotePlaybackAvailable = $state(false);
 	let remotePlaybackState = $state<RemotePlaybackState>('disconnected');
+	let visualizerLevel = $state(0);
 	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
 	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
 	$effect(() => {
@@ -72,7 +73,6 @@
 	import { audioEngine } from '$lib/audio/engine';
 
 	const silenceGate = new SilenceGate();
-	let silenceTimer: ReturnType<typeof setInterval> | null = null;
 	let chapters = $state<any[]>([]);
 	let transcriptCues = $state<any[]>([]);
 	let transcriptQuery = $state('');
@@ -166,7 +166,7 @@
 		if (player.sleepAtChapterEnd && previousChapterIndex >= 0 && currentIdx > previousChapterIndex) {
 			if (audioEl) audioEl.pause();
 			isPlaying = false;
-			player.sleepAtChapterEnd = false;
+			player.setSleepTimer('');
 			toast.info(t('player.sleepTimer'));
 		}
 		previousChapterIndex = currentIdx;
@@ -342,7 +342,7 @@
 	async function requestPlayback() {
 		if (!audioEl) return;
 		const element = audioEl;
-		const needsAudioGraph = effectiveVolumeBoost || effectiveSkipSilence || audioEngine.initialized;
+		const needsAudioGraph = effectiveVolumeBoost || effectiveSkipSilence || prefs.visualizer !== 'off' || audioEngine.initialized;
 
 		// Leave ordinary playback on the native media-element output. Creating a
 		// MediaElementAudioSourceNode redirects all sound into its AudioContext;
@@ -365,33 +365,69 @@
 	}
 
 	function sampleSilence() {
+		const sampledLevel = audioEl && isPlaying && (prefs.visualizer !== 'off' || effectiveSkipSilence)
+			? audioEngine.getLevel()
+			: null;
+		if (prefs.visualizer !== 'off' && isPlaying) {
+			visualizerLevel = Math.min(1, (sampledLevel ?? 0) * 5);
+		} else if (visualizerLevel !== 0) {
+			visualizerLevel = 0;
+		}
 		if (!audioEl || !effectiveSkipSilence || !isPlaying) {
 			resetSilenceTrimming();
 			return;
 		}
-		const level = audioEngine.getLevel();
-		if (level === null) {
+		if (sampledLevel === null) {
 			resetSilenceTrimming();
 			return;
 		}
-		const trim = silenceGate.update(level, performance.now());
+		const trim = silenceGate.update(sampledLevel, performance.now());
 		const targetRate = trim ? Math.min(3, player.playbackSpeed * 2) : player.playbackSpeed;
 		if (audioEl.playbackRate !== targetRate) audioEl.playbackRate = targetRate;
 	}
+
+	// Sampling at 20 Hz is useful only during active playback with either the
+	// visualiser or silence trimming enabled. An unconditional timer kept every
+	// idle player instance waking up forever.
+	$effect(() => {
+		const shouldSample = !!audioEl && isPlaying && (effectiveSkipSilence || prefs.visualizer !== 'off');
+		if (!shouldSample) {
+			visualizerLevel = 0;
+			resetSilenceTrimming();
+			return;
+		}
+		const timer = setInterval(sampleSilence, 50);
+		return () => clearInterval(timer);
+	});
 
 	// Settings can change while the persistent player keeps playing on another
 	// route. Apply them immediately instead of waiting for the next play event.
 	$effect(() => {
 		const boost = effectiveVolumeBoost;
 		const trimSilence = effectiveSkipSilence;
+		const visualizer = prefs.visualizer;
 		audioEngine.skipSilence = trimSilence;
 		audioEngine.setVolumeBoost(boost);
 		if (!trimSilence) resetSilenceTrimming();
+		if (isPlaying && visualizer !== 'off' && !audioEngine.initialized) {
+			void requestPlayback();
+		} else if (visualizer === 'off' && !boost && !trimSilence && audioEngine.initialized) {
+			void resetToNativePlayback();
+		}
 	});
 
-	let autoSaveTimer: any = null;
-
 	const track = $derived(player.current);
+
+	// Progress persistence only needs a timer while audio is advancing. Keeping a
+	// permanent interval after the first playback woke idle tabs forever.
+	$effect(() => {
+		if (!isPlaying) return;
+		const timer = setInterval(() => {
+			void saveProgress('PROGRESS_TICK');
+			void flushListeningSession();
+		}, 30_000);
+		return () => clearInterval(timer);
+	});
 
 	// React to track / play requests. Setting src for a new track loads the saved
 	// position; a bumped playToken (user pressed Play) triggers autoplay — allowed
@@ -609,7 +645,7 @@
 
 		if (player.sleepTimerEndsAt && Date.now() >= player.sleepTimerEndsAt) {
 			audioEl.pause();
-			player.sleepTimerEndsAt = null;
+			player.setSleepTimer('');
 		}
 		if (player.sleepAtChapterEnd && activeChapterIndex >= 0) {
 			const chapter = chapters[activeChapterIndex];
@@ -623,7 +659,7 @@
 			);
 			if (chapterEnd > 0 && audioEl.currentTime >= chapterEnd - 0.2) {
 				audioEl.pause();
-				player.sleepAtChapterEnd = false;
+				player.setSleepTimer('');
 				toast.info(t('player.sleepTimer'));
 			}
 		}
@@ -653,7 +689,7 @@
 		await saveProgress('MARK_PLAYED', true);
 		// Stop here if a "sleep at end of episode" timer is armed.
 		if (player.sleepAtEpisodeEnd) {
-			player.sleepAtEpisodeEnd = false;
+			player.setSleepTimer('');
 			return;
 		}
 		// Otherwise autoplay the next queued episode, if any.
@@ -936,14 +972,6 @@
 
 		player.loadQueue();
 
-		autoSaveTimer = setInterval(() => {
-			if (isPlaying) {
-				saveProgress('PROGRESS_TICK');
-				flushListeningSession();
-			}
-		}, 30000);
-		silenceTimer = setInterval(sampleSilence, 50);
-
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
 				if (showShortcutsModal) showShortcutsModal = false;
@@ -979,8 +1007,6 @@
 			window.removeEventListener('keydown', handleKeyDown);
 			document.removeEventListener('visibilitychange', handleVisibility);
 			flushListeningSession(true);
-			if (autoSaveTimer) clearInterval(autoSaveTimer);
-			if (silenceTimer) clearInterval(silenceTimer);
 			resetSilenceTrimming();
 		};
 	});
@@ -1038,7 +1064,12 @@
 	<div class="player-shell" style={accentVars}>
 		<div class="player-bar" bind:this={playerBarElement}>
 			<!-- Seek progress line spanning the top of the bar -->
-			<div class="progress-track" style="--progress: {progressPercent}%"></div>
+			<div class="progress-track" class:visualizing={prefs.visualizer === 'level'} style="--progress: {progressPercent}%; --audio-level: {visualizerLevel}"></div>
+			{#if prefs.visualizer === 'waveform' && isPlaying}
+				<div class="visualizer-signal" style="--audio-level: {visualizerLevel}" aria-hidden="true">
+					{#each [0.65, 1, 0.8, 1.15, 0.75, 1, 0.6] as scale}<span style="--bar-scale: {scale}"></span>{/each}
+				</div>
+			{/if}
 
 			<div class="track-info">
 				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')} title={t('player.openFullscreen')}>
@@ -1153,10 +1184,10 @@
 						<i class="ph ph-broadcast" aria-hidden="true"></i>
 					</button>
 				{/if}
-				<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
-					<option value="" selected={!player.sleepTimerEndsAt && !player.sleepAtEpisodeEnd && !player.sleepAtChapterEnd}>◐ {t('player.sleepOff')}</option>
-					<option value="chapter" selected={player.sleepAtChapterEnd}>⏳ {t('player.sleepChapterEnd')}</option>
-					<option value="episode" selected={player.sleepAtEpisodeEnd}>⌛ {t('player.sleepEpisodeEnd')}</option>
+				<select value={player.sleepTimerValue} onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
+					<option value="">◐ {t('player.sleepOff')}</option>
+					<option value="chapter">⏳ {t('player.sleepChapterEnd')}</option>
+					<option value="episode">⌛ {t('player.sleepEpisodeEnd')}</option>
 					<option value="15">15 min</option>
 					<option value="30">30 min</option>
 					<option value="45">45 min</option>
@@ -1278,7 +1309,7 @@
 							<i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}
 						</button>
 					{/if}
-					<select onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
+					<select value={player.sleepTimerValue} onchange={(e) => setSleepTimer(e.currentTarget.value)} aria-label={t('player.sleepTimer')}>
 						<option value="">💤 {t('player.sleepTimerOff')}</option>
 						<option value="episode">{t('player.endOfEpisode')}</option>
 						<option value="15">15 min</option>
@@ -1397,6 +1428,9 @@
 		background: linear-gradient(90deg, var(--show-accent, var(--accent-green)), color-mix(in srgb, var(--show-accent, var(--accent-green)) 60%, #fff));
 		transition: width 0.25s linear, background 0.4s ease;
 	}
+	.progress-track.visualizing { height: calc(3px + var(--audio-level, 0) * 3px); box-shadow: 0 0 calc(var(--audio-level, 0) * 12px) var(--show-accent, var(--accent-green)); }
+	.visualizer-signal { position: absolute; top: 7px; left: 50%; z-index: 2; display: flex; align-items: center; gap: 2px; height: 14px; transform: translateX(-50%); pointer-events: none; }
+	.visualizer-signal span { width: 2px; height: max(2px, calc(var(--audio-level, 0) * var(--bar-scale) * 14px)); border-radius: 999px; background: var(--show-accent, var(--accent-green)); transition: height 80ms linear; }
 
 	.art-btn {
 		position: relative;

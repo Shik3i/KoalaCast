@@ -2,7 +2,6 @@ package net.koalastuff.koalacast.core.ui.component
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -23,11 +22,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
+import net.koalastuff.koalacast.core.ui.theme.reduceMotion
 
 /**
  * The download control, built like [EpisodeProgressButton] rather than like a
@@ -58,6 +61,9 @@ fun DownloadButton(
     val accent = if (colors.isDark) colors.accentFill else colors.accentInk
     val ringWidth = 3.dp
     val active = state == DownloadState.DOWNLOADING || state == DownloadState.QUEUED
+    val motionReduced = reduceMotion()
+    val buttonDescription = contentDescription
+    val touchSize = maxOf(size, KoalaSpacing.minTouchTarget)
 
     // Animated rather than snapped: progress arrives in lumps as chunks land, and
     // a ring that jumps 12% at a time looks like a stutter rather than a download.
@@ -75,35 +81,55 @@ fun DownloadButton(
 
     // Until the first bytes report a size there is nothing honest to fill, so the
     // ring turns instead — motion that says "working" without claiming a figure.
-    val spinner = rememberInfiniteTransition(label = "downloadSpin")
-    val spin by spinner.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_100, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "spin",
-    )
     val indeterminate = active && sweep <= 0.01f
+    // Do not keep an infinite transition alive for every idle/completed episode
+    // row. Long lists otherwise recompose forever even though nothing moves.
+    val spin = if (indeterminate && !motionReduced) {
+        val spinner = rememberInfiniteTransition(label = "downloadSpin")
+        val animated by spinner.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1_100, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "spin",
+        )
+        animated
+    } else {
+        0f
+    }
 
     val iconTint = when (state) {
         DownloadState.DONE -> accent
         DownloadState.FAILED -> colors.ink2
         else -> if (active) accent else colors.ink3
     }
-    // A gentle pulse in size while working, so the glyph is not the only static
-    // thing inside a moving ring.
-    val iconSize by animateDpAsState(
-        targetValue = if (active) size * 0.34f else size * 0.38f,
-        animationSpec = tween(durationMillis = 260),
-        label = "downloadIcon",
-    )
+    // A gentle pulse while working, not a one-off resize. Start the infinite
+    // transition only for active controls so a long episode list stays idle.
+    val iconScale = if (active && !motionReduced) {
+        val pulse = rememberInfiniteTransition(label = "downloadPulse")
+        val animated by pulse.animateFloat(
+            initialValue = 0.32f,
+            targetValue = 0.40f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 650),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "downloadIconScale",
+        )
+        animated
+    } else if (active) {
+        0.36f
+    } else {
+        0.38f
+    }
 
     Box(
         modifier = modifier
-            .size(size)
+            .size(touchSize)
             .clip(CircleShape)
+            .semantics { this.contentDescription = buttonDescription }
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -151,9 +177,9 @@ fun DownloadButton(
                 DownloadState.FAILED -> PhosphorIcons.ArrowClockwise
                 else -> PhosphorIcons.DownloadSimple
             },
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = iconTint,
-            size = iconSize,
+            size = size * iconScale,
         )
     }
 }
