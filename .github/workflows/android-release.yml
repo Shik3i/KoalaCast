@@ -112,7 +112,13 @@ jobs:
           done
           for bundle in dist/*.aab; do
             [ -e "$bundle" ] || continue
-            jarsigner -verify -strict "$bundle"
+            # An Android release key is intentionally self-signed. `-strict`
+            # treats that normal signing model as an untrusted public PKIX
+            # chain and exits 4 even when the AAB signature is valid.
+            jarsigner -verify "$bundle"
+            # `jarsigner -verify` also exits zero for an unsigned archive;
+            # requiring a readable signer certificate closes that gap.
+            keytool -printcert -jarfile "$bundle" >/dev/null
           done
 
       - name: Attest build provenance
