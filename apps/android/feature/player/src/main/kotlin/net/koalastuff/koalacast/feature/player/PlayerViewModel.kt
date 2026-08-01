@@ -85,7 +85,7 @@ class PlayerViewModel @Inject constructor(
         amplitudeTap.listening = active
     }
 
-    fun amplitudeLevel(): Float = amplitudeTap.level()
+    fun amplitudeLevel(frameTimeNanos: Long): Float = amplitudeTap.levelAt(frameTimeNanos)
 
     fun copyAmplitudeHistory(out: FloatArray) = amplitudeTap.copyHistoryInto(out)
     fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {

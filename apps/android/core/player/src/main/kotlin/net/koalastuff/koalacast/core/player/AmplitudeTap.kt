@@ -14,11 +14,13 @@ import kotlin.math.sqrt
 // noise, ordinary speech occupies the middle, and mastered peaks retain headroom.
 private const val AMPLITUDE_NOISE_FLOOR = 0.004f
 private const val AMPLITUDE_GAIN = 3.8f
-// At 30 envelope frames per second: a quick attack keeps consonants lively while
-// the slower release bridges the short gaps between syllables.
-private const val AMPLITUDE_ATTACK = 0.80f
-private const val AMPLITUDE_RELEASE = 0.13f
-private const val TARGET_UPDATES_PER_SECOND = 30
+// Calibrated for 120 envelope frames per second: equivalent to the previous
+// 30 Hz attack/release timing, but with enough temporal detail for 120 Hz panels.
+private const val AMPLITUDE_ATTACK = 0.3313f
+private const val AMPLITUDE_RELEASE = 0.0342f
+internal const val ENVELOPE_UPDATES_PER_SECOND = 120
+private const val ENVELOPE_FRAME_NANOS = 1_000_000_000L / ENVELOPE_UPDATES_PER_SECOND
+private const val MAX_RENDER_GAP_NANOS = 1_000_000_000L
 
 /**
  * How loud the audio is right now, as a 0..1 envelope, for anything that wants to
@@ -56,6 +58,18 @@ class AmplitudeTap @Inject constructor() {
     @Volatile
     private var pendingRead = 0L
 
+    // Renderer-only interpolation state. The PCM producer never touches these;
+    // [resetGeneration] tells the next display frame to discard them safely.
+    private var interpolationStart = 0f
+    private var interpolationEnd = 0f
+    private var hasInterpolationEnd = false
+    private var interpolationNanos = 0L
+    private var lastRenderNanos = Long.MIN_VALUE
+    private var observedResetGeneration = 0L
+
+    @Volatile
+    private var resetGeneration = 0L
+
     /**
      * Set while something is actually drawing. The processor stays in the chain
      * either way — inserting and removing it mid-playback would reconfigure the
@@ -77,26 +91,90 @@ class AmplitudeTap @Inject constructor() {
     private var writeIndex = 0
 
     /**
-     * Consumes one queued smoothed amplitude, 0..1. If the decoder gets more than
-     * two seconds ahead, stale values are skipped instead of making the animation
-     * visibly lag behind the audio.
+     * Returns the amplitude for this display frame. PCM is sampled at 120 Hz and
+     * consumed according to elapsed frame time, so 60 Hz displays advance two
+     * source samples, 90 Hz displays alternate one and two, and 120 Hz displays
+     * advance one. Faster panels interpolate instead of repeating a hard step.
      */
-    fun level(): Float {
+    fun levelAt(frameTimeNanos: Long): Float {
+        syncRendererAfterReset()
+
+        if (lastRenderNanos == Long.MIN_VALUE) {
+            lastRenderNanos = frameTimeNanos
+            dequeue()?.let { first ->
+                interpolationStart = first
+                level = first
+                appendHistory(first)
+            }
+            dequeue()?.let { next ->
+                interpolationEnd = next
+                hasInterpolationEnd = true
+            }
+            return level
+        }
+
+        val elapsed = (frameTimeNanos - lastRenderNanos).coerceIn(0L, MAX_RENDER_GAP_NANOS)
+        lastRenderNanos = frameTimeNanos
+
+        if (!hasInterpolationEnd) {
+            dequeue()?.let { next ->
+                interpolationEnd = next
+                hasInterpolationEnd = true
+                interpolationNanos = 0L
+            }
+        }
+
+        interpolationNanos += elapsed
+        while (hasInterpolationEnd && interpolationNanos >= ENVELOPE_FRAME_NANOS) {
+            interpolationStart = interpolationEnd
+            level = interpolationStart
+            appendHistory(interpolationStart)
+            interpolationNanos -= ENVELOPE_FRAME_NANOS
+
+            val next = dequeue()
+            if (next == null) {
+                hasInterpolationEnd = false
+                interpolationNanos = 0L
+            } else {
+                interpolationEnd = next
+            }
+        }
+
+        if (hasInterpolationEnd) {
+            val fraction = interpolationNanos.toFloat() / ENVELOPE_FRAME_NANOS.toFloat()
+            level = interpolationStart + (interpolationEnd - interpolationStart) * fraction
+        }
+        return level
+    }
+
+    private fun dequeue(): Float? {
         val end = pendingWrite
         var read = pendingRead
-        if (read >= end) return level
+        if (read >= end) return null
 
         if (end - read > PENDING_CAPACITY.toLong()) {
             read = end - PENDING_CAPACITY
         }
         val value = pending[(read % PENDING_CAPACITY).toInt()]
         pendingRead = read + 1
-        level = value
+        return value
+    }
 
+    private fun appendHistory(value: Float) {
         val index = writeIndex
         history[index % HISTORY] = value
         writeIndex = (index + 1) % HISTORY
-        return value
+    }
+
+    private fun syncRendererAfterReset() {
+        val generation = resetGeneration
+        if (observedResetGeneration == generation) return
+        observedResetGeneration = generation
+        interpolationStart = 0f
+        interpolationEnd = 0f
+        hasInterpolationEnd = false
+        interpolationNanos = 0L
+        lastRenderNanos = Long.MIN_VALUE
     }
 
     /**
@@ -108,7 +186,9 @@ class AmplitudeTap @Inject constructor() {
         val end = writeIndex
         for (i in out.indices) {
             // out[last] is the newest sample, walking backwards from the write head.
-            val age = out.size - 1 - i
+            // Keep the same ~1.6 second visual span as the old 30 Hz history
+            // while shifting it at 120 Hz for smooth waveform/dot movement.
+            val age = (out.size - 1 - i) * HISTORY_SAMPLE_STRIDE
             val index = ((end - 1 - age) % HISTORY + HISTORY) % HISTORY
             out[i] = history[index]
         }
@@ -126,15 +206,17 @@ class AmplitudeTap @Inject constructor() {
         history.fill(0f)
         writeIndex = 0
         pendingRead = pendingWrite
+        resetGeneration++
     }
 
     private companion object {
         /**
-         * At roughly one sample per decoded buffer this covers a few seconds, which
-         * is as much past as a bar the width of a phone can show honestly.
+         * Four source samples per visible history point preserves the original
+         * time span while allowing every 120 Hz source frame to move the shape.
          */
-        const val HISTORY = 96
-        const val PENDING_CAPACITY = 64
+        const val HISTORY_SAMPLE_STRIDE = ENVELOPE_UPDATES_PER_SECOND / 30
+        const val HISTORY = 96 * HISTORY_SAMPLE_STRIDE
+        const val PENDING_CAPACITY = 128
     }
 }
 
@@ -226,7 +308,7 @@ internal class AmplitudeBufferSink(
 
 internal fun envelopeWindowBytes(sampleRateHz: Int, channelCount: Int): Int {
     val frameBytes = channelCount.coerceAtLeast(1) * 2
-    val raw = sampleRateHz.coerceAtLeast(1) * frameBytes / TARGET_UPDATES_PER_SECOND
+    val raw = sampleRateHz.coerceAtLeast(1) * frameBytes / ENVELOPE_UPDATES_PER_SECOND
     return (raw / frameBytes).coerceAtLeast(1) * frameBytes
 }
 

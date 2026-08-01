@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -60,7 +61,6 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.spotlightGlow
 import net.koalastuff.koalacast.core.ui.util.Format
-import kotlinx.coroutines.delay
 
 /**
  * The full-screen transport. The desktop design puts these controls in a bar
@@ -108,7 +108,7 @@ fun NowPlayingScreen(
         state = state,
         chapters = chapters,
         visualizer = effectiveStyle,
-        amplitude = { viewModel.amplitudeLevel() },
+        amplitude = viewModel::amplitudeLevel,
         amplitudeHistory = viewModel::copyAmplitudeHistory,
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
@@ -129,7 +129,7 @@ internal fun NowPlayingContent(
     modifier: Modifier = Modifier,
     chapters: List<Chapter> = emptyList(),
     visualizer: VisualizerStyle = VisualizerStyle.OFF,
-    amplitude: () -> Float = { 0f },
+    amplitude: (Long) -> Float = { 0f },
     amplitudeHistory: (FloatArray) -> Unit = {},
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
@@ -336,7 +336,7 @@ private fun Scrubber(
     onSeekTo: (Long) -> Unit,
     visualizer: VisualizerStyle = VisualizerStyle.OFF,
     playing: Boolean = false,
-    amplitude: () -> Float = { 0f },
+    amplitude: (Long) -> Float = { 0f },
     amplitudeHistory: (FloatArray) -> Unit = {},
 ) {
     val colors = KoalaTheme.colors
@@ -348,28 +348,6 @@ private fun Scrubber(
 
     val markers = remember(chapters, durationMs) {
         ChapterState.markerFractions(chapters, durationMs)
-    }
-
-    // Sampled on the frame clock rather than pushed from the audio thread: the
-    // renderer decides when it needs a value, and a paused player needs none.
-    var level by remember { mutableFloatStateOf(0f) }
-    val history = remember { FloatArray(WAVEFORM_BARS) }
-    var historyRevision by remember { mutableIntStateOf(0) }
-    LaunchedEffect(visualizer, playing) {
-        if (!visualizer.needsAudio || !playing) {
-            level = 0f
-            return@LaunchedEffect
-        }
-        while (true) {
-            delay(VISUALIZER_SAMPLE_MS)
-            level = amplitude()
-            if (visualizer.needsHistory) {
-                amplitudeHistory(history)
-                // FloatArray is mutated in place, so Compose needs a separate
-                // signal that its contents changed.
-                historyRevision++
-            }
-        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
@@ -390,13 +368,12 @@ private fun Scrubber(
                 contentAlignment = Alignment.Center,
             ) {
                 if (visualizer.needsAudio) {
-                    @Suppress("UNUSED_EXPRESSION")
-                    historyRevision
-                    VisualizerTrack(
+                    LiveVisualizerTrack(
                         style = visualizer,
                         fraction = fraction,
-                        level = level,
-                        history = history,
+                        playing = playing,
+                        amplitude = amplitude,
+                        amplitudeHistory = amplitudeHistory,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
@@ -404,7 +381,7 @@ private fun Scrubber(
                         style = VisualizerStyle.OFF,
                         fraction = fraction,
                         level = 0f,
-                        history = history,
+                        history = EMPTY_VISUALIZER_HISTORY,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -474,6 +451,53 @@ private fun Scrubber(
             )
         }
     }
+}
+
+/**
+ * Owns the per-frame state so only the visualizer canvas is recomposed at VSync.
+ * Keeping this state in [Scrubber] would also rebuild the Slider, markers and time
+ * labels every frame, which misses 60 Hz deadlines on modest devices.
+ */
+@Composable
+private fun LiveVisualizerTrack(
+    style: VisualizerStyle,
+    fraction: Float,
+    playing: Boolean,
+    amplitude: (Long) -> Float,
+    amplitudeHistory: (FloatArray) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var level by remember { mutableFloatStateOf(0f) }
+    val history = remember { FloatArray(WAVEFORM_BARS) }
+    var historyRevision by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(style, playing) {
+        if (!playing) {
+            level = 0f
+            return@LaunchedEffect
+        }
+        while (true) {
+            withFrameNanos { frameTimeNanos ->
+                level = amplitude(frameTimeNanos)
+                if (style.needsHistory) {
+                    amplitudeHistory(history)
+                    // The array mutates in place; this integer invalidates only
+                    // this small composable and its Canvas.
+                    historyRevision++
+                }
+            }
+        }
+    }
+
+    @Suppress("UNUSED_EXPRESSION")
+    historyRevision
+    VisualizerTrack(
+        style = style,
+        fraction = fraction,
+        level = level,
+        history = history,
+        modifier = modifier,
+    )
 }
 
 /**
@@ -625,8 +649,7 @@ private fun animationsDisabled(context: android.content.Context): Boolean =
 
 /** How many bars the waveform draws. Wider than this and each bar is a hairline. */
 private const val WAVEFORM_BARS = 48
-private const val VISUALIZER_SAMPLE_MS = 33L
-
+private val EMPTY_VISUALIZER_HISTORY = FloatArray(0)
 /** The playhead. Small enough to sit on a 4dp track without swallowing it. */
 private val THUMB_DIAMETER = 12.dp
 private val SCRUBBER_CONTROL_HEIGHT = 48.dp
