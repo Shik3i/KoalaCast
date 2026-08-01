@@ -23,6 +23,7 @@ jobs:
   build:
     name: Build, attest & release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write # create the GitHub Release and upload assets
       id-token: write # keyless signing for the artifact attestation
@@ -68,7 +69,10 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > apps/android/release.keystore
           echo "ANDROID_KEYSTORE_FILE=$GITHUB_WORKSPACE/apps/android/release.keystore" >> "$GITHUB_ENV"
 
-      - name: Test, lint and build
+      # Keep these as separate Gradle invocations. Running test, lint and both
+      # package variants in one task graph can race Lint against KSP/Hilt output
+      # cleanup and leave the runner waiting on a generated file.
+      - name: Assemble signed APK
         working-directory: apps/android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -76,7 +80,23 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon test lint assembleRelease bundleRelease
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Unit tests
+        working-directory: apps/android
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Release lint
+        working-directory: apps/android
+        run: ./gradlew --no-daemon lintRelease
+
+      - name: Build signed AAB
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon bundleRelease
 
       - name: Collect artifacts
         id: artifacts
