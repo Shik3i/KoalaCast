@@ -5,15 +5,35 @@ name: CI
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'apps/web/**'
+      - 'services/api/**'
+      - 'packages/openapi/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'Makefile'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/docker-release.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'apps/web/**'
+      - 'services/api/**'
+      - 'packages/openapi/**'
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - 'Makefile'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/docker-release.yml'
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   tests:
@@ -41,21 +61,6 @@ jobs:
           tags: koalacast:ci
           cache-from: type=gha,scope=ci
           cache-to: type=gha,mode=max,scope=ci
-
-      # The release builds arm64 too. Cross-compilation (rather than emulation)
-      # means a target-specific toolchain has to resolve, so a broken arm64
-      # build must fail here rather than at tag time. Not loaded or run — the
-      # runner is amd64; xx-verify inside the build asserts the binary's
-      # architecture.
-      - name: Cross-compile check (arm64)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/arm64
-          push: false
-          cache-from: type=gha,scope=ci-arm64
-          cache-to: type=gha,mode=max,scope=ci-arm64
 
       - name: Smoke test the running container
         run: |

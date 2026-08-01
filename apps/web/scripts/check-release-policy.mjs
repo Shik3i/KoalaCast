@@ -5,12 +5,16 @@ const root = resolve(import.meta.dirname, '../../..');
 const workflowDir = resolve(root, '.github/workflows');
 const androidRelease = 'android-release.yml';
 const releaseCreation = /\bgh\s+release\s+create\b|action-gh-release|releases\/create|createRelease/i;
+const androidBuildReference = /apps\/android|\bgradlew\b/i;
 const errors = [];
 
 for (const name of readdirSync(workflowDir).filter((entry) => /\.ya?ml$/.test(entry))) {
 	const source = readFileSync(resolve(workflowDir, name), 'utf8');
 	if (name !== androidRelease && releaseCreation.test(source)) {
 		errors.push(`${name}: GitHub Releases may only be created by ${androidRelease}`);
+	}
+	if (name !== androidRelease && androidBuildReference.test(source)) {
+		errors.push(`${name}: Android tests and builds may only run from ${androidRelease} after an android-v* tag`);
 	}
 }
 
@@ -38,4 +42,4 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-console.log('Release policy check passed: website tags publish only Docker images; GitHub Releases are Android-only.');
+console.log('Release policy check passed: Android tests/builds require android-v*; website tags publish only Docker images.');
