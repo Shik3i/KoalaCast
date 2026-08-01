@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -32,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
@@ -374,88 +373,90 @@ private fun Scrubber(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
-        Box {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(SCRUBBER_CONTROL_HEIGHT),
+            contentAlignment = Alignment.Center,
+        ) {
+            // The visible track and playhead share this one fixed coordinate
+            // system. Material Slider otherwise lays out its custom track and
+            // thumb independently, which can put their apparent centres on
+            // different pixel rows even when both children are centred.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(horizontal = SLIDER_THUMB_INSET),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (visualizer.needsAudio) {
+                    @Suppress("UNUSED_EXPRESSION")
+                    historyRevision
+                    VisualizerTrack(
+                        style = visualizer,
+                        fraction = fraction,
+                        level = level,
+                        history = history,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    VisualizerTrack(
+                        style = VisualizerStyle.OFF,
+                        fraction = fraction,
+                        level = 0f,
+                        history = history,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            Canvas(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(horizontal = SLIDER_THUMB_INSET),
+            ) {
+                val centreY = size.height / 2f
+                markers.forEach { markerFraction ->
+                    drawLine(
+                        color = colors.bgTransport,
+                        start = Offset(size.width * markerFraction, centreY - MARKER_HALF_HEIGHT_PX),
+                        end = Offset(size.width * markerFraction, centreY + MARKER_HALF_HEIGHT_PX),
+                        strokeWidth = MARKER_WIDTH_PX,
+                    )
+                }
+                drawCircle(
+                    color = if (colors.isDark) colors.ink else colors.inkStrong,
+                    radius = THUMB_DIAMETER.toPx() / 2f,
+                    center = Offset(size.width * fraction, centreY),
+                )
+            }
+
+            // Material retains dragging, keyboard control and Slider semantics;
+            // only its pixels are hidden because they cannot be aligned reliably
+            // with an arbitrary-height visualizer track.
             Slider(
+                modifier = Modifier
+                    .matchParentSize()
+                    .alpha(0f),
                 value = fraction,
                 onValueChange = { dragValue = it },
                 onValueChangeFinished = {
                     dragValue?.let { onSeekTo((it * durationMs).toLong()) }
                     dragValue = null
                 },
-                colors = SliderDefaults.colors(
-                    thumbColor = if (colors.isDark) colors.ink else colors.inkStrong,
-                    activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
-                    inactiveTrackColor = colors.track,
-                ),
-                // Material 3 draws a 4x44dp bar for the handle, which on a 4dp track
-                // reads as a scroll bar rather than a playhead. A dot barely wider than
-                // the track is what the rest of the app's progress indicators imply.
                 thumb = {
                     Box(
-                        modifier = Modifier
-                            .size(THUMB_DIAMETER)
-                            .background(
-                                color = if (colors.isDark) colors.ink else colors.inkStrong,
-                                shape = CircleShape,
-                            ),
+                        modifier = Modifier.size(THUMB_DIAMETER),
                     )
                 },
-                // A fixed-height slot gives every track style the exact same
-                // centre line. The thumb and chapter overlay use that line too.
-                track = { sliderState ->
+                track = {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(SCRUBBER_TRACK_SLOT_HEIGHT),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (visualizer.needsAudio) {
-                            @Suppress("UNUSED_EXPRESSION")
-                            historyRevision
-                            VisualizerTrack(
-                                style = visualizer,
-                                fraction = fraction,
-                                level = level,
-                                history = history,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        } else {
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp),
-                                colors = SliderDefaults.colors(
-                                    activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
-                                    inactiveTrackColor = colors.track,
-                                ),
-                                drawStopIndicator = null,
-                                thumbTrackGapSize = 0.dp,
-                            )
-                        }
-                    }
+                            .height(4.dp),
+                    )
                 },
             )
-            // Drawn over the slider rather than inside it: Material's Slider has
-            // no hook for tick marks at arbitrary positions, only evenly spaced
-            // steps, which is not what chapter starts are.
-            if (markers.isNotEmpty()) {
-                Canvas(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .padding(horizontal = SLIDER_THUMB_INSET),
-                ) {
-                    val y = size.height / 2f
-                    markers.forEach { fraction ->
-                        drawLine(
-                            color = colors.bgTransport,
-                            start = Offset(size.width * fraction, y - MARKER_HALF_HEIGHT_PX),
-                            end = Offset(size.width * fraction, y + MARKER_HALF_HEIGHT_PX),
-                            strokeWidth = MARKER_WIDTH_PX,
-                        )
-                    }
-                }
-            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -628,7 +629,7 @@ private const val VISUALIZER_SAMPLE_MS = 33L
 
 /** The playhead. Small enough to sit on a 4dp track without swallowing it. */
 private val THUMB_DIAMETER = 12.dp
-private val SCRUBBER_TRACK_SLOT_HEIGHT = 30.dp
+private val SCRUBBER_CONTROL_HEIGHT = 48.dp
 
 /**
  * Below this the artwork is a smudge rather than a picture, so a very short

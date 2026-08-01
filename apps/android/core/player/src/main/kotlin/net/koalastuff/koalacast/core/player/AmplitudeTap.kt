@@ -14,9 +14,11 @@ import kotlin.math.sqrt
 // noise, ordinary speech occupies the middle, and mastered peaks retain headroom.
 private const val AMPLITUDE_NOISE_FLOOR = 0.004f
 private const val AMPLITUDE_GAIN = 3.8f
-// At ~11 ms per window: ~40 ms attack and ~550 ms release to bridge syllables.
-private const val AMPLITUDE_ATTACK = 0.42f
-private const val AMPLITUDE_RELEASE = 0.045f
+// At 30 envelope frames per second: a quick attack keeps consonants lively while
+// the slower release bridges the short gaps between syllables.
+private const val AMPLITUDE_ATTACK = 0.80f
+private const val AMPLITUDE_RELEASE = 0.13f
+private const val TARGET_UPDATES_PER_SECOND = 30
 
 /**
  * How loud the audio is right now, as a 0..1 envelope, for anything that wants to
@@ -36,13 +38,23 @@ private const val AMPLITUDE_RELEASE = 0.045f
 @Singleton
 class AmplitudeTap @Inject constructor() {
 
-    /**
-     * Written from the audio thread, read from the UI frame clock. Volatile rather
-     * than locked: the audio thread must never wait for a renderer, and the worst a
-     * racing read can see is one stale frame, which is invisible at 60 Hz.
-     */
+    /** The most recent envelope frame consumed by the renderer. */
     @Volatile
     private var level: Float = 0f
+
+    /**
+     * Decoders hand PCM to the sink in bursts, often hundreds of milliseconds at
+     * once. Publishing only the latest value makes the UI freeze between those
+     * bursts. This lock-free single-producer/single-consumer ring preserves the
+     * short envelope frames and lets the UI consume exactly one per render tick.
+     */
+    private val pending = FloatArray(PENDING_CAPACITY)
+
+    @Volatile
+    private var pendingWrite = 0L
+
+    @Volatile
+    private var pendingRead = 0L
 
     /**
      * Set while something is actually drawing. The processor stays in the chain
@@ -64,8 +76,28 @@ class AmplitudeTap @Inject constructor() {
     @Volatile
     private var writeIndex = 0
 
-    /** Latest smoothed amplitude, 0..1. Zero whenever nothing is being decoded. */
-    fun level(): Float = level
+    /**
+     * Consumes one queued smoothed amplitude, 0..1. If the decoder gets more than
+     * two seconds ahead, stale values are skipped instead of making the animation
+     * visibly lag behind the audio.
+     */
+    fun level(): Float {
+        val end = pendingWrite
+        var read = pendingRead
+        if (read >= end) return level
+
+        if (end - read > PENDING_CAPACITY.toLong()) {
+            read = end - PENDING_CAPACITY
+        }
+        val value = pending[(read % PENDING_CAPACITY).toInt()]
+        pendingRead = read + 1
+        level = value
+
+        val index = writeIndex
+        history[index % HISTORY] = value
+        writeIndex = (index + 1) % HISTORY
+        return value
+    }
 
     /**
      * Copies the history into [out], oldest first, so the caller can render without
@@ -83,15 +115,17 @@ class AmplitudeTap @Inject constructor() {
     }
 
     internal fun publish(value: Float) {
-        level = value
-        val index = writeIndex
-        history[index % HISTORY] = value
-        writeIndex = (index + 1) % HISTORY
+        val index = pendingWrite
+        pending[(index % PENDING_CAPACITY).toInt()] = value
+        // Volatile publication happens after the array write.
+        pendingWrite = index + 1
     }
 
     internal fun reset() {
         level = 0f
         history.fill(0f)
+        writeIndex = 0
+        pendingRead = pendingWrite
     }
 
     private companion object {
@@ -100,6 +134,7 @@ class AmplitudeTap @Inject constructor() {
          * is as much past as a bar the width of a phone can show honestly.
          */
         const val HISTORY = 96
+        const val PENDING_CAPACITY = 64
     }
 }
 
@@ -123,19 +158,30 @@ internal class AmplitudeBufferSink(
 
     private var smoothed = 0f
     private var pcm16 = false
+    private var windowBytes = 0
+    private var bytesInWindow = 0
+    private var sumInWindow = 0.0
+    private var samplesInWindow = 0
 
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         // Any other encoding is left alone rather than misread as shorts and drawn
         // as noise. In practice every codec this app plays decodes to 16-bit.
         pcm16 = encoding == C.ENCODING_PCM_16BIT
         smoothed = 0f
+        windowBytes = envelopeWindowBytes(sampleRateHz, channelCount)
+        bytesInWindow = 0
+        sumInWindow = 0.0
+        samplesInWindow = 0
         tap.reset()
     }
 
     override fun handleBuffer(buffer: ByteBuffer) {
         if (!pcm16 || !tap.listening) {
-            if (smoothed != 0f) {
+            if (smoothed != 0f || bytesInWindow != 0) {
                 smoothed = 0f
+                bytesInWindow = 0
+                sumInWindow = 0.0
+                samplesInWindow = 0
                 tap.reset()
             }
             return
@@ -146,32 +192,26 @@ internal class AmplitudeBufferSink(
         val order = buffer.order()
         buffer.order(ByteOrder.LITTLE_ENDIAN)
 
-        // One value per buffer is far too coarse. The sink hands over a few hundred
-        // milliseconds at a time, so a single RMS per call updates roughly four
-        // times a second — which is exactly what "the animation only moves once a
-        // second" looks like. Each buffer is split into short windows instead, so
-        // the envelope has real temporal resolution and the history scrolls at a
-        // believable rate.
-        var windowStart = position
-        while (windowStart + 1 < limit) {
-            val windowEnd = minOf(windowStart + WINDOW_BYTES, limit)
-            var sum = 0.0
-            var samples = 0
-            var index = windowStart
-            // Stride within the window: an envelope does not get more truthful from
-            // 100x the arithmetic on the audio thread.
-            while (index + 1 < windowEnd) {
-                val sample = buffer.getShort(index) / Short.MAX_VALUE.toFloat()
-                sum += (sample * sample).toDouble()
-                samples++
-                index += SAMPLE_STRIDE_BYTES
-            }
-            if (samples > 0) {
-                val rms = sqrt(sum / samples).toFloat()
+        // Keep windows continuous across ByteBuffer boundaries. Finishing a partial
+        // window at every decoder callback couples animation speed to buffer size
+        // and causes precisely the visible one-second stepping this tap avoids.
+        var index = position
+        while (index + 1 < limit) {
+            val sample = buffer.getShort(index) / Short.MAX_VALUE.toFloat()
+            sumInWindow += (sample * sample).toDouble()
+            samplesInWindow++
+
+            val representedBytes = minOf(SAMPLE_STRIDE_BYTES, limit - index)
+            bytesInWindow += representedBytes
+            if (bytesInWindow >= windowBytes) {
+                val rms = sqrt(sumInWindow / samplesInWindow).toFloat()
                 smoothed = nextAmplitude(smoothed, rms)
                 tap.publish(smoothed)
+                bytesInWindow = 0
+                sumInWindow = 0.0
+                samplesInWindow = 0
             }
-            windowStart = windowEnd
+            index += SAMPLE_STRIDE_BYTES
         }
 
         buffer.order(order)
@@ -181,12 +221,13 @@ internal class AmplitudeBufferSink(
         /** Every 8th sample; at 44.1 kHz stereo that is still ~5 kHz of envelope. */
         const val SAMPLE_STRIDE_BYTES = 16
 
-        /**
-         * ~11 ms of 44.1 kHz stereo per published value, so the history advances
-         * about 90 times a second rather than once per audio buffer.
-         */
-        const val WINDOW_BYTES = 2048
     }
+}
+
+internal fun envelopeWindowBytes(sampleRateHz: Int, channelCount: Int): Int {
+    val frameBytes = channelCount.coerceAtLeast(1) * 2
+    val raw = sampleRateHz.coerceAtLeast(1) * frameBytes / TARGET_UPDATES_PER_SECOND
+    return (raw / frameBytes).coerceAtLeast(1) * frameBytes
 }
 
 internal fun nextAmplitude(previous: Float, rms: Float): Float {
