@@ -33,6 +33,7 @@
 		resolveAudioRedirect
 	} from '$lib/audio/source';
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
+	import VisualizerSignal from './VisualizerSignal.svelte';
 
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let audioElementGeneration = $state(0);
@@ -56,6 +57,7 @@
 	let remotePlaybackAvailable = $state(false);
 	let remotePlaybackState = $state<RemotePlaybackState>('disconnected');
 	let visualizerLevel = $state(0);
+	let visualizerHistory = $state<number[]>(Array(18).fill(0));
 	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
 	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
 	$effect(() => {
@@ -370,6 +372,7 @@
 			: null;
 		if (prefs.visualizer !== 'off' && isPlaying) {
 			visualizerLevel = Math.min(1, (sampledLevel ?? 0) * 5);
+			visualizerHistory = [...visualizerHistory.slice(1), visualizerLevel];
 		} else if (visualizerLevel !== 0) {
 			visualizerLevel = 0;
 		}
@@ -393,6 +396,7 @@
 		const shouldSample = !!audioEl && isPlaying && (effectiveSkipSilence || prefs.visualizer !== 'off');
 		if (!shouldSample) {
 			visualizerLevel = 0;
+			visualizerHistory = Array(18).fill(0);
 			resetSilenceTrimming();
 			return;
 		}
@@ -1065,11 +1069,7 @@
 		<div class="player-bar" bind:this={playerBarElement}>
 			<!-- Seek progress line spanning the top of the bar -->
 			<div class="progress-track" class:visualizing={prefs.visualizer === 'level'} style="--progress: {progressPercent}%; --audio-level: {visualizerLevel}"></div>
-			{#if prefs.visualizer === 'waveform' && isPlaying}
-				<div class="visualizer-signal" style="--audio-level: {visualizerLevel}" aria-hidden="true">
-					{#each [0.65, 1, 0.8, 1.15, 0.75, 1, 0.6] as scale}<span style="--bar-scale: {scale}"></span>{/each}
-				</div>
-			{/if}
+			<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} history={visualizerHistory} playing={isPlaying} variant="compact" />
 
 			<div class="track-info">
 				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')} title={t('player.openFullscreen')}>
@@ -1228,15 +1228,18 @@
 
 				<div class="np-timeline">
 					<span class="time">{formatTime(currentTimeMs)}</span>
-					<input
-						type="range"
-						min="0"
-						max={durationMs || track.duration_ms || 100}
-						value={currentTimeMs}
-						style="--progress: {progressPercent}%"
-						onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
-						aria-label={t('player.timeline')}
-					/>
+					<div class="np-slider-host" class:visualizing={prefs.visualizer === 'level'} style="--audio-level: {visualizerLevel}">
+						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} history={visualizerHistory} playing={isPlaying} variant="full" />
+						<input
+							type="range"
+							min="0"
+							max={durationMs || track.duration_ms || 100}
+							value={currentTimeMs}
+							style="--progress: {progressPercent}%"
+							onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
+							aria-label={t('player.timeline')}
+						/>
+					</div>
 					<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
 				</div>
 
@@ -1429,8 +1432,6 @@
 		transition: width 0.25s linear, background 0.4s ease;
 	}
 	.progress-track.visualizing { height: calc(3px + var(--audio-level, 0) * 3px); box-shadow: 0 0 calc(var(--audio-level, 0) * 12px) var(--show-accent, var(--accent-green)); }
-	.visualizer-signal { position: absolute; top: 7px; left: 50%; z-index: 2; display: flex; align-items: center; gap: 2px; height: 14px; transform: translateX(-50%); pointer-events: none; }
-	.visualizer-signal span { width: 2px; height: max(2px, calc(var(--audio-level, 0) * var(--bar-scale) * 14px)); border-radius: 999px; background: var(--show-accent, var(--accent-green)); transition: height 80ms linear; }
 
 	.art-btn {
 		position: relative;
@@ -1806,6 +1807,9 @@
 	.np-podcast { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; font-size: 0.95rem; color: color-mix(in srgb, var(--player-text) 72%, transparent); }
 
 	.np-timeline { display: flex; align-items: center; gap: 0.75rem; width: 100%; }
+	.np-slider-host { position: relative; display: flex; flex: 1; align-items: center; min-width: 0; }
+	.np-slider-host > input[type='range'] { position: relative; z-index: 3; width: 100%; }
+	.np-slider-host.visualizing > input[type='range'] { filter: drop-shadow(0 0 calc(var(--audio-level, 0) * 10px) var(--show-accent, var(--accent-green))); }
 	.np-timeline input[type='range'] {
 		flex: 1;
 		-webkit-appearance: none;

@@ -2,6 +2,7 @@ package net.koalastuff.koalacast.core.ui.component
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -267,16 +268,44 @@ fun UndoBanner(
         Column(modifier = Modifier.weight(1f).padding(vertical = KoalaSpacing.gapSmall)) {
             MonoText(text = text, color = colors.ink3, style = KoalaTheme.type.monoSmall)
         }
-        OutlineButton(text = actionLabel, onClick = onAction)
+        CompactOutlineAction(text = actionLabel, onClick = onAction)
         IconButtonSquare(
             icon = PhosphorIcons.X,
             contentDescription = stringResource(R.string.action_dismiss),
             onClick = onDismiss,
             tint = colors.ink2,
             bordered = true,
-            boxSize = KoalaSpacing.minTouchTarget,
+            boxSize = UNDO_ACTION_VISUAL_SIZE,
             iconSize = 17.dp,
             shape = KoalaShapes.card,
         )
     }
 }
+
+/** Compact visual treatment with a full 48dp touch target. */
+@Composable
+private fun CompactOutlineAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    val colors = KoalaTheme.colors
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            modifier = Modifier
+                .defaultMinSize(minHeight = UNDO_ACTION_VISUAL_SIZE)
+                .clip(KoalaShapes.card)
+                .border(BorderStroke(1.dp, colors.borderUi), KoalaShapes.card)
+                .padding(horizontal = KoalaSpacing.gapSmall, vertical = KoalaSpacing.gapTiny),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = text, style = KoalaTheme.type.label, color = colors.ink2)
+        }
+    }
+}
+
+private val UNDO_ACTION_VISUAL_SIZE = 34.dp

@@ -755,6 +755,9 @@ private fun VisualizerStyle.labelRes(): Int = when (this) {
     VisualizerStyle.OFF -> R.string.settings_visualizer_off
     VisualizerStyle.LEVEL -> R.string.settings_visualizer_level
     VisualizerStyle.WAVEFORM -> R.string.settings_visualizer_waveform
+    VisualizerStyle.BARS -> R.string.settings_visualizer_bars
+    VisualizerStyle.PULSE -> R.string.settings_visualizer_pulse
+    VisualizerStyle.DOTS -> R.string.settings_visualizer_dots
 }
 
 @StringRes

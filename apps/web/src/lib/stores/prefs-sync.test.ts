@@ -48,4 +48,14 @@ describe('shared preference sync', () => {
 		prefs.setDownloadBudgetBytes(0);
 		expect(prefs.syncPayload().download_budget_bytes).toBe(0);
 	});
+
+	it.each(['off', 'level', 'waveform', 'bars', 'pulse', 'dots'] as const)(
+		'accepts and syncs the %s visualizer',
+		(visualizer) => {
+			prefs.applySynced({ updated_at: 300, visualizer }, { authoritative: true });
+
+			expect(prefs.visualizer).toBe(visualizer);
+			expect(prefs.syncPayload().visualizer).toBe(visualizer);
+		}
+	);
 });

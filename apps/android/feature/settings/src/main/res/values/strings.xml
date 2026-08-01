@@ -19,6 +19,9 @@
     <string name="settings_visualizer_off">Off</string>
     <string name="settings_visualizer_level">Level</string>
     <string name="settings_visualizer_waveform">Waveform</string>
+    <string name="settings_visualizer_bars">Bars</string>
+    <string name="settings_visualizer_pulse">Pulse</string>
+    <string name="settings_visualizer_dots">Dots</string>
 
     <string name="settings_server_title">KoalaCast server</string>
     <string name="settings_server_placeholder">cast.example.org</string>

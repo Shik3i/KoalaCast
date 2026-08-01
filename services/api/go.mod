@@ -1,6 +1,6 @@
 module github.com/Shik3i/KoalaCast/services/api
 
-go 1.25.12
+go 1.26.5
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
@@ -13,6 +13,6 @@ require (
 )
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )

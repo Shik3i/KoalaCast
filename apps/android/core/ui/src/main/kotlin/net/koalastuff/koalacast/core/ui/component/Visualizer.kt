@@ -24,7 +24,7 @@ import kotlin.math.max
  * TalkBack exactly as [ProgressTrack] does.
  *
  * @param level current amplitude, 0..1
- * @param history recent amplitudes, oldest first; only read by [VisualizerStyle.WAVEFORM]
+ * @param history recent amplitudes, oldest first; read by history-based styles
  */
 @Composable
 fun VisualizerTrack(
@@ -127,6 +127,105 @@ fun VisualizerTrack(
                 )
             }
         }
+
+        VisualizerStyle.BARS -> Canvas(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(BARS_HEIGHT)
+                .clearAndSetSemantics { },
+        ) {
+            val centre = size.height / 2f
+            val strength = level.coerceIn(0f, 1f)
+            val clusterWidth = size.width.coerceAtMost(size.width * BARS_WIDTH_FRACTION)
+            val barWidth = max(2f, (clusterWidth - BARS_GAP_PX * (BAR_SCALES.size - 1)) / BAR_SCALES.size)
+            val actualWidth = barWidth * BAR_SCALES.size + BARS_GAP_PX * (BAR_SCALES.size - 1)
+            val startX = (size.width - actualWidth) / 2f
+            val availableHeight = size.height - PROGRESS_HEIGHT_PX
+
+            BAR_SCALES.forEachIndexed { index, scale ->
+                val barHeight = max(MIN_BAR_PX, availableHeight * (0.12f + strength * 0.88f) * scale)
+                drawRoundRect(
+                    color = active.copy(alpha = 0.72f),
+                    topLeft = Offset(startX + index * (barWidth + BARS_GAP_PX), centre - barHeight / 2f),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f),
+                )
+            }
+            drawProgressLine(played, inactive, active, centre)
+        }
+
+        VisualizerStyle.PULSE -> Canvas(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(PULSE_HEIGHT)
+                .clearAndSetSemantics { },
+        ) {
+            val centre = size.height / 2f
+            val strength = level.coerceIn(0f, 1f)
+            val playheadX = size.width * played
+            if (played > 0f && strength > 0f) {
+                drawCircle(
+                    color = active.copy(alpha = 0.10f + strength * 0.08f),
+                    radius = PULSE_INNER_RADIUS_PX + strength * PULSE_OUTER_GROWTH_PX,
+                    center = Offset(playheadX, centre),
+                )
+                drawCircle(
+                    color = active.copy(alpha = 0.22f + strength * 0.18f),
+                    radius = PULSE_INNER_RADIUS_PX + strength * PULSE_INNER_GROWTH_PX,
+                    center = Offset(playheadX, centre),
+                )
+            }
+            drawProgressLine(played, inactive, active, centre)
+        }
+
+        VisualizerStyle.DOTS -> Canvas(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(DOTS_HEIGHT)
+                .clearAndSetSemantics { },
+        ) {
+            val centre = size.height / 2f
+            val count = DOT_COUNT
+            repeat(count) { index ->
+                val historyIndex = if (history.isEmpty()) 0 else index * (history.size - 1) / (count - 1)
+                val energy = if (history.isEmpty()) level else history[historyIndex]
+                val clamped = energy.coerceIn(0f, 1f)
+                val x = size.width * index / (count - 1)
+                val direction = if (index % 2 == 0) -1f else 1f
+                val y = centre + direction * clamped * size.height * DOT_TRAVEL_FRACTION
+                val radius = DOT_MIN_RADIUS_PX + clamped * DOT_RADIUS_GROWTH_PX
+                drawCircle(
+                    color = if (x <= size.width * played) active.copy(alpha = 0.82f) else inactive,
+                    radius = radius,
+                    center = Offset(x, y),
+                )
+            }
+            drawProgressLine(played, inactive, active, centre)
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawProgressLine(
+    played: Float,
+    inactive: androidx.compose.ui.graphics.Color,
+    active: androidx.compose.ui.graphics.Color,
+    centre: Float,
+) {
+    val trackTop = centre - PROGRESS_HEIGHT_PX / 2f
+    val radius = CornerRadius(PROGRESS_HEIGHT_PX / 2f, PROGRESS_HEIGHT_PX / 2f)
+    drawRoundRect(
+        color = inactive,
+        topLeft = Offset(0f, trackTop),
+        size = Size(size.width, PROGRESS_HEIGHT_PX),
+        cornerRadius = radius,
+    )
+    if (played > 0f) {
+        drawRoundRect(
+            color = active,
+            topLeft = Offset(0f, trackTop),
+            size = Size(size.width * played, PROGRESS_HEIGHT_PX),
+            cornerRadius = radius,
+        )
     }
 }
 
@@ -158,6 +257,9 @@ private val PREVIEW_HISTORY = FloatArray(48) { index ->
 /** Level swells within a fixed band so the row never reflows as audio plays. */
 private val LEVEL_MAX_HEIGHT = 10.dp
 private val WAVEFORM_HEIGHT = 30.dp
+private val BARS_HEIGHT = 28.dp
+private val PULSE_HEIGHT = 30.dp
+private val DOTS_HEIGHT = 26.dp
 private const val BASE_THICKNESS = 0.4f
 private const val GAP_PX = 2f
 private const val MIN_BAR_PX = 2f
@@ -165,3 +267,14 @@ private const val PROGRESS_HEIGHT_PX = 8f
 
 /** The wave is context around the bar, not a competing element. */
 private const val WAVE_ALPHA = 0.45f
+private const val BARS_WIDTH_FRACTION = 0.32f
+private const val BARS_GAP_PX = 3f
+private const val PULSE_INNER_RADIUS_PX = 3f
+private const val PULSE_INNER_GROWTH_PX = 7f
+private const val PULSE_OUTER_GROWTH_PX = 13f
+private const val DOT_COUNT = 15
+private const val DOT_TRAVEL_FRACTION = 0.22f
+private const val DOT_MIN_RADIUS_PX = 1.5f
+private const val DOT_RADIUS_GROWTH_PX = 2.8f
+
+private val BAR_SCALES = floatArrayOf(0.42f, 0.7f, 0.92f, 0.62f, 1f, 0.76f, 0.48f, 0.84f, 0.56f)

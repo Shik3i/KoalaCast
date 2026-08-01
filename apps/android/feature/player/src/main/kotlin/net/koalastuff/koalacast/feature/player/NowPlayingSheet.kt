@@ -364,7 +364,7 @@ private fun Scrubber(
         while (true) {
             delay(VISUALIZER_SAMPLE_MS)
             level = amplitude()
-            if (visualizer == VisualizerStyle.WAVEFORM) {
+            if (visualizer.needsHistory) {
                 amplitudeHistory(history)
                 // FloatArray is mutated in place, so Compose needs a separate
                 // signal that its contents changed.
@@ -376,57 +376,66 @@ private fun Scrubber(
     Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny)) {
         Box {
             Slider(
-            value = fraction,
-            onValueChange = { dragValue = it },
-            onValueChangeFinished = {
-                dragValue?.let { onSeekTo((it * durationMs).toLong()) }
-                dragValue = null
-            },
-            colors = SliderDefaults.colors(
-                thumbColor = if (colors.isDark) colors.ink else colors.inkStrong,
-                activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
-                inactiveTrackColor = colors.track,
-            ),
-            // Material 3 draws a 4x44dp bar for the handle, which on a 4dp track
-            // reads as a scroll bar rather than a playhead. A dot barely wider than
-            // the track is what the rest of the app's progress indicators imply.
-            thumb = {
-                Box(
-                    modifier = Modifier
-                        .size(THUMB_DIAMETER)
-                        .background(
-                            color = if (colors.isDark) colors.ink else colors.inkStrong,
-                            shape = CircleShape,
-                        ),
-                )
-            },
-            // The visualiser lives in the track slot, so the thumb, the drag
-            // gesture, the chapter markers and the time codes are untouched by it:
-            // whatever it draws, this is still the control you seek with.
-            track = { sliderState ->
-                if (visualizer.needsAudio) {
-                    @Suppress("UNUSED_EXPRESSION")
-                    historyRevision
-                    VisualizerTrack(
-                        style = visualizer,
-                        fraction = fraction,
-                        level = level,
-                        history = history,
+                value = fraction,
+                onValueChange = { dragValue = it },
+                onValueChangeFinished = {
+                    dragValue?.let { onSeekTo((it * durationMs).toLong()) }
+                    dragValue = null
+                },
+                colors = SliderDefaults.colors(
+                    thumbColor = if (colors.isDark) colors.ink else colors.inkStrong,
+                    activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
+                    inactiveTrackColor = colors.track,
+                ),
+                // Material 3 draws a 4x44dp bar for the handle, which on a 4dp track
+                // reads as a scroll bar rather than a playhead. A dot barely wider than
+                // the track is what the rest of the app's progress indicators imply.
+                thumb = {
+                    Box(
+                        modifier = Modifier
+                            .size(THUMB_DIAMETER)
+                            .background(
+                                color = if (colors.isDark) colors.ink else colors.inkStrong,
+                                shape = CircleShape,
+                            ),
                     )
-                } else {
-                    SliderDefaults.Track(
-                        sliderState = sliderState,
-                        modifier = Modifier.height(4.dp),
-                        colors = SliderDefaults.colors(
-                            activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
-                            inactiveTrackColor = colors.track,
-                        ),
-                        drawStopIndicator = null,
-                        thumbTrackGapSize = 0.dp,
-                    )
-                }
-            },
-        )
+                },
+                // A fixed-height slot gives every track style the exact same
+                // centre line. The thumb and chapter overlay use that line too.
+                track = { sliderState ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(SCRUBBER_TRACK_SLOT_HEIGHT),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (visualizer.needsAudio) {
+                            @Suppress("UNUSED_EXPRESSION")
+                            historyRevision
+                            VisualizerTrack(
+                                style = visualizer,
+                                fraction = fraction,
+                                level = level,
+                                history = history,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = if (colors.isDark) colors.accentFill else colors.accentInk,
+                                    inactiveTrackColor = colors.track,
+                                ),
+                                drawStopIndicator = null,
+                                thumbTrackGapSize = 0.dp,
+                            )
+                        }
+                    }
+                },
+            )
             // Drawn over the slider rather than inside it: Material's Slider has
             // no hook for tick marks at arbitrary positions, only evenly spaced
             // steps, which is not what chapter starts are.
@@ -619,6 +628,7 @@ private const val VISUALIZER_SAMPLE_MS = 33L
 
 /** The playhead. Small enough to sit on a 4dp track without swallowing it. */
 private val THUMB_DIAMETER = 12.dp
+private val SCRUBBER_TRACK_SLOT_HEIGHT = 30.dp
 
 /**
  * Below this the artwork is a smudge rather than a picture, so a very short

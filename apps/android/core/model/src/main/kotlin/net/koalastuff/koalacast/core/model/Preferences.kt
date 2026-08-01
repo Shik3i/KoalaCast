@@ -92,10 +92,22 @@ enum class VisualizerStyle(val id: String) {
 
     /** The bar becomes a running history of how loud the last few seconds were. */
     WAVEFORM("waveform"),
+
+    /** A compact equaliser cluster rises and falls around the progress line. */
+    BARS("bars"),
+
+    /** The playhead sends out restrained rings in time with the recording. */
+    PULSE("pulse"),
+
+    /** Recent speech energy travels across the track as floating points. */
+    DOTS("dots"),
     ;
 
     /** True when this style needs the amplitude tap doing arithmetic at all. */
     val needsAudio: Boolean get() = this != OFF
+
+    /** Styles that render more than the current instantaneous amplitude. */
+    val needsHistory: Boolean get() = this == WAVEFORM || this == DOTS
 
     companion object {
         val DEFAULT = OFF

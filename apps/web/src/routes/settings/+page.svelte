@@ -553,7 +553,10 @@
 				{#each [
 					{ value: 'off' as const, icon: 'ph-minus', label: t('common.off') },
 					{ value: 'level' as const, icon: 'ph-chart-bar', label: t('settings.visualizerLevel') },
-					{ value: 'waveform' as const, icon: 'ph-waveform', label: t('settings.visualizerWaveform') }
+					{ value: 'waveform' as const, icon: 'ph-waveform', label: t('settings.visualizerWaveform') },
+					{ value: 'bars' as const, icon: 'ph-chart-bar-horizontal', label: t('settings.visualizerBars') },
+					{ value: 'pulse' as const, icon: 'ph-circles-three-plus', label: t('settings.visualizerPulse') },
+					{ value: 'dots' as const, icon: 'ph-dots-nine', label: t('settings.visualizerDots') }
 				] as option}
 					<button type="button" class="theme-btn" class:active={prefs.visualizer === option.value} aria-pressed={prefs.visualizer === option.value} onclick={() => prefs.setVisualizer(option.value)}>
 						<i class="ph {option.icon}" aria-hidden="true"></i> {option.label}

@@ -25,7 +25,7 @@ import {
 export type DateFormat = 'absolute' | 'relative';
 export type DefaultInboxMode = 'all' | 'latest';
 export type StartScreen = 'discover' | 'inbox' | 'library';
-export type VisualizerStyle = 'off' | 'level' | 'waveform';
+export type VisualizerStyle = 'off' | 'level' | 'waveform' | 'bars' | 'pulse' | 'dots';
 export type DownloadRetention = 'keep' | 'finished' | '7d' | '14d' | '30d';
 export interface HiddenPodcastPreference {
 	key: string;
@@ -154,7 +154,7 @@ function initialVisualizer(): VisualizerStyle {
 	if (typeof localStorage === 'undefined') return 'off';
 	try {
 		const value = localStorage.getItem(scopedKey(VISUALIZER_KEY));
-		return value === 'level' || value === 'waveform' ? value : 'off';
+		return value === 'level' || value === 'waveform' || value === 'bars' || value === 'pulse' || value === 'dots' ? value : 'off';
 	} catch (_) {
 		return 'off';
 	}
@@ -671,7 +671,7 @@ class Prefs {
 		if (payload.start_screen === 'discover' || payload.start_screen === 'inbox' || payload.start_screen === 'library') {
 			this.startScreen = payload.start_screen;
 		}
-		if (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform') {
+		if (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform' || payload.visualizer === 'bars' || payload.visualizer === 'pulse' || payload.visualizer === 'dots') {
 			this.visualizer = payload.visualizer;
 		}
 		if (typeof payload.proxy_images === 'boolean') this.proxyImages = payload.proxy_images;
