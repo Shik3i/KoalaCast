@@ -24,6 +24,8 @@ data class AccountUiState(
     val account: Account? = null,
     val syncStatus: SyncStatus = SyncStatus.OFF,
     val lastSyncedAtMs: Long? = null,
+    /** Why the last sync failed. Shown verbatim: it exists to be reported. */
+    val syncError: String? = null,
     val username: String = "",
     val password: String = "",
     val recoveryCodeInput: String = "",
@@ -51,11 +53,13 @@ class AccountViewModel @Inject constructor(
         accounts.account,
         sync.status,
         sync.lastSyncedAt,
-    ) { local, account, syncStatus, lastSyncedAt ->
+        sync.lastSyncError,
+    ) { local, account, syncStatus, lastSyncedAt, syncError ->
         local.copy(
             account = account,
             syncStatus = syncStatus,
             lastSyncedAtMs = lastSyncedAt,
+            syncError = syncError,
         )
     }.stateIn(
         scope = viewModelScope,

@@ -109,6 +109,27 @@ login and `client_schema_version` on every sync push. The server ignores the
 latter today, so nothing behaved differently — but the client was claiming to
 send a schema version it never sent.
 
+**A production instance had zero sessions while reporting one participant.**
+`GET https://cast.koalastuff.net/api/v1/stats/global` returns
+`participants: 1, listening_sessions: 0, podcasts: 0, episodes: 0` for every
+range. The account is opted in and the server is current — it answers
+`/stats/preferences` and `/sync/snapshot` — so the aggregate is not the problem:
+nothing has arrived to aggregate. The same client code pushes fine to a local
+server, so this is specific to that pairing and still open. Two client defects
+found while chasing it are fixed:
+
+- `syncNow` caught every failure with a bare `catch (_: Exception)` and set
+  `SyncStatus.ERROR` with no reason kept anywhere. A sync that never succeeds was
+  therefore undiagnosable by anyone, including from a bug report. The reason is
+  now retained and shown on the Account screen, untranslated, so it can be
+  pasted somewhere useful.
+- The listening-session push watermark advanced to wall-clock time captured
+  before the outgoing operations were built. Sessions are written asynchronously
+  when playback stops, so one landing in the database just after that query had
+  an `endedAt` below the new watermark and was skipped permanently. It now
+  advances only as far as the newest session actually sent; the worst case is
+  sending one twice, which the server handles idempotently.
+
 **Category breakdowns are empty, and cannot be fixed on the client.** Every
 session the Android app writes carries `categories: []`, so the global category
 chart has exactly one bar, labelled "Uncategorised". The chain is missing end to

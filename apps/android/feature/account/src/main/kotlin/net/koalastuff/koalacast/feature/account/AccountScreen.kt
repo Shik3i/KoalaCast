@@ -453,6 +453,16 @@ private fun SignedInContent(
                 enabled = !state.busy,
             )
         }
+        // Verbatim and untranslated on purpose: this is the line someone pastes
+        // into a bug report. A red status dot with no reason is what made "my
+        // listening never reaches the server" impossible to act on.
+        state.syncError?.let { reason ->
+            MonoText(
+                text = stringResource(R.string.account_sync_error, reason),
+                color = KoalaTheme.colors.ink4,
+                style = KoalaTheme.type.monoSmall,
+            )
+        }
     }
 
     Hairline()

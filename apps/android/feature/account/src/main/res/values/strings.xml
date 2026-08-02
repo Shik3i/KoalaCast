@@ -22,6 +22,7 @@
     <string name="account_sync_now">Sync now</string>
     <string name="account_syncing">Syncing…</string>
     <string name="account_sync_retry">Retry sync</string>
+    <string name="account_sync_error">Last sync failed: %1$s</string>
     <string name="account_statistics">Community statistics</string>
     <string name="account_global_stats">Contribute anonymous aggregates</string>
     <string name="account_global_stats_body">Include your listening sessions in site-wide aggregates and show your username in the listener leaderboard. Episodes, timestamps, raw sessions, and account IDs are never published.</string>

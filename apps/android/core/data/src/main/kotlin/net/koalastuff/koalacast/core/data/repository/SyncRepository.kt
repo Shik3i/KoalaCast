@@ -75,6 +75,19 @@ class SyncRepository @Inject constructor(
     private val _lastSyncedAt = MutableStateFlow<Long?>(null)
     val lastSyncedAt: StateFlow<Long?> = _lastSyncedAt
 
+    /**
+     * Why the last sync failed, or null after one succeeds.
+     *
+     * Every failure used to be swallowed by a bare `catch (_: Exception)` that
+     * set [SyncStatus.ERROR] and nothing else. A listener whose data never
+     * reached the server saw a red dot and no reason, and neither a bug report
+     * nor a log could say whether it was the network, a rejected operation or an
+     * expired session. The message is deliberately the exception's own text: it
+     * is a diagnostic, not a translated user-facing string.
+     */
+    private val _lastSyncError = MutableStateFlow<String?>(null)
+    val lastSyncError: StateFlow<String?> = _lastSyncError
+
     suspend fun syncNow(): Boolean = mutex.withLock {
         val account = store.account.value ?: run {
             _status.value = SyncStatus.OFF
@@ -86,6 +99,7 @@ class SyncRepository @Inject constructor(
             pull(account.userId, generation)
             push(account.userId, account.deviceId, generation)
             _lastSyncedAt.value = System.currentTimeMillis()
+            _lastSyncError.value = null
             _status.value = SyncStatus.IDLE
             true
         } catch (error: AuthExpired) {
@@ -97,7 +111,8 @@ class SyncRepository @Inject constructor(
         } catch (_: AccountChanged) {
             _status.value = if (store.account.value == null) SyncStatus.OFF else SyncStatus.IDLE
             false
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            _lastSyncError.value = error.message ?: error::class.simpleName ?: "sync failed"
             _status.value = SyncStatus.ERROR
             false
         }
@@ -278,6 +293,16 @@ class SyncRepository @Inject constructor(
             generalWatermark = previousWatermark,
             listeningWatermark = previousListeningWatermark,
         )
+        // The newest session actually in this push, not the clock. Sessions are
+        // written asynchronously when playback stops, so one that ended a moment
+        // ago can land in the database after the query above has run — and a
+        // wall-clock watermark would then be past its `endedAt`, dropping it
+        // permanently. Advancing only to what was sent means the worst case is
+        // sending a session twice, which the server treats idempotently.
+        val nextListeningWatermark = operations
+            .filter { it.entityType == "listening_session" }
+            .maxOfOrNull { it.clientTimestamp }
+            ?: previousListeningWatermark
         ensureGeneration(generation)
         operations.chunked(PUSH_BATCH).forEach { batch ->
             ensureGeneration(generation)
@@ -287,7 +312,7 @@ class SyncRepository @Inject constructor(
             if (!response.isSuccessful) throw IOException("sync push failed: ${response.code()}")
         }
         store.setPushWatermark(userId, nextWatermark)
-        store.setListeningSessionPushWatermark(userId, nextWatermark)
+        store.setListeningSessionPushWatermark(userId, nextListeningWatermark)
         // Cursor deliberately stays unchanged. The next pull re-reads our own
         // idempotent operations so a concurrent device cannot be skipped.
     }

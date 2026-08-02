@@ -22,6 +22,7 @@
     <string name="account_sync_now">Jetzt synchronisieren</string>
     <string name="account_syncing">Synchronisiere…</string>
     <string name="account_sync_retry">Sync wiederholen</string>
+    <string name="account_sync_error">Letzter Sync fehlgeschlagen: %1$s</string>
     <string name="account_statistics">Community-Statistik</string>
     <string name="account_global_stats">Anonyme Aggregate beitragen</string>
     <string name="account_global_stats_body">Deine Hörsessions fließen in Gesamtwerte ein und dein Benutzername erscheint im Hörer-Leaderboard. Folgen, Zeitstempel, Rohsitzungen und Konto-IDs werden nie veröffentlicht.</string>
