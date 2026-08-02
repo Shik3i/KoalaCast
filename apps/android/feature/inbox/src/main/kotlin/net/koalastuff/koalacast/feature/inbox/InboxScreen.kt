@@ -52,6 +52,7 @@ import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.util.Format
@@ -583,8 +584,8 @@ private fun InboxEpisodeRow(
                     icon = PhosphorIcons.ListPlus,
                     contentDescription = stringResource(R.string.inbox_queue),
                     onClick = onQueue,
-                    boxSize = 30.dp,
-                    iconSize = 16.dp,
+                    boxSize = KoalaIconButton.rowBox,
+                    iconSize = KoalaIconButton.rowIcon,
                 )
                 DownloadButton(
                     state = downloadState,
@@ -598,7 +599,9 @@ private fun InboxEpisodeRow(
                         },
                     ),
                     onClick = onDownload,
-                    size = 34.dp,
+                    // The same 30dp box as the square icon buttons either side of
+                    // it. At 34dp it was the odd one out in its own row.
+                    size = 30.dp,
                 )
                 IconButtonSquare(
                     icon = if (played) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
@@ -607,16 +610,16 @@ private fun InboxEpisodeRow(
                     ),
                     onClick = onTogglePlayed,
                     tint = if (played) colors.accentInk else colors.ink3,
-                    boxSize = 30.dp,
-                    iconSize = 16.dp,
+                    boxSize = KoalaIconButton.rowBox,
+                    iconSize = KoalaIconButton.rowIcon,
                 )
                 Column {
                     IconButtonSquare(
                         icon = PhosphorIcons.CaretDown,
                         contentDescription = stringResource(R.string.inbox_more),
                         onClick = { menuOpen = true },
-                        boxSize = 30.dp,
-                        iconSize = 16.dp,
+                        boxSize = KoalaIconButton.rowBox,
+                        iconSize = KoalaIconButton.rowIcon,
                     )
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(

@@ -498,45 +498,45 @@
 				</div>
 
 				<div class="action-buttons">
-					<button class="btn-play" onclick={handlePlay}>
+					<button class="btn btn-play" onclick={handlePlay}>
 						<i class="ph-fill {isCurrent ? 'ph-waveform' : 'ph-play'}" aria-hidden="true"></i>
 						{isCurrent ? t('player.nowPlaying') : t('podcast.playEpisode')}
 					</button>
-					<button class="btn-secondary" onclick={handleAddToQueue}>
+					<button class="btn btn-secondary" onclick={handleAddToQueue}>
 						<i class="ph ph-plus" aria-hidden="true"></i> {t('episode.addToQueue')}
 					</button>
 					{#if audioDownloadBusy}
-						<button class="btn-secondary active" onclick={cancelAudioDownload}>
+						<button class="btn btn-secondary active" onclick={cancelAudioDownload}>
 							<i class="ph ph-x" aria-hidden="true"></i>
 							{t('downloads.cancel')} {currentDownload?.totalBytes
 								? `${Math.round(((currentDownload?.bytesDownloaded || 0) / currentDownload.totalBytes) * 100)}%`
 								: ''}
 						</button>
 					{:else}
-						<button class="btn-secondary" class:active={audioDownloaded} onclick={toggleAudioDownload}>
+						<button class="btn btn-secondary" class:active={audioDownloaded} onclick={toggleAudioDownload}>
 							<i class="ph {audioDownloaded ? 'ph-trash' : 'ph-download-simple'}" aria-hidden="true"></i>
 							{audioDownloaded ? t('episode.removeDownload') : t('episode.download')}
 						</button>
 					{/if}
-					<button class="btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}>
+					<button class="btn btn-secondary btn-fav" class:active={isFavorite} onclick={toggleFavorite} aria-pressed={isFavorite} aria-label={isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}>
 						<i class="{isFavorite ? 'ph-fill ph-heart' : 'ph ph-heart'}" aria-hidden="true"></i>
 						{isFavorite ? t('player.removeFavorite') : t('player.addFavorite')}
 					</button>
-					<button class="btn-secondary" onclick={addTimeBookmark}>
+					<button class="btn btn-secondary" onclick={addTimeBookmark}>
 						<i class="ph ph-bookmark-simple" aria-hidden="true"></i>
 						{t('episode.addBookmarkAt', { time: formatTimecode(handoffPositionMs) })}
 					</button>
-					<button class="btn-secondary" onclick={shareHandoff}>
+					<button class="btn btn-secondary" onclick={shareHandoff}>
 						<i class="ph ph-share-network" aria-hidden="true"></i>
 						{t('episode.handoff')}
 					</button>
 					{#if episode.chapters_url}
-						<button class="btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
+						<button class="btn btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
 							<i class="ph ph-list-numbers" aria-hidden="true"></i> {t('episode.chapters')}
 						</button>
 					{/if}
 					{#if episode.transcripts && episode.transcripts.length > 0}
-						<button class="btn-secondary" class:active={showTranscript} onclick={toggleTranscript} aria-expanded={showTranscript}>
+						<button class="btn btn-secondary" class:active={showTranscript} onclick={toggleTranscript} aria-expanded={showTranscript}>
 							<i class="ph ph-article" aria-hidden="true"></i> {t('episode.transcript')}
 						</button>
 					{/if}
@@ -714,50 +714,20 @@
 		gap: 0.75rem;
 	}
 
+	/* Only what makes it the play button: the show's colour and its lift. The
+	   shape comes from the shared `.btn`, like every other action here. */
 	.btn-play {
 		background: var(--show-accent, var(--accent-green));
-		color: #fff;
-		border: none;
-		padding: 0.7rem 1.5rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.95rem;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
+		color: var(--show-accent-contrast, var(--accent-button-text));
 		box-shadow: 0 8px 20px var(--show-accent-soft, color-mix(in srgb, var(--accent-green) 40%, transparent));
-		transition: transform 0.15s ease, filter 0.2s ease;
 	}
-	.btn-play:hover { filter: brightness(1.08); transform: translateY(-2px); }
+	.btn-play:hover { background: var(--show-accent, var(--accent-green)); filter: brightness(1.08); transform: translateY(-2px); }
 	.btn-play :global(.ph), .btn-play :global(.ph-fill) { display: block; font-size: 1.15rem; line-height: 1; }
 
-	.btn-secondary {
-		background: var(--bg-elevated);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		padding: 0.7rem 1.3rem;
-		border-radius: 12px;
-		font-weight: 600;
-		font-size: 0.95rem;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.btn-secondary:hover { border-color: var(--accent-green); color: var(--accent-green); transform: translateY(-2px); }
+	.btn-secondary:hover { transform: translateY(-2px); }
 
-	.btn-fav {
-		background: var(--bg-elevated);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		padding: 0.7rem 1.3rem;
-		border-radius: 12px;
-		font-weight: 600;
-		font-size: 0.95rem;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		transition: all 0.2s ease;
-	}
+	/* Saving is the one action here with a colour of its own. */
+
 	.btn-fav :global(.ph), .btn-fav :global(.ph-fill) { font-size: 1.15rem; transition: transform 0.2s var(--ease-spring, ease); }
 	.btn-fav:hover { border-color: #e5484d; color: #e5484d; transform: translateY(-2px); }
 	.btn-fav.active { border-color: #e5484d; color: #e5484d; background: color-mix(in srgb, #e5484d 12%, var(--bg-surface)); }
@@ -876,7 +846,6 @@
 		color: var(--text-secondary);
 	}
 	.transcript-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-	.btn-secondary.active { border-color: var(--show-accent, var(--accent-green)); color: var(--show-accent, var(--accent-green)); }
 
 	.description-card h3 {
 		font-size: 1.25rem;

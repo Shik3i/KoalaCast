@@ -47,6 +47,7 @@ import net.koalastuff.koalacast.core.ui.component.UndoBanner
 import net.koalastuff.koalacast.core.ui.genre.GENRES
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.language.CONTENT_LANGUAGES
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.R as CoreR
@@ -143,8 +144,8 @@ internal fun SearchContent(
                                     contentDescription = stringResource(CoreR.string.action_clear),
                                     onClick = onClearQuery,
                                     bordered = false,
-                                    boxSize = 24.dp,
-                                    iconSize = 15.dp,
+                                    boxSize = KoalaIconButton.compactBox,
+                                    iconSize = KoalaIconButton.compactIcon,
                                 )
                             }
                         },
@@ -431,8 +432,6 @@ private fun ResultRow(show: PodcastSummary, onClick: () -> Unit, onHide: () -> U
                     onClick = onHide,
                 ),
             ),
-            boxSize = 36.dp,
-            iconSize = 16.dp,
         )
     }
 }

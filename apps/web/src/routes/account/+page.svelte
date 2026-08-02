@@ -332,44 +332,6 @@
 		gap: 0.75rem;
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1.25rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.92rem;
-		cursor: pointer;
-		border: none;
-		text-decoration: none;
-		transition: all 0.2s ease;
-	}
-
-	.btn-secondary {
-		background: var(--bg-elevated);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-	}
-
-	.btn-secondary:hover {
-		background: color-mix(in srgb, var(--accent-green) 15%, transparent);
-		border-color: var(--accent-green);
-		color: var(--accent-green);
-	}
-
-	.btn-danger {
-		background: color-mix(in srgb, #ef4444 15%, transparent);
-		color: #f87171;
-		border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
-	}
-
-	.btn-danger:hover {
-		background: #ef4444;
-		color: #ffffff;
-	}
-
 	.section-header {
 		display: flex;
 		align-items: center;

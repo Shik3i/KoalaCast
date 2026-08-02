@@ -31,10 +31,11 @@ for (const file of sourceFiles(sourceRoot)) {
 // Keeping this explicit prevents the filled font from carrying every regular
 // icon merely because both weights share the same class names.
 const usedFillNames = new Set([
-	'bookmark-simple', 'broadcast', 'chart-line-up', 'check-circle',
-	'dots-three-circle', 'eye-slash', 'gear', 'gear-six', 'heart', 'info',
-	'lightning', 'magnifying-glass', 'newspaper', 'pause', 'play', 'shield-star',
-	'sparkle', 'squares-four', 'tray', 'user-circle', 'warning-circle', 'waveform'
+	'bookmark-simple', 'books', 'broadcast', 'chart-line-up', 'check-circle',
+	'compass', 'dots-three-circle', 'eye-slash', 'gear', 'gear-six', 'heart',
+	'info', 'lightning', 'magnifying-glass', 'newspaper', 'pause', 'play',
+	'shield-star', 'sparkle', 'squares-four', 'tray', 'user-circle',
+	'warning-circle', 'waveform'
 ]);
 
 function catalogue(style) {
@@ -47,6 +48,41 @@ function catalogue(style) {
 	);
 }
 
+/**
+ * HarfBuzz first, fontTools second.
+ *
+ * `hb-subset` is a system package, and on a machine without it this script used
+ * to die with a bare ENOENT — which meant the icon set could not be regenerated
+ * at all, so adding one icon quietly became a blocked task. `pyftsubset` ships
+ * with fontTools, produces an equivalent subset for this input, and is far more
+ * likely to already be present. Either tool is fine; having only one is not.
+ */
+function runSubsetter(input, unicodes, output) {
+	const attempts = [
+		{ file: 'hb-subset', args: [input, `--unicodes=${unicodes}`, `--output-file=${output}`] },
+		{
+			file: 'pyftsubset',
+			args: [input, `--unicodes=${unicodes}`, `--output-file=${output}`, '--no-ignore-missing-unicodes']
+		}
+	];
+	const failures = [];
+	for (const { file, args } of attempts) {
+		try {
+			execFileSync(file, args, { stdio: 'pipe' });
+			return file;
+		} catch (error) {
+			failures.push(`${file}: ${error.code ?? error.message}`);
+		}
+	}
+	throw new Error(
+		[
+			'No font subsetter available.',
+			'Install HarfBuzz (hb-subset) or fontTools (pip install fonttools).',
+			...failures
+		].join(' ')
+	);
+}
+
 function subset(style, fontName, outputName) {
 	const icons = catalogue(style);
 	const selected = [...(style === 'fill' ? usedFillNames : usedNames)]
@@ -54,11 +90,8 @@ function subset(style, fontName, outputName) {
 		.sort()
 		.map((name) => ({ name, code: icons.get(name) }));
 	const unicodes = selected.map(({ code }) => `U+${code.toString(16).toUpperCase()}`).join(',');
-	execFileSync('hb-subset', [
-		join(phosphorRoot, style, fontName),
-		`--unicodes=${unicodes}`,
-		`--output-file=${join(outputRoot, outputName)}`
-	]);
+	const tool = runSubsetter(join(phosphorRoot, style, fontName), unicodes, join(outputRoot, outputName));
+	console.log(`  ${outputName}: ${selected.length} glyphs via ${tool}`);
 	return selected;
 }
 

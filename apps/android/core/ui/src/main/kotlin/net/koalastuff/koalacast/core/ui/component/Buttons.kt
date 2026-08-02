@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
@@ -98,8 +99,9 @@ fun OutlineButton(
 }
 
 /**
- * A bare icon control. The visual box follows the design (28–34px); the touch target
- * is padded out to 48dp because nothing interactive may be smaller on a phone.
+ * A bare icon control. The visual box comes from [KoalaIconButton]; the touch
+ * target is padded out to 48dp because nothing interactive may be smaller on a
+ * phone.
  */
 @Composable
 fun IconButtonSquare(
@@ -110,8 +112,8 @@ fun IconButtonSquare(
     tint: Color = KoalaTheme.colors.ink2,
     enabled: Boolean = true,
     bordered: Boolean = true,
-    boxSize: Dp = 34.dp,
-    iconSize: Dp = 17.dp,
+    boxSize: Dp = KoalaIconButton.rowBox,
+    iconSize: Dp = KoalaIconButton.rowIcon,
     shape: Shape = KoalaShapes.chip,
 ) {
     val colors = KoalaTheme.colors
@@ -150,7 +152,7 @@ fun LabelledIconAction(
     contentDescription: String = label,
     tint: Color = KoalaTheme.colors.ink3,
     enabled: Boolean = true,
-    iconSize: Dp = 20.dp,
+    iconSize: Dp = KoalaIconButton.labelledIcon,
 ) {
     val content = if (enabled) tint else KoalaTheme.colors.ink4
     Column(
@@ -162,12 +164,19 @@ fun LabelledIconAction(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
     ) {
-        PhosphorIcon(
-            icon = icon,
-            contentDescription = contentDescription,
-            tint = content,
-            size = iconSize,
-        )
+        // The fixed slot, not the glyph, is what sets this column's height, so
+        // every action in a row puts its label on the same line as the rest.
+        Box(
+            modifier = Modifier.size(KoalaIconButton.labelledBox),
+            contentAlignment = Alignment.Center,
+        ) {
+            PhosphorIcon(
+                icon = icon,
+                contentDescription = contentDescription,
+                tint = content,
+                size = iconSize,
+            )
+        }
         MonoText(
             text = label,
             color = content,

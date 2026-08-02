@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -93,7 +95,20 @@ fun KoalaCastApp(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = TopLevelDestination.entries.any { it.route == currentRoute }
+    // The tab row stays put on every screen in the graph. It used to appear only
+    // on the four top-level routes, so opening a show or Settings took the app's
+    // primary navigation away and left Back as the only way out — the listener
+    // had to unwind wherever they were before they could go anywhere else.
+    val showBottomBar = currentRoute != null && currentRoute != Routes.ONBOARDING
+    // Which tab a detail screen belongs to. A podcast opened from Library is
+    // still Library; nothing is gained by unhighlighting the row the moment you
+    // use it, and an unlit tab row reads as broken.
+    var selectedTab by rememberSaveable { mutableStateOf(homeRoute) }
+    LaunchedEffect(currentRoute) {
+        if (TopLevelDestination.entries.any { it.route == currentRoute }) {
+            selectedTab = currentRoute!!
+        }
+    }
     // The expanded player is a layer over the graph, not a destination: the back
     // stack underneath must survive collapsing it.
     var nowPlayingExpanded by rememberSaveable { mutableStateOf(false) }
@@ -278,16 +293,26 @@ fun KoalaCastApp(
 
         if (showBottomBar) {
             KoalaBottomBar(
-                currentRoute = currentRoute,
+                currentRoute = selectedTab,
                 onSelect = { destination ->
+                    selectedTab = destination.route
                     navController.navigate(destination.route) {
-                        // Pops back to whichever tab the graph starts on, so the
-                        // back stack stays one level deep whatever "home" is.
+                        // Land on the tab itself, every time.
+                        //
+                        // This used to save and restore each tab's stack, which is
+                        // the usual pattern and was harmless while the bar only
+                        // existed on the four tab roots. Now that it is on every
+                        // screen, a restored stack can end in a detail screen —
+                        // pressing "Discover" from Settings reopened whichever
+                        // episode was last read, and pressing "Profile" appeared to
+                        // do nothing because it restored Settings. A bar that is
+                        // always on screen has to be a way out, so it pops to the
+                        // root instead of resuming.
                         popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+                            saveState = false
                         }
                         launchSingleTop = true
-                        restoreState = true
+                        restoreState = false
                     }
                 },
             )
@@ -301,13 +326,38 @@ fun KoalaCastApp(
         // every race — back popped the graph underneath while the player stayed up.
         BackHandler { nowPlayingExpanded = false }
 
-        NowPlayingScreen(
-            onCollapse = { nowPlayingExpanded = false },
-            onOpenEpisode = { episodeId ->
-                nowPlayingExpanded = false
-                navController.navigate(Routes.episode(episodeId))
-            },
-        )
+        // The player is opaque, so it must also be solid to touch. A background
+        // colour only paints; it registers no pointer input, and Compose hit-tests
+        // straight past it into the NavHost underneath. Every part of the player
+        // that is not itself a control — the artwork, the title, the empty space
+        // around the transport — was therefore a window onto whatever screen the
+        // listener happened to leave open, and tapping it operated that screen
+        // blind. Opening the player from Settings and pressing near the artwork
+        // changed the visualiser style behind it.
+        //
+        // This node covers the whole overlay and simply consumes what reaches it.
+        // Hit testing walks siblings in reverse draw order and stops at the first
+        // subtree it hits, so the layer below is never reached; the player's own
+        // controls are descendants of this node and keep working as before.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(PointerEventPass.Initial)
+                        }
+                    }
+                },
+        ) {
+            NowPlayingScreen(
+                onCollapse = { nowPlayingExpanded = false },
+                onOpenEpisode = { episodeId ->
+                    nowPlayingExpanded = false
+                    navController.navigate(Routes.episode(episodeId))
+                },
+            )
+        }
     }
 }
 

@@ -45,6 +45,7 @@ import net.koalastuff.koalacast.core.ui.component.ProgressTrack
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SegmentedControl
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.util.Format
@@ -452,8 +453,8 @@ private fun QueueRow(
                 onClick = onPlay,
                 tint = colors.accentInk,
                 bordered = false,
-                boxSize = 26.dp,
-                iconSize = 14.dp,
+                boxSize = KoalaIconButton.compactBox,
+                iconSize = KoalaIconButton.compactIcon,
             )
             IconButtonSquare(
                 icon = PhosphorIcons.CaretUp,
@@ -461,8 +462,8 @@ private fun QueueRow(
                 onClick = onMoveUp,
                 tint = if (isFirst) colors.track else colors.ink3,
                 bordered = false,
-                boxSize = 26.dp,
-                iconSize = 14.dp,
+                boxSize = KoalaIconButton.compactBox,
+                iconSize = KoalaIconButton.compactIcon,
                 enabled = !isFirst,
             )
             IconButtonSquare(
@@ -471,8 +472,8 @@ private fun QueueRow(
                 onClick = onMoveDown,
                 tint = if (isLast) colors.track else colors.ink3,
                 bordered = false,
-                boxSize = 26.dp,
-                iconSize = 14.dp,
+                boxSize = KoalaIconButton.compactBox,
+                iconSize = KoalaIconButton.compactIcon,
                 enabled = !isLast,
             )
             IconButtonSquare(
@@ -481,8 +482,8 @@ private fun QueueRow(
                 onClick = onRemove,
                 tint = colors.ink3,
                 bordered = false,
-                boxSize = 26.dp,
-                iconSize = 14.dp,
+                boxSize = KoalaIconButton.compactBox,
+                iconSize = KoalaIconButton.compactIcon,
             )
         }
     }
@@ -525,7 +526,7 @@ private fun FavoritesList(
                     onClick = { onRemove(favorite.episodeId) },
                     tint = KoalaTheme.colors.accentInk,
                     bordered = false,
-                    boxSize = 28.dp,
+                    boxSize = KoalaIconButton.rowBox,
                     modifier = Modifier.padding(end = KoalaSpacing.gapSmall),
                 )
             }
@@ -566,8 +567,8 @@ private fun TrackRow(
                 onClick = onPlay,
                 tint = colors.inkStrong,
                 bordered = false,
-                boxSize = 28.dp,
-                iconSize = 16.dp,
+                boxSize = KoalaIconButton.rowBox,
+                iconSize = KoalaIconButton.rowIcon,
             )
         }
         Column(

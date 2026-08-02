@@ -23,6 +23,9 @@
     <string name="podcast_action_played">Als gehört markieren</string>
     <string name="podcast_action_unplayed">Als ungehört markieren</string>
     <string name="podcast_action_play">Folge abspielen</string>
+    <string name="podcast_action_download">Folge herunterladen</string>
+    <string name="podcast_action_pause_download">Download pausieren</string>
+    <string name="podcast_action_remove_download">Download entfernen</string>
     <string name="podcast_show_speed">Geschwindigkeit für diese Sendung</string>
     <string name="podcast_speed_default">Standard</string>
     <string name="podcast_skip_intro">Intro überspringen</string>

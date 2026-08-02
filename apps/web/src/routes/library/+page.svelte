@@ -342,18 +342,18 @@
 		{/if}
 	</div>
 
-	<div class="tabs collection-tabs" role="tablist" aria-label={t('library.sections')}>
+	<div class="segmented collection-tabs" role="tablist" aria-label={t('library.sections')}>
 		<button data-library-tab="subscriptions" role="tab" aria-selected={activeTab === 'subscriptions'} tabindex={activeTab === 'subscriptions' ? 0 : -1} class:active={activeTab === 'subscriptions'} onclick={() => (activeTab = 'subscriptions')} onkeydown={handleTabKey}>
-			<i class="ph ph-books" aria-hidden="true"></i> {t('library.subscriptions')} <span class="count">{subscriptions.length}</span>
+			{t('library.subscriptions')}
 		</button>
 		<button data-library-tab="episodes" role="tab" aria-selected={activeTab === 'episodes'} tabindex={activeTab === 'episodes' ? 0 : -1} class:active={activeTab === 'episodes'} onclick={() => (activeTab = 'episodes')} onkeydown={handleTabKey}>
-			<i class="ph ph-hourglass-medium" aria-hidden="true"></i> {t('library.inProgress')} <span class="count">{recentEpisodes.length}</span>
+			{t('library.inProgress')}
 		</button>
 		<button data-library-tab="queue" role="tab" aria-selected={activeTab === 'queue'} tabindex={activeTab === 'queue' ? 0 : -1} class:active={activeTab === 'queue'} onclick={() => (activeTab = 'queue')} onkeydown={handleTabKey}>
-			<i class="ph ph-list-plus" aria-hidden="true"></i> {t('library.queue')} <span class="count">{queue.length}</span>
+			{t('library.queue')}
 		</button>
 		<button data-library-tab="favorites" role="tab" aria-selected={activeTab === 'favorites'} tabindex={activeTab === 'favorites' ? 0 : -1} class:active={activeTab === 'favorites'} onclick={() => (activeTab = 'favorites')} onkeydown={handleTabKey}>
-			<i class="ph ph-heart" aria-hidden="true"></i> {t('library.favorites')} <span class="count">{favorites.length}</span>
+			{t('library.favorites')}
 		</button>
 	</div>
 
@@ -372,11 +372,12 @@
 		{/if}
 		{#if subscriptions.length === 0}
 			<div class="empty-state">
+				<i class="ph ph-books empty-icon" aria-hidden="true"></i>
 				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptySubscriptions')}</p>
 				<div class="empty-actions">
 					<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
-					<a href="/settings#opml" class="btn secondary">{t('settings.opmlTitle')}</a>
+					<a href="/settings#opml" class="btn btn-secondary opml-shortcut">{t('settings.opmlTitle')}</a>
 				</div>
 			</div>
 		{:else}
@@ -409,6 +410,7 @@
 	{:else if activeTab === 'episodes'}
 		{#if recentEpisodes.length === 0}
 			<div class="empty-state">
+				<i class="ph ph-hourglass-medium empty-icon" aria-hidden="true"></i>
 				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptyInProgress')}</p>
 				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
@@ -482,6 +484,7 @@
 		</section>
 		{#if queue.length === 0}
 			<div class="empty-state">
+				<i class="ph ph-list-plus empty-icon" aria-hidden="true"></i>
 				<img class="empty-illustration queue" src="/illustrations/empty-queue.webp" width="192" height="288" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptyQueue')}</p>
 				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
@@ -532,6 +535,7 @@
 	{:else}
 		{#if favorites.length === 0}
 			<div class="empty-state">
+				<i class="ph ph-heart empty-icon" aria-hidden="true"></i>
 				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />
 				<p>{t('library.emptyFavorites')}</p>
 				<a href="/search" class="btn">{t('common.discoverPodcasts')}</a>
@@ -576,31 +580,6 @@
 	.lib-head h1 :global(.ph-fill) { color: var(--accent-green); }
 	.lib-head .sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.25rem; }
 
-	.tabs {
-		display: flex;
-		gap: 0.5rem;
-		overflow-x: auto;
-		padding-bottom: 0.25rem;
-		scrollbar-width: none;
-	}
-	.tabs::-webkit-scrollbar { display: none; }
-
-	.tabs button {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		font-weight: 600;
-		font-size: 0.9rem;
-		color: var(--text-secondary);
-		padding: 0.5rem 1rem;
-		border-radius: 999px;
-		white-space: nowrap;
-		transition: all 0.22s var(--ease-spring, ease);
-	}
-	.tabs button :global(.ph) { font-size: 1.05rem; }
-	.tabs button:hover { border-color: var(--accent-green); color: var(--text-primary); }
 	.folder-filter {
 		display: flex;
 		gap: 0.45rem;
@@ -625,35 +604,21 @@
 		background: color-mix(in srgb, var(--accent-green) 10%, var(--bg-surface));
 	}
 
-	.tabs button.active {
-		background: var(--accent-green);
-		border-color: var(--accent-green);
-		color: var(--accent-button-text);
-	}
-	.tabs .count {
-		font-size: 0.72rem;
-		font-weight: 800;
-		background: var(--bg-elevated);
-		color: var(--text-secondary);
-		padding: 0.05rem 0.45rem;
-		border-radius: 999px;
-		min-width: 1.4em;
-		text-align: center;
-	}
-	.tabs button.active .count {
-		background: rgba(255, 255, 255, 0.25);
-		color: var(--accent-button-text);
-	}
 
-	.empty-state {
-		text-align: center;
-		padding: 3rem;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
-	}
+	/*
+	 * The drawing where there is room for it, the app's icon badge where there
+	 * is not. A 256px illustration is most of a phone screen, and the Android
+	 * client shows a 56px circle in the same place.
+	 */
 	.empty-illustration { width: min(256px, 72vw); height: auto; aspect-ratio: 1; object-fit: contain; margin: -1rem auto 0; }
 	.empty-illustration.queue { width: min(176px, 54vw); aspect-ratio: 2 / 3; }
+	.empty-icon { display: none; }
+	@media (max-width: 640px) {
+		.empty-illustration { display: none; }
+		.empty-icon { display: grid; }
+		/* The app offers one way out of an empty library; import is in Settings. */
+		.opml-shortcut { display: none; }
+	}
 
 	.podcast-grid {
 		display: grid;
@@ -694,18 +659,7 @@
 		align-items: center;
 	}
 
-	.btn {
-		display: inline-block;
-		margin-top: 1rem;
-		background: var(--accent-green);
-		color: var(--accent-button-text);
-		padding: 0.6rem 1.4rem;
-		border-radius: 10px;
-		font-weight: 700;
-	}
-	.btn:hover { text-decoration: none; background: var(--accent-green-hover); }
 	.empty-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
-	.btn.secondary { border: 1px solid var(--border-ui); background: transparent; color: var(--text-primary); }
 
 	/* In-progress episode list */
 	.episode-list { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -876,7 +830,7 @@
 		padding: 0 10px;
 		background: var(--bg-sunken);
 		border: 1px solid var(--border-ui);
-		border-radius: 5px;
+		border-radius: var(--radius-control);
 		color: var(--ink-4);
 	}
 	.library-filter input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 12px; }
@@ -885,7 +839,7 @@
 		min-height: 44px;
 		padding: 6px 8px;
 		border: 0;
-		border-radius: 3px;
+		border-radius: var(--radius-inset);
 		background: transparent;
 		color: var(--ink-4);
 		font: 600 10px/1 var(--font-mono);
@@ -893,8 +847,6 @@
 	}
 	.library-sort button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.collection-tabs { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-hair); }
-	.tabs button { min-height: 44px; border-radius: 4px; box-shadow: none; font: 600 10px/1 var(--font-mono); }
-	.tabs button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.podcast-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
 	.podcast-card.quiet-cover-card {
 		position: relative;
@@ -950,7 +902,6 @@
 	.episode-list { gap: 0; border-top: 1px solid var(--border-hair); }
 	.ep-row { border: 0; border-bottom: 1px solid var(--border-row); border-radius: 0; background: transparent; box-shadow: none; }
 	.ep-row:hover { transform: none; background: var(--bg-sunken); }
-	.empty-state { box-shadow: none; border-radius: 8px; }
 
 	@media (max-width: 1180px) { .podcast-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 	@media (max-width: 820px) {
@@ -960,18 +911,12 @@
 	}
 	@media (max-width: 560px) {
 		.library-page { padding: 16px; }
-		.collection-tabs {
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			overflow: visible;
-		}
-		.collection-tabs button { justify-content: center; width: 100%; }
 		.podcast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 		.quiet-cover-card .cover-overlay { padding: 8px; }
 		.quiet-cover-card .cover-overlay h3 { font-size: 11px; }
 		.quiet-cover-card .cover-overlay p { display: none; }
 		.quiet-cover-card .cover-overlay { opacity: 1; pointer-events: auto; background: linear-gradient(0deg, rgba(5,10,7,.96) 8%, rgba(5,10,7,.52) 58%, transparent 78%); }
-		.tabs button, .reorder-btn, .ep-remove { min-height: 44px; min-width: 44px; }
+		.segmented > button, .reorder-btn, .ep-remove { min-height: 44px; min-width: 44px; }
 	}
 	@media (max-width: 380px) {
 		.podcast-grid { grid-template-columns: 1fr; }

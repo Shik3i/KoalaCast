@@ -289,36 +289,6 @@
 		border-color: var(--accent-green);
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		padding: 0.85rem 1.5rem;
-		border-radius: 12px;
-		font-weight: 700;
-		font-size: 0.98rem;
-		cursor: pointer;
-		border: none;
-		transition: all 0.2s ease;
-		margin-top: 0.5rem;
-	}
-
-	.btn-primary {
-		background: var(--accent-green);
-		color: var(--bg-primary);
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		transform: translateY(-1px);
-		filter: brightness(1.1);
-	}
-
-	.btn:disabled {
-		opacity: 0.65;
-		cursor: not-allowed;
-	}
-
 	.spinner {
 		animation: spin 1s linear infinite;
 	}

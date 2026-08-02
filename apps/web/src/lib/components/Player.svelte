@@ -35,6 +35,18 @@
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
 	import VisualizerSignal from './VisualizerSignal.svelte';
 
+	// How many bars the spectrum styles draw. Enough to fill the width of a
+	// desktop player bar at a readable bar width, few enough that a phone does not
+	// end up drawing hairlines. The visualiser stretches this count across
+	// whatever width it is given rather than clustering it in the middle.
+	const VISUALIZER_BANDS = 48;
+	/** Speech RMS rarely passes 0.2; without this the meter never leaves the floor. */
+	const LEVEL_GAIN = 5;
+	const SPECTRUM_ATTACK = 0.55;
+	const SPECTRUM_RELEASE = 0.16;
+	/** Peak markers fall about a third of full scale per second at 60 Hz. */
+	const PEAK_FALL = 0.006;
+
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let audioElementGeneration = $state(0);
 	let isPlaying = $state(false);
@@ -57,7 +69,14 @@
 	let remotePlaybackAvailable = $state(false);
 	let remotePlaybackState = $state<RemotePlaybackState>('disconnected');
 	let visualizerLevel = $state(0);
-	let visualizerHistory = $state<number[]>(Array(18).fill(0));
+	// One entry per bar the visualiser draws. Both are fixed-length and rewritten
+	// in place every frame; the arrays are reassigned only so Svelte sees the
+	// change, never grown, because these are read at display refresh rate.
+	let visualizerSpectrum = $state<number[]>(new Array(VISUALIZER_BANDS).fill(0));
+	let visualizerPeaks = $state<number[]>(new Array(VISUALIZER_BANDS).fill(0));
+	const spectrumScratch = new Float32Array(VISUALIZER_BANDS);
+	const spectrumSmoothed = new Float32Array(VISUALIZER_BANDS);
+	const peakScratch = new Float32Array(VISUALIZER_BANDS);
 	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
 	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
 	$effect(() => {
@@ -367,19 +386,11 @@
 	}
 
 	function sampleSilence() {
-		const sampledLevel = audioEl && isPlaying && (prefs.visualizer !== 'off' || effectiveSkipSilence)
-			? audioEngine.getLevel()
-			: null;
-		if (prefs.visualizer !== 'off' && isPlaying) {
-			visualizerLevel = Math.min(1, (sampledLevel ?? 0) * 5);
-			visualizerHistory = [...visualizerHistory.slice(1), visualizerLevel];
-		} else if (visualizerLevel !== 0) {
-			visualizerLevel = 0;
-		}
 		if (!audioEl || !effectiveSkipSilence || !isPlaying) {
 			resetSilenceTrimming();
 			return;
 		}
+		const sampledLevel = audioEngine.getLevel();
 		if (sampledLevel === null) {
 			resetSilenceTrimming();
 			return;
@@ -389,19 +400,64 @@
 		if (audioEl.playbackRate !== targetRate) audioEl.playbackRate = targetRate;
 	}
 
-	// Sampling at 20 Hz is useful only during active playback with either the
-	// visualiser or silence trimming enabled. An unconditional timer kept every
-	// idle player instance waking up forever.
+	// Silence trimming is a hysteresis gate over hundreds of milliseconds, so 20 Hz
+	// is plenty and a timer is cheaper than a frame callback. The visualiser is a
+	// separate loop below because it needs every frame, not every third one.
 	$effect(() => {
-		const shouldSample = !!audioEl && isPlaying && (effectiveSkipSilence || prefs.visualizer !== 'off');
-		if (!shouldSample) {
-			visualizerLevel = 0;
-			visualizerHistory = Array(18).fill(0);
+		if (!audioEl || !isPlaying || !effectiveSkipSilence) {
 			resetSilenceTrimming();
 			return;
 		}
 		const timer = setInterval(sampleSilence, 50);
 		return () => clearInterval(timer);
+	});
+
+	function resetVisualizer() {
+		visualizerLevel = 0;
+		spectrumSmoothed.fill(0);
+		peakScratch.fill(0);
+		visualizerSpectrum = new Array(VISUALIZER_BANDS).fill(0);
+		visualizerPeaks = new Array(VISUALIZER_BANDS).fill(0);
+	}
+
+	// Redrawn at the display's refresh rate, not on a timer. A 50 ms interval is
+	// three frames on a 60 Hz screen and six on a 120 Hz one, which is exactly the
+	// stepping that made every bar look like it was catching up with the audio.
+	$effect(() => {
+		if (!audioEl || !isPlaying || prefs.visualizer === 'off') {
+			resetVisualizer();
+			return;
+		}
+		let frame = 0;
+		const tick = () => {
+			frame = requestAnimationFrame(tick);
+			const level = audioEngine.getLevel();
+			// Speech sits far below full scale; without the lift the bars would
+			// spend the whole episode in the bottom fifth of the track.
+			visualizerLevel = Math.min(1, (level ?? 0) * LEVEL_GAIN);
+
+			if (!audioEngine.getSpectrum(spectrumScratch)) return;
+			for (let band = 0; band < VISUALIZER_BANDS; band++) {
+				const next = spectrumScratch[band];
+				// Fast up, slow down — the standard bar-meter asymmetry. A symmetric
+				// filter either misses transients or leaves the bars twitching.
+				const previous = spectrumSmoothed[band];
+				spectrumSmoothed[band] =
+					next > previous
+						? previous + (next - previous) * SPECTRUM_ATTACK
+						: previous + (next - previous) * SPECTRUM_RELEASE;
+				// A separate, slower envelope: the peak-hold outline that makes a
+				// spectrum readable rather than a blur of moving sticks.
+				peakScratch[band] = Math.max(spectrumSmoothed[band], peakScratch[band] - PEAK_FALL);
+			}
+			visualizerSpectrum = Array.from(spectrumSmoothed);
+			visualizerPeaks = Array.from(peakScratch);
+		};
+		frame = requestAnimationFrame(tick);
+		return () => {
+			cancelAnimationFrame(frame);
+			resetVisualizer();
+		};
 	});
 
 	// Settings can change while the persistent player keeps playing on another
@@ -1069,7 +1125,7 @@
 		<div class="player-bar" bind:this={playerBarElement}>
 			<!-- Seek progress line spanning the top of the bar -->
 			<div class="progress-track" class:visualizing={prefs.visualizer === 'level'} style="--progress: {progressPercent}%; --audio-level: {visualizerLevel}"></div>
-			<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} history={visualizerHistory} playing={isPlaying} variant="compact" />
+			<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} spectrum={visualizerSpectrum} peaks={visualizerPeaks} playing={isPlaying} variant="compact" />
 
 			<div class="track-info">
 				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')} title={t('player.openFullscreen')}>
@@ -1229,7 +1285,7 @@
 				<div class="np-timeline">
 					<span class="time">{formatTime(currentTimeMs)}</span>
 					<div class="np-slider-host" class:visualizing={prefs.visualizer === 'level'} style="--audio-level: {visualizerLevel}">
-						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} history={visualizerHistory} playing={isPlaying} variant="full" />
+						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} spectrum={visualizerSpectrum} peaks={visualizerPeaks} playing={isPlaying} variant="full" />
 						<input
 							type="range"
 							min="0"
@@ -2165,8 +2221,8 @@
 	}
 	.progress-track { display: none; }
 	.track-info { gap: 9px; }
-	.artwork { width: 52px; height: 52px; border-radius: 5px; box-shadow: none; background: var(--bg-tile); }
-	.art-expand { border-radius: 5px; }
+	.artwork { width: 52px; height: 52px; border-radius: var(--radius-control); box-shadow: none; background: var(--bg-tile); }
+	.art-expand { border-radius: var(--radius-control); }
 	.track-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.podcast-title { color: var(--ink-3); font: 400 11px/1.3 var(--font-sans); }
 	.mobile-player-meta { display: none; }
@@ -2213,14 +2269,14 @@
 	.timeline input[type='range']::-moz-range-thumb { width: 12px; height: 12px; background: var(--ink); }
 	.time { min-width: 40px; color: var(--ink-3); font: 500 10px/1 var(--font-mono); opacity: 1; }
 	.extras { gap: 6px; }
-	.speed-cycle { height: 44px; min-width: 46px; padding: 0 6px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
+	.speed-cycle { height: 44px; min-width: 46px; padding: 0 6px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); color: var(--ink-2); font: 700 10px/1 var(--font-mono); }
 	.vol-wrap .ctrl { border: 0; }
 	.extras select {
 		height: 44px;
 		max-width: 62px;
 		padding: 0 5px;
 		border: 1px solid var(--border-ui);
-		border-radius: 4px;
+		border-radius: var(--radius-control);
 		background: transparent;
 		color: var(--ink-3);
 		font: 600 10px/1 var(--font-mono);
@@ -2232,7 +2288,7 @@
 		height: 44px;
 		padding: 0 7px;
 		border: 1px solid var(--border-ui);
-		border-radius: 4px;
+		border-radius: var(--radius-control);
 		color: var(--ink-2);
 		font: 700 10px/1 var(--font-mono);
 

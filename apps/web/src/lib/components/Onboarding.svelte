@@ -149,8 +149,9 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+		min-height: 44px;
 		padding: 0.65rem 0.9rem;
-		border-radius: 6px;
+		border-radius: var(--radius-control);
 		border: 1.5px solid var(--border-subtle);
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
@@ -190,7 +191,8 @@
 		color: var(--text-muted);
 		font-weight: 600;
 		font-size: 0.9rem;
-		padding: 0.6rem 0.4rem;
+		min-height: 44px;
+		padding: 0.6rem 0.8rem;
 		cursor: pointer;
 	}
 	.ob-skip:hover { color: var(--text-primary); }
@@ -198,8 +200,9 @@
 		background: var(--accent-fill);
 		color: var(--accent-on);
 		border: none;
+		min-height: 44px;
 		padding: 0.75rem 1.6rem;
-		border-radius: 5px;
+		border-radius: var(--radius-control);
 		font-weight: 700;
 		font-size: 0.95rem;
 		cursor: pointer;

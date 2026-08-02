@@ -14,7 +14,9 @@
 
 	type Range = 'year' | '90days' | 'all';
 
-	let range = $state<Range>('90days');
+	let range = $state<Range>('year');
+	/** The signed-in name, shown as the heading exactly as the app does. */
+	let accountName = $state<string | null>(null);
 	let sessions = $state<LocalListeningSession[]>([]);
 	let history = $state<LocalPlaybackState[]>([]);
 	let subscriptionCount = $state(0);
@@ -66,6 +68,17 @@
 		]);
 	}
 
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/v1/auth/status');
+			if (!res.ok) return;
+			const me = await res.json();
+			if (me?.authenticated && me.username) accountName = me.username;
+		} catch {
+			// Signed out, offline, or no server: the heading falls back to its label.
+		}
+	});
+
 	onMount(loadListeningData);
 
 	$effect(() => {
@@ -97,26 +110,43 @@
 </script>
 
 <div class="profile-page">
-	<nav class="stats-subnav" aria-label={t('quiet.profile.sections')}>
-		<a href="/profile" class="active" aria-current="page">{t('quiet.statsTab.myStats')}</a>
-		<a href="/global-stats">{t('quiet.statsTab.globalStats')}</a>
-	</nav>
-
+	<!--
+		Identity, then the two rows the app puts under it. The web profile was
+		statistics only: no name, no way to reach Account or Downloads, so the
+		same screen answered a different question on each client.
+	-->
 	<header class="profile-head" id="stats">
-		<span class="profile-avatar"><i class="ph ph-user" aria-hidden="true"></i></span>
+		<span class="profile-avatar">
+			{#if accountName}{accountName.slice(0, 2).toUpperCase()}{:else}<i class="ph ph-user" aria-hidden="true"></i>{/if}
+		</span>
 		<div>
-			<h1>{t('profileStats.title')}</h1>
+			<h1>{accountName ?? t('profileStats.title')}</h1>
 			<p>
 				{firstListening ? t('profileStats.since', { date: new Date(firstListening).toLocaleDateString(prefs.uiLanguage, { day: '2-digit', month: 'short', year: 'numeric' }) }) : t('profileStats.trackingStarts')}
 				· {t('profileStats.summary', { subscriptions: subscriptionCount, shows: touchedShows })}
 			</p>
 		</div>
-		<div class="range-tabs" role="group" aria-label={t('profileStats.rangeLabel')}>
-			<button aria-pressed={range === '90days'} class:active={range === '90days'} onclick={() => (range = '90days')}>{t('profileStats.days90')}</button>
-			<button aria-pressed={range === 'year'} class:active={range === 'year'} onclick={() => (range = 'year')}>{t('profileStats.thisYear')}</button>
-			<button aria-pressed={range === 'all'} class:active={range === 'all'} onclick={() => (range = 'all')}>{t('profileStats.allTime')}</button>
-		</div>
+		<a class="profile-settings" href="/settings" aria-label={t('nav.settings')} title={t('nav.settings')}>
+			<i class="ph ph-gear" aria-hidden="true"></i>
+		</a>
 	</header>
+
+	<div class="profile-rows">
+		<a class="btn btn-secondary" href="/account">{t('nav.account')}</a>
+		<a class="btn btn-secondary" href="/downloads">{t('downloads.title')}</a>
+	</div>
+
+	<nav class="segmented stats-subnav" aria-label={t('quiet.profile.sections')}>
+		<a href="/profile" class="active" aria-current="page">{t('quiet.statsTab.myStats')}</a>
+		<a href="/global-stats">{t('quiet.statsTab.globalStats')}</a>
+	</nav>
+
+	<!-- Same order as the app: this year, then 90 days, then all time. -->
+	<div class="segmented range-tabs" role="group" aria-label={t('profileStats.rangeLabel')}>
+		<button aria-pressed={range === 'year'} class:active={range === 'year'} onclick={() => (range = 'year')}>{t('profileStats.thisYear')}</button>
+		<button aria-pressed={range === '90days'} class:active={range === '90days'} onclick={() => (range = '90days')}>{t('profileStats.days90')}</button>
+		<button aria-pressed={range === 'all'} class:active={range === 'all'} onclick={() => (range = 'all')}>{t('profileStats.allTime')}</button>
+	</div>
 
 	{#if sessions.length === 0 && history.length === 0}
 		<section class="stats-empty">
@@ -238,14 +268,15 @@
 	.stats-empty > i { color: var(--accent-ink); font-size: 32px; }
 	.stats-empty h2 { font-size: 24px; }
 	.stats-empty p { color: var(--ink-3); }
-	.stats-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
-	.profile-head { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 14px; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-hair); }
+	.stats-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: var(--radius-control); background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
+	.profile-head { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; gap: 14px; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-hair); margin-bottom: 16px; }
+	.profile-settings { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); color: var(--ink-2); font-size: 18px; }
+	.profile-settings:hover { border-color: var(--accent-green); color: var(--accent-green); }
+	.profile-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
 	.profile-avatar { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--accent-fill); color: var(--accent-on); font-size: 24px; }
-	.profile-head h1 { font-size: 30px; letter-spacing: -.04em; }
+	.profile-head h1 { font-size: 22px; letter-spacing: -.03em; }
 	.profile-head p, section > header span { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .01em; }
-	.range-tabs { display: flex; gap: 2px; }
-	.range-tabs button { min-height: 44px; padding: 7px 10px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 11px/1 var(--font-mono); }
-	.range-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
+	.stats-subnav, .range-tabs { margin-bottom: 16px; }
 	.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; padding: 18px 0; }
 	.kpi-grid article { padding: 15px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
 	.kpi-grid span, .saved-total > span, .privacy-card > div > span { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
@@ -291,16 +322,12 @@
 	.saved-summary { margin-top: 10px; color: var(--ink-4); font: 600 10px/1.4 var(--font-mono); }
 	.privacy-card { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 20px; padding: 18px; border: 1px solid var(--border-hair); border-radius: 8px; background: var(--bg-sunken); }
 	.privacy-card h2 { margin: 5px 0; font-size: 17px; }.privacy-card p { max-width: 68ch; color: var(--ink-3); font-size: 13px; }
-	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 44px; padding: 9px 11px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
+	.privacy-card button { display: inline-flex; gap: 7px; align-items: center; flex: 0 0 auto; min-height: 44px; padding: 9px 11px; border: 0; border-radius: var(--radius-control); background: var(--accent-fill); color: var(--accent-on); font: 700 10px/1 var(--font-mono); }
 	.profile-actions { display: grid; margin-top: 20px; border-top: 1px solid var(--border-row); }
 	.profile-actions a { display: grid; grid-template-columns: 28px minmax(0, 1fr) 20px; align-items: center; gap: 10px; min-height: 56px; border-bottom: 1px solid var(--border-row); color: var(--ink-2); }
 	.profile-actions a > i:first-child { color: var(--accent-ink); font-size: 20px; }
 	.profile-actions a > i:last-child { color: var(--ink-4); }
 	@media (max-width: 1050px) { .profile-analysis { grid-template-columns: 1fr; }.breakdowns { grid-template-columns: repeat(3,1fr); }.ranking-list a { grid-template-columns: 22px 36px minmax(0,1fr) 80px 46px; } }
-	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px 1fr; }.profile-avatar { width: 54px; height: 54px; }.range-tabs { grid-column: 1 / -1; overflow-x: auto; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
-	.stats-subnav { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-row); padding-bottom: 12px; }
-	.stats-subnav a { padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 13px; color: var(--ink-3); background: var(--bg-rail); text-decoration: none; transition: all 0.15s ease; }
-	.stats-subnav a:hover { color: var(--ink-1); }
-	.stats-subnav a.active { background: var(--accent-fill); color: var(--accent-on); }
+	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px minmax(0,1fr) auto; }.profile-avatar { width: 54px; height: 54px; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
 	@media (max-width: 520px) { .profile-page { padding: 16px; }.heatmap { grid-auto-columns: 9px; overflow-x: auto; }.ranking-list a { grid-template-columns: 22px 34px minmax(0,1fr) 56px; }.ranking-list em { display: none; }.privacy-card { align-items: flex-start; flex-direction: column; } }
 </style>

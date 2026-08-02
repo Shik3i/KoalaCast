@@ -87,7 +87,10 @@ class PlayerViewModel @Inject constructor(
 
     fun amplitudeLevel(frameTimeNanos: Long): Float = amplitudeTap.levelAt(frameTimeNanos)
 
-    fun copyAmplitudeHistory(out: FloatArray) = amplitudeTap.copyHistoryInto(out)
+    /** Band heights into [out] and their peak markers into [peaks], per display frame. */
+    fun copyAmplitudeBands(out: FloatArray, peaks: FloatArray) =
+        amplitudeTap.copyBandsInto(out, peaks)
+
     fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
         if (!atChapterEnd) {
             player.setSleepTimer(minutes, atEpisodeEnd, atChapterEnd = false)

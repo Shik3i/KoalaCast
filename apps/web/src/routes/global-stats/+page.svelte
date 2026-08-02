@@ -249,8 +249,8 @@
 	.global-head h1 { margin: 3px 0 5px; font: 800 clamp(34px, 5vw, 58px)/1.02 var(--font-display); letter-spacing: -.035em; color: var(--ink-1); }
 	.global-head > div > p:last-child { max-width: 650px; color: var(--ink-4); font-size: 13px; }
 	.eyebrow { color: var(--accent); font: 700 10px/1 var(--font-mono); letter-spacing: .01em; }
-	.range-tabs { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; flex-shrink: 0; }
-	.range-tabs button { min-height: 44px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.range-tabs { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: var(--radius-control); flex-shrink: 0; }
+	.range-tabs button { min-height: 44px; padding: 0 11px; border: 0; border-radius: var(--radius-inset); background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.range-tabs button.active { color: var(--accent-on); background: var(--accent-fill); }
 	.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border-ui); }
 	.kpi-grid article { padding: 18px; display: flex; flex-direction: column; border-right: 1px solid var(--border-hair); background: var(--bg-panel); }

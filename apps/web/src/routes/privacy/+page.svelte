@@ -286,28 +286,4 @@
 		margin-top: 0.35rem;
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.6rem 1.15rem;
-		border-radius: 12px;
-		font-weight: 600;
-		font-size: 0.9rem;
-		text-decoration: none;
-		transition: all 0.2s ease;
-	}
-
-	.btn-secondary {
-		background: var(--bg-elevated);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-	}
-
-	.btn-secondary:hover {
-		background: color-mix(in srgb, var(--accent-green) 15%, var(--bg-elevated));
-		border-color: var(--accent-green);
-		color: var(--accent-green);
-		transform: translateY(-1px);
-	}
 </style>

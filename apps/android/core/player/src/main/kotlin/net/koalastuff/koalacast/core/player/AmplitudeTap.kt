@@ -18,6 +18,12 @@ private const val AMPLITUDE_GAIN = 3.8f
 // 30 Hz attack/release timing, but with enough temporal detail for 120 Hz panels.
 private const val AMPLITUDE_ATTACK = 0.3313f
 private const val AMPLITUDE_RELEASE = 0.0342f
+// Applied once per display frame rather than per audio window, so these are in
+// frames: roughly 60 ms to rise and 250 ms to fall on a 60 Hz panel.
+private const val BAND_ATTACK = 0.55f
+private const val BAND_RELEASE = 0.16f
+/** Peak markers fall about a third of full scale per second at 60 Hz. */
+private const val BAND_PEAK_FALL = 0.006f
 internal const val ENVELOPE_UPDATES_PER_SECOND = 120
 private const val ENVELOPE_FRAME_NANOS = 1_000_000_000L / ENVELOPE_UPDATES_PER_SECOND
 private const val MAX_RENDER_GAP_NANOS = 1_000_000_000L
@@ -80,17 +86,6 @@ class AmplitudeTap @Inject constructor() {
     var listening: Boolean = false
 
     /**
-     * Recent history, oldest first, for styles that draw a shape rather than a
-     * level. A fixed array written round-robin: the audio thread must not allocate,
-     * and a reader that catches a half-updated slot sees one wrong bar for one
-     * frame, which nobody can perceive.
-     */
-    private val history = FloatArray(HISTORY)
-
-    @Volatile
-    private var writeIndex = 0
-
-    /**
      * Returns the amplitude for this display frame. PCM is sampled at 120 Hz and
      * consumed according to elapsed frame time, so 60 Hz displays advance two
      * source samples, 90 Hz displays alternate one and two, and 120 Hz displays
@@ -104,7 +99,6 @@ class AmplitudeTap @Inject constructor() {
             dequeue()?.let { first ->
                 interpolationStart = first
                 level = first
-                appendHistory(first)
             }
             dequeue()?.let { next ->
                 interpolationEnd = next
@@ -128,7 +122,6 @@ class AmplitudeTap @Inject constructor() {
         while (hasInterpolationEnd && interpolationNanos >= ENVELOPE_FRAME_NANOS) {
             interpolationStart = interpolationEnd
             level = interpolationStart
-            appendHistory(interpolationStart)
             interpolationNanos -= ENVELOPE_FRAME_NANOS
 
             val next = dequeue()
@@ -160,12 +153,6 @@ class AmplitudeTap @Inject constructor() {
         return value
     }
 
-    private fun appendHistory(value: Float) {
-        val index = writeIndex
-        history[index % HISTORY] = value
-        writeIndex = (index + 1) % HISTORY
-    }
-
     private fun syncRendererAfterReset() {
         val generation = resetGeneration
         if (observedResetGeneration == generation) return
@@ -178,20 +165,40 @@ class AmplitudeTap @Inject constructor() {
     }
 
     /**
-     * Copies the history into [out], oldest first, so the caller can render without
-     * allocating per frame. [out] may be any length; it is filled from the most
-     * recent samples backwards.
+     * The newest band energies the audio thread produced, low frequencies first.
+     * A single flat array rather than a queue: unlike the envelope, a spectrum
+     * frame that the display never showed is of no interest, and holding onto
+     * stale ones only adds latency.
      */
-    fun copyHistoryInto(out: FloatArray) {
-        val end = writeIndex
-        for (i in out.indices) {
-            // out[last] is the newest sample, walking backwards from the write head.
-            // Keep the same ~1.6 second visual span as the old 30 Hz history
-            // while shifting it at 120 Hz for smooth waveform/dot movement.
-            val age = (out.size - 1 - i) * HISTORY_SAMPLE_STRIDE
-            val index = ((end - 1 - age) % HISTORY + HISTORY) % HISTORY
-            out[i] = history[index]
+    private val publishedBands = FloatArray(SPECTRUM_BANDS)
+
+    // Renderer-only. Smoothing has to happen per *display* frame, not per FFT, or
+    // the bars move at whatever rate the decoder happens to hand over buffers.
+    private val smoothedBands = FloatArray(SPECTRUM_BANDS)
+    private val peakBands = FloatArray(SPECTRUM_BANDS)
+
+    /**
+     * Fills [out] with the current band heights and [peaks], if given, with the
+     * slow-falling peak markers. Both must be [SPECTRUM_BANDS] long.
+     *
+     * Fast up, slow down — the standard bar-meter asymmetry. A symmetric filter
+     * either misses transients or leaves every bar twitching.
+     */
+    fun copyBandsInto(out: FloatArray, peaks: FloatArray? = null) {
+        for (band in smoothedBands.indices) {
+            val next = publishedBands[band]
+            val previous = smoothedBands[band]
+            val blend = if (next > previous) BAND_ATTACK else BAND_RELEASE
+            val value = previous + (next - previous) * blend
+            smoothedBands[band] = value
+            peakBands[band] = maxOf(value, peakBands[band] - BAND_PEAK_FALL)
+            if (band < out.size) out[band] = value
+            if (peaks != null && band < peaks.size) peaks[band] = peakBands[band]
         }
+    }
+
+    internal fun publishBands(source: FloatArray) {
+        source.copyInto(publishedBands, endIndex = minOf(source.size, publishedBands.size))
     }
 
     internal fun publish(value: Float) {
@@ -203,19 +210,14 @@ class AmplitudeTap @Inject constructor() {
 
     internal fun reset() {
         level = 0f
-        history.fill(0f)
-        writeIndex = 0
+        publishedBands.fill(0f)
+        smoothedBands.fill(0f)
+        peakBands.fill(0f)
         pendingRead = pendingWrite
         resetGeneration++
     }
 
     private companion object {
-        /**
-         * Four source samples per visible history point preserves the original
-         * time span while allowing every 120 Hz source frame to move the shape.
-         */
-        const val HISTORY_SAMPLE_STRIDE = ENVELOPE_UPDATES_PER_SECOND / 30
-        const val HISTORY = 96 * HISTORY_SAMPLE_STRIDE
         const val PENDING_CAPACITY = 128
     }
 }
@@ -245,12 +247,32 @@ internal class AmplitudeBufferSink(
     private var sumInWindow = 0.0
     private var samplesInWindow = 0
 
+    /**
+     * One sample per audio frame — the first channel — rather than every eighth
+     * sample as before. The envelope was happy with a decimated signal; an FFT is
+     * not, because decimating without a low-pass filter folds everything above the
+     * new Nyquist back down and paints energy into bands that hold none.
+     */
+    private var strideBytes = 2
+
+    // Everything below is preallocated: [handleBuffer] runs on the audio thread.
+    private val fftReal = FloatArray(SPECTRUM_FFT_SIZE)
+    private val fftImaginary = FloatArray(SPECTRUM_FFT_SIZE)
+    private val fftWindow = hannWindow(SPECTRUM_FFT_SIZE)
+    private val fftFrame = FloatArray(SPECTRUM_FFT_SIZE)
+    private var fftFill = 0
+    private val bandScratch = FloatArray(SPECTRUM_BANDS)
+    private var bandEdges = spectrumBandEdges(DEFAULT_SAMPLE_RATE)
+
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         // Any other encoding is left alone rather than misread as shorts and drawn
         // as noise. In practice every codec this app plays decodes to 16-bit.
         pcm16 = encoding == C.ENCODING_PCM_16BIT
         smoothed = 0f
         windowBytes = envelopeWindowBytes(sampleRateHz, channelCount)
+        strideBytes = channelCount.coerceAtLeast(1) * 2
+        bandEdges = spectrumBandEdges(sampleRateHz)
+        fftFill = 0
         bytesInWindow = 0
         sumInWindow = 0.0
         samplesInWindow = 0
@@ -264,6 +286,7 @@ internal class AmplitudeBufferSink(
                 bytesInWindow = 0
                 sumInWindow = 0.0
                 samplesInWindow = 0
+                fftFill = 0
                 tap.reset()
             }
             return
@@ -283,7 +306,7 @@ internal class AmplitudeBufferSink(
             sumInWindow += (sample * sample).toDouble()
             samplesInWindow++
 
-            val representedBytes = minOf(SAMPLE_STRIDE_BYTES, limit - index)
+            val representedBytes = minOf(strideBytes, limit - index)
             bytesInWindow += representedBytes
             if (bytesInWindow >= windowBytes) {
                 val rms = sqrt(sumInWindow / samplesInWindow).toFloat()
@@ -293,16 +316,38 @@ internal class AmplitudeBufferSink(
                 sumInWindow = 0.0
                 samplesInWindow = 0
             }
-            index += SAMPLE_STRIDE_BYTES
+
+            fftFrame[fftFill++] = sample
+            if (fftFill == SPECTRUM_FFT_SIZE) {
+                publishSpectrum()
+                // Overlapping frames by three quarters: a hop of a whole 2048
+                // window is only 21 spectra per second, which visibly steps. A
+                // quarter-window hop puts a fresh spectrum on screen roughly every
+                // 12 ms for four times the arithmetic on a few thousand floats.
+                val hop = SPECTRUM_FFT_SIZE / 4
+                fftFrame.copyInto(fftFrame, 0, hop, SPECTRUM_FFT_SIZE)
+                fftFill = SPECTRUM_FFT_SIZE - hop
+            }
+
+            index += strideBytes
         }
 
         buffer.order(order)
     }
 
-    private companion object {
-        /** Every 8th sample; at 44.1 kHz stereo that is still ~5 kHz of envelope. */
-        const val SAMPLE_STRIDE_BYTES = 16
+    private fun publishSpectrum() {
+        for (i in 0 until SPECTRUM_FFT_SIZE) {
+            fftReal[i] = fftFrame[i] * fftWindow[i]
+            fftImaginary[i] = 0f
+        }
+        fftInPlace(fftReal, fftImaginary)
+        reduceToBands(fftReal, fftImaginary, bandEdges, bandScratch)
+        tap.publishBands(bandScratch)
+    }
 
+    private companion object {
+        /** Only used before the first [flush] tells us the real rate. */
+        const val DEFAULT_SAMPLE_RATE = 44_100
     }
 }
 

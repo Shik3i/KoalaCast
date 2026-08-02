@@ -14,6 +14,7 @@ Specifications and design docs for KoalaCast. Start with the root
 | [feed-compatibility/rss-spec.md](feed-compatibility/rss-spec.md) | RSS/Atom parsing rules and feed aliasing |
 | [privacy/privacy-policy.md](privacy/privacy-policy.md) | Privacy principles and data retention |
 | [android-architecture.md](android-architecture.md) | Native Android client architecture and shipped boundaries |
+| [web-app-parity.md](web-app-parity.md) | Where mobile web and the Android app differ on purpose, and what is still outstanding |
 
 ## Directory Map
 
@@ -22,6 +23,7 @@ docs/
 ├── current-status.md
 ├── implementation-plan.md
 ├── android-architecture.md
+├── web-app-parity.md
 ├── architecture/overview.md
 ├── sync-protocol/specification.md
 ├── feed-compatibility/rss-spec.md

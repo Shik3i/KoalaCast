@@ -90,24 +90,24 @@ enum class VisualizerStyle(val id: String) {
     /** The bar keeps its shape; only its fill breathes with the audio. */
     LEVEL("level"),
 
-    /** The bar becomes a running history of how loud the last few seconds were. */
+    /** A soft mirrored spectrum across the whole track, with the bar through it. */
     WAVEFORM("waveform"),
 
-    /** A compact equaliser cluster rises and falls around the progress line. */
+    /** A full-width equaliser with peak markers, centred on the progress line. */
     BARS("bars"),
 
     /** The playhead sends out restrained rings in time with the recording. */
     PULSE("pulse"),
 
-    /** Recent speech energy travels across the track as floating points. */
+    /** The same spectrum on a coarser grid: one dot per few bands, swelling in place. */
     DOTS("dots"),
     ;
 
     /** True when this style needs the amplitude tap doing arithmetic at all. */
     val needsAudio: Boolean get() = this != OFF
 
-    /** Styles that render more than the current instantaneous amplitude. */
-    val needsHistory: Boolean get() = this == WAVEFORM || this == DOTS
+    /** Styles that need per-frequency-band energy rather than one loudness figure. */
+    val needsSpectrum: Boolean get() = this == WAVEFORM || this == DOTS || this == BARS
 
     companion object {
         val DEFAULT = OFF

@@ -683,28 +683,6 @@
 		font-weight: 700;
 	}
 
-	.empty-state {
-		text-align: center;
-		padding: 3.5rem 2rem;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
-		border-radius: 14px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1rem;
-		color: var(--text-muted);
-	}
-	.empty-state :global(.ph) { font-size: 2rem; }
-	.btn {
-		display: inline-block;
-		background: var(--accent-green);
-		color: var(--accent-button-text);
-		padding: 0.6rem 1.4rem;
-		border-radius: 10px;
-		font-weight: 700;
-	}
-	.btn:hover { text-decoration: none; background: var(--accent-green-hover); }
 
 	@media (max-width: 640px) {
 		.settings-row .s-title { font-size: 0.82rem; }
@@ -717,8 +695,8 @@
 	.head h1 :global(.ph-fill) { display: none; }
 	.sub { color: var(--ink-4); font: 600 11px/1.4 var(--font-mono); letter-spacing: .01em; }
 	.head-actions { gap: 6px; }
-	.switch { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
-	.btn-ghost { min-height: 34px; padding: 0 10px; border-color: var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
+	.switch { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
+	.btn-ghost { min-height: 34px; padding: 0 10px; border-color: var(--border-ui); border-radius: var(--radius-control); background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.settings-panel { margin: 14px 0; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); box-shadow: none; }
 	.episode-list { gap: 0; }
 	.day-header {
@@ -751,13 +729,12 @@
 	}
 	.ep-row:hover { transform: none; border-color: var(--border-row); background: var(--bg-sunken); }
 	.ep-row.current { border-color: var(--border-row); background: linear-gradient(90deg, var(--accent-wash), transparent); }
-	.ep-art { width: 56px; height: 56px; border-radius: 5px; background: var(--bg-tile); }
+	.ep-art { width: 56px; height: 56px; border-radius: var(--radius-control); background: var(--bg-tile); }
 	.ep-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); letter-spacing: .01em; }
 	.ep-show { color: var(--ink-3); }
 	.ep-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; color: var(--ink-3); }
-	.empty-state { margin-top: 16px; border-radius: 8px; box-shadow: none; }
-	.menu { border-color: var(--border-ui); border-radius: 5px; background: var(--bg-rail); box-shadow: none; }
+	.menu { border-color: var(--border-ui); border-radius: var(--radius-control); background: var(--bg-rail); box-shadow: none; }
 
 	@media (max-width: 560px) {
 		.inbox-page { padding: 16px; }

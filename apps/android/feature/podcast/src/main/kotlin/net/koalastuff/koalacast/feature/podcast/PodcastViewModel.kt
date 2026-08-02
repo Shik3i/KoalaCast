@@ -16,11 +16,13 @@ import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ContentTtl
+import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.DataError
 import net.koalastuff.koalacast.core.model.DataResult
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.PodcastSettings
@@ -46,6 +48,10 @@ data class PodcastUiState(
     /** The episode the player currently holds, if any. */
     val currentEpisodeId: String? = null,
     val currentEpisodePlaying: Boolean = false,
+    /** episodeId -> download state, for the row's download control. */
+    val downloadStates: Map<String, DownloadState> = emptyMap(),
+    /** episodeId -> 0..100 while a download is running. */
+    val downloadProgress: Map<String, Int> = emptyMap(),
 )
 
 @HiltViewModel
@@ -55,6 +61,7 @@ class PodcastViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val queue: QueueRepository,
     private val progress: ProgressRepository,
+    private val downloads: DownloadRepository,
     private val player: PlayerConnection,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -69,6 +76,7 @@ class PodcastViewModel @Inject constructor(
 
     init {
         load(force = false)
+        observeDownloads()
     }
 
     fun retry() = load(force = true)
@@ -213,6 +221,46 @@ class PodcastViewModel @Inject constructor(
                         currentEpisodePlaying = playing,
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * The same source the inbox reads. An episode list that offers Queue and Save
+     * but not Download is a different list depending on which screen you reached
+     * it from, which is exactly the sort of thing a listener has to learn rather
+     * than know.
+     */
+    private fun observeDownloads() {
+        viewModelScope.launch {
+            downloads.downloads.collect { items ->
+                _state.update { state ->
+                    state.copy(
+                        downloadStates = items.associate { it.episodeId to it.state },
+                        downloadProgress = items.associate { it.episodeId to it.progressPercent },
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleDownload(episode: Episode) {
+        val track = trackFor(episode) ?: return
+        viewModelScope.launch {
+            when (_state.value.downloadStates[episode.id]) {
+                null, DownloadState.PAUSED, DownloadState.FAILED -> {
+                    val prefs = preferences.preferences.first()
+                    downloads.enqueue(
+                        track,
+                        wifiOnly = prefs.downloadWifiOnly,
+                        concurrency = prefs.downloadConcurrency,
+                        storage = prefs.downloadStorage,
+                        treeUri = prefs.downloadTreeUri,
+                        budgetBytes = prefs.downloadBudgetBytes,
+                    )
+                }
+                DownloadState.QUEUED, DownloadState.DOWNLOADING -> downloads.pause(episode.id)
+                DownloadState.DONE -> downloads.remove(episode.id)
             }
         }
     }

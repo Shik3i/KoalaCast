@@ -60,6 +60,15 @@
 	--transition-smooth: color 0.16s ease, background 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
 	--radius-sm: 4px;
 	--radius-md: 6px;
+	/*
+	 * The two radii the interface actually runs on. They were a bare `5px` and
+	 * `3px` repeated across thirty-odd rules — the app's real control language,
+	 * with no name, which is how eight other radii crept in beside them.
+	 * --radius-control: anything you press or type into.
+	 * --radius-inset:   a segment sitting inside one of those.
+	 */
+	--radius-control: 5px;
+	--radius-inset: 3px;
 	--radius-lg: 8px;
 	--radius-xl: 10px;
 	--shadow-sm: none;
@@ -864,6 +873,158 @@ button:not(:disabled):active, .btn:active {
 	filter: brightness(.94);
 	transform: scale(.97);
 }
+
+/*
+ * The button. One definition, for every route.
+ *
+ * `.btn` used to be redeclared in seven page components, and the copies had
+ * drifted: 8px, 10px and 12px radii, four different paddings, font weight 600
+ * in three files and 700 in the others. The same "Cancel" was a different
+ * object on Settings than it was on Account, which is the sort of thing nobody
+ * can name but everybody notices. Page-specific buttons still get their own
+ * class; what they no longer get is their own idea of what a button is.
+ */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 44px;
+	padding: 0 16px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-control);
+	background: var(--accent-green);
+	color: var(--accent-button-text);
+	font-family: var(--font-ui);
+	font-weight: 700;
+	font-size: 0.92rem;
+	line-height: 1;
+	text-decoration: none;
+	transition: var(--transition-smooth), filter .12s ease, transform .12s var(--ease-spring);
+}
+.btn:hover { text-decoration: none; background: var(--accent-green-hover); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Named for the markup that says so out loud; `.btn` alone is already primary. */
+.btn-primary { background: var(--accent-green); color: var(--accent-button-text); }
+
+/* Secondary: the same object with its ground removed, not a smaller one. */
+.btn-secondary {
+	background: var(--bg-elevated);
+	color: var(--text-primary);
+	border-color: var(--border-ui);
+}
+.btn-secondary:hover {
+	background: var(--bg-elevated);
+	border-color: var(--accent-green);
+	color: var(--accent-green);
+}
+.btn-secondary.active {
+	border-color: var(--show-accent, var(--accent-green));
+	color: var(--show-accent, var(--accent-green));
+}
+
+.btn-danger {
+	background: var(--color-danger-bg);
+	color: var(--color-danger);
+	border-color: var(--color-danger-border);
+}
+/*
+ * The empty state, matching the Android `EmptyState`: a circular accent badge
+ * around the icon, a line of explanation, and one outlined action. No card.
+ *
+ * Each route had built its own — a 14px-radius panel on Inbox, an 8px one on
+ * Library with a 256px illustration, a horizontal layout on Search — so "you
+ * have nothing here yet" looked like a different product on each tab. On a
+ * phone the card was the worst of it: a bordered box floating in an otherwise
+ * empty screen, which reads as a failed load rather than as a clean slate.
+ */
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 48px 24px;
+	text-align: center;
+	color: var(--ink-3);
+}
+.empty-state > .ph,
+.empty-state > .ph-fill {
+	display: grid;
+	place-items: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 50%;
+	background: var(--accent-wash);
+	color: var(--accent-ink);
+	font-size: 26px;
+}
+.empty-state p { max-width: 34ch; }
+/* One outlined action, like the app — not an accent slab in an empty screen. */
+.empty-state .btn {
+	background: var(--bg-elevated);
+	color: var(--text-primary);
+	border-color: var(--border-ui);
+}
+.empty-state .btn:hover {
+	background: var(--bg-elevated);
+	border-color: var(--accent-green);
+	color: var(--accent-green);
+}
+
+/*
+ * The segmented control, one definition, matching the Android `SegmentedControl`:
+ * a bordered host on the sunken ground, equal-width text-only segments, the
+ * active one filled with the accent.
+ *
+ * The web had grown three unrelated versions of this — pill-shaped chips on
+ * Library, a 999px-radius pair on Profile, and a bordered host on Discover — so
+ * the same control looked like three different components depending on the tab
+ * you were standing in. The app has one; so does this.
+ */
+.segmented {
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--border-ui);
+	border-radius: var(--radius-control);
+	background: var(--bg-sunken);
+	/* German labels ("Warteschlange") outrun 320px. Scrolling keeps it one row,
+	   which is the shape people recognise; wrapping turns it into a chip grid. */
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+.segmented::-webkit-scrollbar { display: none; }
+.segmented > * {
+	flex: 1 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 38px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: var(--radius-inset);
+	background: transparent;
+	color: var(--ink-3);
+	font: 700 12px/1 var(--font-ui);
+	white-space: nowrap;
+	cursor: pointer;
+}
+@media (max-width: 560px) {
+	.segmented > * { padding: 0 8px; font-size: 11px; }
+}
+.segmented > .active,
+.segmented > [aria-selected='true'],
+.segmented > [aria-pressed='true'] {
+	background: var(--accent-fill);
+	color: var(--accent-on);
+}
+
+.btn-danger:hover {
+	background: var(--color-danger);
+	color: var(--danger-button-text);
+	border-color: var(--color-danger);
+}
 img { display: block; max-width: 100%; }
 h1, h2, h3, h4 { font-family: var(--font-ui); color: var(--ink-strong); text-wrap: balance; }
 p { text-wrap: pretty; }
@@ -1338,7 +1499,8 @@ html.is-resizing-rails * {
 	}
 	.quiet-mobile-nav i { font-size: 20px; }
 	.quiet-mobile-nav a.active { color: var(--accent-ink); }
-	.mobile-legal {
+	.mobile-legal { display: none; }
+	.mobile-legal.on-profile {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px 14px;

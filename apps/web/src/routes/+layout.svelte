@@ -32,9 +32,9 @@
 	const path = $derived($page.url.pathname);
 	const showRunningOrder = $derived(path === '/');
 	const appLinks = $derived([
-		{ href: '/', icon: 'ph-newspaper', label: t('quiet.nav.discover') },
+		{ href: '/', icon: 'ph-compass', label: t('quiet.nav.discover') },
 		{ href: '/inbox', icon: 'ph-tray', label: t('nav.new') },
-		{ href: '/library', icon: 'ph-squares-four', label: t('nav.library') },
+		{ href: '/library', icon: 'ph-books', label: t('nav.library') },
 		{ href: '/profile', icon: 'ph-user-circle', label: t('nav.profileMenu') }
 	]);
 
@@ -155,7 +155,14 @@
 	<main class="quiet-main" id="main-content" tabindex="-1">
 		{#if !online}<div class="offline-banner" role="status"><i class="ph ph-wifi-slash" aria-hidden="true"></i>{t('common.offline')}</div>{/if}
 		{@render children()}
-		<footer class="mobile-legal" aria-label={t('footer.mobileLinks')}>
+		<!--
+			Profile only. On a phone these links used to sit under every tab, so
+			Impressum and MIT-Lizenz appeared beneath an empty inbox — a web page
+			footer bleeding into a view that is otherwise an app screen. The
+			Android client keeps this kind of link on the profile screen; so does
+			this now.
+		-->
+		<footer class="mobile-legal" class:on-profile={path === '/profile'} aria-label={t('footer.mobileLinks')}>
 			<a href="https://koalastuff.net/legal" target="_blank" rel="noopener noreferrer">{t('footer.legalNotice')}</a>
 			<a href="/privacy">{t('footer.privacy')}</a>
 			<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer">{t('footer.github')}</a>

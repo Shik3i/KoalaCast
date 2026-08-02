@@ -388,8 +388,6 @@ private fun ChartRow(
                     onClick = onHide,
                 ),
             ),
-            boxSize = 36.dp,
-            iconSize = 16.dp,
         )
     }
 }

@@ -20,10 +20,11 @@ class VisualizerStyleTest {
     }
 
     @Test
-    fun `only history based visualizers request sample history`() {
-        assertTrue(VisualizerStyle.WAVEFORM.needsHistory)
-        assertTrue(VisualizerStyle.DOTS.needsHistory)
-        assertFalse(VisualizerStyle.BARS.needsHistory)
-        assertFalse(VisualizerStyle.PULSE.needsHistory)
+    fun `only bar shaped visualizers request the spectrum`() {
+        assertTrue(VisualizerStyle.WAVEFORM.needsSpectrum)
+        assertTrue(VisualizerStyle.DOTS.needsSpectrum)
+        assertTrue(VisualizerStyle.BARS.needsSpectrum)
+        assertFalse(VisualizerStyle.PULSE.needsSpectrum)
+        assertFalse(VisualizerStyle.LEVEL.needsSpectrum)
     }
 }

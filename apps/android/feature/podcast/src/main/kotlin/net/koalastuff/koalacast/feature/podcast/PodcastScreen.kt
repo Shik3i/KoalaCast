@@ -45,11 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.ArtworkAccent
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
+import net.koalastuff.koalacast.core.ui.component.DownloadButton
 import net.koalastuff.koalacast.core.ui.component.EpisodeProgressButton
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.ConfirmDialog
@@ -61,6 +63,7 @@ import net.koalastuff.koalacast.core.ui.component.KoalaTextField
 import net.koalastuff.koalacast.core.ui.component.RowSeparator
 import net.koalastuff.koalacast.core.ui.component.SkeletonRows
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.spotlightGlow
@@ -124,6 +127,7 @@ fun PodcastScreen(
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
         onTogglePlayed = viewModel::togglePlayed,
+        onToggleDownload = viewModel::toggleDownload,
         onSetSpeed = viewModel::setSpeed,
         onSetSkipIntro = viewModel::setSkipIntro,
         onSetSkipOutro = viewModel::setSkipOutro,
@@ -152,6 +156,7 @@ internal fun PodcastContent(
     onToggleFavorite: (Episode) -> Unit,
     onToggleQueue: (Episode) -> Unit,
     onTogglePlayed: (Episode) -> Unit,
+    onToggleDownload: (Episode) -> Unit,
     onSetSpeed: (Float?) -> Unit,
     onSetSkipIntro: (Int) -> Unit,
     onSetSkipOutro: (Int) -> Unit,
@@ -300,6 +305,9 @@ internal fun PodcastContent(
                     onToggleFavorite = { onToggleFavorite(episode) },
                     onToggleQueue = { onToggleQueue(episode) },
                     onTogglePlayed = { onTogglePlayed(episode) },
+                    downloadState = state.downloadStates[episode.id],
+                    downloadPercent = state.downloadProgress[episode.id] ?: 0,
+                    onToggleDownload = { onToggleDownload(episode) },
                 )
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
@@ -641,6 +649,7 @@ private fun SkipField(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EpisodeRow(
     episode: Episode,
@@ -655,6 +664,9 @@ private fun EpisodeRow(
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
     onTogglePlayed: () -> Unit,
+    downloadState: DownloadState?,
+    downloadPercent: Int,
+    onToggleDownload: () -> Unit,
 ) {
     val colors = KoalaTheme.colors
     val context = LocalContext.current
@@ -718,9 +730,12 @@ private fun EpisodeRow(
             }
         }
 
-        Row(
+        // FlowRow rather than Row, as on the inbox: five 48dp touch targets and
+        // their gaps come to 272dp, which fits a 360dp phone and does not fit a
+        // 320dp one. Wrapping is better than a row that silently runs off the edge.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
         ) {
             EpisodeProgressButton(
                 progressPercent = progressPercent,
@@ -728,7 +743,9 @@ private fun EpisodeRow(
                 playing = playing,
                 contentDescription = stringResource(R.string.podcast_action_play),
                 onClick = onPlay,
-                size = 38.dp,
+                // 34dp everywhere an episode row draws this, so the podcast list
+                // and the inbox do not disagree about how big a play button is.
+                size = 34.dp,
             )
             IconButtonSquare(
                 icon = if (isQueued) PhosphorIcons.Check else PhosphorIcons.ListPlus,
@@ -737,8 +754,8 @@ private fun EpisodeRow(
                 ),
                 onClick = onToggleQueue,
                 tint = if (isQueued) colors.accentInk else colors.ink3,
-                boxSize = 30.dp,
-                iconSize = 16.dp,
+                boxSize = KoalaIconButton.rowBox,
+                iconSize = KoalaIconButton.rowIcon,
             )
             IconButtonSquare(
                 icon = if (isFavorite) PhosphorIcons.HeartFill else PhosphorIcons.Heart,
@@ -747,8 +764,8 @@ private fun EpisodeRow(
                 ),
                 onClick = onToggleFavorite,
                 tint = if (isFavorite) colors.accentInk else colors.ink3,
-                boxSize = 30.dp,
-                iconSize = 16.dp,
+                boxSize = KoalaIconButton.rowBox,
+                iconSize = KoalaIconButton.rowIcon,
             )
             IconButtonSquare(
                 icon = if (isPlayed) PhosphorIcons.CheckCircleFill else PhosphorIcons.CheckCircle,
@@ -757,8 +774,22 @@ private fun EpisodeRow(
                 ),
                 onClick = onTogglePlayed,
                 tint = if (isPlayed) colors.accentInk else colors.ink3,
-                boxSize = 30.dp,
-                iconSize = 16.dp,
+                boxSize = KoalaIconButton.rowBox,
+                iconSize = KoalaIconButton.rowIcon,
+            )
+            DownloadButton(
+                state = downloadState,
+                progressPercent = downloadPercent,
+                contentDescription = stringResource(
+                    when (downloadState) {
+                        DownloadState.QUEUED, DownloadState.DOWNLOADING ->
+                            R.string.podcast_action_pause_download
+                        DownloadState.DONE -> R.string.podcast_action_remove_download
+                        else -> R.string.podcast_action_download
+                    },
+                ),
+                onClick = onToggleDownload,
+                size = KoalaIconButton.rowBox,
             )
         }
     }

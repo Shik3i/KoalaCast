@@ -19,6 +19,7 @@
 	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
 	import { LOCALES, t } from '$lib/i18n';
 	import { confirmDialog } from '$lib/stores/confirm.svelte';
+	import VisualizerSignal from '$lib/components/VisualizerSignal.svelte';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
 	function cycleGenre(name: string) {
@@ -563,6 +564,20 @@
 					</button>
 				{/each}
 			</div>
+			<!-- The app shows each style drawn beside its name; a name alone tells
+			     nobody what "Pulse" is going to do to their progress bar. There is
+			     no audio here, so the component falls back to its canned shape. -->
+			{#if prefs.visualizer !== 'off'}
+				<div class="visualizer-preview">
+					{#if prefs.visualizer === 'level'}
+						<!-- Level is drawn by the progress track itself, not by the
+						     signal overlay, so it gets its own swollen-bar sample. -->
+						<span class="level-preview"></span>
+					{:else}
+						<VisualizerSignal style={prefs.visualizer} variant="preview" progress={55} level={0.7} />
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</details>
 
@@ -882,8 +897,8 @@
 	}
 	.settings-status { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; color: var(--text-muted); font-size: .8rem; }
 	.settings-status strong { color: var(--text-primary); }
-	.settings-nav { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; background: color-mix(in srgb, var(--bg-surface) 94%, transparent); backdrop-filter: blur(12px); }
-	.settings-nav a { display: inline-flex; align-items: center; flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 8px 10px; border-radius: 5px; color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
+	.settings-nav { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--bg-surface) 94%, transparent); backdrop-filter: blur(12px); }
+	.settings-nav a { display: inline-flex; align-items: center; flex: 1 1 auto; justify-content: center; min-height: 44px; padding: 8px 10px; border-radius: var(--radius-control); color: var(--text-secondary); font-size: .78rem; font-weight: 700; }
 	.settings-nav a:hover, .settings-nav a:focus-visible { background: var(--accent-wash); color: var(--accent-ink); }
 	.card { scroll-margin-top: 64px; }
 	.settings-grid {
@@ -907,7 +922,7 @@
 	.card {
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		overflow: clip;
 		transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
 	}
@@ -941,7 +956,7 @@
 		width: 40px;
 		height: 40px;
 		place-items: center;
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		background: var(--accent-wash);
 		color: var(--accent-ink);
 		font-size: 1.25rem;
@@ -996,16 +1011,40 @@
 		padding: 1rem;
 		border: 1px solid var(--border-subtle);
 		background: var(--bg-sunken);
-		border-radius: 9px;
+		border-radius: var(--radius-lg);
 	}
 	.consent-row h4 { margin-bottom: .35rem; }
 	.consent-row p { max-width: 60ch; color: var(--text-muted); font-size: .9rem; }
 	.consent-row a { display: inline-flex; gap: .3rem; align-items: center; margin-top: .65rem; color: var(--accent-green); font-weight: 700; font-size: .85rem; }
 	.download-settings { display: grid; gap: .8rem; }
-	.select-setting { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1rem; background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: 12px; }
+	/* A fixed slot, so switching style does not make the panel jump. */
+	.visualizer-preview {
+		position: relative;
+		margin-top: 0.75rem;
+		height: 34px;
+		padding: 0 12px;
+		display: flex;
+		align-items: center;
+		border: 1px solid var(--border-ui);
+		border-radius: var(--radius-control);
+		background: var(--bg-sunken);
+	}
+
+	.level-preview {
+		flex: 1;
+		height: 7px;
+		border-radius: 999px;
+		background: linear-gradient(
+			to right,
+			var(--accent-fill) 0 55%,
+			var(--track) 55% 100%
+		);
+	}
+
+	.select-setting { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1rem; background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: var(--radius-lg); }
 	.select-setting span { display: grid; gap: .25rem; }
 	.select-setting small, .platform-note { color: var(--text-muted); font-size: .84rem; }
-	.select-setting select { min-width: 8rem; min-height: 2.75rem; padding: .55rem .75rem; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-ui); border-radius: 9px; }
+	.select-setting select { min-width: 8rem; min-height: 2.75rem; padding: .55rem .75rem; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-ui); border-radius: var(--radius-control); }
 	.platform-note { margin: 0; }
 	.consent-switch { display: flex; align-items: center; gap: .55rem; cursor: pointer; white-space: nowrap; }
 	.consent-switch input { position: absolute; opacity: 0; pointer-events: none; }
@@ -1016,7 +1055,7 @@
 	.consent-switch input:focus-visible + span { outline: 2px solid var(--accent-green); outline-offset: 2px; }
 	.consent-switch input:disabled + span { opacity: .55; cursor: wait; }
 	.audio-settings { display: grid; gap: .7rem; margin: 1rem 0 1.2rem; }
-	.audio-settings .consent-row { background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: 12px; }
+	.audio-settings .consent-row { background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: var(--radius-lg); }
 	.date-heading { margin: 0 0 .65rem; }
 	.preference-heading { margin-top: 1.25rem; }
 	.privacy-box.muted { opacity: .78; }
@@ -1050,7 +1089,7 @@
 		flex-wrap: wrap;
 		background: var(--bg-elevated);
 		padding: 4px;
-		border-radius: 12px;
+		border-radius: var(--radius-control);
 		width: fit-content;
 		margin-top: 0.25rem;
 	}
@@ -1060,7 +1099,7 @@
 		color: var(--text-secondary);
 		border: none;
 		padding: 0.6rem 1.1rem;
-		border-radius: 9px;
+		border-radius: var(--radius-inset);
 		font-weight: 700;
 		font-size: 0.9rem;
 		display: flex;
@@ -1105,7 +1144,7 @@
 		min-height: 76px;
 		padding: 0.7rem;
 		border: 1px solid var(--border-subtle);
-		border-radius: 10px;
+		border-radius: var(--radius-control);
 		background: var(--bg-elevated);
 		color: var(--text-primary);
 		text-align: left;
@@ -1129,7 +1168,7 @@
 		height: 54px;
 		overflow: hidden;
 		border: 1px solid color-mix(in srgb, #fff 18%, transparent);
-		border-radius: 8px;
+		border-radius: var(--radius-lg);
 	}
 
 	.palette-swatches span {
@@ -1172,7 +1211,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.6rem 0.85rem;
-		border-radius: 12px;
+		border-radius: var(--radius-control);
 		border: 1.5px solid var(--border-subtle);
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
@@ -1204,7 +1243,7 @@
 	.hidden-podcast-list { display: grid; gap: 8px; }
 	.hidden-podcast-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--border-row); }
 	.hidden-podcast-list strong { min-width: 0; overflow: hidden; color: var(--ink-2); text-overflow: ellipsis; white-space: nowrap; }
-	.hidden-podcast-list button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-3); }
+	.hidden-podcast-list button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: transparent; color: var(--ink-3); }
 
 	.language-grid {
 		display: grid;
@@ -1230,7 +1269,7 @@
 		align-items: center;
 		gap: 0.6rem;
 		padding: 0.7rem 1rem;
-		border-radius: 12px;
+		border-radius: var(--radius-control);
 		border: 1.5px solid var(--border-subtle);
 		background: var(--bg-elevated);
 		color: var(--text-secondary);
@@ -1264,7 +1303,7 @@
 
 	.privacy-box {
 		background: var(--bg-elevated);
-		border-radius: 8px;
+		border-radius: var(--radius-lg);
 		padding: 1rem 1.25rem;
 	}
 
@@ -1287,30 +1326,41 @@
 		flex-wrap: wrap;
 	}
 
+	/*
+	 * This page styles bare `<button>` rather than a class, so the values have to
+	 * be kept equal to the shared `.btn` in app.css by hand — an element selector
+	 * outranks a class one and would otherwise quietly override it. Anything
+	 * changed here has to change there too.
+	 */
 	button, .btn {
 		background: var(--accent-green);
 		color: var(--accent-button-text);
-		border: none;
-		padding: 0.65rem 1.25rem;
-		border-radius: 8px;
-		font-weight: 600;
+		border: 1px solid transparent;
+		min-height: 44px;
+		padding: 0 16px;
+		border-radius: var(--radius-control);
+		font-family: var(--font-ui);
+		font-weight: 700;
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.95rem;
+		justify-content: center;
+		gap: 8px;
+		font-size: 0.92rem;
+		line-height: 1;
 		text-decoration: none;
 	}
 
 	.btn-secondary {
 		background: var(--bg-elevated);
 		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
+		border-color: var(--border-ui);
 	}
 
 	.btn-danger {
 		background: var(--color-danger);
 		color: var(--danger-button-text);
+		border-color: var(--color-danger);
 		width: fit-content;
 	}
 
@@ -1319,13 +1369,13 @@
 		background: var(--color-danger-bg);
 		color: var(--text-primary);
 		border: 1px solid var(--color-danger-border);
-		border-radius: 8px;
+		border-radius: var(--radius-lg);
 	}
 
 	.report-box {
 		background: var(--bg-elevated);
 		border: 1px solid var(--border-subtle);
-		border-radius: 8px;
+		border-radius: var(--radius-lg);
 		padding: 1rem;
 	}
 
@@ -1341,7 +1391,7 @@
 		background: var(--color-warning-bg);
 		color: var(--text-primary);
 		border: 1px solid var(--color-warning-border);
-		border-radius: 8px;
+		border-radius: var(--radius-lg);
 		padding: 1rem;
 	}
 
@@ -1353,7 +1403,7 @@
 		flex-wrap: wrap;
 		background: var(--bg-elevated);
 		border: 1px solid var(--border-subtle);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 0.75rem 1rem;
 		margin: 0.25rem 0 0.5rem;
 	}
@@ -1379,7 +1429,7 @@
 		gap: 0.75rem;
 		background: var(--bg-elevated);
 		border: 1px solid var(--border-subtle);
-		border-radius: 10px;
+		border-radius: var(--radius-lg);
 		padding: 0.6rem 0.85rem;
 	}
 	.s-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
@@ -1406,7 +1456,7 @@
 		color: var(--color-danger);
 		border: 1px solid var(--color-danger-border);
 		padding: 0.35rem 0.8rem;
-		border-radius: 8px;
+		border-radius: var(--radius-lg);
 		font-size: 0.82rem;
 		font-weight: 600;
 		flex-shrink: 0;
@@ -1423,7 +1473,7 @@
 		background: var(--bg-surface);
 		border: 1px solid var(--border-subtle);
 		padding: 0.5rem;
-		border-radius: 6px;
+		border-radius: var(--radius-lg);
 	}
 	@media (max-width: 900px) {
 		.settings-grid { grid-template-columns: 1fr; }

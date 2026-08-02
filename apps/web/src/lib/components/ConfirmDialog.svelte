@@ -57,7 +57,7 @@
 	.confirm-card h2 { font-size: 20px; }
 	.confirm-card p { color: var(--text-secondary); line-height: 1.5; }
 	.confirm-card div { display: flex; justify-content: flex-end; gap: 8px; }
-	.confirm-card button { min-height: 44px; padding: 0 14px; border: 1px solid var(--border-ui); border-radius: 5px; font-weight: 700; }
+	.confirm-card button { min-height: 44px; padding: 0 14px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); font-weight: 700; }
 	.cancel { background: transparent; color: var(--text-primary); }
 	.danger { border-color: var(--color-danger-border) !important; background: var(--color-danger); color: #fff; }
 </style>

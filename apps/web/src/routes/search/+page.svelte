@@ -868,7 +868,7 @@
 		min-height: 40px;
 		padding: 0 12px;
 		border: 1px solid var(--border-ui);
-		border-radius: 5px;
+		border-radius: var(--radius-control);
 		background: transparent;
 		color: var(--ink-3);
 		font: 650 12px/1 var(--font-ui);

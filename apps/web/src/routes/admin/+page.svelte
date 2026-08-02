@@ -318,7 +318,7 @@
 	.admin-head h1 :global(.ph-fill) { color: var(--accent-ink); }
 	.admin-sub { color: var(--ink-4); font: 600 11px/1.5 var(--font-mono); letter-spacing: .01em; margin-top: 7px; }
 	.admin-refresh { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
-	.admin-refresh button, .table-search { min-height: 44px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-panel); color: var(--ink-2); }
+	.admin-refresh button, .table-search { min-height: 44px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: var(--bg-panel); color: var(--ink-2); }
 	.admin-refresh button { padding: 0 12px; font: inherit; text-transform: uppercase; }
 	.table-search { width: min(360px, 100%); margin-top: 12px; padding: 0 12px; }
 
@@ -414,7 +414,7 @@
 	.btn-sm {
 		font: 600 10px/1 var(--font-mono);
 		padding: 7px 9px;
-		border-radius: 4px;
+		border-radius: var(--radius-control);
 		border: 1px solid var(--border-ui);
 		background: transparent;
 		color: var(--ink-2);
@@ -443,7 +443,7 @@
 		color: var(--accent-on);
 		border: none;
 		padding: 9px 11px;
-		border-radius: 5px;
+		border-radius: var(--radius-control);
 		font: 700 10px/1 var(--font-mono);
 
 	}

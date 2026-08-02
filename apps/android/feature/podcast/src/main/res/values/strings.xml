@@ -23,6 +23,9 @@
     <string name="podcast_action_played">Mark as played</string>
     <string name="podcast_action_unplayed">Mark as unplayed</string>
     <string name="podcast_action_play">Play episode</string>
+    <string name="podcast_action_download">Download episode</string>
+    <string name="podcast_action_pause_download">Pause download</string>
+    <string name="podcast_action_remove_download">Remove download</string>
     <string name="podcast_show_speed">Speed for this show</string>
     <string name="podcast_speed_default">Default</string>
     <string name="podcast_skip_intro">Skip intro</string>

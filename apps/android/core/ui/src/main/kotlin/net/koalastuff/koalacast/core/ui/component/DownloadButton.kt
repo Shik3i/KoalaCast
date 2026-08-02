@@ -2,6 +2,7 @@ package net.koalastuff.koalacast.core.ui.component
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -9,7 +10,11 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
@@ -44,11 +50,18 @@ import net.koalastuff.koalacast.core.ui.theme.reduceMotion
  * forty-minute episode on a slow connection it effectively was: the listener had
  * no way to tell whether anything was happening.
  *
- * So the outline carries the answer. It fills around the same rounded square
- * used by the app's other non-play actions, moves while the download is queued
- * but has no measurable progress yet, and settles when the file is on device.
+ * So the outline carries the answer — but only while there is an answer to carry.
+ * At rest the control is exactly [IconButtonSquare]: the same rounded square, the
+ * same 1dp `border-ui` hairline, no more. The outline thickens to a progress ring
+ * when a download actually starts and thins back when it finishes. A permanently
+ * heavy ring made every idle episode row look like it was mid-download, which is
+ * both louder than its neighbours and simply untrue.
  *
  * @param progressPercent 0–100, clamped. Ignored unless [state] is downloading.
+ * @param bordered whether the resting hairline is drawn. False where the control
+ *   sits beside unbordered actions — the episode screen's Queue/Save/Played row —
+ *   so it does not become the one outlined item in a row of bare icons. The
+ *   progress ring still appears there once a download is running.
  */
 @Composable
 fun DownloadButton(
@@ -57,20 +70,50 @@ fun DownloadButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 44.dp,
+    size: Dp = 30.dp,
+    bordered: Boolean = true,
+) {
+    val buttonDescription = contentDescription
+    Box(
+        modifier = modifier
+            .size(maxOf(size, KoalaSpacing.minTouchTarget))
+            .clip(KoalaShapes.chip)
+            .semantics { this.contentDescription = buttonDescription }
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        DownloadGlyph(
+            state = state,
+            progressPercent = progressPercent,
+            size = size,
+            bordered = bordered,
+        )
+    }
+}
+
+/**
+ * The drawing half of [DownloadButton], without a touch target of its own, so a
+ * caller that already owns the click — [LabelledDownloadAction], whose whole
+ * icon-and-word column is the button — does not nest two clickables.
+ */
+@Composable
+private fun DownloadGlyph(
+    state: DownloadState?,
+    progressPercent: Int,
+    size: Dp,
+    bordered: Boolean,
+    iconSize: Dp = size * ICON_FRACTION,
 ) {
     val colors = KoalaTheme.colors
     val accent = if (colors.isDark) colors.accentFill else colors.accentInk
-    val outlineWidth = 3.dp
     val active = state == DownloadState.DOWNLOADING || state == DownloadState.QUEUED
     val motionReduced = reduceMotion()
-    val buttonDescription = contentDescription
-    val touchSize = maxOf(size, KoalaSpacing.minTouchTarget)
 
     // Animated rather than snapped: progress arrives in lumps as chunks land, and
     // an outline that jumps 12% at a time looks like a stutter rather than a download.
+    // DONE is deliberately not 1f: a finished download is reported by the tick and
+    // the accent tint, not by a permanent ring that outshouts every other control.
     val target = when (state) {
-        DownloadState.DONE -> 1f
         DownloadState.DOWNLOADING, DownloadState.QUEUED, DownloadState.PAUSED ->
             progressPercent.coerceIn(0, 100) / 100f
         else -> 0f
@@ -84,6 +127,16 @@ fun DownloadButton(
     // Until the first bytes report a size there is nothing honest to fill, so the
     // outline segment moves instead — motion that says "working" without claiming a figure.
     val indeterminate = active && sweep <= 0.01f
+
+    // The whole point of the ring is that it is temporary. It grows out of the
+    // ordinary hairline when a download starts and shrinks back into it when the
+    // download ends, so the resting control weighs exactly what its neighbours do.
+    val showsProgress = active || (state == DownloadState.PAUSED && sweep > 0.01f)
+    val outlineWidth by animateDpAsState(
+        targetValue = if (showsProgress) ACTIVE_OUTLINE else RESTING_OUTLINE,
+        animationSpec = tween(durationMillis = 220),
+        label = "downloadOutlineWidth",
+    )
     // Do not keep an infinite transition alive for every idle/completed episode
     // row. Long lists otherwise recompose forever even though nothing moves.
     val spin = if (indeterminate && !motionReduced) {
@@ -112,8 +165,8 @@ fun DownloadButton(
     val iconScale = if (active && !motionReduced) {
         val pulse = rememberInfiniteTransition(label = "downloadPulse")
         val animated by pulse.animateFloat(
-            initialValue = 0.32f,
-            targetValue = 0.40f,
+            initialValue = 0.92f,
+            targetValue = 1.08f,
             animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 650),
                 repeatMode = RepeatMode.Reverse,
@@ -121,54 +174,57 @@ fun DownloadButton(
             label = "downloadIconScale",
         )
         animated
-    } else if (active) {
-        0.36f
     } else {
-        0.38f
+        1f
     }
 
     Box(
-        modifier = modifier
-            .size(touchSize)
-            .clip(KoalaShapes.chip)
-            .semantics { this.contentDescription = buttonDescription }
-            .clickable(role = Role.Button, onClick = onClick),
+        modifier = Modifier.size(size),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(
-            modifier = Modifier
-                .size(size),
-        ) {
-            val strokeWidth = outlineWidth.toPx()
-            val inset = strokeWidth / 2f
-            val radius = DOWNLOAD_CORNER_RADIUS.toPx()
-            val outline = Path().apply {
-                addRoundRect(
-                    RoundRect(
-                        left = inset,
-                        top = inset,
-                        right = this@Canvas.size.width - inset,
-                        bottom = this@Canvas.size.height - inset,
-                        cornerRadius = CornerRadius(radius, radius),
-                    ),
-                )
-            }
-            val measure = PathMeasure().apply { setPath(outline, forceClosed = true) }
-            val pathStyle = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            drawPath(path = outline, color = colors.borderUi, style = pathStyle)
-
-            val drawnFraction = if (indeterminate) INDETERMINATE_FRACTION else sweep
-            if (drawnFraction > 0f) {
-                val start = if (indeterminate) measure.length * (spin / 360f) else 0f
-                val end = start + measure.length * drawnFraction
-                val progressPath = Path()
-                if (end <= measure.length) {
-                    measure.getSegment(start, end, progressPath, startWithMoveTo = true)
-                } else {
-                    measure.getSegment(start, measure.length, progressPath, startWithMoveTo = true)
-                    measure.getSegment(0f, end - measure.length, progressPath, startWithMoveTo = true)
+        if (bordered || outlineWidth > RESTING_OUTLINE) {
+            Canvas(
+                modifier = Modifier
+                    .size(size),
+            ) {
+                val strokeWidth = outlineWidth.toPx()
+                val inset = strokeWidth / 2f
+                val radius = DOWNLOAD_CORNER_RADIUS.toPx()
+                val outline = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            left = inset,
+                            top = inset,
+                            right = this@Canvas.size.width - inset,
+                            bottom = this@Canvas.size.height - inset,
+                            cornerRadius = CornerRadius(radius, radius),
+                        ),
+                    )
                 }
-                drawPath(path = progressPath, color = accent, style = pathStyle)
+                val measure = PathMeasure().apply { setPath(outline, forceClosed = true) }
+                val pathStyle = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                // The unbordered variant still needs something for the ring to run
+                // on while a download is live, but it fades in and out with the
+                // ring rather than sitting there for the row's whole life.
+                val trackAlpha = if (bordered) 1f else ((outlineWidth - RESTING_OUTLINE) / (ACTIVE_OUTLINE - RESTING_OUTLINE))
+                    .coerceIn(0f, 1f)
+                if (trackAlpha > 0f) {
+                    drawPath(path = outline, color = colors.borderUi.copy(alpha = trackAlpha), style = pathStyle)
+                }
+
+                val drawnFraction = if (indeterminate) INDETERMINATE_FRACTION else sweep
+                if (drawnFraction > 0f) {
+                    val start = if (indeterminate) measure.length * (spin / 360f) else 0f
+                    val end = start + measure.length * drawnFraction
+                    val progressPath = Path()
+                    if (end <= measure.length) {
+                        measure.getSegment(start, end, progressPath, startWithMoveTo = true)
+                    } else {
+                        measure.getSegment(start, measure.length, progressPath, startWithMoveTo = true)
+                        measure.getSegment(0f, end - measure.length, progressPath, startWithMoveTo = true)
+                    }
+                    drawPath(path = progressPath, color = accent, style = pathStyle)
+                }
             }
         }
 
@@ -180,7 +236,7 @@ fun DownloadButton(
             },
             contentDescription = null,
             tint = iconTint,
-            size = size * iconScale,
+            size = iconSize * iconScale,
         )
     }
 }
@@ -188,6 +244,11 @@ fun DownloadButton(
 /**
  * [DownloadButton] with its name underneath, for the episode screen's action row
  * where it sits beside Queue, Save and Played.
+ *
+ * Geometrically this is [LabelledIconAction] — same 20dp glyph, same gap, same
+ * padding, same touch minimum, same unbordered rest — so the four controls in that
+ * row read as one set. The only thing it adds is the progress ring, and only while
+ * there is progress to show.
  */
 @Composable
 fun LabelledDownloadAction(
@@ -200,16 +261,25 @@ fun LabelledDownloadAction(
 ) {
     val colors = KoalaTheme.colors
     val active = state == DownloadState.DOWNLOADING || state == DownloadState.QUEUED
-    androidx.compose.foundation.layout.Column(
-        modifier = modifier,
+    val actionDescription = contentDescription
+    Column(
+        modifier = modifier
+            .clip(KoalaShapes.chip)
+            .semantics { this.contentDescription = actionDescription }
+            .clickable(role = Role.Button, onClick = onClick)
+            .defaultMinSize(minWidth = KoalaSpacing.minTouchTarget, minHeight = KoalaSpacing.minTouchTarget)
+            .padding(horizontal = KoalaSpacing.gapSmall, vertical = KoalaSpacing.gapSmall),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
     ) {
-        DownloadButton(
+        DownloadGlyph(
             state = state,
             progressPercent = progressPercent,
-            contentDescription = contentDescription,
-            onClick = onClick,
-            size = 40.dp,
+            // The same fixed slot [LabelledIconAction] reserves, so the ring has
+            // somewhere to go and the label still lines up with its neighbours'.
+            size = KoalaIconButton.labelledBox,
+            bordered = false,
+            iconSize = KoalaIconButton.labelledIcon,
         )
         MonoText(
             text = label,
@@ -227,3 +297,13 @@ fun LabelledDownloadAction(
 /** Enough outline to read as movement rather than as a stalled 25%. */
 private const val INDETERMINATE_FRACTION = 0.25f
 private val DOWNLOAD_CORNER_RADIUS = 4.dp
+
+/** The hairline every other bordered control in the app draws. */
+private val RESTING_OUTLINE = 1.dp
+
+/** Thick enough that a 1% sliver of progress is visible at 30dp. */
+private val ACTIVE_OUTLINE = 3.dp
+
+/** [IconButtonSquare] puts a 16dp glyph in a 30dp box; match it. */
+private const val ICON_FRACTION = 16f / 30f
+

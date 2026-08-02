@@ -486,13 +486,6 @@
 <div class="discover-page">
 	{#if !spotlight}<h1 class="sr-only">{t('quiet.discover.pageTitle')}</h1>{/if}
 	<header class="discover-topbar">
-		<div class="mobile-title">
-			<strong>{t('quiet.nav.discover')}</strong>
-			<span>{new Intl.DateTimeFormat(prefs.uiLanguage, { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date()).toUpperCase()}</span>
-			<button class="language-switch" type="button" onclick={toggleUILanguage} aria-label={`${t('quiet.discover.changeLanguage')}: ${prefs.uiLanguage.toUpperCase()}`} title={t('quiet.discover.changeLanguage')}>
-				{prefs.uiLanguage.toUpperCase()}
-			</button>
-		</div>
 		<label class="global-search">
 			<i class="ph ph-magnifying-glass" aria-hidden="true"></i>
 			<input bind:this={searchInput} bind:value={searchQuery} onkeydown={(event) => event.key === 'Enter' && openGlobalSearch()} aria-label={t('quiet.discover.searchLabel')} placeholder={t('quiet.discover.searchPlaceholder')} />
@@ -517,9 +510,9 @@
 				<p>{plainSummary(spotlight.description, spotlight.author)}</p>
 				<div class="spotlight-actions">
 					<button class="primary" onclick={() => playLatest(spotlight)}><i class="ph-fill ph-play"></i> {t('quiet.discover.playNow')}</button>
-					<button onclick={() => queueLatest(spotlight)}><i class="ph ph-list-plus"></i> {t('quiet.discover.queueNext')}</button>
-					<button onclick={() => saveLatest(spotlight)}><i class="ph ph-bookmark-simple"></i> {t('quiet.discover.save')}</button>
-					<button onclick={() => hidePodcast(spotlight)} title={t('discover.hidePodcast', { title: spotlight.title })}><i class="ph ph-eye-slash"></i> {t('discover.hide')}</button>
+					<button class="minor" onclick={() => queueLatest(spotlight)} title={t('quiet.discover.queueNext')}><i class="ph ph-list-plus"></i> <span>{t('quiet.discover.queueNext')}</span></button>
+					<button class="minor" onclick={() => saveLatest(spotlight)} title={t('quiet.discover.save')}><i class="ph ph-bookmark-simple"></i> <span>{t('quiet.discover.save')}</span></button>
+					<button class="minor" onclick={() => hidePodcast(spotlight)} title={t('discover.hidePodcast', { title: spotlight.title })}><i class="ph ph-eye-slash"></i> <span>{t('discover.hide')}</span></button>
 				</div>
 			</div>
 			<button class="spotlight-art" onclick={() => openPodcast(spotlight)} onpointerenter={() => warmPodcastArtwork(spotlight)} onfocus={() => warmPodcastArtwork(spotlight)} aria-label={`${t('quiet.discover.coverCaption')}: ${spotlight.title}`} title={t('discover.openPodcast', { title: spotlight.title })}>
@@ -600,6 +593,17 @@
 			</div>
 		</header>
 		<div class="chart-filters">
+			<!--
+				A chip row on a phone, matching the app, and the same <select> on
+				wider screens where a dropdown costs nothing. A native picker
+				hides every genre behind a tap; the app shows them and lets you
+				swipe, which is what makes a category feel browsable.
+			-->
+			<div class="genre-chips" role="group" aria-label={t('search.genreFilter')}>
+				{#each categories as category}
+					<button type="button" class:active={selectedCategory === category} aria-pressed={selectedCategory === category} disabled={isLoading} onclick={() => selectCategory(category)}>{genreLabel(category)}</button>
+				{/each}
+			</div>
 			<select value={selectedCategory} onchange={(event) => selectCategory(event.currentTarget.value)} aria-label={t('search.genreFilter')} disabled={isLoading}>
 				{#each categories as category}<option value={category}>{genreLabel(category)}</option>{/each}
 			</select>
@@ -630,8 +634,8 @@
 					<span class="fit" title={podcast.latestDurationMs === undefined ? t('quiet.discover.durationUnknown') : undefined}>{isHydratingMetadata && podcast.latestDurationMs === undefined ? t('common.loading') : formatEpisodeMinutes(podcast.latestDurationMs) ?? t('quiet.discover.durationUnknownShort')}</span>
 					<div class="row-actions">
 						<button onclick={() => playLatest(podcast)} aria-label={t('quiet.discover.playLatest', { title: podcast.title })} title={t('quiet.discover.playLatest', { title: podcast.title })}><i class="ph-fill ph-play" aria-hidden="true"></i></button>
-						<button onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })} title={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
-						<button onclick={() => hidePodcast(podcast)} aria-label={t('discover.hidePodcast', { title: podcast.title })} title={t('discover.hidePodcast', { title: podcast.title })}><i class="ph ph-eye-slash" aria-hidden="true"></i></button>
+						<button class="row-extra" onclick={() => queueLatest(podcast)} aria-label={t('quiet.discover.queueLatest', { title: podcast.title })} title={t('quiet.discover.queueLatest', { title: podcast.title })}><i class="ph ph-list-plus" aria-hidden="true"></i></button>
+						<button class="row-extra" onclick={() => hidePodcast(podcast)} aria-label={t('discover.hidePodcast', { title: podcast.title })} title={t('discover.hidePodcast', { title: podcast.title })}><i class="ph ph-eye-slash" aria-hidden="true"></i></button>
 					</div>
 				</article>
 			{/each}
@@ -658,16 +662,15 @@
 		align-items: center; gap: 16px; min-height: 64px; padding: 11px 22px; background: var(--bg-rail);
 		border-bottom: 1px solid var(--border-hair);
 	}
-	.mobile-title { display: none; }
 	.global-search {
 		display: flex; align-items: center; gap: 9px; min-width: 0; height: 38px; padding: 0 10px;
-		background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; color: var(--ink-4);
+		background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: var(--radius-control); color: var(--ink-4);
 	}
 	.global-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
 	.global-search input::placeholder { color: var(--ink-4); }
 	kbd { padding: 3px 5px; border: 1px solid var(--border-ui); border-radius: 4px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.edition-date { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .08em; }
-	.language-switch { display: grid; place-items: center; min-width: 44px; height: 44px; padding: 0 7px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--accent-ink); font: 700 10px/1 var(--font-mono); }
+	.language-switch { display: grid; place-items: center; min-width: 44px; height: 44px; padding: 0 7px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--accent-ink); font: 700 10px/1 var(--font-mono); }
 
 	.spotlight {
 		position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 208px; gap: 24px; min-height: 286px;
@@ -678,7 +681,7 @@
 	.discover-empty > i { color: var(--accent-ink); font-size: 28px; }
 	.discover-empty h1 { font-size: 24px; }
 	.discover-empty p { color: var(--ink-3); }
-	.discover-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
+	.discover-empty a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: var(--radius-control); background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
 	.spotlight.loading > div:first-child { display: flex; flex-direction: column; gap: 20px; }
 	.spotlight-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; }
 	.spotlight-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
@@ -686,7 +689,7 @@
 	.spotlight h1 { display: -webkit-box; max-width: 720px; overflow: hidden; font: 750 clamp(32px, 4vw, 44px)/1.02 var(--font-display); letter-spacing: -.035em; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; text-transform: uppercase; }
 	.spotlight p { display: -webkit-box; max-width: 58ch; margin-top: 13px; overflow: hidden; color: var(--ink-3); font-size: 15px; line-clamp: 3; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 	.spotlight-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+	.spotlight-actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 700; }
 	.spotlight-actions button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.spotlight-art { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
 	.spotlight-art img { width: 208px; height: 208px; object-fit: cover; border-radius: 6px; background: var(--bg-tile); }
@@ -697,11 +700,11 @@
 	.session-section { padding: 18px 22px 22px; border-bottom: 1px solid var(--border-hair); }
 	.session-control { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
 	.session-control > span { color: var(--ink-4); font: 600 11px/1 var(--font-mono); letter-spacing: .01em; }
-	.session-control > div { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: 5px; }
-	.session-control button { min-width: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
+	.session-control > div { display: flex; padding: 3px; background: var(--bg-sunken); border: 1px solid var(--border-ui); border-radius: var(--radius-control); }
+	.session-control button { min-width: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-inset); background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.session-control button.active { background: var(--accent-fill); color: var(--accent-on); }
 	.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
-	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-ui); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); transition: var(--transition-smooth); }
+	.mood-grid button { display: grid; grid-template-columns: 25px 1fr; gap: 2px 8px; align-items: center; padding: 13px; text-align: left; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--ink); transition: var(--transition-smooth); }
 	.mood-grid button:hover { background: var(--accent-wash); border-color: var(--accent-ink); }
 	.mood-grid button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 	.mood-grid button.active { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); }
@@ -717,7 +720,7 @@
 	.reasoned-picks header span, .chart-head span { color: var(--ink-4); font: 600 10px/1.2 var(--font-mono); letter-spacing: .01em; }
 	.reasoned-picks > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 	.reasoned-picks article { position: relative; min-width: 0; }
-	.reasoned-picks .pick-main { display: grid; width: 100%; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px 42px 8px 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: 6px; background: var(--bg-sunken); color: var(--ink); }
+	.reasoned-picks .pick-main { display: grid; width: 100%; grid-template-columns: 60px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 8px 42px 8px 8px; text-align: left; border: 1px solid var(--border-hair); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--ink); }
 	.reasoned-picks .pick-hide { position: absolute; top: 4px; right: 4px; width: 36px; min-height: 36px; border: 0; background: transparent; color: var(--ink-4); }
 	.reasoned-picks img { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; background: var(--bg-tile); }
 	.reasoned-picks button > span { display: flex; flex-direction: column; min-width: 0; }
@@ -727,11 +730,24 @@
 
 	.chart-head > div:first-child { display: flex; align-items: baseline; gap: 10px; }
 	.sort-tabs { display: flex; gap: 2px; }
-	.sort-tabs button { min-height: 44px; padding: 5px 9px; border: 0; border-radius: 3px; background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.sort-tabs button { min-height: 44px; padding: 5px 9px; border: 0; border-radius: var(--radius-inset); background: transparent; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.sort-tabs button.active { background: var(--accent-wash); color: var(--accent-ink); }
 	.chart-filters { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border-hair); }
-	.chart-filters select { min-height: 44px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: 4px; background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
+	.chart-filters select { min-height: 44px; padding: 0 10px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: transparent; color: var(--ink-3); font: 600 10px/1 var(--font-mono); }
 	.chart-filters span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
+	.genre-chips { display: none; }
+	.genre-chips button {
+		flex: 0 0 auto;
+		min-height: 40px;
+		padding: 0 12px;
+		border: 1px solid var(--border-ui);
+		border-radius: var(--radius-control);
+		background: transparent;
+		color: var(--ink-3);
+		font: 700 11px/1 var(--font-ui);
+		white-space: nowrap;
+	}
+	.genre-chips button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.chart-row { display: grid; grid-template-columns: 30px 48px minmax(0, 1fr) 52px 140px; gap: 10px; align-items: center; min-height: 66px; border-bottom: 1px solid var(--border-row); }
 	.rank, .fit { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 	.chart-art, .chart-title, .row-actions button { border: 0; background: transparent; color: inherit; }
@@ -742,13 +758,13 @@
 	.chart-title strong { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.chart-title span { color: var(--ink-4); font: 500 11px/1.4 var(--font-sans); }
 	.row-actions { display: flex; gap: 4px; justify-content: end; }
-	.row-actions button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 4px; }
+	.row-actions button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); }
 	.row-actions button i { display: block; font-size: 14px; line-height: 1; }
 	.row-actions button:first-child { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
 	.chart-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 12px; color: var(--ink-4); font: 600 10px/1 var(--font-mono); }
 	.chart-footer button { min-height: 44px; padding: 7px 10px; border: 1px solid var(--border-ui); border-radius: 20px; background: transparent; color: var(--ink-3); font: inherit; text-transform: inherit; }
 	.empty-filter { display: grid; justify-items: start; gap: 10px; padding: 22px 0; color: var(--ink-3); font-size: 13px; }
-	.empty-filter button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-sunken); color: var(--ink-2); }
+	.empty-filter button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: var(--bg-sunken); color: var(--ink-2); }
 
 	@media (max-width: 820px) {
 		.discover-topbar { grid-template-columns: minmax(0,1fr) 30px; padding: 10px 14px; }
@@ -767,32 +783,57 @@
 			gap: 10px;
 			padding: 13px 16px 14px;
 		}
-		.mobile-title { display: flex; align-items: center; gap: 10px; }
-		.mobile-title strong { font: 800 17px/1 var(--font-ui); }
-		.mobile-title span { margin-left: auto; color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .06em; }
-		.mobile-title .language-switch { flex: 0 0 auto; }
 		.desktop-language-switch { display: none; }
 		.global-search kbd { display: none; }
+		/*
+		 * The app's running order, which is what a phone should see first:
+		 * search, cover story, genre chips, the chart. Session length and mood
+		 * are web-only extras and now sit below that instead of pushing the
+		 * cover story off the first screen. `.mood-basis` had no order at all,
+		 * so `display: contents` sorted it to 0 and its footnote led the page.
+		 */
 		.session-section { display: contents; }
-		.session-control { order: 1; padding: 16px; border-bottom: 1px solid var(--border-hair); }
-		.spotlight { order: 2; display: flex; flex-direction: column; gap: 16px; padding: 16px; }
-		.mood-grid { order: 3; margin: 0; padding: 16px; border-bottom: 1px solid var(--border-hair); }
-		.reasoned-picks { order: 4; }
-		.chart-section { order: 5; }
+		.session-control { order: 4; padding: 16px; border-top: 1px solid var(--border-hair); }
+		.spotlight { order: 1; gap: 12px 14px; padding: 16px; grid-template-areas: 'art copy' 'actions actions'; }
+		.mood-grid { order: 5; margin: 0; padding: 0 16px 16px; }
+		.mood-basis { order: 6; padding: 0 16px 16px; }
+		.reasoned-picks { order: 3; }
+		.chart-section { order: 2; }
+		/*
+		 * The app's cover story: artwork beside the words, a title in ordinary
+		 * case, and the blurb kept. The web version put a 30px all-caps headline
+		 * above a centred 56vw cover and dropped the description entirely, which
+		 * is a magazine layout, not the app's.
+		 */
+		.spotlight { display: grid; grid-template-columns: 90px minmax(0, 1fr); grid-template-areas: 'art copy'; align-items: start; }
+		.spotlight-copy { grid-area: copy; }
+		.spotlight-art { grid-area: art; width: 90px; align-self: start; }
 		.spotlight-art img { width: 100%; height: auto; aspect-ratio: 1; }
-		.spotlight h1 { font-size: 30px; }
-		.spotlight p { display: none; }
-		.spotlight-actions { width: 100%; }
+		.spotlight h1 { font-size: 20px; line-height: 1.15; letter-spacing: -.02em; text-transform: none; }
+		.spotlight p { display: -webkit-box; margin-top: 8px; font-size: 13px; line-clamp: 3; -webkit-line-clamp: 3; }
+		.spotlight-actions { grid-area: actions; flex-wrap: nowrap; width: 100%; margin-top: 14px; }
 		.spotlight-actions .primary { flex: 1; justify-content: center; }
-		.spotlight-art { width: min(56vw, 220px); align-self: center; }
+		/* Icon-only, so the row weighs what the app's two buttons and kebab weigh. */
+		.spotlight-actions .minor { width: 44px; padding: 0; justify-content: center; }
+		.spotlight-actions .minor span { display: none; }
 		.spotlight-actions button, .session-control button, .sort-tabs button, .chart-filters select, .row-actions button { min-height: 44px; }
 		.reasoned-picks, .chart-section { padding: 16px; }
 		.mood-grid { grid-template-columns: repeat(2, 1fr); }
 		.chart-head { align-items: flex-start; flex-direction: column; }
 		.sort-tabs { width: 100%; overflow-x: auto; }
-		.chart-row { grid-template-columns: 24px 44px minmax(0, 1fr) 140px; min-height: 60px; }
+		/*
+		 * One control per row, as the app has. Three 44px buttons on a 320px row
+		 * left the title with about 70px — every show in the chart read as
+		 * "Globa…". Queue and hide stay on the show's own page.
+		 */
+		.chart-row { grid-template-columns: 24px 44px minmax(0, 1fr) 44px; min-height: 60px; }
+		.row-actions .row-extra { display: none; }
 		.fit { display: none; }
 		.chart-filters span { display: none; }
+		.chart-filters select { display: none; }
+		.chart-filters { padding-bottom: 0; border-bottom: 0; }
+		.genre-chips { display: flex; gap: 8px; width: 100%; overflow-x: auto; scrollbar-width: none; padding-bottom: 10px; }
+		.genre-chips::-webkit-scrollbar { display: none; }
 		.chart-footer { justify-content: end; }
 	}
 </style>

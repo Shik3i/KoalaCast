@@ -61,8 +61,8 @@
 	.recover-page p { color: var(--text-secondary); line-height: 1.5; }
 	form, label, .success { display: grid; gap: 8px; }
 	form { gap: 14px; }
-	input { min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-elevated); color: var(--text-primary); }
-	button { min-height: 44px; padding: 0 14px; border: 0; border-radius: 5px; background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
+	input { min-height: 44px; padding: 0 12px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: var(--bg-elevated); color: var(--text-primary); }
+	button { min-height: 44px; padding: 0 14px; border: 0; border-radius: var(--radius-control); background: var(--accent-fill); color: var(--accent-on); font-weight: 700; }
 	.error { color: var(--color-danger) !important; }
-	code { padding: 12px; overflow-wrap: anywhere; border: 1px solid var(--border-ui); border-radius: 5px; background: var(--bg-elevated); }
+	code { padding: 12px; overflow-wrap: anywhere; border: 1px solid var(--border-ui); border-radius: var(--radius-control); background: var(--bg-elevated); }
 </style>

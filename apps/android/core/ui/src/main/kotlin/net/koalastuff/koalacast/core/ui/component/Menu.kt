@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.koalastuff.koalacast.core.ui.R
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
@@ -60,8 +61,8 @@ fun OverflowMenu(
     contentDescription: String,
     actions: List<MenuAction>,
     modifier: Modifier = Modifier,
-    boxSize: Dp = 34.dp,
-    iconSize: Dp = 17.dp,
+    boxSize: Dp = KoalaIconButton.rowBox,
+    iconSize: Dp = KoalaIconButton.rowIcon,
 ) {
     MenuButton(
         icon = PhosphorIcons.DotsThreeVertical,
@@ -93,8 +94,8 @@ fun MenuButton(
      */
     title: String? = contentDescription,
     active: Boolean = false,
-    boxSize: Dp = 34.dp,
-    iconSize: Dp = 17.dp,
+    boxSize: Dp = KoalaIconButton.rowBox,
+    iconSize: Dp = KoalaIconButton.rowIcon,
 ) {
     if (actions.isEmpty()) return
     val colors = KoalaTheme.colors
@@ -276,7 +277,7 @@ fun UndoBanner(
             tint = colors.ink2,
             bordered = true,
             boxSize = UNDO_ACTION_VISUAL_SIZE,
-            iconSize = 17.dp,
+            iconSize = KoalaIconButton.rowIcon,
             shape = KoalaShapes.card,
         )
     }

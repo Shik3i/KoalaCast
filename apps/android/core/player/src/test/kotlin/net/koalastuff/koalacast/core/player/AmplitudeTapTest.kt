@@ -34,21 +34,6 @@ class AmplitudeTapTest {
     }
 
     @Test
-    fun `history advances with rendered frames instead of decoder burst`() {
-        val tap = AmplitudeTap()
-        val history = FloatArray(3)
-        tap.publish(0.2f)
-        tap.publish(0.4f)
-
-        tap.copyHistoryInto(history)
-        assertTrue(history.all { it == 0f })
-
-        tap.levelAt(1_000_000_000L)
-        tap.copyHistoryInto(history)
-        assertEquals(listOf(0f, 0f, 0.2f), history.toList())
-    }
-
-    @Test
     fun `overflow skips stale audio instead of increasing visual latency`() {
         val tap = AmplitudeTap()
         repeat(140) { tap.publish((it + 1).toFloat()) }

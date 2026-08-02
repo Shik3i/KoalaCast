@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.model.VisualizerStyle
 import net.koalastuff.koalacast.core.player.PlaybackUiState
+import net.koalastuff.koalacast.core.player.SPECTRUM_BANDS
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.IconButtonSquare
 import net.koalastuff.koalacast.core.ui.component.MonoText
@@ -56,6 +57,7 @@ import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.MenuButton
 import net.koalastuff.koalacast.core.ui.component.VisualizerTrack
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
+import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
 import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
@@ -109,7 +111,7 @@ fun NowPlayingScreen(
         chapters = chapters,
         visualizer = effectiveStyle,
         amplitude = viewModel::amplitudeLevel,
-        amplitudeHistory = viewModel::copyAmplitudeHistory,
+        amplitudeBands = viewModel::copyAmplitudeBands,
         onCollapse = onCollapse,
         onOpenEpisode = onOpenEpisode,
         onTogglePlayPause = viewModel::togglePlayPause,
@@ -130,7 +132,7 @@ internal fun NowPlayingContent(
     chapters: List<Chapter> = emptyList(),
     visualizer: VisualizerStyle = VisualizerStyle.OFF,
     amplitude: (Long) -> Float = { 0f },
-    amplitudeHistory: (FloatArray) -> Unit = {},
+    amplitudeBands: (FloatArray, FloatArray) -> Unit = { _, _ -> },
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -263,7 +265,7 @@ internal fun NowPlayingContent(
             visualizer = visualizer,
             playing = state.isPlaying,
             amplitude = amplitude,
-            amplitudeHistory = amplitudeHistory,
+            amplitudeBands = amplitudeBands,
         )
 
         Row(
@@ -337,7 +339,7 @@ private fun Scrubber(
     visualizer: VisualizerStyle = VisualizerStyle.OFF,
     playing: Boolean = false,
     amplitude: (Long) -> Float = { 0f },
-    amplitudeHistory: (FloatArray) -> Unit = {},
+    amplitudeBands: (FloatArray, FloatArray) -> Unit = { _, _ -> },
 ) {
     val colors = KoalaTheme.colors
     // While a drag is in flight the slider follows the finger, not the player,
@@ -373,7 +375,7 @@ private fun Scrubber(
                         fraction = fraction,
                         playing = playing,
                         amplitude = amplitude,
-                        amplitudeHistory = amplitudeHistory,
+                        amplitudeBands = amplitudeBands,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
@@ -381,7 +383,7 @@ private fun Scrubber(
                         style = VisualizerStyle.OFF,
                         fraction = fraction,
                         level = 0f,
-                        history = EMPTY_VISUALIZER_HISTORY,
+                        bands = EMPTY_VISUALIZER_BANDS,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -464,38 +466,47 @@ private fun LiveVisualizerTrack(
     fraction: Float,
     playing: Boolean,
     amplitude: (Long) -> Float,
-    amplitudeHistory: (FloatArray) -> Unit,
+    amplitudeBands: (FloatArray, FloatArray) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var level by remember { mutableFloatStateOf(0f) }
-    val history = remember { FloatArray(WAVEFORM_BARS) }
-    var historyRevision by remember { mutableIntStateOf(0) }
+    val bands = remember { FloatArray(SPECTRUM_BANDS) }
+    val peaks = remember { FloatArray(SPECTRUM_BANDS) }
+    var bandRevision by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(style, playing) {
         if (!playing) {
             level = 0f
+            bands.fill(0f)
+            peaks.fill(0f)
+            bandRevision++
             return@LaunchedEffect
         }
         while (true) {
             withFrameNanos { frameTimeNanos ->
                 level = amplitude(frameTimeNanos)
-                if (style.needsHistory) {
-                    amplitudeHistory(history)
-                    // The array mutates in place; this integer invalidates only
+                if (style.needsSpectrum) {
+                    // Smoothing happens per display frame inside the tap, so this
+                    // has to run every frame even when the decoder is between
+                    // buffers — that is what makes the bars settle rather than
+                    // freeze at whatever the last burst left behind.
+                    amplitudeBands(bands, peaks)
+                    // The arrays mutate in place; this integer invalidates only
                     // this small composable and its Canvas.
-                    historyRevision++
+                    bandRevision++
                 }
             }
         }
     }
 
     @Suppress("UNUSED_EXPRESSION")
-    historyRevision
+    bandRevision
     VisualizerTrack(
         style = style,
         fraction = fraction,
         level = level,
-        history = history,
+        bands = bands,
+        peaks = peaks,
         modifier = modifier,
     )
 }
@@ -525,8 +536,8 @@ private fun ChapterRow(
             contentDescription = stringResource(R.string.player_previous_chapter),
             onClick = { previous?.let(onSeekTo) },
             enabled = previous != null,
-            boxSize = 30.dp,
-            iconSize = 15.dp,
+            boxSize = KoalaIconButton.rowBox,
+            iconSize = KoalaIconButton.rowIcon,
         )
         Text(
             text = current?.title ?: stringResource(R.string.player_before_first_chapter),
@@ -541,8 +552,8 @@ private fun ChapterRow(
             contentDescription = stringResource(R.string.player_next_chapter),
             onClick = { next?.let(onSeekTo) },
             enabled = next != null,
-            boxSize = 30.dp,
-            iconSize = 15.dp,
+            boxSize = KoalaIconButton.rowBox,
+            iconSize = KoalaIconButton.rowIcon,
         )
     }
 }
@@ -569,7 +580,7 @@ private fun SpeedButton(speed: Float, onSetSpeed: (Float) -> Unit) {
         },
         label = Format.speed(speed),
         active = kotlin.math.abs(speed - 1f) >= 0.01f,
-        iconSize = 16.dp,
+        iconSize = KoalaIconButton.rowIcon,
     )
 }
 
@@ -631,7 +642,6 @@ private fun SleepTimerButton(
             else -> null
         },
         active = armed,
-        iconSize = 18.dp,
     )
 }
 
@@ -647,9 +657,7 @@ private fun animationsDisabled(context: android.content.Context): Boolean =
         1f,
     ) == 0f
 
-/** How many bars the waveform draws. Wider than this and each bar is a hairline. */
-private const val WAVEFORM_BARS = 48
-private val EMPTY_VISUALIZER_HISTORY = FloatArray(0)
+private val EMPTY_VISUALIZER_BANDS = FloatArray(0)
 /** The playhead. Small enough to sit on a 4dp track without swallowing it. */
 private val THUMB_DIAMETER = 12.dp
 private val SCRUBBER_CONTROL_HEIGHT = 48.dp
