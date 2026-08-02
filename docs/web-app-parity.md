@@ -109,26 +109,37 @@ login and `client_schema_version` on every sync push. The server ignores the
 latter today, so nothing behaved differently — but the client was claiming to
 send a schema version it never sent.
 
-**A production instance had zero sessions while reporting one participant.**
-`GET https://cast.koalastuff.net/api/v1/stats/global` returns
-`participants: 1, listening_sessions: 0, podcasts: 0, episodes: 0` for every
-range. The account is opted in and the server is current — it answers
-`/stats/preferences` and `/sync/snapshot` — so the aggregate is not the problem:
-nothing has arrived to aggregate. The same client code pushes fine to a local
-server, so this is specific to that pairing and still open. Two client defects
-found while chasing it are fixed:
+**A production instance had zero sessions while reporting one participant —
+R8 was the cause.** `GET https://cast.koalastuff.net/api/v1/stats/global`
+returned `participants: 1, listening_sessions: 0` for every range: the account
+was opted in, the server was current, and nothing had arrived to aggregate.
+
+The client was failing every sync with
+`IllegalArgumentException: Unable to create converter for class java.lang.Object`
+— and only in a minified build. R8's full mode, the default since AGP 8,
+discards generic signatures nothing demonstrably reads. Retrofit reads them
+reflectively when it builds a service method, so an erased `Continuation` type
+made every `suspend fun … : Response<Dto>` resolve to `java.lang.Object`.
+`app/proguard-rules.pro` was empty on the assumption that library consumer rules
+covered it; they do not cover full mode. Reproduced by building the release APK
+twice with `validateEagerly(true)` — the error appears without the rules and is
+absent with them.
+
+Two things kept this hidden for so long, and both are fixed:
 
 - `syncNow` caught every failure with a bare `catch (_: Exception)` and set
-  `SyncStatus.ERROR` with no reason kept anywhere. A sync that never succeeds was
-  therefore undiagnosable by anyone, including from a bug report. The reason is
-  now retained and shown on the Account screen, untranslated, so it can be
-  pasted somewhere useful.
-- The listening-session push watermark advanced to wall-clock time captured
-  before the outgoing operations were built. Sessions are written asynchronously
-  when playback stops, so one landing in the database just after that query had
-  an `endedAt` below the new watermark and was skipped permanently. It now
-  advances only as far as the newest session actually sent; the worst case is
-  sending one twice, which the server handles idempotently.
+  `SyncStatus.ERROR` with no reason kept anywhere, so a sync that never
+  succeeded was undiagnosable from the screen, a log or a bug report. The reason
+  and its cause are now retained, logged under `KoalaCastSync`, and shown on the
+  Account screen untranslated and wrapped.
+- Debug builds are not minified, so the fault could not occur in development or
+  on an emulator — only in the signed release people actually install.
+
+Also fixed while here: the listening-session push watermark advanced to
+wall-clock time captured before the outgoing operations were built. Sessions are
+written asynchronously when playback stops, so one landing just after that query
+had an `endedAt` below the new watermark and was skipped permanently. It now
+advances only as far as the newest session actually sent.
 
 **Category breakdowns are empty, and cannot be fixed on the client.** Every
 session the Android app writes carries `categories: []`, so the global category

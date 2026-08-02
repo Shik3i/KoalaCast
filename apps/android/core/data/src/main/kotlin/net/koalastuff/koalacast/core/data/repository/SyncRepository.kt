@@ -112,7 +112,18 @@ class SyncRepository @Inject constructor(
             _status.value = if (store.account.value == null) SyncStatus.OFF else SyncStatus.IDLE
             false
         } catch (error: Exception) {
-            _lastSyncError.value = error.message ?: error::class.simpleName ?: "sync failed"
+            android.util.Log.w("KoalaCastSync", "sync failed", error)
+            _lastSyncError.value = buildString {
+                append(error::class.simpleName ?: "Exception")
+                error.message?.let { append(": ").append(it) }
+                // Retrofit wraps the useful half; without the cause the message
+                // can name a symptom and never the type that actually failed.
+                error.cause?.let { cause ->
+                    append(" — caused by ")
+                    append(cause::class.simpleName ?: "cause")
+                    cause.message?.let { append(": ").append(it) }
+                }
+            }
             _status.value = SyncStatus.ERROR
             false
         }

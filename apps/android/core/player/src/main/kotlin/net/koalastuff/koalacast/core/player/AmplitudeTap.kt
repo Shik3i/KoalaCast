@@ -19,12 +19,17 @@ private const val AMPLITUDE_GAIN = 3.8f
 private const val AMPLITUDE_ATTACK = 0.3313f
 private const val AMPLITUDE_RELEASE = 0.0342f
 // Applied once per *analysed* spectrum — about 86 a second — not once per drawn
-// frame, so the shape moves at the same speed whatever the display does. Roughly
-// 40 ms to rise and 150 ms to fall.
-private const val BAND_ATTACK = 0.45f
-private const val BAND_RELEASE = 0.09f
-/** Peak markers fall about a third of full scale per second. */
-private const val BAND_PEAK_FALL = 0.004f
+// frame, so the shape moves at the same speed whatever the display does.
+//
+// Retuned after the first version read as a jitter rather than a movement: at 86
+// steps a second an attack of 0.45 reaches full height in three hundredths of a
+// second, which is faster than an eye can follow and shows every glottal pulse
+// in speech. These give roughly 90 ms to rise and 400 ms to fall — quick enough
+// to catch a consonant, slow enough that the shape reads as one thing moving.
+private const val BAND_ATTACK = 0.16f
+private const val BAND_RELEASE = 0.03f
+/** Peak markers fall about a fifth of full scale per second. */
+private const val BAND_PEAK_FALL = 0.0025f
 internal const val ENVELOPE_UPDATES_PER_SECOND = 120
 private const val ENVELOPE_FRAME_NANOS = 1_000_000_000L / ENVELOPE_UPDATES_PER_SECOND
 private const val MAX_RENDER_GAP_NANOS = 1_000_000_000L

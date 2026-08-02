@@ -321,8 +321,12 @@ private val LEVEL_MAX_HEIGHT = 22.dp
 /**
  * One height for every audio-reactive style. They used to be 26–30dp apiece, so
  * changing style in Settings nudged the whole transport row up or down.
+ *
+ * 30dp left ±11px of travel once the progress bar had taken its share, which is
+ * not enough for a loud passage to look different from a quiet one. The scrubber
+ * row reserves 48dp, so this can take 40 without moving anything else.
  */
-private val AUDIO_TRACK_HEIGHT = 30.dp
+private val AUDIO_TRACK_HEIGHT = 40.dp
 private const val BASE_THICKNESS = 0.22f
 private const val MIN_BAR_PX = 2f
 private const val MIN_BAR_WIDTH_PX = 1.5f

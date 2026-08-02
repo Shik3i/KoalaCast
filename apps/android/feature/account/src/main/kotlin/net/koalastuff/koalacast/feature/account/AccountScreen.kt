@@ -461,6 +461,8 @@ private fun SignedInContent(
                 text = stringResource(R.string.account_sync_error, reason),
                 color = KoalaTheme.colors.ink4,
                 style = KoalaTheme.type.monoSmall,
+                // Wraps rather than ellipsising: a truncated reason is no reason.
+                maxLines = Int.MAX_VALUE,
             )
         }
     }

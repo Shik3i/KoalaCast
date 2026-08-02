@@ -44,12 +44,23 @@ const val SPECTRUM_BANDS = 48
 private const val SPECTRUM_MIN_HZ = 60.0
 private const val SPECTRUM_MAX_HZ = 12_000.0
 
-/** The visible window, in dBFS. Quieter than the floor reads as an empty band. */
-private const val SPECTRUM_FLOOR_DB = -72f
-private const val SPECTRUM_CEILING_DB = -14f
+/**
+ * The visible window, in dBFS. Quieter than the floor reads as an empty band.
+ *
+ * The ceiling was -14 dB, which ordinary mastered speech passes for most of a
+ * sentence: nearly every band pinned at full height, the shape stopped having
+ * any range and the display read as a solid bar with a fringe. -4 leaves the
+ * headroom that mastering actually uses, so a loud passage has somewhere to go.
+ */
+private const val SPECTRUM_FLOOR_DB = -78f
+private const val SPECTRUM_CEILING_DB = -4f
 
-/** Recorded speech rolls off with frequency; without this the right half is dead. */
-private const val SPECTRUM_TILT = 1.6f
+/**
+ * Recorded speech rolls off with frequency; without this the right half is dead.
+ * Kept modest — at 1.6 the top bands were lifted by 2.6x and clipped on their
+ * own, which is the same saturation from the other end.
+ */
+private const val SPECTRUM_TILT = 0.8f
 
 /**
  * In-place radix-2 Cooley–Tukey FFT over [re] and [im], which must be the same

@@ -90,12 +90,18 @@ class SpectrumTest {
         val out = FloatArray(SPECTRUM_BANDS)
         val peaks = FloatArray(SPECTRUM_BANDS)
 
-        repeat(10) { tap.publishBands(loud) }
-        tap.copyBandsInto(out, peaks)
+        // Eight steps is the per-frame ceiling, so drive it over several frames —
+        // which is what a display doing 60 Hz against 86 spectra a second does.
+        repeat(6) {
+            repeat(8) { tap.publishBands(loud) }
+            tap.copyBandsInto(out, peaks)
+        }
         val risen = out[0]
 
-        repeat(10) { tap.publishBands(FloatArray(SPECTRUM_BANDS)) }
-        tap.copyBandsInto(out, peaks)
+        repeat(6) {
+            repeat(8) { tap.publishBands(FloatArray(SPECTRUM_BANDS)) }
+            tap.copyBandsInto(out, peaks)
+        }
 
         assertTrue("should be most of the way up, got $risen", risen > 0.9f)
         assertTrue("should still be falling, got ${out[0]}", out[0] > 0.1f)
