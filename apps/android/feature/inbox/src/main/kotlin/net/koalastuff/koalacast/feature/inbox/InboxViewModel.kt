@@ -322,7 +322,18 @@ class InboxViewModel @Inject constructor(
         viewModelScope.launch { library.setInboxMode(podcastId, mode) }
     }
 
-    fun play(item: InboxEpisode) = player.play(item.track)
+    /**
+     * Play, or pause when this is already the episode running. The row draws a
+     * moving equaliser for the current episode, which reads as a pause control;
+     * calling play again just stuttered and resumed the same audio.
+     */
+    fun play(item: InboxEpisode) {
+        if (player.state.value.track?.episodeId == item.episode.id) {
+            player.togglePlayPause()
+        } else {
+            player.play(item.track)
+        }
+    }
 
     fun addToQueue(item: InboxEpisode) {
         viewModelScope.launch { queue.addToEnd(item.track) }

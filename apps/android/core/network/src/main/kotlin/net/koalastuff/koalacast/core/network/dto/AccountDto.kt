@@ -1,5 +1,6 @@
 package net.koalastuff.koalacast.core.network.dto
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -21,6 +22,7 @@ data class DeviceLoginRequest(
     val password: String,
     @SerialName("device_id") val deviceId: String,
     @SerialName("device_name") val deviceName: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("client_type") val clientType: String = "android",
 )
 
@@ -70,8 +72,17 @@ data class AccountSessionDto(
 @Serializable
 data class SessionsResponse(val sessions: List<AccountSessionDto> = emptyList())
 
+/**
+ * Both the request and the response for `/stats/preferences`.
+ *
+ * [EncodeDefault] is load-bearing. kotlinx-serialization omits a property equal
+ * to its default, so opting *out* — `enabled = false`, which is the default —
+ * serialised to `{}`, the server saw no field and answered 400. Opting in worked,
+ * opting out was impossible, and the preference could never be turned off again.
+ */
 @Serializable
 data class GlobalStatsPreference(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("global_stats_opt_in") val enabled: Boolean = false,
 )
 

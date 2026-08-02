@@ -64,6 +64,19 @@ class PlayerStore {
 	positionUpdatedAt = $state(Date.now());
 	requestedPositionMs: number | null = null;
 
+	/**
+	 * Bumped when something outside the player asks it to toggle — an episode row
+	 * whose control is showing the "this one is running" animation, for instance.
+	 * The row cannot reach the audio element, and calling [play] again for the
+	 * episode already playing restarted it: a short stutter and then the same
+	 * audio, where the animation had promised a pause.
+	 */
+	playPauseToken = $state(0);
+
+	requestTogglePlayPause() {
+		this.playPauseToken++;
+	}
+
 	play(track: CurrentTrack, positionMs?: number) {
 		this.current = track;
 		this.requestedPositionMs =

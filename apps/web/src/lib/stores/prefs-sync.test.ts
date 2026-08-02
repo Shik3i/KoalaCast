@@ -49,7 +49,7 @@ describe('shared preference sync', () => {
 		expect(prefs.syncPayload().download_budget_bytes).toBe(0);
 	});
 
-	it.each(['off', 'level', 'waveform', 'bars', 'pulse', 'dots'] as const)(
+	it.each(['off', 'level', 'waveform', 'bars', 'pulse'] as const)(
 		'accepts and syncs the %s visualizer',
 		(visualizer) => {
 			prefs.applySynced({ updated_at: 300, visualizer }, { authoritative: true });
@@ -58,4 +58,12 @@ describe('shared preference sync', () => {
 			expect(prefs.syncPayload().visualizer).toBe(visualizer);
 		}
 	);
+
+	it('maps the retired dots visualizer onto bars rather than off', () => {
+		// A peer still running an older build syncs "dots". Falling through to the
+		// default would silently switch the listener's visualiser off.
+		prefs.applySynced({ updated_at: 400, visualizer: 'dots' }, { authoritative: true });
+
+		expect(prefs.visualizer).toBe('bars');
+	});
 });

@@ -296,7 +296,12 @@ class PodcastViewModel @Inject constructor(
         }
     }
 
+    /** Play, or pause when this is already the episode running. See the inbox. */
     fun play(episode: Episode) {
+        if (_state.value.currentEpisodeId == episode.id) {
+            player.togglePlayPause()
+            return
+        }
         val track = trackFor(episode) ?: return
         player.play(track)
     }

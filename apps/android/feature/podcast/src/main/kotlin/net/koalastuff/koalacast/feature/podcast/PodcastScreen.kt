@@ -689,6 +689,11 @@ private fun EpisodeRow(
             ) {
                 MonoText(
                     text = buildString {
+                        // Runtime leads the line and never moves. It used to sit in
+                        // its own column on the right, where a long title pushed it
+                        // to the edge and it was the first thing to be clipped.
+                        append(Format.duration(context, episode.durationMs))
+                        append(" · ")
                         append(Format.publishedAt(context, episode.pubDateMs, episode.hasPubDate, now))
                         if (episode.episodeNumber > 0) {
                             append(" · ")
@@ -720,13 +725,6 @@ private fun EpisodeRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-            Box(modifier = Modifier.padding(top = 2.dp)) {
-                MonoText(
-                    text = Format.duration(context, episode.durationMs),
-                    color = colors.ink3,
-                    style = KoalaTheme.type.monoStrong,
-                )
             }
         }
 

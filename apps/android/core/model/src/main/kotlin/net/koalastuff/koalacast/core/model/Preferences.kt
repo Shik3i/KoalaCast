@@ -98,22 +98,23 @@ enum class VisualizerStyle(val id: String) {
 
     /** The playhead sends out restrained rings in time with the recording. */
     PULSE("pulse"),
-
-    /** The same spectrum on a coarser grid: one dot per few bands, swelling in place. */
-    DOTS("dots"),
     ;
 
     /** True when this style needs the amplitude tap doing arithmetic at all. */
     val needsAudio: Boolean get() = this != OFF
 
     /** Styles that need per-frequency-band energy rather than one loudness figure. */
-    val needsSpectrum: Boolean get() = this == WAVEFORM || this == DOTS || this == BARS
+    val needsSpectrum: Boolean get() = this == WAVEFORM || this == BARS
 
     companion object {
         val DEFAULT = OFF
 
-        fun fromId(value: String?): VisualizerStyle =
-            entries.firstOrNull { it.id == value } ?: DEFAULT
+        fun fromId(value: String?): VisualizerStyle = when (value) {
+            // Retired: a coarser, less legible restatement of BARS. Existing
+            // choices move there rather than silently reverting to OFF.
+            "dots" -> BARS
+            else -> entries.firstOrNull { it.id == value } ?: DEFAULT
+        }
     }
 }
 

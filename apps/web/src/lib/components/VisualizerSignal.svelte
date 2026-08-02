@@ -32,9 +32,31 @@
 
 	const bands = $derived(spectrum.length > 0 ? spectrum : previewSpectrum);
 	const peakLine = $derived(peaks.length === bands.length ? peaks : bands);
-	// Dots are the same signal on a coarser grid: every fourth band, so the row
-	// stays a row of dots instead of turning into a dotted line.
-	const dotBands = $derived(bands.filter((_, index) => index % 4 === 0));
+
+	/*
+	 * The waveform's outline, as one closed SVG path in a 0..100 × 0..100 box.
+	 * It used to render the same bars as `bars` at a lower opacity, which made
+	 * two of the styles the same picture. Points are joined with horizontal
+	 * midpoint control points so the curve stays monotone between samples and
+	 * never crosses its own mirror.
+	 */
+	const wavePath = $derived.by(() => {
+		if (bands.length < 2) return '';
+		const step = 100 / (bands.length - 1);
+		const top = (i: number) => 50 - Math.max(1.5, Math.min(1, bands[i]) * 48);
+		const bottom = (i: number) => 50 + Math.max(1.5, Math.min(1, bands[i]) * 48);
+		let d = `M 0 ${top(0)}`;
+		for (let i = 0; i < bands.length - 1; i++) {
+			const mid = (i + 0.5) * step;
+			d += ` C ${mid} ${top(i)} ${mid} ${top(i + 1)} ${(i + 1) * step} ${top(i + 1)}`;
+		}
+		d += ` L 100 ${bottom(bands.length - 1)}`;
+		for (let i = bands.length - 1; i > 0; i--) {
+			const mid = (i - 0.5) * step;
+			d += ` C ${mid} ${bottom(i)} ${mid} ${bottom(i - 1)} ${(i - 1) * step} ${bottom(i - 1)}`;
+		}
+		return `${d} Z`;
+	});
 </script>
 
 {#if playing && style !== 'off' && style !== 'level'}
@@ -43,16 +65,13 @@
 		class:compact={variant === 'compact'}
 		class:full={variant === 'full'}
 		class:preview={variant === 'preview'}
-		class:dots={style === 'dots'}
 		style="--level: {Math.max(0, Math.min(1, level))}; --progress: {Math.max(0, Math.min(100, progress))}%"
 		aria-hidden="true"
 	>
 		{#if style === 'waveform'}
-			<div class="row">
-				{#each bands as band}
-					<span class="band" style="--band: {Math.max(0.04, band)}"><i class="fill wave"></i></span>
-				{/each}
-			</div>
+			<svg class="wave" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+				<path d={wavePath} />
+			</svg>
 		{:else if style === 'bars'}
 			<div class="row">
 				{#each bands as band, index}
@@ -64,12 +83,6 @@
 			</div>
 		{:else if style === 'pulse'}
 			<div class="pulse-point"><span></span><span></span></div>
-		{:else if style === 'dots'}
-			<div class="row">
-				{#each dotBands as band}
-					<span class="band" style="--band: {Math.max(0.04, band)}"><i class="dot"></i></span>
-				{/each}
-			</div>
 		{/if}
 	</div>
 {/if}
@@ -135,8 +148,12 @@
 		background: currentColor;
 		opacity: 0.8;
 	}
-	/* The wave is context around the progress bar, not a competitor to it. */
-	.fill.wave { opacity: 0.5; }
+	/*
+	 * `preserveAspectRatio: none` is what lets one 0..100 path stretch to any
+	 * width without the caller knowing the band count.
+	 */
+	.wave { width: 100%; height: 100%; display: block; }
+	.wave path { fill: currentColor; fill-opacity: 0.3; stroke: currentColor; stroke-opacity: 0.85; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 	/* A peak that falls back slowly is what makes a spectrum readable at a
 	   glance rather than a blur of moving sticks. */
 	.peak {
@@ -149,19 +166,6 @@
 		background: currentColor;
 		opacity: 0.5;
 	}
-	.dot {
-		position: absolute;
-		left: 50%;
-		top: 50%;
-		width: max(3px, calc(var(--band, 0.1) * 34%));
-		aspect-ratio: 1;
-		transform: translate(-50%, -50%);
-		border-radius: 50%;
-		background: currentColor;
-		opacity: 0.82;
-	}
-	/* Dots are round, so they need breathing room rather than a 1px gutter. */
-	.signal.dots .row { gap: 4px; }
 
 	.pulse-point {
 		position: absolute;

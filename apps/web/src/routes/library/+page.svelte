@@ -94,6 +94,12 @@
 	});
 
 	function playFavorite(fav: LocalFavorite) {
+		// Already the episode running: the control is showing the playing
+		// animation, so it has to be a pause, not a restart.
+		if (player.current?.episode_id === fav.episode_id) {
+			player.requestTogglePlayPause();
+			return;
+		}
 		if (!fav.enclosure_url) {
 			goto(`/episode/${fav.episode_id}`);
 			return;
@@ -116,6 +122,12 @@
 	}
 
 	async function playQueueItem(item: CurrentTrack) {
+		// Already the episode running: the control is showing the playing
+		// animation, so it has to be a pause, not a restart.
+		if (player.current?.episode_id === item.episode_id) {
+			player.requestTogglePlayPause();
+			return;
+		}
 		await player.playFromQueue(item);
 		queue = [...player.queue];
 	}

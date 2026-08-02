@@ -90,16 +90,50 @@ class SpectrumTest {
         val out = FloatArray(SPECTRUM_BANDS)
         val peaks = FloatArray(SPECTRUM_BANDS)
 
-        tap.publishBands(loud)
-        repeat(10) { tap.copyBandsInto(out, peaks) }
+        repeat(10) { tap.publishBands(loud) }
+        tap.copyBandsInto(out, peaks)
         val risen = out[0]
 
-        tap.publishBands(FloatArray(SPECTRUM_BANDS))
-        repeat(10) { tap.copyBandsInto(out, peaks) }
+        repeat(10) { tap.publishBands(FloatArray(SPECTRUM_BANDS)) }
+        tap.copyBandsInto(out, peaks)
 
-        assertTrue("should reach the top in ~10 frames, got $risen", risen > 0.9f)
+        assertTrue("should be most of the way up, got $risen", risen > 0.9f)
         assertTrue("should still be falling, got ${out[0]}", out[0] > 0.1f)
         // The peak marker outlives the bar it was set by; that is its whole job.
         assertTrue(peaks[0] > out[0])
+    }
+
+    @Test
+    fun `every published spectrum advances the filter, not just the newest`() {
+        // The bug this guards: a decoder hands over a burst, the audio thread
+        // computes a dozen spectra from it, and the display used to see only the
+        // last one — so the shape stepped once per burst instead of moving.
+        val burst = AmplitudeTap()
+        val single = AmplitudeTap()
+        val loud = FloatArray(SPECTRUM_BANDS) { 1f }
+        val out = FloatArray(SPECTRUM_BANDS)
+
+        repeat(8) { burst.publishBands(loud) }
+        burst.copyBandsInto(out)
+        val afterBurst = out[0]
+
+        single.publishBands(loud)
+        single.copyBandsInto(out)
+        val afterOne = out[0]
+
+        assertTrue("burst $afterBurst should outrun single $afterOne", afterBurst > afterOne * 1.5f)
+    }
+
+    @Test
+    fun `a long backlog is skipped rather than replayed`() {
+        val tap = AmplitudeTap()
+        val out = FloatArray(SPECTRUM_BANDS)
+        // Far more than the ring holds: the renderer must not walk through audio
+        // the listener heard a second ago just to catch up.
+        repeat(500) { tap.publishBands(FloatArray(SPECTRUM_BANDS) { 1f }) }
+        tap.copyBandsInto(out)
+
+        assertTrue(out[0] > 0f)
+        assertTrue("must not reach the top in one frame, got ${out[0]}", out[0] < 1f)
     }
 }

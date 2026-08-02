@@ -90,6 +90,34 @@ has.
 `For you / Charts / Length / Newest` above the chart has no app equivalent.
 Kept; it is a genuine web feature and sits where the app has nothing.
 
+## Listening statistics
+
+Verified against a live server, not inferred: 33 listening sessions from the
+Android client had reached `listening_sessions`, `/api/v1/stats/global` returned
+them correctly, and the app's own **You** and **Community** scopes both showed
+1 h 21 min — the same figure. Session sync itself is sound.
+
+Two faults were found around it.
+
+**Opting out of global statistics was impossible.** `GlobalStatsPreference` is a
+kotlinx-serialization class with `enabled: Boolean = false`, and the encoder
+omits a property equal to its default. Opting out therefore serialised to `{}`,
+the server saw no field and answered `400`, and the preference could only ever be
+turned on. Fixed with `@EncodeDefault(ALWAYS)`. Two more request fields were
+silently absent for the same reason and are now sent: `client_type` on device
+login and `client_schema_version` on every sync push. The server ignores the
+latter today, so nothing behaved differently — but the client was claiming to
+send a schema version it never sent.
+
+**Category breakdowns are empty, and cannot be fixed on the client.** Every
+session the Android app writes carries `categories: []`, so the global category
+chart has exactly one bar, labelled "Uncategorised". The chain is missing end to
+end: the `podcasts` table has no category column, `/api/v1/podcasts/{id}` returns
+none, and the `Podcast` model — unlike `PodcastSummary`, which discovery and
+search return — has no `categories` field to read. Closing this needs a schema
+migration, category ingestion from the RSS feed, an API field and then the client
+plumbing. It is a feature, not a bug fix, and was deliberately left alone.
+
 ## Still outstanding
 
 Not yet reconciled. Roughly in order of how visible they are.

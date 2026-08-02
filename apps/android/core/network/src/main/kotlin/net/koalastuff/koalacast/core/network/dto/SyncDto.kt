@@ -1,5 +1,6 @@
 package net.koalastuff.koalacast.core.network.dto
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -19,6 +20,7 @@ data class SyncOperationDto(
 @Serializable
 data class SyncPushRequest(
     val operations: List<SyncOperationDto>,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("client_schema_version") val clientSchemaVersion: Int = 2,
 )
 

@@ -566,7 +566,7 @@ private fun InboxEpisodeRow(
                 overflow = TextOverflow.Ellipsis,
             )
             MonoText(
-                text = "${item.subscription.title} · ${Format.duration(context, item.episode.durationMs)}",
+                text = "${Format.duration(context, item.episode.durationMs)} · ${item.subscription.title}",
                 color = colors.ink4,
                 style = KoalaTheme.type.monoSmall,
                 maxLines = 1,

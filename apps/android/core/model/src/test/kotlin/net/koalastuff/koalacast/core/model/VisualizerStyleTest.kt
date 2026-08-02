@@ -16,13 +16,15 @@ class VisualizerStyleTest {
     @Test
     fun `unknown visualizer ids stay safely disabled`() {
         assertEquals(VisualizerStyle.OFF, VisualizerStyle.fromId("unknown"))
+        // Retired style: a stored "dots" must land on the style it resembled,
+        // not silently switch the listener's visualiser off.
+        assertEquals(VisualizerStyle.BARS, VisualizerStyle.fromId("dots"))
         assertEquals(VisualizerStyle.OFF, VisualizerStyle.fromId(null))
     }
 
     @Test
     fun `only bar shaped visualizers request the spectrum`() {
         assertTrue(VisualizerStyle.WAVEFORM.needsSpectrum)
-        assertTrue(VisualizerStyle.DOTS.needsSpectrum)
         assertTrue(VisualizerStyle.BARS.needsSpectrum)
         assertFalse(VisualizerStyle.PULSE.needsSpectrum)
         assertFalse(VisualizerStyle.LEVEL.needsSpectrum)

@@ -362,6 +362,12 @@
 	}
 
 	function playEpisode(ep: any) {
+		// Already the episode running: the control is showing the playing
+		// animation, so it has to be a pause, not a restart.
+		if (player.current?.episode_id === ep.id) {
+			player.requestTogglePlayPause();
+			return;
+		}
 		if (!podcast) return;
 		player.play({
 			episode_id: ep.id,
@@ -748,10 +754,8 @@
 										<h3><a href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a></h3>
 										<p class="ep-desc">{epDescription(ep)}</p>
 										<span class="ep-meta">
+											{#if ep.duration_ms}<span class="ep-duration">{formatDuration(ep.duration_ms)}</span> • {/if}
 											{ep.pub_date ? prefs.formatDate(ep.pub_date) : t('podcast.noDate')}
-											{#if ep.duration_ms}
-												• {formatDuration(ep.duration_ms)}
-											{/if}
 											{#if playedIds.has(ep.id)}<span class="played-tag">{t('podcast.played')}</span>{/if}
 										</span>
 									</div>
@@ -1453,6 +1457,7 @@
 		.ep-info h3 { font: 700 14px/1.3 var(--font-ui); }
 	.ep-desc { color: var(--ink-3); font-size: 10px; }
 	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); }
+	.ep-duration { color: var(--ink-3); font-weight: 700; }
 		.btn-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; }
 	.menu { border-color: var(--border-ui); border-radius: var(--radius-control); background: var(--bg-rail); box-shadow: none; }
 

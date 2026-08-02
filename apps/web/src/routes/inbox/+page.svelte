@@ -323,6 +323,12 @@
 	}
 
 	function play(ep: InboxEpisode) {
+		// Already the episode running: the control is showing the playing
+		// animation, so it has to be a pause, not a restart.
+		if (player.current?.episode_id === ep.id) {
+			player.requestTogglePlayPause();
+			return;
+		}
 		player.play({
 			episode_id: ep.id,
 			podcast_id: ep.podcast_id,
@@ -471,9 +477,9 @@
 					<div class="ep-body">
 						<a class="ep-title" href={`/episode/${ep.id}`} title={ep.title}>{ep.title}</a>
 						<span class="ep-meta">
+							{#if ep.duration_ms}<span class="ep-duration">{formatDuration(ep.duration_ms)}</span><span class="dot">•</span>{/if}
 							<a class="ep-show" href={showHref(ep.podcast_id)} title={ep.podcast_title}>{ep.podcast_title}</a>
 							{#if ep.pub_date}<span class="dot">•</span>{prefs.formatDate(ep.pub_date)}{/if}
-							{#if ep.duration_ms}<span class="dot">•</span>{formatDuration(ep.duration_ms)}{/if}
 							{#if completed.has(ep.id)}<span class="played-tag">{t('common.played')}</span>{/if}
 						</span>
 					</div>
@@ -732,6 +738,8 @@
 	.ep-art { width: 56px; height: 56px; border-radius: var(--radius-control); background: var(--bg-tile); }
 	.ep-title { color: var(--ink-2); font: 700 14px/1.3 var(--font-ui); }
 	.ep-meta { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); letter-spacing: .01em; }
+	/* Never shrinks or wraps: the show name after it may do both. */
+	.ep-duration { flex: 0 0 auto; color: var(--ink-3); font-weight: 700; }
 	.ep-show { color: var(--ink-3); }
 	.ep-kebab { width: 44px; height: 44px; border: 1px solid var(--border-ui); border-radius: 50%; color: var(--ink-3); }
 	.menu { border-color: var(--border-ui); border-radius: var(--radius-control); background: var(--bg-rail); box-shadow: none; }

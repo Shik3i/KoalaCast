@@ -63,6 +63,7 @@
 	let isFav = $state(false);
 	let showVolume = $state(false);
 	let lastToken = 0;
+	let lastPlayPauseToken = 0;
 	let activeSession: LocalListeningSession | null = null;
 	let lastListeningSampleAt = 0;
 	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
@@ -559,6 +560,14 @@
 		if (el.readyState >= 1 /* HAVE_METADATA */) apply();
 		else el.addEventListener('loadedmetadata', apply, { once: true });
 	}
+
+	// Outside requests to toggle, from episode rows that show the playing state.
+	$effect(() => {
+		const token = player.playPauseToken;
+		if (token === lastPlayPauseToken) return;
+		lastPlayPauseToken = token;
+		if (audioEl) togglePlay();
+	});
 
 	function togglePlay() {
 		if (!audioEl || !track) return;
@@ -1487,7 +1496,9 @@
 		background: linear-gradient(90deg, var(--show-accent, var(--accent-green)), color-mix(in srgb, var(--show-accent, var(--accent-green)) 60%, #fff));
 		transition: width 0.25s linear, background 0.4s ease;
 	}
-	.progress-track.visualizing { height: calc(3px + var(--audio-level, 0) * 3px); box-shadow: 0 0 calc(var(--audio-level, 0) * 12px) var(--show-accent, var(--accent-green)); }
+	/* Swells across most of the row, like the app's. A 3px bar that grew to 6px
+	   was not something anyone noticed. */
+	.progress-track.visualizing { height: calc(5px + var(--audio-level, 0) * 17px); box-shadow: 0 0 calc(var(--audio-level, 0) * 12px) var(--show-accent, var(--accent-green)); }
 
 	.art-btn {
 		position: relative;

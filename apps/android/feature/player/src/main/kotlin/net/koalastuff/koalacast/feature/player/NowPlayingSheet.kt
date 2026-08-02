@@ -499,14 +499,13 @@ private fun LiveVisualizerTrack(
         }
     }
 
-    @Suppress("UNUSED_EXPRESSION")
-    bandRevision
     VisualizerTrack(
         style = style,
         fraction = fraction,
         level = level,
         bands = bands,
         peaks = peaks,
+        revision = bandRevision,
         modifier = modifier,
     )
 }

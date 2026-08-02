@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -36,6 +37,15 @@ import kotlin.math.max
  * @param level current amplitude, 0..1, for the styles that draw one number
  * @param bands per-frequency-band energy, low first; the spectrum styles' input
  * @param peaks slow-falling peak per band, same length as [bands]
+ * @param revision bumped by the caller whenever [bands] changes.
+ *
+ *   Load-bearing, and the reason the spectrum appeared to update a couple of
+ *   times a second while the app was drawing at fifty. [bands] is one array
+ *   mutated in place — it has to be, because allocating 48 floats per frame on
+ *   the audio path is not acceptable — so from Compose's point of view the
+ *   parameter never changes, the draw lambda captures nothing new, and
+ *   `drawBehind` reuses its cached result. Capturing an integer that does change
+ *   is what invalidates the draw.
  */
 @Composable
 fun VisualizerTrack(
@@ -44,6 +54,7 @@ fun VisualizerTrack(
     level: Float,
     bands: FloatArray,
     peaks: FloatArray = bands,
+    revision: Int = 0,
     modifier: Modifier = Modifier,
     height: Dp = 4.dp,
 ) {
@@ -92,12 +103,10 @@ fun VisualizerTrack(
                 .height(AUDIO_TRACK_HEIGHT)
                 .clearAndSetSemantics { },
         ) {
-            drawSpectrum(
-                bands = bands,
-                peaks = null,
-                colour = active.copy(alpha = WAVE_ALPHA),
-                peakColour = null,
-            )
+            revision.let { }
+            // A wave, not bars. This drew the same rectangles as BARS with a
+            // lower alpha, which made two of the five styles the same picture.
+            drawWave(bands, active)
             drawProgressLine(played, inactive, active, size.height / 2f)
         }
 
@@ -107,6 +116,7 @@ fun VisualizerTrack(
                 .height(AUDIO_TRACK_HEIGHT)
                 .clearAndSetSemantics { },
         ) {
+            revision.let { }
             drawSpectrum(
                 bands = bands,
                 peaks = peaks,
@@ -152,49 +162,59 @@ fun VisualizerTrack(
             }
         }
 
-        VisualizerStyle.DOTS -> Canvas(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(AUDIO_TRACK_HEIGHT)
-                .clearAndSetSemantics { },
-        ) {
-            val centre = size.height / 2f
-            // The same signal on a coarser grid, so the row stays a row of dots
-            // rather than becoming a dotted line.
-            val count = max(2, bands.size / DOT_BAND_STRIDE)
-            val available = size.height - PROGRESS_HEIGHT_PX
-            val spacing = size.width / (count - 1)
-            // Bounded by the gap as well as by the row height. Height alone let a
-            // loud passage grow every dot until neighbours overlapped and the
-            // whole left half fused into one blob.
-            val maxRadius = minOf(available / 2f, spacing * DOT_MAX_SPACING_FRACTION)
-            // Never thinner than the track it sits on. A dot smaller than 8px was
-            // simply inside the progress bar, so quiet passages had no dots at all
-            // and the row looked like it stopped rendering partway across.
-            val minRadius = minOf(PROGRESS_HEIGHT_PX / 2f + DOT_CLEARANCE_PX, maxRadius)
-
-            // The line first, the dots over it. Drawn the other way round, the bar
-            // paints out every dot it is wider than — which is most of them.
-            drawProgressLine(played, inactive, active, centre)
-            for (index in 0 until count) {
-                val band = (index * DOT_BAND_STRIDE).coerceAtMost(bands.size - 1)
-                val energy = if (bands.isEmpty()) level else bands[band].coerceIn(0f, 1f)
-                val x = if (count == 1) size.width / 2f else spacing * index
-                val radius = minRadius + energy * (maxRadius - minRadius).coerceAtLeast(0f)
-                val reached = x <= size.width * played
-                drawCircle(
-                    // Both halves are the accent, only at different strengths. The
-                    // unplayed dots used to be drawn in the track colour, on the
-                    // track, which made them invisible even where the bar did not
-                    // cover them.
-                    color = active.copy(alpha = if (reached) DOT_PLAYED_ALPHA else DOT_AHEAD_ALPHA),
-                    // Inset at the ends so the outermost dots are not clipped in half.
-                    radius = radius,
-                    center = Offset(x.coerceIn(radius, size.width - radius), centre),
-                )
-            }
-        }
     }
+}
+
+/**
+ * A continuous wave across the spectrum: low frequencies at the left, high at the
+ * right, mirrored about the centre line and filled.
+ *
+ * Points are joined with a Catmull-Rom-style midpoint curve rather than straight
+ * segments, because 48 straight joins over 300px read as a saw, not a wave.
+ */
+private fun DrawScope.drawWave(bands: FloatArray, colour: Color) {
+    if (bands.size < 2) return
+    val centre = size.height / 2f
+    val available = (size.height - PROGRESS_HEIGHT_PX) / 2f
+    val step = size.width / (bands.size - 1)
+
+    fun heightAt(index: Int): Float =
+        max(MIN_BAR_PX / 2f, available * bands[index].coerceIn(0f, 1f))
+
+    val upper = Path()
+    val lower = Path()
+    upper.moveTo(0f, centre - heightAt(0))
+    lower.moveTo(0f, centre + heightAt(0))
+    for (index in 0 until bands.size - 1) {
+        val x = index * step
+        val nextX = (index + 1) * step
+        val midX = (x + nextX) / 2f
+        val h = heightAt(index)
+        val nextH = heightAt(index + 1)
+        // Horizontal control points at the midpoint keep the curve monotone
+        // between samples, so a loud band cannot make the line overshoot below
+        // the axis and cross its own mirror.
+        upper.cubicTo(midX, centre - h, midX, centre - nextH, nextX, centre - nextH)
+        lower.cubicTo(midX, centre + h, midX, centre + nextH, nextX, centre + nextH)
+    }
+
+    // Closed into a single band so the wave reads as one body rather than as two
+    // unrelated lines.
+    val body = Path().apply {
+        addPath(upper)
+        lineTo(size.width, centre + heightAt(bands.size - 1))
+        // Walk the lower edge backwards to close the shape.
+        for (index in bands.size - 1 downTo 1) {
+            val x = index * step
+            val previousX = (index - 1) * step
+            val midX = (x + previousX) / 2f
+            cubicTo(midX, centre + heightAt(index), midX, centre + heightAt(index - 1), previousX, centre + heightAt(index - 1))
+        }
+        close()
+    }
+    drawPath(path = body, color = colour.copy(alpha = WAVE_FILL_ALPHA))
+    drawPath(path = upper, color = colour.copy(alpha = WAVE_LINE_ALPHA), style = Stroke(width = WAVE_STROKE_PX))
+    drawPath(path = lower, color = colour.copy(alpha = WAVE_LINE_ALPHA), style = Stroke(width = WAVE_STROKE_PX))
 }
 
 /**
@@ -290,15 +310,20 @@ private val PREVIEW_BANDS = FloatArray(48) { index ->
 }
 private val PREVIEW_PEAKS = FloatArray(48) { (PREVIEW_BANDS[it] + 0.12f).coerceAtMost(1f) }
 
-/** Level swells within a fixed band so the row never reflows as audio plays. */
-private val LEVEL_MAX_HEIGHT = 10.dp
+/**
+ * Level swells within a fixed band so the row never reflows as audio plays. It
+ * used to top out at 10dp, which is a progress bar with a slight wobble — not
+ * something a listener notices. It now shares the height of the other styles and
+ * swells across most of it.
+ */
+private val LEVEL_MAX_HEIGHT = 22.dp
 
 /**
  * One height for every audio-reactive style. They used to be 26–30dp apiece, so
  * changing style in Settings nudged the whole transport row up or down.
  */
 private val AUDIO_TRACK_HEIGHT = 30.dp
-private const val BASE_THICKNESS = 0.4f
+private const val BASE_THICKNESS = 0.22f
 private const val MIN_BAR_PX = 2f
 private const val MIN_BAR_WIDTH_PX = 1.5f
 private const val BAR_GAP_PX = 2f
@@ -306,7 +331,9 @@ private const val PROGRESS_HEIGHT_PX = 8f
 private const val PEAK_HEIGHT_PX = 2f
 
 /** The wave is context around the bar, not a competing element. */
-private const val WAVE_ALPHA = 0.45f
+private const val WAVE_FILL_ALPHA = 0.3f
+private const val WAVE_LINE_ALPHA = 0.85f
+private const val WAVE_STROKE_PX = 2f
 private const val BAR_ALPHA = 0.72f
 private const val PEAK_ALPHA = 0.5f
 /** Big enough at silence that the playhead always carries a visible ring. */
@@ -318,10 +345,3 @@ private const val PULSE_OUTER_ALPHA = 0.28f
 private const val PULSE_OUTER_ALPHA_GROWTH = 0.32f
 private const val PULSE_INNER_ALPHA = 0.5f
 private const val PULSE_INNER_ALPHA_GROWTH = 0.4f
-private const val DOT_BAND_STRIDE = 4
-/** How far a silent dot still stands clear of the track's edge. */
-private const val DOT_CLEARANCE_PX = 2f
-/** A dot at full energy leaves about a third of the gap clear on each side. */
-private const val DOT_MAX_SPACING_FRACTION = 0.34f
-private const val DOT_PLAYED_ALPHA = 0.9f
-private const val DOT_AHEAD_ALPHA = 0.45f

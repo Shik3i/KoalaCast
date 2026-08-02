@@ -18,12 +18,13 @@ private const val AMPLITUDE_GAIN = 3.8f
 // 30 Hz attack/release timing, but with enough temporal detail for 120 Hz panels.
 private const val AMPLITUDE_ATTACK = 0.3313f
 private const val AMPLITUDE_RELEASE = 0.0342f
-// Applied once per display frame rather than per audio window, so these are in
-// frames: roughly 60 ms to rise and 250 ms to fall on a 60 Hz panel.
-private const val BAND_ATTACK = 0.55f
-private const val BAND_RELEASE = 0.16f
-/** Peak markers fall about a third of full scale per second at 60 Hz. */
-private const val BAND_PEAK_FALL = 0.006f
+// Applied once per *analysed* spectrum — about 86 a second — not once per drawn
+// frame, so the shape moves at the same speed whatever the display does. Roughly
+// 40 ms to rise and 150 ms to fall.
+private const val BAND_ATTACK = 0.45f
+private const val BAND_RELEASE = 0.09f
+/** Peak markers fall about a third of full scale per second. */
+private const val BAND_PEAK_FALL = 0.004f
 internal const val ENVELOPE_UPDATES_PER_SECOND = 120
 private const val ENVELOPE_FRAME_NANOS = 1_000_000_000L / ENVELOPE_UPDATES_PER_SECOND
 private const val MAX_RENDER_GAP_NANOS = 1_000_000_000L
@@ -165,15 +166,26 @@ class AmplitudeTap @Inject constructor() {
     }
 
     /**
-     * The newest band energies the audio thread produced, low frequencies first.
-     * A single flat array rather than a queue: unlike the envelope, a spectrum
-     * frame that the display never showed is of no interest, and holding onto
-     * stale ones only adds latency.
+     * Band energies the audio thread produced, low frequencies first, as a ring
+     * of whole spectra.
+     *
+     * This was a single flat array holding "the newest spectrum", on the
+     * reasoning that a frame the display never showed is of no interest. That
+     * reasoning is wrong for the same reason it was wrong for the envelope, and
+     * the note above [pending] says why: decoders hand over PCM in bursts of
+     * hundreds of milliseconds, so an entire burst's worth of spectra was
+     * computed and then overwritten, and the display saw exactly one per burst.
+     * That is the two-updates-per-second crawl — the level meter looked fine
+     * next to it only because it had this ring and the spectrum did not.
      */
-    private val publishedBands = FloatArray(SPECTRUM_BANDS)
+    private val pendingBands = Array(PENDING_SPECTRA) { FloatArray(SPECTRUM_BANDS) }
 
-    // Renderer-only. Smoothing has to happen per *display* frame, not per FFT, or
-    // the bars move at whatever rate the decoder happens to hand over buffers.
+    @Volatile
+    private var bandsWrite = 0L
+
+    private var bandsRead = 0L
+
+    // Renderer-only filter state, advanced once per analysed spectrum.
     private val smoothedBands = FloatArray(SPECTRUM_BANDS)
     private val peakBands = FloatArray(SPECTRUM_BANDS)
 
@@ -185,20 +197,52 @@ class AmplitudeTap @Inject constructor() {
      * either misses transients or leaves every bar twitching.
      */
     fun copyBandsInto(out: FloatArray, peaks: FloatArray? = null) {
+        // Every spectrum the audio thread produced since the last display frame
+        // is folded through the filter, not just the newest. That makes the
+        // attack and release run at the rate the audio is analysed — about 86
+        // steps a second — rather than at whatever rate the display happens to
+        // redraw, so the shape moves identically on a 60 Hz phone, a 120 Hz one
+        // and a slow emulator.
+        var steps = 0
+        while (bandsRead < bandsWrite) {
+            if (bandsWrite - bandsRead > PENDING_SPECTRA) {
+                // Fell far behind: skip the stale ones rather than animate through
+                // audio the listener heard a second ago.
+                bandsRead = bandsWrite - PENDING_SPECTRA
+            }
+            advanceBands(pendingBands[(bandsRead % PENDING_SPECTRA).toInt()])
+            bandsRead++
+            steps++
+            if (steps >= MAX_BAND_STEPS_PER_FRAME) break
+        }
+        // Nothing new — still let the release and the peak markers fall, or a
+        // pause would freeze the bars mid-air.
+        if (steps == 0) advanceBands(null)
+
         for (band in smoothedBands.indices) {
-            val next = publishedBands[band]
+            if (band < out.size) out[band] = smoothedBands[band]
+            if (peaks != null && band < peaks.size) peaks[band] = peakBands[band]
+        }
+    }
+
+    /** One filter step toward [target], or toward silence when it is null. */
+    private fun advanceBands(target: FloatArray?) {
+        for (band in smoothedBands.indices) {
+            val next = target?.getOrElse(band) { 0f } ?: 0f
             val previous = smoothedBands[band]
             val blend = if (next > previous) BAND_ATTACK else BAND_RELEASE
             val value = previous + (next - previous) * blend
             smoothedBands[band] = value
             peakBands[band] = maxOf(value, peakBands[band] - BAND_PEAK_FALL)
-            if (band < out.size) out[band] = value
-            if (peaks != null && band < peaks.size) peaks[band] = peakBands[band]
         }
     }
 
     internal fun publishBands(source: FloatArray) {
-        source.copyInto(publishedBands, endIndex = minOf(source.size, publishedBands.size))
+        val index = bandsWrite
+        val slot = pendingBands[(index % PENDING_SPECTRA).toInt()]
+        source.copyInto(slot, endIndex = minOf(source.size, slot.size))
+        // Volatile publication happens after the array write.
+        bandsWrite = index + 1
     }
 
     internal fun publish(value: Float) {
@@ -210,15 +254,25 @@ class AmplitudeTap @Inject constructor() {
 
     internal fun reset() {
         level = 0f
-        publishedBands.fill(0f)
         smoothedBands.fill(0f)
         peakBands.fill(0f)
+        bandsRead = bandsWrite
         pendingRead = pendingWrite
         resetGeneration++
     }
 
     private companion object {
         const val PENDING_CAPACITY = 128
+
+        /** About a third of a second of spectra at the analysis rate. */
+        const val PENDING_SPECTRA = 32
+
+        /**
+         * A ceiling on catch-up work per display frame. Without it, resuming from
+         * a long stall would run the filter over a full backlog inside one frame
+         * and drop the next one.
+         */
+        const val MAX_BAND_STEPS_PER_FRAME = 8
     }
 }
 
