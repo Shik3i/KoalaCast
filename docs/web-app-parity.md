@@ -135,6 +135,15 @@ Two things kept this hidden for so long, and both are fixed:
 - Debug builds are not minified, so the fault could not occur in development or
   on an emulator — only in the signed release people actually install.
 
+With the converter fixed the push finally ran, and the server rejected it with
+`400`. The client reported only the status code and aborted the whole sync, so
+the watermark never moved and the next attempt resent the same operation — one
+unacceptable record could keep an entire account's data off the server for good.
+A batch that is rejected is now halved and retried until the offending operation
+is alone; that one is reported with the server's own explanation and skipped, and
+everything else goes through. Only 400 is treated this way: a 500 or a 429 is
+about the request as a whole and still fails the sync so it retries.
+
 Also fixed while here: the listening-session push watermark advanced to
 wall-clock time captured before the outgoing operations were built. Sessions are
 written asynchronously when playback stops, so one landing just after that query

@@ -17,6 +17,9 @@ import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
+import net.koalastuff.koalacast.core.model.Account
+import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
+import net.koalastuff.koalacast.core.network.dto.SyncPushResponse
 import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
 import net.koalastuff.koalacast.core.network.dto.SyncSnapshotResponse
 import net.koalastuff.koalacast.core.network.dto.SyncOperationDto
@@ -341,6 +344,65 @@ class SyncRepositoryTest {
 
         assertTrue(failure?.message?.contains("after snapshot recovery") == true)
         assertEquals(1, snapshotCalls)
+    }
+
+    @Test
+    fun `one rejected operation is isolated and the rest still sync`() = runTest {
+        // The failure this guards: a 400 aborted the whole push, the watermark
+        // never moved, and the next attempt resent the same rejected operation —
+        // so one unacceptable row kept an entire account's data off the server
+        // for good.
+        repeat(6) { index ->
+            database.listeningSessionDao().upsert(
+                ListeningSessionEntity(
+                    id = "session-$index",
+                    episodeId = "episode-$index",
+                    podcastId = "show",
+                    title = "Episode $index",
+                    podcastTitle = "Show",
+                    startedAt = 10L + index,
+                    endedAt = 20L + index,
+                    wallClockMs = 10,
+                    audioListenedMs = 10,
+                    speedSavedMs = 0,
+                    silenceSavedMs = 0,
+                    manualSkippedMs = 0,
+                    introOutroSkippedMs = 0,
+                    speedWeightedMs = 10,
+                ),
+            )
+        }
+
+        val accepted = mutableListOf<String>()
+        apiHandler = { method, args ->
+            when (method.name) {
+                "pushSync" -> {
+                    val body = args!![0] as SyncPushRequest
+                    val poisoned = body.operations.any { it.entityId == "session-3" }
+                    if (poisoned && body.operations.size == 1) {
+                        Response.error<SyncPushResponse>(
+                            400,
+                            """{"error":"invalid operation at index 0: bad"}""".toResponseBody(),
+                        )
+                    } else if (poisoned) {
+                        Response.error<SyncPushResponse>(400, "".toResponseBody())
+                    } else {
+                        accepted += body.operations.map { it.entityId }
+                        Response.success(SyncPushResponse(appliedOps = body.operations.size))
+                    }
+                }
+                else -> error("unexpected API call: ${method.name}")
+            }
+        }
+
+        val rejected = repository.push(USER_ID, "device", store.accountGeneration())
+
+        // Everything except the poisoned record reached the server.
+        assertTrue(accepted.containsAll(listOf("session-0", "session-1", "session-2", "session-4", "session-5")))
+        assertTrue("session-3" !in accepted)
+        // And it is reported rather than vanishing quietly.
+        assertEquals(1, rejected.size)
+        assertTrue(rejected.first().contains("session-3"))
     }
 
     private fun subscriptionChange(id: String, cursor: Long) = SyncChangesetDto(

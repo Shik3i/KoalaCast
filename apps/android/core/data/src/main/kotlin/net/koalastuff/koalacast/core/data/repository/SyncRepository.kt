@@ -97,9 +97,15 @@ class SyncRepository @Inject constructor(
         _status.value = SyncStatus.SYNCING
         try {
             pull(account.userId, generation)
-            push(account.userId, account.deviceId, generation)
+            val rejected = push(account.userId, account.deviceId, generation)
             _lastSyncedAt.value = System.currentTimeMillis()
-            _lastSyncError.value = null
+            // A rejection is not a failed sync — the rest went through — but it
+            // must still be said out loud, or the data silently goes missing.
+            _lastSyncError.value = if (rejected.isEmpty()) {
+                null
+            } else {
+                "${rejected.size} rejected, rest synced. First: ${rejected.first()}"
+            }
             _status.value = SyncStatus.IDLE
             true
         } catch (error: AuthExpired) {
@@ -294,7 +300,7 @@ class SyncRepository @Inject constructor(
         }
     }
 
-    private suspend fun push(userId: String, deviceId: String, generation: Long) {
+    internal suspend fun push(userId: String, deviceId: String, generation: Long): List<String> {
         ensureGeneration(generation)
         val previousWatermark = store.pushWatermark(userId)
         val previousListeningWatermark = store.listeningSessionPushWatermark(userId)
@@ -315,17 +321,58 @@ class SyncRepository @Inject constructor(
             .maxOfOrNull { it.clientTimestamp }
             ?: previousListeningWatermark
         ensureGeneration(generation)
+        val rejected = mutableListOf<String>()
         operations.chunked(PUSH_BATCH).forEach { batch ->
-            ensureGeneration(generation)
-            val response = api.pushSync(SyncPushRequest(batch))
-            ensureGeneration(generation)
-            if (response.code() == 401) throw AuthExpired()
-            if (!response.isSuccessful) throw IOException("sync push failed: ${response.code()}")
+            pushBatch(batch, generation, rejected)
         }
+
         store.setPushWatermark(userId, nextWatermark)
         store.setListeningSessionPushWatermark(userId, nextListeningWatermark)
         // Cursor deliberately stays unchanged. The next pull re-reads our own
         // idempotent operations so a concurrent device cannot be skipped.
+        return rejected
+    }
+
+    /**
+     * Sends one batch, and refuses to let a single bad record stop everything.
+     *
+     * A 400 used to abort the whole sync, which meant the watermark never moved
+     * and the next attempt sent the same rejected operation again — forever. One
+     * unacceptable row could therefore keep an entire account's data off the
+     * server permanently, which is precisely what happened. On a rejection the
+     * batch is halved and retried until the offending operation is alone; that
+     * one is recorded and skipped, and everything else goes through.
+     *
+     * The server's own explanation is kept. Reporting only the status code threw
+     * away the one sentence that says which operation was wrong and why.
+     */
+    private suspend fun pushBatch(
+        batch: List<SyncOperationDto>,
+        generation: Long,
+        rejected: MutableList<String>,
+    ) {
+        if (batch.isEmpty()) return
+        ensureGeneration(generation)
+        val response = api.pushSync(SyncPushRequest(batch))
+        ensureGeneration(generation)
+        if (response.code() == 401) throw AuthExpired()
+        if (response.isSuccessful) return
+
+        val detail = runCatching { response.errorBody()?.string() }.getOrNull().orEmpty().take(300)
+        // Only a rejection of the *content* is worth isolating. A 500 or a 429 is
+        // about the request as a whole and must still fail the sync so it retries.
+        if (response.code() != 400) {
+            throw IOException("sync push failed: ${response.code()} $detail".trim())
+        }
+        if (batch.size == 1) {
+            val op = batch.first()
+            android.util.Log.w("KoalaCastSync", "dropping ${op.entityType}/${op.entityId}: $detail")
+            rejected += "${op.entityType} ${op.entityId}: $detail"
+            return
+        }
+        val half = batch.size / 2
+        pushBatch(batch.subList(0, half), generation, rejected)
+        pushBatch(batch.subList(half, batch.size), generation, rejected)
     }
 
     internal suspend fun buildOperations(
