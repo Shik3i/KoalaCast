@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.2",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "idb": "^8.0.0"
   },
   "overrides": {
