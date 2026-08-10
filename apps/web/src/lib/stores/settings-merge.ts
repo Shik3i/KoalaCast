@@ -39,8 +39,20 @@ export const OWNED_SETTINGS_KEYS = new Set([
 	'download_retention',
 	'download_concurrency',
 	'download_budget_bytes',
-	'updated_at'
+	'updated_at',
+	// The per-field timestamps this client maintains. Owned, so it is never stored
+	// as somebody else's key and written back twice.
+	'field_updated_at'
 ]);
+
+/**
+ * The settings that carry a value, in the order they are merged. This is
+ * `OWNED_SETTINGS_KEYS` without the two bookkeeping keys: those describe the
+ * payload rather than being part of it, and nothing merges them field-wise.
+ */
+export const SYNCED_SETTINGS_FIELDS: readonly string[] = [...OWNED_SETTINGS_KEYS].filter(
+	(key) => key !== 'updated_at' && key !== 'field_updated_at'
+);
 
 /** The part of an incoming payload that belongs to another client. */
 export function foreignSettingsOf(payload: Record<string, unknown>): Record<string, unknown> {

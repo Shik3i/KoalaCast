@@ -11,7 +11,17 @@ import {
 // this store, and importing it back would create a cycle.
 import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
 import { storedPlaybackSpeed } from '$lib/player/playback-speed';
-import { foreignSettingsOf, mergeForeignSettings } from './settings-merge';
+import {
+	foreignSettingsOf,
+	mergeForeignSettings,
+	SYNCED_SETTINGS_FIELDS
+} from './settings-merge';
+import {
+	decideFields,
+	parseFieldTimestamps,
+	FIELD_UPDATED_AT_KEY,
+	type FieldTimestamps
+} from './settings-fields';
 import {
 	getStoredPalette,
 	getStoredTheme,
@@ -53,6 +63,7 @@ const DOWNLOAD_CONCURRENCY_KEY = 'koalacast_download_concurrency';
 const DOWNLOAD_BUDGET_BYTES_KEY = 'koalacast_download_budget_bytes';
 const SETTINGS_UPDATED_AT_KEY = 'koalacast_settings_updated_at';
 const FOREIGN_SETTINGS_KEY = 'koalacast_settings_foreign';
+const FIELD_UPDATED_AT_KEY_STORAGE = 'koalacast_settings_field_updated_at';
 const GUEST_MIGRATION_KEY = 'koalacast_guest_preferences_migrated';
 const ACCOUNT_SCOPED_KEYS = [
 	KEY,
@@ -74,7 +85,8 @@ const ACCOUNT_SCOPED_KEYS = [
 	DOWNLOAD_CONCURRENCY_KEY,
 	DOWNLOAD_BUDGET_BYTES_KEY,
 	SETTINGS_UPDATED_AT_KEY,
-	FOREIGN_SETTINGS_KEY
+	FOREIGN_SETTINGS_KEY,
+	FIELD_UPDATED_AT_KEY_STORAGE
 ];
 
 function preferenceStorage(): Storage | null {
@@ -97,6 +109,17 @@ function initialForeignSettings(): Record<string, unknown> {
 		return {};
 	}
 }
+function initialFieldTimestamps(): FieldTimestamps {
+	if (typeof localStorage === 'undefined') return {};
+	try {
+		return parseFieldTimestamps(
+			JSON.parse(localStorage.getItem(scopedKey(FIELD_UPDATED_AT_KEY_STORAGE)) || '{}')
+		);
+	} catch (_) {
+		return {};
+	}
+}
+
 let activeOwner: string | null = null;
 
 function scopedKey(key: string, owner = activeOwner): string {
@@ -305,6 +328,10 @@ class Prefs {
 	// Settings keys owned by another client, kept verbatim so pushing from here
 	// does not delete them from the server. Not $state: nothing renders them.
 	#foreignSettings: Record<string, unknown> = initialForeignSettings();
+	// When each individual setting last changed here, so a merge can keep both
+	// halves of two concurrent edits instead of letting the newer blob win all of
+	// it. Not $state for the same reason. See settings-fields.ts.
+	#fieldUpdatedAt: FieldTimestamps = initialFieldTimestamps();
 
 	activateContext(userId: string | null, options: { migrateGuest?: boolean } = {}) {
 		const storage = preferenceStorage();
@@ -325,6 +352,7 @@ class Prefs {
 		}
 		activeOwner = userId;
 		this.#foreignSettings = initialForeignSettings();
+		this.#fieldUpdatedAt = initialFieldTimestamps();
 		this.dateFormat = initialFormat();
 		this.interests = initialInterests();
 		this.hiddenGenres = initialHidden();
@@ -354,10 +382,28 @@ class Prefs {
 				: Math.max(0, Number(storage.getItem(scopedKey(SETTINGS_UPDATED_AT_KEY))) || 0);
 	}
 
-	#touch() {
+	/**
+	 * Marks the settings blob dirty, and records *which* fields changed.
+	 *
+	 * The per-field stamps are what let a merge keep both sides of a concurrent
+	 * edit; see settings-fields.ts. A caller that passes no field still bumps the
+	 * blob timestamp, which is the old, coarser behaviour.
+	 */
+	#touch(...fields: string[]) {
 		this.updatedAt = Date.now();
+		for (const field of fields) this.#fieldUpdatedAt[field] = this.updatedAt;
 		try {
 			localStorage.setItem(scopedKey(SETTINGS_UPDATED_AT_KEY), String(this.updatedAt));
+			if (fields.length > 0) this.#persistFieldTimestamps();
+		} catch (_) {}
+	}
+
+	#persistFieldTimestamps() {
+		try {
+			localStorage.setItem(
+				scopedKey(FIELD_UPDATED_AT_KEY_STORAGE),
+				JSON.stringify(this.#fieldUpdatedAt)
+			);
 		} catch (_) {}
 	}
 
@@ -381,7 +427,7 @@ class Prefs {
 		}
 		this.languages = has ? this.languages.filter((l) => l !== langCode) : [...this.languages, langCode];
 		this.#persistLanguages();
-		this.#touch();
+		this.#touch('languages');
 	}
 
 	setUILanguage(locale: string) {
@@ -389,7 +435,7 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(UI_LANGUAGE_KEY), locale);
 		} catch (_) {}
-		this.#touch();
+		this.#touch('ui_language');
 	}
 
 	setDateFormat(mode: DateFormat) {
@@ -397,7 +443,7 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(KEY), mode);
 		} catch (_) {}
-		this.#touch();
+		this.#touch('date_format');
 	}
 
 	setVolumeBoost(enabled: boolean) {
@@ -405,7 +451,7 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(VOLUME_BOOST_KEY), enabled ? '1' : '0');
 		} catch (_) {}
-		this.#touch();
+		this.#touch('volume_boost');
 	}
 
 	setSkipSilence(enabled: boolean) {
@@ -413,7 +459,7 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(SKIP_SILENCE_KEY), enabled ? '1' : '0');
 		} catch (_) {}
-		this.#touch();
+		this.#touch('skip_silence');
 	}
 
 	setPlaybackSpeed(speed: number) {
@@ -421,49 +467,49 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(PLAYBACK_SPEED_KEY), String(this.playbackSpeed));
 		} catch (_) {}
-		this.#touch();
+		this.#touch('playback_speed');
 	}
 
 	setStartScreen(value: StartScreen) {
 		this.startScreen = value;
 		try { localStorage.setItem(scopedKey(START_SCREEN_KEY), value); } catch (_) {}
-		this.#touch();
+		this.#touch('start_screen');
 	}
 
 	setVisualizer(value: VisualizerStyle) {
 		this.visualizer = value;
 		try { localStorage.setItem(scopedKey(VISUALIZER_KEY), value); } catch (_) {}
-		this.#touch();
+		this.#touch('visualizer');
 	}
 
 	setProxyImages(enabled: boolean) {
 		this.proxyImages = enabled;
 		try { localStorage.setItem(scopedKey(PROXY_IMAGES_KEY), enabled ? '1' : '0'); } catch (_) {}
-		this.#touch();
+		this.#touch('proxy_images');
 	}
 
 	setDownloadWifiOnly(enabled: boolean) {
 		this.downloadWifiOnly = enabled;
 		try { localStorage.setItem(scopedKey(DOWNLOAD_WIFI_ONLY_KEY), enabled ? '1' : '0'); } catch (_) {}
-		this.#touch();
+		this.#touch('download_wifi_only');
 	}
 
 	setAutoDownloadCount(value: number) {
 		this.autoDownloadCount = clampedNumber(value, this.autoDownloadCount, 1, 10);
 		try { localStorage.setItem(scopedKey(AUTO_DOWNLOAD_COUNT_KEY), String(this.autoDownloadCount)); } catch (_) {}
-		this.#touch();
+		this.#touch('auto_download_count');
 	}
 
 	setDownloadRetention(value: DownloadRetention) {
 		this.downloadRetention = value;
 		try { localStorage.setItem(scopedKey(DOWNLOAD_RETENTION_KEY), value); } catch (_) {}
-		this.#touch();
+		this.#touch('download_retention');
 	}
 
 	setDownloadConcurrency(value: number) {
 		this.downloadConcurrency = clampedNumber(value, this.downloadConcurrency, 1, 4);
 		try { localStorage.setItem(scopedKey(DOWNLOAD_CONCURRENCY_KEY), String(this.downloadConcurrency)); } catch (_) {}
-		this.#touch();
+		this.#touch('download_concurrency');
 	}
 
 	setDownloadBudgetBytes(value: number) {
@@ -474,7 +520,7 @@ class Prefs {
 			10 * 1024 * 1024 * 1024
 		);
 		try { localStorage.setItem(scopedKey(DOWNLOAD_BUDGET_BYTES_KEY), String(this.downloadBudgetBytes)); } catch (_) {}
-		this.#touch();
+		this.#touch('download_budget_bytes');
 	}
 
 	/**
@@ -484,12 +530,12 @@ class Prefs {
 	 */
 	setThemeMode(mode: ThemeMode) {
 		setTheme(mode);
-		this.#touch();
+		this.#touch('theme_mode');
 	}
 
 	setPaletteId(palette: PaletteId) {
 		setPalette(palette);
-		this.#touch();
+		this.#touch('palette');
 	}
 
 	setDefaultInboxMode(mode: DefaultInboxMode) {
@@ -497,7 +543,7 @@ class Prefs {
 		try {
 			localStorage.setItem(scopedKey(DEFAULT_INBOX_MODE_KEY), mode);
 		} catch (_) {}
-		this.#touch();
+		this.#touch('default_inbox_mode');
 	}
 
 	#persistInterests() {
@@ -515,7 +561,7 @@ class Prefs {
 			this.#persistHidden();
 		}
 		this.#persistInterests();
-		this.#touch();
+		this.#touch('interests', 'hidden_genres');
 	}
 
 	#persistHidden() {
@@ -533,7 +579,7 @@ class Prefs {
 			this.#persistInterests();
 		}
 		this.#persistHidden();
-		this.#touch();
+		this.#touch('hidden_genres', 'interests');
 	}
 
 	#persistHiddenPodcasts() {
@@ -550,13 +596,13 @@ class Prefs {
 			{ key, title: podcast.title.trim() || key }
 		];
 		this.#persistHiddenPodcasts();
-		this.#touch();
+		this.#touch('hidden_podcasts');
 	}
 
 	unhidePodcast(key: string) {
 		this.hiddenPodcasts = this.hiddenPodcasts.filter((item) => item.key !== key);
 		this.#persistHiddenPodcasts();
-		this.#touch();
+		this.#touch('hidden_podcasts');
 	}
 
 	syncPayload() {
@@ -586,7 +632,8 @@ class Prefs {
 				download_retention: this.downloadRetention,
 				download_concurrency: this.downloadConcurrency,
 				download_budget_bytes: this.downloadBudgetBytes,
-				updated_at: this.updatedAt
+				updated_at: this.updatedAt,
+				[FIELD_UPDATED_AT_KEY]: { ...this.#fieldUpdatedAt }
 			},
 			this.#foreignSettings
 		);
@@ -594,6 +641,7 @@ class Prefs {
 
 	resetSynced() {
 		this.#foreignSettings = {};
+		this.#fieldUpdatedAt = {};
 		this.dateFormat = 'absolute';
 		this.interests = [];
 		this.hiddenGenres = [];
@@ -622,32 +670,45 @@ class Prefs {
 
 	applySynced(payload: Record<string, unknown>, options: { authoritative?: boolean } = {}) {
 		const updatedAt = Math.max(0, Number(payload.updated_at) || 0);
-		if (!updatedAt || (!options.authoritative && this.updatedAt >= updatedAt)) return;
-		// Recorded only once the payload has won, so the snapshot stays in step with
-		// the accepted updated_at rather than resurrecting keys from a stale write.
-		this.#foreignSettings = foreignSettingsOf(payload);
+		if (!updatedAt) return;
+		// Deliberately no blob-level early return any more. Discarding a payload
+		// whose `updated_at` is older than ours threw away every field in it —
+		// including the one field the other device had just changed and we had not.
+		// Each field is now weighed on its own timestamp instead.
+		const decision = decideFields(
+			SYNCED_SETTINGS_FIELDS,
+			{ stamps: parseFieldTimestamps(payload[FIELD_UPDATED_AT_KEY]), updatedAt },
+			{ stamps: this.#fieldUpdatedAt, updatedAt: this.updatedAt },
+			options
+		);
+		if (decision.accepted.size === 0 && updatedAt <= this.updatedAt) return;
+		const wins = (field: string) => decision.accepted.has(field);
+		// Foreign keys are the other client's own fields and are merged rather than
+		// replaced: a payload that loses every field of ours may still be the only
+		// carrier of a key neither of us understands.
+		this.#foreignSettings = { ...this.#foreignSettings, ...foreignSettingsOf(payload) };
 		const languages = normalizeLanguageList(Array.isArray(payload.languages) ? payload.languages : []);
-		if (payload.date_format === 'relative' || payload.date_format === 'absolute') {
+		if (wins('date_format') && (payload.date_format === 'relative' || payload.date_format === 'absolute')) {
 			this.dateFormat = payload.date_format;
 		}
-		if (payload.theme_mode === 'dark' || payload.theme_mode === 'light' || payload.theme_mode === 'system') {
+		if (wins('theme_mode') && (payload.theme_mode === 'dark' || payload.theme_mode === 'light' || payload.theme_mode === 'system')) {
 			setTheme(payload.theme_mode as ThemeMode);
 		}
-		if (typeof payload.palette === 'string' && isPaletteId(payload.palette)) {
+		if (wins('palette') && typeof payload.palette === 'string' && isPaletteId(payload.palette)) {
 			setPalette(payload.palette);
 		}
-		this.languages = languages.length ? languages : this.languages;
-		if (Array.isArray(payload.interests)) {
+		if (wins('languages') && languages.length) this.languages = languages;
+		if (wins('interests') && Array.isArray(payload.interests)) {
 			this.interests = payload.interests.filter(
 				(value): value is string => typeof value === 'string'
 			);
 		}
-		if (Array.isArray(payload.hidden_genres)) {
+		if (wins('hidden_genres') && Array.isArray(payload.hidden_genres)) {
 			this.hiddenGenres = payload.hidden_genres.filter(
 				(value): value is string => typeof value === 'string'
 			);
 		}
-		if (Array.isArray(payload.hidden_podcasts)) {
+		if (wins('hidden_podcasts') && Array.isArray(payload.hidden_podcasts)) {
 			this.hiddenPodcasts = payload.hidden_podcasts.filter(
 				(item): item is HiddenPodcastPreference =>
 					typeof item === 'object' &&
@@ -656,43 +717,43 @@ class Prefs {
 					typeof (item as Record<string, unknown>).title === 'string'
 			);
 		}
-		if (payload.default_inbox_mode === 'all' || payload.default_inbox_mode === 'latest') {
+		if (wins('default_inbox_mode') && (payload.default_inbox_mode === 'all' || payload.default_inbox_mode === 'latest')) {
 			this.defaultInboxMode = payload.default_inbox_mode;
 		}
-		if (typeof payload.ui_language === 'string' && isSupportedLocale(payload.ui_language)) {
+		if (wins('ui_language') && typeof payload.ui_language === 'string' && isSupportedLocale(payload.ui_language)) {
 			this.uiLanguage = payload.ui_language;
 		}
-		if (typeof payload.volume_boost === 'boolean') {
+		if (wins('volume_boost') && typeof payload.volume_boost === 'boolean') {
 			this.volumeBoost = payload.volume_boost;
 		}
-		if (typeof payload.skip_silence === 'boolean') {
+		if (wins('skip_silence') && typeof payload.skip_silence === 'boolean') {
 			this.skipSilence = payload.skip_silence;
 		}
-		if (payload.playback_speed !== null && payload.playback_speed !== undefined) {
+		if (wins('playback_speed') && payload.playback_speed !== null && payload.playback_speed !== undefined) {
 			this.playbackSpeed = storedPlaybackSpeed(payload.playback_speed);
 		}
-		if (payload.start_screen === 'discover' || payload.start_screen === 'inbox' || payload.start_screen === 'library') {
+		if (wins('start_screen') && (payload.start_screen === 'discover' || payload.start_screen === 'inbox' || payload.start_screen === 'library')) {
 			this.startScreen = payload.start_screen;
 		}
 		// A peer on an older build may still send the retired "dots"; treat it the
 		// same way a stored value is treated.
-		if (payload.visualizer === 'dots') {
+		if (wins('visualizer') && payload.visualizer === 'dots') {
 			this.visualizer = 'bars';
-		} else if (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform' || payload.visualizer === 'bars' || payload.visualizer === 'pulse') {
+		} else if (wins('visualizer') && (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform' || payload.visualizer === 'bars' || payload.visualizer === 'pulse')) {
 			this.visualizer = payload.visualizer;
 		}
-		if (typeof payload.proxy_images === 'boolean') this.proxyImages = payload.proxy_images;
-		if (typeof payload.download_wifi_only === 'boolean') this.downloadWifiOnly = payload.download_wifi_only;
-		if (payload.auto_download_count !== null && payload.auto_download_count !== undefined) {
+		if (wins('proxy_images') && typeof payload.proxy_images === 'boolean') this.proxyImages = payload.proxy_images;
+		if (wins('download_wifi_only') && typeof payload.download_wifi_only === 'boolean') this.downloadWifiOnly = payload.download_wifi_only;
+		if (wins('auto_download_count') && payload.auto_download_count !== null && payload.auto_download_count !== undefined) {
 			this.autoDownloadCount = clampedNumber(payload.auto_download_count, this.autoDownloadCount, 1, 10);
 		}
-		if (payload.download_retention === 'keep' || payload.download_retention === 'finished' || payload.download_retention === '7d' || payload.download_retention === '14d' || payload.download_retention === '30d') {
+		if (wins('download_retention') && (payload.download_retention === 'keep' || payload.download_retention === 'finished' || payload.download_retention === '7d' || payload.download_retention === '14d' || payload.download_retention === '30d')) {
 			this.downloadRetention = payload.download_retention;
 		}
-		if (payload.download_concurrency !== null && payload.download_concurrency !== undefined) {
+		if (wins('download_concurrency') && payload.download_concurrency !== null && payload.download_concurrency !== undefined) {
 			this.downloadConcurrency = clampedNumber(payload.download_concurrency, this.downloadConcurrency, 1, 4);
 		}
-		if (payload.download_budget_bytes !== null && payload.download_budget_bytes !== undefined) {
+		if (wins('download_budget_bytes') && payload.download_budget_bytes !== null && payload.download_budget_bytes !== undefined) {
 			this.downloadBudgetBytes = clampedNumber(
 				payload.download_budget_bytes,
 				this.downloadBudgetBytes,
@@ -700,7 +761,11 @@ class Prefs {
 				10 * 1024 * 1024 * 1024
 			);
 		}
-		this.updatedAt = updatedAt;
+		// The blob timestamp only moves forward: our own newer fields are still
+		// pending a push and must keep looking newer than what we just merged in.
+		this.updatedAt = Math.max(this.updatedAt, updatedAt);
+		this.#fieldUpdatedAt = { ...this.#fieldUpdatedAt, ...decision.stamps };
+		this.#persistFieldTimestamps();
 		try {
 			localStorage.setItem(scopedKey(KEY), this.dateFormat);
 			localStorage.setItem(scopedKey(LANGUAGES_KEY), JSON.stringify(this.languages));

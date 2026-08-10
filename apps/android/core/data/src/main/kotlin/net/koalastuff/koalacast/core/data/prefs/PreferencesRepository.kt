@@ -10,6 +10,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import net.koalastuff.koalacast.core.data.repository.SyncedSettings
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -51,15 +54,15 @@ class PreferencesRepository @Inject constructor(
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        dataStore.edit { it[Keys.themeMode(owner())] = mode.name; it.touch(owner()) }
+        dataStore.edit { it[Keys.themeMode(owner())] = mode.name; it.touch(owner(), "theme_mode") }
     }
 
     suspend fun setPalette(palette: PaletteId) {
-        dataStore.edit { it[Keys.palette(owner())] = palette.id; it.touch(owner()) }
+        dataStore.edit { it[Keys.palette(owner())] = palette.id; it.touch(owner(), "palette") }
     }
 
     suspend fun setLanguages(languages: Set<String>) {
-        dataStore.edit { it[Keys.languages(owner())] = languages; it.touch(owner()) }
+        dataStore.edit { it[Keys.languages(owner())] = languages; it.touch(owner(), "languages") }
     }
 
     suspend fun setGenrePreferences(interests: Set<String>, hiddenGenres: Set<String>) {
@@ -67,7 +70,7 @@ class PreferencesRepository @Inject constructor(
             val owner = owner()
             it[Keys.interests(owner)] = interests
             it[Keys.hiddenGenres(owner)] = hiddenGenres - interests
-            it.touch(owner)
+            it.touch(owner, "interests", "hidden_genres")
         }
     }
 
@@ -80,7 +83,7 @@ class PreferencesRepository @Inject constructor(
                 .filterNot { hidden -> hidden.key == podcast.key }
             it[Keys.hiddenPodcasts(owner)] =
                 (current + podcast).mapTo(mutableSetOf(), ::encodeHiddenPodcast)
-            it.touch(owner)
+            it.touch(owner, "hidden_podcasts")
         }
     }
 
@@ -91,61 +94,61 @@ class PreferencesRepository @Inject constructor(
                 .mapNotNull(::decodeHiddenPodcast)
                 .filterNot { hidden -> hidden.key == key }
                 .mapTo(mutableSetOf(), ::encodeHiddenPodcast)
-            it.touch(owner)
+            it.touch(owner, "hidden_podcasts")
         }
     }
 
     suspend fun setDefaultInboxMode(mode: InboxMode) {
         dataStore.edit {
             it[Keys.defaultInboxMode(owner())] = mode.name.lowercase()
-            it.touch(owner())
+            it.touch(owner(), "default_inbox_mode")
         }
     }
 
     suspend fun setStartScreen(screen: StartScreen) {
-        dataStore.edit { it[Keys.startScreen(owner())] = screen.id; it.touch(owner()) }
+        dataStore.edit { it[Keys.startScreen(owner())] = screen.id; it.touch(owner(), "start_screen") }
     }
 
     suspend fun setVisualizer(style: VisualizerStyle) {
-        dataStore.edit { it[Keys.visualizer(owner())] = style.id; it.touch(owner()) }
+        dataStore.edit { it[Keys.visualizer(owner())] = style.id; it.touch(owner(), "visualizer") }
     }
 
     suspend fun setProxyImages(enabled: Boolean) {
-        dataStore.edit { it[Keys.proxyImages(owner())] = enabled; it.touch(owner()) }
+        dataStore.edit { it[Keys.proxyImages(owner())] = enabled; it.touch(owner(), "proxy_images") }
     }
 
     suspend fun setPlaybackSpeed(speed: Float) {
-        dataStore.edit { it[Keys.playbackSpeed(owner())] = speed.coerceIn(0.5f, 3f); it.touch(owner()) }
+        dataStore.edit { it[Keys.playbackSpeed(owner())] = speed.coerceIn(0.5f, 3f); it.touch(owner(), "playback_speed") }
     }
 
     suspend fun setDownloadWifiOnly(enabled: Boolean) {
-        dataStore.edit { it[Keys.downloadWifiOnly(owner())] = enabled; it.touch(owner()) }
+        dataStore.edit { it[Keys.downloadWifiOnly(owner())] = enabled; it.touch(owner(), "download_wifi_only") }
     }
 
     suspend fun setSkipSilence(enabled: Boolean) {
-        dataStore.edit { it[Keys.skipSilence(owner())] = enabled; it.touch(owner()) }
+        dataStore.edit { it[Keys.skipSilence(owner())] = enabled; it.touch(owner(), "skip_silence") }
     }
 
     suspend fun setVolumeBoost(enabled: Boolean) {
-        dataStore.edit { it[Keys.volumeBoost(owner())] = enabled; it.touch(owner()) }
+        dataStore.edit { it[Keys.volumeBoost(owner())] = enabled; it.touch(owner(), "volume_boost") }
     }
 
     suspend fun setAutoDownloadCount(count: Int) {
-        dataStore.edit { it[Keys.autoDownloadCount(owner())] = count.coerceIn(1, 20); it.touch(owner()) }
+        dataStore.edit { it[Keys.autoDownloadCount(owner())] = count.coerceIn(1, 20); it.touch(owner(), "auto_download_count") }
     }
 
     suspend fun setDownloadRetention(retention: DownloadRetention) {
-        dataStore.edit { it[Keys.downloadRetention(owner())] = retention.id; it.touch(owner()) }
+        dataStore.edit { it[Keys.downloadRetention(owner())] = retention.id; it.touch(owner(), "download_retention") }
     }
 
     suspend fun setDownloadConcurrency(value: Int) {
-        dataStore.edit { it[Keys.downloadConcurrency(owner())] = value.coerceIn(1, 4); it.touch(owner()) }
+        dataStore.edit { it[Keys.downloadConcurrency(owner())] = value.coerceIn(1, 4); it.touch(owner(), "download_concurrency") }
     }
 
     suspend fun setDownloadBudgetBytes(value: Long) {
         dataStore.edit {
             it[Keys.downloadBudgetMb(owner())] = (value / MB).toInt().coerceAtLeast(0)
-            it.touch(owner())
+            it.touch(owner(), "download_budget_bytes")
         }
     }
 
@@ -168,6 +171,18 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setForeignSettings(json: String) {
         dataStore.edit { it[Keys.foreignSettings(owner())] = json }
+    }
+
+    /** When each individual setting last changed on this device. */
+    suspend fun settingsFieldTimestamps(): Map<String, Long> =
+        SyncedSettings.parseTimestamps(
+            dataStore.data.first()[Keys.settingsFieldUpdatedAt(owner())].orEmpty(),
+        )
+
+    suspend fun setSettingsFieldTimestamps(values: Map<String, Long>) {
+        dataStore.edit {
+            it[Keys.settingsFieldUpdatedAt(owner())] = encodeFieldTimestamps(values)
+        }
     }
 
     suspend fun syncSnapshot(): Pair<UserPreferences, Long> {
@@ -199,7 +214,10 @@ class PreferencesRepository @Inject constructor(
             it[Keys.downloadRetention(owner)] = preferences.downloadRetention.id
             it[Keys.downloadConcurrency(owner)] = preferences.downloadConcurrency.coerceIn(1, 4)
             it[Keys.downloadBudgetMb(owner)] = (preferences.downloadBudgetBytes / MB).toInt()
-            it[Keys.settingsUpdatedAt(owner)] = updatedAt
+            // Only ever forward: fields of ours that are newer than this payload are
+            // still waiting to be pushed and have to keep looking newer than it.
+            it[Keys.settingsUpdatedAt(owner)] =
+                maxOf(it[Keys.settingsUpdatedAt(owner)] ?: 0, updatedAt)
         }
     }
 
@@ -409,6 +427,8 @@ class PreferencesRepository @Inject constructor(
         val DOWNLOAD_TREE_URI = stringPreferencesKey("download_tree_uri")
         fun settingsUpdatedAt(owner: String?) = longPreferencesKey(scoped("settings_updated_at", owner))
         fun foreignSettings(owner: String?) = stringPreferencesKey(scoped("settings_foreign", owner))
+        fun settingsFieldUpdatedAt(owner: String?) =
+            stringPreferencesKey(scoped("settings_field_updated_at", owner))
         fun migrationComplete(owner: String?) = booleanPreferencesKey(scoped("legacy_migrated", owner))
         val LEGACY_THEME_MODE = stringPreferencesKey("theme_mode")
         val LEGACY_PALETTE = stringPreferencesKey("palette")
@@ -440,9 +460,29 @@ class PreferencesRepository @Inject constructor(
         if (removeSource) remove(source)
     }
 
-    private fun androidx.datastore.preferences.core.MutablePreferences.touch(owner: String?) {
-        this[Keys.settingsUpdatedAt(owner)] = System.currentTimeMillis()
+    /**
+     * Marks the settings blob dirty, and records *which* fields changed.
+     *
+     * The per-field stamps let a merge keep both halves of two concurrent edits
+     * instead of letting the newer blob win all of it; see [SyncedSettings.decide].
+     * A caller that names no field still bumps the blob timestamp, which is the
+     * older, coarser behaviour.
+     */
+    private fun androidx.datastore.preferences.core.MutablePreferences.touch(
+        owner: String?,
+        vararg fields: String,
+    ) {
+        val now = System.currentTimeMillis()
+        this[Keys.settingsUpdatedAt(owner)] = now
+        if (fields.isEmpty()) return
+        val merged = SyncedSettings.parseTimestamps(
+            this[Keys.settingsFieldUpdatedAt(owner)].orEmpty(),
+        ) + fields.associateWith { now }
+        this[Keys.settingsFieldUpdatedAt(owner)] = encodeFieldTimestamps(merged)
     }
+
+    private fun encodeFieldTimestamps(values: Map<String, Long>): String =
+        JsonObject(values.mapValues { (_, timestamp) -> JsonPrimitive(timestamp) }).toString()
 
     private fun encodeHiddenPodcast(podcast: HiddenPodcast): String =
         podcast.key + HIDDEN_PODCAST_SEPARATOR +

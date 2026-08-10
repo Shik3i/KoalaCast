@@ -453,7 +453,11 @@ class SyncRepository @Inject constructor(
                 entityId = "global",
                 timestamp = settingsUpdatedAt,
                 payload = SyncedSettings.merge(
-                    owned = settingsPayload(settings, settingsUpdatedAt),
+                    owned = settingsPayload(
+                        settings,
+                        settingsUpdatedAt,
+                        preferences.settingsFieldTimestamps(),
+                    ),
                     foreign = foreignSettings(),
                 ),
             )
@@ -630,68 +634,91 @@ class SyncRepository @Inject constructor(
         val updatedAt = payload.long("updated_at")
         if (updatedAt <= 0) return
         val (current, localUpdatedAt) = preferences.syncSnapshot()
-        if (!authoritative && localUpdatedAt >= updatedAt) return
+        // No blob-level early return any more. Rejecting a payload whose
+        // `updated_at` is older than ours threw away every field it carried,
+        // including the one the other device had just changed and we had not.
+        // Each field is weighed on its own timestamp instead.
+        val localStamps = preferences.settingsFieldTimestamps()
+        val accepted = SyncedSettings.decide(
+            incoming = SyncedSettings.parseTimestamps(payload),
+            incomingUpdatedAt = updatedAt,
+            local = localStamps,
+            localUpdatedAt = localUpdatedAt,
+            authoritative = authoritative,
+        )
+        if (accepted.isEmpty() && updatedAt <= localUpdatedAt) return
+        fun wins(field: String) = field in accepted
 
         // Keep whatever this payload carries for other clients, so the next push
-        // from this device hands it back rather than dropping it. Only recorded
-        // once the payload has won, so it stays in step with the accepted
-        // updated_at rather than resurrecting keys from a stale write.
-        val foreign = SyncedSettings.foreignOf(payload)
+        // from this device hands it back rather than dropping it. Merged rather
+        // than replaced: a payload that loses every field of ours may still be the
+        // only carrier of a key neither client understands.
+        val foreign = SyncedSettings.merge(
+            owned = SyncedSettings.foreignOf(payload),
+            foreign = runCatching {
+                Json.parseToJsonElement(preferences.foreignSettings()) as? JsonObject
+            }.getOrNull() ?: JsonObject(emptyMap()),
+        )
         preferences.setForeignSettings(if (foreign.isEmpty()) "" else foreign.toString())
+        preferences.setSettingsFieldTimestamps(localStamps + accepted)
 
         preferences.applySynced(
             current.copy(
-                themeMode = payload.string("theme_mode").ifBlank {
+                themeMode = if (!wins("theme_mode")) current.themeMode else payload.string("theme_mode").ifBlank {
                     payload.string("theme")
                 }.let { runCatching { ThemeMode.valueOf(it.uppercase()) }.getOrNull() }
                     ?: current.themeMode,
-                palette = payload.string("palette").takeIf { it.isNotBlank() }
+                palette = payload.string("palette").takeIf { wins("palette") && it.isNotBlank() }
                     ?.let(PaletteId::fromId) ?: current.palette,
-                languages = payload.strings("languages").toSet().ifEmpty { current.languages },
-                interests = if ("interests" in payload) {
+                languages = payload.strings("languages").toSet()
+                    .takeIf { wins("languages") && it.isNotEmpty() } ?: current.languages,
+                interests = if (wins("interests") && "interests" in payload) {
                     payload.strings("interests").toSet()
                 } else {
                     current.interests
                 },
-                hiddenGenres = if ("hidden_genres" in payload) {
+                hiddenGenres = if (wins("hidden_genres") && "hidden_genres" in payload) {
                     payload.strings("hidden_genres").toSet()
                 } else {
                     current.hiddenGenres
                 },
-                hiddenPodcasts = if ("hidden_podcasts" in payload) {
+                hiddenPodcasts = if (wins("hidden_podcasts") && "hidden_podcasts" in payload) {
                     payload.hiddenPodcasts()
                 } else {
                     current.hiddenPodcasts
                 },
-                defaultInboxMode = when (payload.string("default_inbox_mode")) {
+                defaultInboxMode = when (payload.string("default_inbox_mode").takeIf { wins("default_inbox_mode") }) {
                     InboxMode.LATEST.name.lowercase() -> InboxMode.LATEST
                     InboxMode.ALL.name.lowercase() -> InboxMode.ALL
                     else -> current.defaultInboxMode
                 },
-                startScreen = payload.string("start_screen").takeIf { it.isNotBlank() }
+                startScreen = payload.string("start_screen").takeIf { wins("start_screen") && it.isNotBlank() }
                     ?.let(StartScreen::fromId) ?: current.startScreen,
-                visualizer = payload.string("visualizer").takeIf { it.isNotBlank() }
+                visualizer = payload.string("visualizer").takeIf { wins("visualizer") && it.isNotBlank() }
                     ?.let(VisualizerStyle::fromId) ?: current.visualizer,
-                proxyImages = payload.booleanOr("proxy_images", current.proxyImages),
-                playbackSpeed = payload.floatOr("playback_speed", current.playbackSpeed),
-                downloadWifiOnly = payload.booleanOr(
-                    "download_wifi_only",
-                    current.downloadWifiOnly,
-                ),
-                skipSilence = payload.booleanOr("skip_silence", current.skipSilence),
-                volumeBoost = payload.booleanOr("volume_boost", current.volumeBoost),
-                autoDownloadCount = payload.intOr(
-                    "auto_download_count",
-                    current.autoDownloadCount,
-                ),
+                proxyImages = if (wins("proxy_images")) payload.booleanOr("proxy_images", current.proxyImages) else current.proxyImages,
+                playbackSpeed = if (wins("playback_speed")) payload.floatOr("playback_speed", current.playbackSpeed) else current.playbackSpeed,
+                downloadWifiOnly = if (wins("download_wifi_only")) {
+                    payload.booleanOr("download_wifi_only", current.downloadWifiOnly)
+                } else {
+                    current.downloadWifiOnly
+                },
+                skipSilence = if (wins("skip_silence")) payload.booleanOr("skip_silence", current.skipSilence) else current.skipSilence,
+                volumeBoost = if (wins("volume_boost")) payload.booleanOr("volume_boost", current.volumeBoost) else current.volumeBoost,
+                autoDownloadCount = if (wins("auto_download_count")) {
+                    payload.intOr("auto_download_count", current.autoDownloadCount)
+                } else {
+                    current.autoDownloadCount
+                },
                 downloadRetention = payload.string("download_retention")
-                    .takeIf { it.isNotBlank() }
+                    .takeIf { wins("download_retention") && it.isNotBlank() }
                     ?.let(DownloadRetention::fromId) ?: current.downloadRetention,
-                downloadConcurrency = payload.intOr(
-                    "download_concurrency",
-                    current.downloadConcurrency,
-                ),
-                downloadBudgetBytes = if ("download_budget_bytes" in payload) {
+                downloadConcurrency = if (wins("download_concurrency")) {
+                    payload.intOr("download_concurrency", current.downloadConcurrency)
+                } else {
+                    current.downloadConcurrency
+                },
+                downloadBudgetBytes = if (wins("download_budget_bytes") && "download_budget_bytes" in payload) {
                     payload.longOrNull("download_budget_bytes")
                         ?.coerceIn(0L, MAX_SYNCED_DOWNLOAD_BUDGET_BYTES)
                         ?: current.downloadBudgetBytes
@@ -700,7 +727,9 @@ class SyncRepository @Inject constructor(
                 },
             ),
             updatedAt,
-            force = authoritative,
+            // The per-field decision has already been made above; applySynced must
+            // not second-guess it with its own blob comparison.
+            force = true,
         )
     }
 
@@ -858,7 +887,17 @@ class SyncRepository @Inject constructor(
             Json.parseToJsonElement(preferences.foreignSettings()) as? JsonObject
         }.getOrNull() ?: JsonObject(emptyMap())
 
-    private fun settingsPayload(item: UserPreferences, updatedAt: Long) = buildJsonObject {
+    private fun settingsPayload(
+        item: UserPreferences,
+        updatedAt: Long,
+        fieldUpdatedAt: Map<String, Long>,
+    ) = buildJsonObject {
+        // Per-field timestamps, so the other client can merge this payload field by
+        // field instead of taking or discarding all of it; see SyncedSettings.
+        put(
+            SyncedSettings.FIELD_UPDATED_AT,
+            JsonObject(fieldUpdatedAt.mapValues { (_, at) -> JsonPrimitive(at) }),
+        )
         put("theme_mode", item.themeMode.name.lowercase())
         put("palette", item.palette.id)
         put("languages", JsonArray(item.languages.map(::JsonPrimitive)))

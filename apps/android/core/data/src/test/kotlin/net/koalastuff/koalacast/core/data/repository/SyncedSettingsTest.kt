@@ -115,10 +115,73 @@ class SyncedSettingsTest {
             "download_concurrency",
             "download_budget_bytes",
             "updated_at",
+            "field_updated_at",
         )
 
         assertEquals(written, SyncedSettings.ownedKeys)
         assertFalse("date_format" in SyncedSettings.ownedKeys)
         assertFalse("ui_language" in SyncedSettings.ownedKeys)
+    }
+
+    @Test
+    fun `keeps both halves of two concurrent edits`() {
+        // The phone changed the language at 10:00, the browser the palette at 10:01.
+        // The browser's blob is newer, and used to revert the language wholesale.
+        val accepted = SyncedSettings.decide(
+            incoming = mapOf("palette" to 1_001L, "languages" to 900L),
+            incomingUpdatedAt = 1_001L,
+            local = mapOf("languages" to 1_000L, "palette" to 900L),
+            localUpdatedAt = 1_000L,
+        )
+        assertTrue("palette" in accepted)
+        assertFalse("languages" in accepted)
+    }
+
+    @Test
+    fun `accepts an older blob that still carries a newer field`() {
+        val accepted = SyncedSettings.decide(
+            incoming = mapOf("languages" to 2_000L),
+            incomingUpdatedAt = 500L,
+            local = emptyMap(),
+            localUpdatedAt = 1_000L,
+        )
+        assertEquals(2_000L, accepted["languages"])
+    }
+
+    @Test
+    fun `reads a payload without stamps the old way`() {
+        val newer = SyncedSettings.decide(emptyMap(), 2_000L, emptyMap(), 1_000L)
+        assertEquals(SyncedSettings.mergeableFields, newer.keys)
+
+        val older = SyncedSettings.decide(emptyMap(), 500L, emptyMap(), 1_000L)
+        assertTrue(older.isEmpty())
+    }
+
+    @Test
+    fun `an upgrading installation does not lose its untouched fields`() {
+        val accepted = SyncedSettings.decide(
+            incoming = mapOf("languages" to 10L),
+            incomingUpdatedAt = 10L,
+            local = emptyMap(),
+            localUpdatedAt = 5_000L,
+        )
+        assertTrue(accepted.isEmpty())
+    }
+
+    @Test
+    fun `an exact tie changes nothing, so a re-pulled own write is a no-op`() {
+        val accepted = SyncedSettings.decide(
+            incoming = mapOf("palette" to 1_000L),
+            incomingUpdatedAt = 1_000L,
+            local = mapOf("palette" to 1_000L),
+            localUpdatedAt = 1_000L,
+        )
+        assertTrue(accepted.isEmpty())
+    }
+
+    @Test
+    fun `field stamps never leak into the foreign bucket`() {
+        assertFalse(SyncedSettings.FIELD_UPDATED_AT in SyncedSettings.mergeableFields)
+        assertTrue(SyncedSettings.FIELD_UPDATED_AT in SyncedSettings.ownedKeys)
     }
 }
