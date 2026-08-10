@@ -90,6 +90,17 @@ has.
 `For you / Charts / Length / Newest` above the chart has no app equivalent.
 Kept; it is a genuine web feature and sits where the app has nothing.
 
+### 9. Player transport — web is ahead
+
+The web player gained live scrubbing with a hover readout, chapter markers on
+the timeline, a "back to 12:34" marker after a large jump, a reorderable queue
+inside the full-screen view, and a transcript that follows the playhead. The app
+has none of these yet.
+
+**Resolution:** temporary, not deliberate. These are the kind of affordance that
+reads as sloppy when only one client has it, and each maps cleanly onto Compose
+and Media3. Listed here so the gap is recorded rather than discovered.
+
 ## Listening statistics
 
 Verified against a live server, not inferred: 33 listening sessions from the
@@ -176,6 +187,9 @@ Not yet reconciled. Roughly in order of how visible they are.
 - **Theme parity.** Both clients ship the same nine palettes, but the app was
   compared in light mode and the web in dark. Colour tokens are shared by name,
   not verified side by side per palette.
+- **Player transport.** Deviation 9 above: five web-only player affordances that
+  should exist on both.
+- **Smart queues** are web-only. The app has named queues but no saved rules.
 
 ## How to re-run the comparison
 

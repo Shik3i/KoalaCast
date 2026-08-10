@@ -110,8 +110,18 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		legalBasis: 'Art. 6(1)(a) GDPR, explicit and freely revocable consent.'
 	},
 	{
+		id: 'notifications',
+		title: '7. New-episode notifications and background checks',
+		icon: 'ph-bell',
+		paragraphs: [
+			'Notifications are opt-in per show and off by default. Enabling them registers a Web Push subscription — a browser-issued endpoint URL and two encryption keys — with this service so it can wake your device while the site is closed. It is stored with your account and your chosen interface language, and nothing else. Turning notifications off for the last remaining show unsubscribes the browser and deletes that registration from the server.',
+			'Where your browser supports Periodic Background Sync (Chromium-based browsers, and only when KoalaCast is installed as an app), the service worker can also check your watched shows without a tab being open. It reads a small local record — each watched show’s identifier and title and the episode identifiers already seen — which never leaves your device, and requests the same public episode endpoint the app uses in the foreground. No additional data is sent to the server, and no notification is shown for a show it has not seen before.'
+		],
+		legalBasis: 'Art. 6(1)(a) GDPR, explicit and freely revocable consent.'
+	},
+	{
 		id: 'no-tracking',
-		title: '7. No advertising or client tracking',
+		title: '8. No advertising or client tracking',
 		icon: 'ph-lock-key',
 		highlight: true,
 		paragraphs: [
@@ -120,7 +130,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 	},
 	{
 		id: 'external-links',
-		title: '8. External links',
+		title: '9. External links',
 		icon: 'ph-arrow-square-out',
 		paragraphs: [
 			'GitHub, license, and publisher links are ordinary external links, not embedded trackers. Opening one sends the usual connection data to that provider under its own privacy policy.'
@@ -128,7 +138,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 	},
 	{
 		id: 'your-rights',
-		title: '9. Your rights & Data Control',
+		title: '10. Your rights & Data Control',
 		icon: 'ph-scales',
 		paragraphs: [
 			'Under the GDPR, you have the right to access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20), objection (Art. 21), and lodging a complaint with a supervisory authority.'

@@ -3,12 +3,17 @@
 KoalaCast is a free, open-source, privacy-first podcast player with a Go API,
 SvelteKit web client, native Android client, and SQLite persistence. This file
 describes the current architectural boundaries; proposed features live in
-[roadmap.md](roadmap.md) and [`api_todo.md`](../api_todo.md).
+[roadmap.md](roadmap.md).
 
 ## Architecture and principles
 
 - **Audio delivery:** browsers and native clients stream or download episode
-  enclosures directly from publishers. KoalaCast does not proxy audio.
+  enclosures directly from publishers. The one exception is opt-in and
+  self-hosted: when a publisher refuses CORS, the browser cannot apply Web Audio
+  effects or store a download at all, so an instance may enable an audio relay
+  (`audio_effects_proxy_enabled`) as a last resort. It is off by default, and the
+  client only reaches for it after trying the host the redirect chain resolves
+  to. Nothing routes audio through KoalaCast without an operator turning it on.
 - **Metadata privacy:** search, RSS, artwork, chapters, and transcripts use the
   KoalaCast backend where applicable to avoid client-side CORS failures and
   reduce disclosure to metadata providers.
@@ -45,7 +50,7 @@ monotonic server cursor, with conflict handling for passive progress versus
 explicit playback actions. Queue and per-podcast settings are not yet
 materialized by the sync handler even though schema foundations exist. Snapshot
 recovery for a compacted cursor is also pending. Exact remaining API contracts:
-[`api_todo.md`](../api_todo.md).
+[roadmap.md](roadmap.md).
 
 ## Sources of truth
 

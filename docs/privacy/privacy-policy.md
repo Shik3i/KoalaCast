@@ -44,6 +44,19 @@ deployment's legal obligations.
 - Individual episodes, raw sessions, timestamps, device IDs, and internal account IDs are never returned by the public statistics endpoint.
 - Opting out removes the account from all global aggregates and rankings immediately without deleting private synchronized listening statistics.
 
+## Notifications and Background Checks
+
+- New-episode notifications are opt-in per show and off by default.
+- Enabling them registers a Web Push endpoint (a browser-issued URL plus two
+  encryption keys) with the server, so it can wake the device while the site is
+  closed. Turning the last show's notifications off unsubscribes the browser and
+  deletes that registration from the server.
+- Where the browser supports Periodic Background Sync, the service worker can
+  check watched shows without any tab being open. It reads a small local mirror
+  — the show's id and title and the episode ids already seen — that never leaves
+  the device, and it requests the same public episode endpoint the app uses in
+  the foreground. No additional data reaches the server.
+
 The live policy shown in the application is maintained in
 [`apps/web/src/lib/data/privacy.ts`](../../apps/web/src/lib/data/privacy.ts).
 That file is authoritative for the official hosted UI; self-hosters must adapt

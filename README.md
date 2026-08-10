@@ -56,11 +56,12 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 | :--- | :--- |
 | **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, multi-select preferred/hidden genres, per-podcast hiding, add any feed by direct RSS URL |
 | **Languages** | Spoken-language filtering (not just storefront region) for Discover and Search, language + genre search filters, fully translated English/German interface (add a language with one JSON file) |
-| **Playback** | Web Audio player, Media Session and Remote Playback APIs, playback-speed control, per-podcast controls, timestamp handoff links, listening-time tracking, keyboard shortcuts |
-| **Library** | Subscriptions with folders, queue plus reusable named queues, favorites, timestamp bookmarks, OPML import/export |
+| **Playback** | Web Audio player, Media Session and Remote Playback APIs, playback-speed control, per-podcast controls, live scrubbing with chapter markers, jump-back after a large seek, a sleep timer that counts listening time rather than wall-clock time, a transcript that follows the playhead, timestamp handoff links, listening-time tracking, keyboard shortcuts |
+| **Library** | Subscriptions with folders, queue plus reusable named queues, smart queues built from saved rules, favorites, timestamp bookmarks, OPML import/export plus an optional auto-updating OPML backup file |
 | **Accounts (optional)** | Argon2id hashing, Base32 recovery codes, HttpOnly session cookies, Bearer device tokens |
-| **Sync** | Subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings via monotonic cursor pull/push and idempotent writes |
+| **Sync** | Subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings via monotonic cursor pull/push and idempotent writes; settings merge per field, so two devices editing different preferences do not revert each other |
 | **Statistics** | Private personal listening analytics plus separately opt-in global aggregates and listener leaderboard |
+| **Offline** | Downloads with an enforced storage budget, retention policy and parallel-transfer limit; installable as a standalone app; new-episode checks continue in the background where the browser allows it |
 | **Customization** | Light/dark/system modes, nine palettes with Fjord as default, resizable side rails, per-show playback preferences |
 | **Admin** | Registration toggle, user suspension, feed-health inspection, manual refresh, system metrics |
 | **Backend** | Go + chi, SQLite (WAL), SSRF-safe HTTP transport, background feed worker with ETag/304 + backoff |

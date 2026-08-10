@@ -87,7 +87,8 @@ processor into the chain preserves skip-silence and variable speed.
 
 ## Settings sync no longer drops the other client's keys
 
-**Status:** fixed. Kept here because the invariant is easy to break again.
+**Status:** fixed, and extended. Kept here because the invariant is easy to
+break again.
 
 Both clients push the whole `settings` entity and the server keeps the last write
 without merging (`services/api/internal/server/handlers/sync.go`), but their
@@ -106,14 +107,82 @@ what the payload writes; keep it that way.
 Theme and palette stay readable from unscoped `localStorage` for pre-paint boot,
 but their current values now enter the account settings blob and synchronize.
 
+The related failure — one `updated_at` for the whole blob, so the newer write
+reverted whatever the other device had just changed — is fixed as well: the blob
+is merged per field. Both invariants are covered by unit tests on both clients,
+and the wire contract is written down in
+[sync-protocol/specification.md](sync-protocol/specification.md#settings-conflict-handling).
+A field added to a payload must also be added to that client's owned-key set, or
+it is treated as a foreign key and written twice.
+
 ---
 
 ## Native Android P7
 
-**Status:** P0–P7 shipped. Remaining batch-API optimisation and broader
-UI/integration coverage are tracked in [`api_todo.md`](../api_todo.md) and
-[`apps/android/README.md`](../apps/android/README.md). Architecture:
+**Status:** P0–P7 shipped. Remaining broader UI/integration coverage is tracked
+in [`apps/android/README.md`](../apps/android/README.md). Architecture:
 [android-architecture.md](android-architecture.md).
+
+---
+
+## Instance-owned legal metadata
+
+**Status:** planned. Carried over from the API hand-off note that used to live at
+the repository root; the sync, chapter, inbox-batching and podcast-settings items
+it also listed have all shipped.
+
+**Motivation:** the Android privacy screen can only link to the official
+KoalaCast operator. That is wrong the moment somebody selects a self-hosted
+instance run by a different operator under a different privacy policy — the app
+then points at legal text that does not govern the service it is talking to.
+
+Proposed unauthenticated `GET /instance`:
+
+```json
+{
+  "service_name": "KoalaCast",
+  "operator_name": "Example e.V.",
+  "privacy_policy_url": "https://cast.example.org/privacy",
+  "legal_notice_url": "https://cast.example.org/legal",
+  "registration_enabled": true
+}
+```
+
+- Values come from server configuration, never from request headers.
+- URLs must be absolute HTTPS, except HTTP on loopback for development.
+- An empty `legal_notice_url` is allowed; operator and privacy policy are not.
+- Android shows this before registration and links it from Settings instead of
+  the hard-coded official-instance text.
+- `packages/openapi/openapi.yaml` needs the endpoint.
+
+Acceptance: official defaults and a custom self-host configuration; relative or
+invalid configured URLs fail startup validation; the response is reachable
+without authentication and carries no deployment secrets.
+
+---
+
+## Account data control
+
+**Status:** planned. Also carried over from the API hand-off note.
+
+Two authenticated endpoints, needed before the in-app privacy screen can be
+called complete:
+
+- `GET /auth/export` — a downloadable JSON export of the account's metadata and
+  every synchronized record. Never password hashes, recovery-code hashes,
+  session secrets or device-token hashes.
+- `DELETE /auth/account` — requires a password or recovery code in the body,
+  deletes the account and all dependent rows in one transaction, and revokes
+  every session and device token.
+
+Both are destructive and security-sensitive: rate-limit them, require fresh
+credentials, audit the event but never the supplied credentials, and prove by
+test that one user cannot export or delete another's account.
+
+Worth noting what already exists, so this is not rebuilt twice: the web client
+can already delete everything held locally (see `resetAllLocalData`), and the
+listening-data JSON export on the Profile screen covers the analytics half. What
+is missing is the server-side account itself.
 
 ---
 

@@ -2,8 +2,8 @@
 
 > **Status:** ✅ **P0–P7 shipped** — browsing, playback, local-first library,
 > downloads, inbox, profile statistics, account, sync, OPML, widget and platform
-> features are implemented. API extensions tracked in
-> [`api_todo.md`](../../api_todo.md) remain optional server-side improvements.
+> features are implemented. The remaining server-side improvements are tracked in
+> [`docs/roadmap.md`](../../docs/roadmap.md) and are optional.
 >
 > Companion docs: [`docs/android-architecture.md`](../../docs/android-architecture.md)
 > (high-level architecture), [`docs/sync-protocol/specification.md`](../../docs/sync-protocol/specification.md)
@@ -283,8 +283,9 @@ Web has these today; Android should match:
       and per-podcast `all` / `latest only` inclusion, plus downloaded, podcast, date,
       mood and 25/40/60-minute session filters. A global default controls newly
       added podcasts while existing per-podcast choices remain overrides. It currently aggregates
-      `/podcasts/{id}/episodes` client-side; a batch server endpoint remains in
-      `api_todo.md`.
+      `/podcasts/{id}/episodes` client-side with an incremental `?since=` refresh;
+      a single batched endpoint for many podcasts is still open (see
+      [`docs/roadmap.md`](../../docs/roadmap.md)).
 - [x] **Auto-download** newest N unplayed episodes of selected subscriptions (WorkManager, Wi-Fi-only toggle).
 - [x] **Playback tuning** — variable speed with fine steps, skip-silence / volume boost
       (Media3 audio processors), per-podcast default speed.
@@ -351,9 +352,10 @@ internal/external app storage or SAF, budget cleanup, and a Room mirror for UI s
 
 Both clients ship a cross-subscription **Inbox / New** view. They aggregate
 episodes client-side by fetching each subscribed podcast and merging by
-publication date. The remaining shared backend improvement is the batched Inbox
-endpoint specified in [`api_todo.md`](../../api_todo.md), which will remove the
-per-subscription request fan-out.
+publication date. `?since=` already keeps each refresh incremental; the remaining
+shared backend improvement is a batched Inbox endpoint that would remove the
+per-subscription request fan-out entirely. See
+[`docs/roadmap.md`](../../docs/roadmap.md).
 
 ---
 
@@ -363,12 +365,14 @@ per-subscription request fan-out.
    and Settings both let a listener point the app anywhere, and the URL is validated
    against `/api/v1/healthz` before it is stored. A plain-HTTP address is allowed
    (LAN self-hosting) but always warned about.
-2. **"New episodes" data source** — client-side fan-out is implemented; a batch
-   endpoint remains in `api_todo.md`.
+2. **"New episodes" data source** — client-side fan-out is implemented, with an
+   incremental `?since=` refresh per podcast; a batched multi-podcast endpoint
+   remains open.
 3. **Sync granularity** — subscriptions, favorites, playback state and listening
-   sessions are materialized by the server. Queue and show-settings
-   materialization plus lossless pagination/snapshot remain backend work in
-   `api_todo.md`.
+   sessions are materialized by the server. Lossless pagination (`next_cursor` /
+   `has_more`) and the `/sync/snapshot` recovery endpoint have shipped. Queue and
+   show-settings materialization remain backend work; the clients reconstruct
+   both from the sync log, which is authoritative for them anyway.
 4. **Downloads engine** — implemented with OkHttp + WorkManager, resumable range
    requests and app-private storage.
 5. **Min / target SDK** — **26 / 36**, `compileSdk 37`, pinned in
