@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
@@ -490,7 +491,13 @@ class PlaybackService : MediaLibraryService() {
         positionTicker?.cancel()
         val finalPlayback = capturePlayback(finalise = true)
         if (finalPlayback != null) {
-            runBlocking(Dispatchers.IO) { persist(finalPlayback) }
+            // The last position has to reach disk before the process goes away, so
+            // this one write blocks. It is bounded because onDestroy runs on the main
+            // thread: a database that has stopped answering must cost a lost position,
+            // never an ANR.
+            runBlocking(Dispatchers.IO) {
+                withTimeoutOrNull(FINAL_PERSIST_TIMEOUT_MS) { persist(finalPlayback) }
+            }
         }
         val sessionPlayer = mediaSession?.player
         mediaSession?.run {
@@ -635,15 +642,22 @@ class PlaybackService : MediaLibraryService() {
 
     private fun publishWidgetState(player: Player) {
         val track = TrackMediaItem.toTrack(player.currentMediaItem)
-        getSharedPreferences(WIDGET_PREFERENCES, MODE_PRIVATE)
+        val preferences = getSharedPreferences(WIDGET_PREFERENCES, MODE_PRIVATE)
+        preferences
             .edit()
             .putString(WIDGET_TITLE, track?.title)
             .putString(WIDGET_PODCAST, track?.podcastTitle)
             .putBoolean(WIDGET_PLAYING, player.isPlaying)
             .apply()
+        // The widget provider must stay exported for the system's own
+        // APPWIDGET_UPDATE, so it authenticates our private actions with a token
+        // that only this app's storage holds. No token means no widget has been
+        // placed and there is nothing to notify.
+        val token = preferences.getString(WIDGET_TOGGLE_TOKEN, null) ?: return
         sendBroadcast(
             Intent(WIDGET_STATE_CHANGED)
-                .setPackage(packageName),
+                .setPackage(packageName)
+                .putExtra(WIDGET_TOGGLE_TOKEN, token),
         )
     }
 
@@ -799,6 +813,7 @@ class PlaybackService : MediaLibraryService() {
         const val SEEK_FORWARD_MS = 30_000L
         const val OUTRO_CHECK_INTERVAL_MS = 1_000L
         const val POSITION_SAVE_INTERVAL_SECONDS = 30
+        const val FINAL_PERSIST_TIMEOUT_MS = 2_000L
         const val AUTOMATIC_SEEK_TOLERANCE_MS = 1_000L
         const val ARTWORK_PX = 512
         const val ROOT_ID = "root"
@@ -813,6 +828,7 @@ class PlaybackService : MediaLibraryService() {
         const val WIDGET_TITLE = "title"
         const val WIDGET_PODCAST = "podcast"
         const val WIDGET_PLAYING = "playing"
+        const val WIDGET_TOGGLE_TOKEN = "toggle_token"
         val SPEED_STEPS = floatArrayOf(1f, 1.25f, 1.5f, 1.75f, 2f, 0.75f).toList()
         /** Below unity headroom, so a loud episode cannot be pushed into clipping. */
         /** +10 dB, the usual lift for speech that was mastered too quietly. */

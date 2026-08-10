@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_channel_name">Folgen-Downloads</string>
+    <string name="download_notification_title">Podcast-Folge</string>
+    <string name="download_notification_progress">Wird geladen …</string>
+    <string name="download_notification_percent">%1$d %%</string>
+</resources>

@@ -89,6 +89,9 @@ class PlayerConnection @Inject constructor(
     private var sleepJob: Job? = null
     private var sleepTargetPositionMs: Long? = null
     private val playGeneration = AtomicLong()
+    private val syncLock = Any()
+    private var syncRunning = false
+    private var syncPending = false
 
     init {
         scope.launch {
@@ -234,7 +237,9 @@ class PlayerConnection @Inject constructor(
 
     /** Cycles 1 → 1.25 → 1.5 → 1.75 → 2 → 1, as the design specifies. */
     fun setSpeed(speed: Float) {
-        val clamped = speed.coerceIn(0.5f, 3f)
+        // Same range as the web client. The narrower 0.5–3 window here silently
+        // rewrote a synced 0.4× or 3.5× the moment this device touched the control.
+        val clamped = speed.coerceIn(MIN_SPEED, MAX_SPEED)
         onController { it.playbackParameters = PlaybackParameters(clamped) }
         _state.update { it.copy(speed = clamped) }
         scope.launch { preferences.setPlaybackSpeed(clamped) }
@@ -271,8 +276,23 @@ class PlayerConnection @Inject constructor(
         _state.update {
             it.copy(sleepAtMs = endsAt, sleepMinutes = minutes, sleepAtEpisodeEnd = false, sleepAtChapterEnd = false)
         }
+        // A single delay() spent the timer on wall-clock time, so pausing for a phone
+        // call could burn the whole thing: playback resumed and stopped again seconds
+        // later. "Thirty minutes" means thirty minutes of listening, so the countdown
+        // only advances while audio is actually playing — which is what the web client
+        // does as well.
         sleepJob = scope.launch {
-            delay(minutes * 60_000L)
+            var remaining = minutes * 60_000L
+            var last = System.currentTimeMillis()
+            while (remaining > 0) {
+                delay(SLEEP_TICK_MS)
+                val now = System.currentTimeMillis()
+                val elapsed = (now - last).coerceIn(0, MAX_SLEEP_TICK_MS)
+                last = now
+                if (!_state.value.isPlaying) continue
+                remaining -= elapsed
+                _state.update { it.copy(sleepAtMs = now + remaining.coerceAtLeast(0)) }
+            }
             onController { it.pause() }
             _state.update { it.copy(sleepAtMs = null, sleepMinutes = null, sleepAtChapterEnd = false) }
         }
@@ -356,41 +376,80 @@ class PlayerConnection @Inject constructor(
         }
     }
 
+    /**
+     * Coalesces refreshes. `onEvents` fires several times for a single user action
+     * and the position ticker adds two more per second; each one used to allocate a
+     * coroutine and a main-thread hop, and they could land out of order. One
+     * refresh runs at a time, and a request that arrives while it is running is
+     * collapsed into a single follow-up — so the final state is never the stale one.
+     */
     private fun syncFromController() {
-        val controller = controller ?: return
+        if (controller == null) return
+        synchronized(syncLock) {
+            if (syncRunning) {
+                syncPending = true
+                return
+            }
+            syncRunning = true
+        }
         scope.launch {
-            withContext(Dispatchers.Main) {
-                val currentItem = controller.currentMediaItem
-                val track = TrackMediaItem.toTrack(currentItem)
-                    ?: _state.value.track?.takeIf {
-                        currentItem == null || currentItem.mediaId == it.episodeId
-                    }
-                val duration = controller.duration
-                    .takeIf { it != C.TIME_UNSET && it > 0 }
-                    ?: track?.durationMs
-                    ?: 0L
-                _state.update {
-                    it.copy(
-                        track = track,
-                        isPlaying = controller.isPlaying,
-                        isBuffering = controller.playbackState == Player.STATE_BUFFERING,
-                        positionMs = controller.currentPosition.coerceAtLeast(0),
-                        durationMs = duration,
-                        speed = controller.playbackParameters.speed,
-                        playbackError = if (controller.playerError == null) {
-                            it.playbackError
-                        } else {
-                            controller.playerError?.errorCodeName
-                        },
-                        isOfflineSource = TrackMediaItem.isOffline(currentItem),
-                    )
+            try {
+                do {
+                    readControllerState()
+                } while (synchronized(syncLock) {
+                        val again = syncPending
+                        syncPending = false
+                        if (!again) syncRunning = false
+                        again
+                    })
+            } catch (error: Throwable) {
+                synchronized(syncLock) {
+                    syncRunning = false
+                    syncPending = false
                 }
+                throw error
+            }
+        }
+    }
+
+    private suspend fun readControllerState() {
+        val controller = controller ?: return
+        withContext(Dispatchers.Main) {
+            val currentItem = controller.currentMediaItem
+            val track = TrackMediaItem.toTrack(currentItem)
+                ?: _state.value.track?.takeIf {
+                    currentItem == null || currentItem.mediaId == it.episodeId
+                }
+            val duration = controller.duration
+                .takeIf { it != C.TIME_UNSET && it > 0 }
+                ?: track?.durationMs
+                ?: 0L
+            _state.update {
+                it.copy(
+                    track = track,
+                    isPlaying = controller.isPlaying,
+                    isBuffering = controller.playbackState == Player.STATE_BUFFERING,
+                    positionMs = controller.currentPosition.coerceAtLeast(0),
+                    durationMs = duration,
+                    speed = controller.playbackParameters.speed,
+                    playbackError = if (controller.playerError == null) {
+                        it.playbackError
+                    } else {
+                        controller.playerError?.errorCodeName
+                    },
+                    isOfflineSource = TrackMediaItem.isOffline(currentItem),
+                )
             }
         }
     }
 
     private companion object {
         const val POSITION_TICK_MS = 500L
+        const val MIN_SPEED = 0.25f
+        const val MAX_SPEED = 4f
+        const val SLEEP_TICK_MS = 1_000L
+        /** A doze or a stalled buffer must not charge minutes to a single tick. */
+        const val MAX_SLEEP_TICK_MS = 5_000L
         const val ARTWORK_PX = 512
         const val ACTION_SET_SLEEP_TIMER = "net.koalastuff.koalacast.SET_SLEEP_TIMER"
         const val ARG_SLEEP_AT_EPISODE_END = "sleep_at_episode_end"

@@ -20,12 +20,14 @@ class KoalaCastWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        // An AppWidgetProvider has to be exported for the system's own
+        // APPWIDGET_UPDATE, which means any installed app can also send it our two
+        // private actions. Both therefore carry the token that only this app's own
+        // storage holds. A missing token means no widget has ever been rendered,
+        // and then there is nothing to refresh either.
+        if (intent.getStringExtra(EXTRA_TOGGLE_TOKEN) != storedToggleToken(context)) return
         when (intent.action) {
-            ACTION_TOGGLE -> if (
-                intent.getStringExtra(EXTRA_TOGGLE_TOKEN) == toggleToken(context)
-            ) {
-                togglePlayback(context)
-            }
+            ACTION_TOGGLE -> togglePlayback(context)
             ACTION_STATE_CHANGED -> updateAll(context)
         }
     }
@@ -115,14 +117,22 @@ class KoalaCastWidgetProvider : AppWidgetProvider() {
         val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
         preferences.getString(KEY_TOGGLE_TOKEN, null)?.let { return it }
         val token = UUID.randomUUID().toString()
-        preferences.edit().putString(KEY_TOGGLE_TOKEN, token).apply()
+        // commit(), not apply(): the playback service reads this token from another
+        // process to authenticate its state broadcasts, and an update that has not
+        // reached disk yet would be rejected.
+        preferences.edit().putString(KEY_TOGGLE_TOKEN, token).commit()
         return token
     }
+
+    /** The stored token, or null when no widget has been placed yet. */
+    private fun storedToggleToken(context: Context): String? =
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .getString(KEY_TOGGLE_TOKEN, null)
 
     companion object {
         const val ACTION_STATE_CHANGED = "net.koalastuff.koalacast.WIDGET_STATE_CHANGED"
         private const val ACTION_TOGGLE = "net.koalastuff.koalacast.WIDGET_TOGGLE"
-        private const val EXTRA_TOGGLE_TOKEN = "toggle_token"
+        const val EXTRA_TOGGLE_TOKEN = "toggle_token"
         const val PREFERENCES = "playback_widget"
         const val KEY_TITLE = "title"
         const val KEY_PODCAST = "podcast"

@@ -13,6 +13,8 @@ node_modules/
 .vite/
 build/
 dist/
+# Kotlin compiler session scratch, written by any Gradle build
+.kotlin/
 coverage/
 .nyc_output/
 .lighthouseci/

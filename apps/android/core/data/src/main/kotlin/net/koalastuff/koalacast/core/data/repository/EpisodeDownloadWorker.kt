@@ -19,12 +19,13 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.io.RandomAccessFile
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import net.koalastuff.koalacast.core.data.R
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
@@ -181,7 +182,7 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
-        createForeground("Podcast episode", 0)
+        createForeground(applicationContext.getString(R.string.download_notification_title), 0)
 
     private suspend fun update(
         id: String,
@@ -205,12 +206,22 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     private fun createForeground(title: String, progress: Int): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Episode downloads", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(
+                CHANNEL_ID,
+                applicationContext.getString(R.string.download_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ),
         )
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(title)
-            .setContentText(if (progress > 0) "$progress%" else "Downloading…")
+            .setContentText(
+                if (progress > 0) {
+                    applicationContext.getString(R.string.download_notification_percent, progress)
+                } else {
+                    applicationContext.getString(R.string.download_notification_progress)
+                },
+            )
             .setProgress(100, progress, progress == 0)
             .setOngoing(true)
             .build()
@@ -311,12 +322,50 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     }
 }
 
+/**
+ * One global cap on simultaneous transfers.
+ *
+ * This used to keep a `Semaphore` per limit value in a map, so changing "parallel
+ * downloads" from 2 to 4 while downloads were running produced two independent
+ * semaphores and up to six concurrent transfers. A single counter cannot be
+ * fooled that way, and it also lets a lowered limit take effect for the episodes
+ * that are still waiting rather than only for the next batch.
+ */
 private object DownloadWorkerLimiter {
-    private val semaphores = ConcurrentHashMap<Int, Semaphore>()
+    private val mutex = Mutex()
+    private var active = 0
+    private val waiting = ArrayDeque<CompletableDeferred<Unit>>()
 
     suspend fun <T> withLimit(concurrency: Int, block: suspend () -> T): T {
         val limit = concurrency.coerceIn(1, 4)
-        return semaphores.getOrPut(limit) { Semaphore(limit) }.withPermit { block() }
+        acquire(limit)
+        try {
+            return block()
+        } finally {
+            release(limit)
+        }
+    }
+
+    private suspend fun acquire(limit: Int) {
+        val waiter = mutex.withLock {
+            if (active < limit) {
+                active++
+                null
+            } else {
+                CompletableDeferred<Unit>().also { waiting.addLast(it) }
+            }
+        }
+        waiter?.await()
+    }
+
+    private suspend fun release(limit: Int) {
+        mutex.withLock {
+            active--
+            while (active < limit && waiting.isNotEmpty()) {
+                waiting.removeFirst().complete(Unit)
+                active++
+            }
+        }
     }
 }
 
