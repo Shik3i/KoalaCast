@@ -12,6 +12,15 @@ import {
 	AUDIO_DOWNLOAD_CACHE_PREFIX,
 	audioDownloadCacheNameForOfflinePath
 } from '$lib/downloads/offline-audio';
+import {
+	BACKGROUND_META_STORE,
+	NEW_EPISODES_LABEL_KEY,
+	openBackgroundDB,
+	PERIODIC_SYNC_TAG,
+	trimKnownIds,
+	WATCHED_FEEDS_STORE,
+	type WatchedFeed
+} from '$lib/background/feed-mirror';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -64,6 +73,81 @@ sw.addEventListener('push', (event) => {
 			data: { url: safeNotificationPath(payload.url) }
 		})
 	);
+});
+
+/**
+ * Checks the watched shows for new episodes without the app being open.
+ *
+ * Reads the mirror the page maintains (see background/feed-mirror.ts) rather
+ * than the account's own database, whose name the worker cannot know. Failures
+ * are per-feed: one unreachable publisher must not stop the rest.
+ */
+async function checkWatchedFeedsForNewEpisodes(): Promise<void> {
+	// A real server push already covers this device; showing the same episode a
+	// second time from here would be a duplicate notification.
+	if (await sw.registration.pushManager?.getSubscription().catch(() => null)) return;
+
+	const db = await openBackgroundDB();
+	try {
+		const feeds: WatchedFeed[] = await db.getAll(WATCHED_FEEDS_STORE);
+		const label = String(
+			(await db.get(BACKGROUND_META_STORE, NEW_EPISODES_LABEL_KEY))?.value ?? '{count} new episodes'
+		);
+		for (const feed of feeds) {
+			try {
+				const response = await fetch(
+					`/api/v1/podcasts/${encodeURIComponent(feed.podcast_id)}/episodes?limit=5`,
+					{ cache: 'no-store' }
+				);
+				if (!response.ok) continue;
+				const data = await response.json();
+				const episodes: Array<{ id?: string; title?: string }> = data.episodes || [];
+				const known = new Set(feed.known_episode_ids);
+				const fresh = episodes.filter((episode) => episode.id && !known.has(episode.id));
+				const seenIds = trimKnownIds([
+					...episodes.map((episode) => String(episode.id ?? '')).filter(Boolean),
+					...feed.known_episode_ids
+				]);
+				await db.put(WATCHED_FEEDS_STORE, {
+					...feed,
+					known_episode_ids: seenIds,
+					checked_at: Date.now()
+				});
+				// An empty `known_episode_ids` means the mirror has never been filled
+				// for this show; announcing its whole back catalogue as "new" would be
+				// a wall of notifications on the first run.
+				if (fresh.length === 0 || feed.known_episode_ids.length === 0) continue;
+				await sw.registration.showNotification(feed.title, {
+					body:
+						fresh.length === 1
+							? String(fresh[0].title ?? '')
+							: label.replace('{count}', String(fresh.length)),
+					icon: '/icon-192.png',
+					badge: '/icon-72.png',
+					tag: `new-episodes-${feed.podcast_id}`,
+					data: { url: `/podcast/${encodeURIComponent(feed.podcast_id)}` }
+				});
+			} catch {
+				// Next run gets another go at this feed.
+			}
+		}
+	} finally {
+		db.close();
+	}
+}
+
+sw.addEventListener('periodicsync', (event) => {
+	const periodic = event as ExtendableEvent & { tag?: string };
+	if (periodic.tag !== PERIODIC_SYNC_TAG) return;
+	periodic.waitUntil(checkWatchedFeedsForNewEpisodes());
+});
+
+// One-shot fallback, so a browser that has Background Sync but not the periodic
+// variant still catches up the next time it regains connectivity.
+sw.addEventListener('sync', (event) => {
+	const oneShot = event as ExtendableEvent & { tag?: string };
+	if (oneShot.tag !== PERIODIC_SYNC_TAG) return;
+	oneShot.waitUntil(checkWatchedFeedsForNewEpisodes());
 });
 
 sw.addEventListener('notificationclick', (event) => {

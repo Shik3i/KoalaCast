@@ -183,7 +183,40 @@
 		"folderPrompt": "Ordner für {title}. Leer lassen, um die Ordnerzuordnung zu entfernen.",
 		"playLatestUnheard": "Neueste ungehörte Folge von {title} abspielen",
 		"noUnplayedEpisodes": "Für diesen Podcast ist keine ungehörte Folge verfügbar.",
-		"playEpisodeError": "Die neueste ungehörte Folge konnte nicht geladen werden."
+		"playEpisodeError": "Die neueste ungehörte Folge konnte nicht geladen werden.",
+		"smartQueues": "Smart-Queues",
+		"smartQueuesHint": "Eine gespeicherte Regel, keine gespeicherte Liste — die Antwort wird bei jedem Öffnen neu berechnet.",
+		"smartQueueNew": "Neue Smart-Queue",
+		"smartQueueName": "Name",
+		"smartQueueNamePlaceholder": "Kurzer Arbeitsweg",
+		"smartQueueMaxLength": "Höchstens",
+		"smartQueueAnyLength": "Beliebige Länge",
+		"smartQueueAge": "Veröffentlicht",
+		"smartQueueAnyAge": "Jederzeit",
+		"smartQueueDays": {
+			"one": "letzter {count} Tag",
+			"other": "letzte {count} Tage"
+		},
+		"smartQueueSort": "Reihenfolge",
+		"smartQueueNewest": "Neueste zuerst",
+		"smartQueueOldest": "Älteste zuerst",
+		"smartQueueShortest": "Kürzeste zuerst",
+		"smartQueueLimit": "Maximal",
+		"smartQueueUnplayedOnly": "Nur ungehörte",
+		"smartQueueDownloadedOnly": "Nur heruntergeladene",
+		"smartQueuePreview": {
+			"one": "{count} Folge · {duration}",
+			"other": "{count} Folgen · {duration}"
+		},
+		"smartQueueSaved": "Smart-Queue gespeichert.",
+		"smartQueueFilled": {
+			"one": "{count} Folge zur Warteschlange hinzugefügt.",
+			"other": "{count} Folgen zur Warteschlange hinzugefügt."
+		},
+		"smartQueueNoMatches": "Aktuell passt nichts auf diese Regeln.",
+		"smartQueueEdit": "{name} bearbeiten",
+		"smartQueueDelete": "{name} löschen",
+		"smartQueueConfirmDelete": "Smart-Queue „{name}“ löschen?"
 	},
 	"inbox": {
 		"title": "Neu",
@@ -211,7 +244,8 @@
 		"newEpisodesCount": {
 			"one": "{count} neue Folge",
 			"other": "{count} neue Folgen"
-		}
+		},
+		"newEpisodesTemplate": "{count} neue Folgen"
 	},
 	"profileStats": {
 		"title": "Dein Hören",

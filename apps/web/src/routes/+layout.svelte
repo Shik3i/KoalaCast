@@ -20,6 +20,7 @@
 	import { shell } from '$lib/stores/shell.svelte';
 	import { install } from '$lib/stores/install.svelte';
 	import { opmlBackup } from '$lib/backup/opml-backup.svelte';
+	import { registerPeriodicEpisodeCheck } from '$lib/background/feed-mirror';
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import { getLocalSubscriptions } from '$lib/idb/db';
@@ -75,6 +76,10 @@
 		// the account context above has settled — so the backup describes the library
 		// that is actually loaded, not the one from before the switch.
 		void opmlBackup.write();
+		// Lets the worker keep checking the watched shows once every tab is closed.
+		// Chromium-only and installed-app-only; where it is refused the Inbox keeps
+		// refreshing on open, exactly as before.
+		void registerPeriodicEpisodeCheck();
 	});
 	onMount(() => {
 		const warmPlayer = (event: Event) => {

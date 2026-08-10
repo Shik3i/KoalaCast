@@ -31,6 +31,7 @@
 	import { getPodcastPlaybackSettings } from '$lib/stores/podcast-settings';
 	import { notifyNewPodcastEpisodes } from '$lib/notifications/browser';
 	import { audioDownloads } from '$lib/downloads/manager.svelte';
+	import { replaceWatchedFeeds, type WatchedFeed } from '$lib/background/feed-mirror';
 
 	interface InboxEpisode {
 		id: string;
@@ -159,6 +160,24 @@
 		});
 		rawEpisodes = results.flat();
 		isLoading = false;
+		// Hand the service worker what it needs to keep checking these shows once
+		// this screen is closed: the ids already seen, and nothing else.
+		void replaceWatchedFeeds(
+			subs
+				.filter((sub) => getPodcastPlaybackSettings(sub.podcast_id).notifyNewEpisodes)
+				.map((sub) => ({
+					podcast_id: sub.podcast_id,
+					title: sub.title,
+					known_episode_ids: results
+						.flat()
+						.filter((episode) => episode.podcast_id === sub.podcast_id)
+						.map((episode) => episode.id),
+					checked_at: Date.now()
+				})) satisfies WatchedFeed[],
+			// Handed over as a template rather than a finished sentence: the worker
+			// does not know the count until it runs.
+			t('inbox.newEpisodesTemplate')
+		);
 	});
 
 	function mergeInboxEpisodes(

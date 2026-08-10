@@ -19,8 +19,21 @@
 		type LocalPlaybackState,
 		type LocalFavorite,
 		type LocalNamedQueue,
-		type LocalQueueItem
+		type LocalQueueItem,
+		getSmartQueues,
+		saveSmartQueue,
+		removeSmartQueue
 	} from '$lib/idb/db';
+	import {
+		DEFAULT_SMART_QUEUE_RULES,
+		evaluateSmartQueue,
+		normalizeRules,
+		totalDurationMs,
+		type SmartQueue,
+		type SmartQueueCandidate
+	} from '$lib/queues/smart';
+	import { readCachedContent } from '$lib/cache/content';
+	import { audioDownloads } from '$lib/downloads/manager.svelte';
 	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
@@ -83,7 +96,101 @@
 		await player.loadQueue();
 		favorites = await getLocalFavorites();
 		namedQueues = await getLocalNamedQueues();
+		await loadSmartQueues();
 	});
+
+	// ---- Smart queues ----
+	let smartQueues = $state<SmartQueue[]>([]);
+	let smartCandidates = $state<SmartQueueCandidate[]>([]);
+	let completedIds = $state<Set<string>>(new Set());
+	let editingSmartQueue = $state<SmartQueue | null>(null);
+
+	const downloadedIds = $derived(
+		new Set(
+			audioDownloads.items
+				.filter((item) => item.state === 'downloaded')
+				.map((item) => item.episodeId)
+		)
+	);
+
+	async function loadSmartQueues() {
+		smartQueues = await getSmartQueues();
+		completedIds = await getCompletedEpisodeIds();
+		// Evaluated over what the Inbox has already cached, so opening the Library
+		// never fans out into one request per subscribed show.
+		const cached = await Promise.all(
+			subscriptions.map(async (sub) => {
+				const entry = await readCachedContent<SmartQueueCandidate[]>(
+					`inbox:${sub.podcast_id}`,
+					Number.MAX_SAFE_INTEGER
+				);
+				return (entry?.value ?? []).map((episode) => ({
+					...episode,
+					podcast_id: sub.podcast_id,
+					podcast_title: sub.title
+				}));
+			})
+		);
+		smartCandidates = cached.flat();
+	}
+
+	function formatQueueDuration(ms: number): string {
+		const minutes = Math.round(ms / 60_000);
+		const hours = Math.floor(minutes / 60);
+		return hours > 0 ? `${hours} h ${String(minutes % 60).padStart(2, '0')} min` : `${minutes} min`;
+	}
+
+	function smartQueueMatches(queue: SmartQueue): SmartQueueCandidate[] {
+		return evaluateSmartQueue(smartCandidates, normalizeRules(queue.rules), {
+			completedIds,
+			downloadedIds,
+			now: Date.now()
+		});
+	}
+
+	function newSmartQueue() {
+		editingSmartQueue = {
+			id: crypto.randomUUID(),
+			name: '',
+			rules: { ...DEFAULT_SMART_QUEUE_RULES },
+			updated_at: Date.now()
+		};
+	}
+
+	async function persistSmartQueue() {
+		const queue = editingSmartQueue;
+		if (!queue || !queue.name.trim()) return;
+		await saveSmartQueue({ ...queue, name: queue.name.trim(), updated_at: Date.now() });
+		editingSmartQueue = null;
+		await loadSmartQueues();
+		toast.success(t('library.smartQueueSaved'));
+	}
+
+	async function deleteSmartQueue(queue: SmartQueue) {
+		if (!(await confirmDialog.ask(t('library.smartQueueConfirmDelete', { name: queue.name })))) return;
+		await removeSmartQueue(queue.id);
+		await loadSmartQueues();
+	}
+
+	async function fillFromSmartQueue(queue: SmartQueue) {
+		const matches = smartQueueMatches(queue);
+		if (matches.length === 0) {
+			toast.error(t('library.smartQueueNoMatches'));
+			return;
+		}
+		await player.addManyToQueue(
+			matches.map((episode) => ({
+				episode_id: episode.id,
+				podcast_id: episode.podcast_id,
+				title: episode.title,
+				podcast_title: episode.podcast_title,
+				artwork_url: episode.artwork_url ?? '',
+				enclosure_url: episode.enclosure_url,
+				duration_ms: episode.duration_ms ?? 0
+			}))
+		);
+		toast.success(t('library.smartQueueFilled', { count: matches.length }));
+	}
 
 	// Mirror the store's queue into the local list so the tab stays correct when the
 	// queue changes elsewhere (e.g. autoplay advancing to the next episode) — except
@@ -455,6 +562,119 @@
 			</div>
 		{/if}
 	{:else if activeTab === 'queue'}
+		<!--
+			A saved question rather than a saved list: "everything unplayed under
+			twenty minutes from this week" has a different answer every day, and
+			answering it by hand meant scrolling the Inbox and adding episodes one at
+			a time. Evaluated over the episode lists the Inbox has already cached.
+		-->
+		<section class="smart-queues" aria-labelledby="smart-queues-title">
+			<div class="named-queue-head">
+				<div>
+					<h2 id="smart-queues-title">{t('library.smartQueues')}</h2>
+					<p>{t('library.smartQueuesHint')}</p>
+				</div>
+				<button onclick={newSmartQueue}>
+					<i class="ph ph-plus" aria-hidden="true"></i> {t('library.smartQueueNew')}
+				</button>
+			</div>
+
+			{#if editingSmartQueue}
+				{@const draft = editingSmartQueue}
+				{@const preview = smartQueueMatches(draft)}
+				<form class="smart-editor" onsubmit={(event) => { event.preventDefault(); persistSmartQueue(); }}>
+					<label class="smart-name">
+						<span>{t('library.smartQueueName')}</span>
+						<input bind:value={draft.name} placeholder={t('library.smartQueueNamePlaceholder')} required />
+					</label>
+					<div class="smart-rules">
+						<label>
+							<span>{t('library.smartQueueMaxLength')}</span>
+							<select bind:value={draft.rules.maxDurationMs}>
+								<option value={0}>{t('library.smartQueueAnyLength')}</option>
+								<option value={600000}>10 min</option>
+								<option value={1200000}>20 min</option>
+								<option value={1800000}>30 min</option>
+								<option value={3600000}>60 min</option>
+							</select>
+						</label>
+						<label>
+							<span>{t('library.smartQueueAge')}</span>
+							<select bind:value={draft.rules.withinDays}>
+								<option value={0}>{t('library.smartQueueAnyAge')}</option>
+								<option value={1}>{t('library.smartQueueDays', { count: 1 })}</option>
+								<option value={7}>{t('library.smartQueueDays', { count: 7 })}</option>
+								<option value={30}>{t('library.smartQueueDays', { count: 30 })}</option>
+							</select>
+						</label>
+						<label>
+							<span>{t('library.smartQueueSort')}</span>
+							<select bind:value={draft.rules.sort}>
+								<option value="newest">{t('library.smartQueueNewest')}</option>
+								<option value="oldest">{t('library.smartQueueOldest')}</option>
+								<option value="shortest">{t('library.smartQueueShortest')}</option>
+							</select>
+						</label>
+						<label>
+							<span>{t('library.smartQueueLimit')}</span>
+							<select bind:value={draft.rules.limit}>
+								{#each [5, 10, 20, 50] as value}<option {value}>{value}</option>{/each}
+							</select>
+						</label>
+						<label class="smart-toggle">
+							<input type="checkbox" bind:checked={draft.rules.unplayedOnly} />
+							{t('library.smartQueueUnplayedOnly')}
+						</label>
+						<label class="smart-toggle">
+							<input type="checkbox" bind:checked={draft.rules.downloadedOnly} />
+							{t('library.smartQueueDownloadedOnly')}
+						</label>
+					</div>
+					<p class="smart-preview" aria-live="polite">
+						{t('library.smartQueuePreview', {
+							count: preview.length,
+							duration: formatQueueDuration(totalDurationMs(preview))
+						})}
+					</p>
+					<div class="smart-editor-actions">
+						<button type="submit" disabled={!draft.name.trim()}>{t('common.save')}</button>
+						<button type="button" class="ghost" onclick={() => (editingSmartQueue = null)}>{t('common.cancel')}</button>
+					</div>
+				</form>
+			{/if}
+
+			{#if smartQueues.length > 0}
+				<div class="named-queue-list">
+					{#each smartQueues as smart (smart.id)}
+						{@const matches = smartQueueMatches(smart)}
+						<div class="named-queue-row">
+							<button class="named-queue-restore" onclick={() => fillFromSmartQueue(smart)}>
+								<strong>{smart.name}</strong>
+								<span>{t('library.smartQueuePreview', {
+									count: matches.length,
+									duration: formatQueueDuration(totalDurationMs(matches))
+								})}</span>
+							</button>
+							<button
+								class="named-queue-delete"
+								onclick={() => (editingSmartQueue = { ...smart, rules: normalizeRules(smart.rules) })}
+								aria-label={t('library.smartQueueEdit', { name: smart.name })}
+							>
+								<i class="ph ph-pencil-simple" aria-hidden="true"></i>
+							</button>
+							<button
+								class="named-queue-delete"
+								onclick={() => deleteSmartQueue(smart)}
+								aria-label={t('library.smartQueueDelete', { name: smart.name })}
+							>
+								<i class="ph ph-trash" aria-hidden="true"></i>
+							</button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
 		<section class="named-queues" aria-labelledby="named-queues-title">
 			<div class="named-queue-head">
 				<div>
@@ -727,6 +947,40 @@
 		border-radius: 12px;
 		background: var(--bg-surface);
 	}
+	.smart-queues { display: grid; gap: 0.75rem; margin-bottom: 1.5rem; }
+	.smart-editor {
+		display: grid;
+		gap: 0.75rem;
+		padding: 1rem;
+		border: 1px solid var(--border-ui);
+		border-radius: var(--radius-lg, 12px);
+		background: var(--bg-elevated);
+	}
+	.smart-name { display: grid; gap: 0.3rem; }
+	.smart-name span, .smart-rules label > span { color: var(--text-muted); font-size: 0.78rem; }
+	.smart-name input, .smart-rules select {
+		padding: 0.5rem 0.6rem;
+		border: 1px solid var(--border-ui);
+		border-radius: var(--radius-control, 8px);
+		background: var(--bg-panel);
+		color: inherit;
+	}
+	.smart-rules {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		gap: 0.6rem;
+	}
+	.smart-rules label { display: grid; gap: 0.3rem; align-content: start; }
+	.smart-rules .smart-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		align-self: end;
+		font-size: 0.85rem;
+	}
+	.smart-preview { color: var(--accent-ink, var(--text-secondary)); font-size: 0.85rem; font-weight: 600; }
+	.smart-editor-actions { display: flex; gap: 0.5rem; }
+	.smart-editor-actions .ghost { background: transparent; }
 	.named-queue-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
 	.named-queue-head h2 { font-size: 1rem; }
 	.named-queue-head p { margin-top: 0.2rem; color: var(--text-muted); font-size: 0.8rem; }

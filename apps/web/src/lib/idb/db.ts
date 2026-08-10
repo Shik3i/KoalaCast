@@ -1,4 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
+import { normalizeRules, type SmartQueue } from '$lib/queues/smart';
 
 export type InboxMode = 'all' | 'latest';
 
@@ -143,8 +144,8 @@ const GUEST_DB_NAME = 'koalacast_local_db';
 const ACTIVE_CONTEXT_KEY = 'koalacast_local_data_context';
 const INITIALIZED_KEY = 'context_initialized';
 // v2 dropped the never-used 'history' store. v3 adds local-only listening
-// sessions for accurate Profile analytics.
-const DB_VERSION = 6;
+// sessions for accurate Profile analytics. v7 adds saved smart-queue rules.
+const DB_VERSION = 7;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 let activeContext = 'guest';
@@ -199,6 +200,9 @@ function openLocalDB(name: string): Promise<IDBPDatabase> {
 			if (!db.objectStoreNames.contains('content_cache')) {
 				const contentCache = db.createObjectStore('content_cache', { keyPath: 'key' });
 				contentCache.createIndex('stored_at', 'stored_at');
+			}
+			if (!db.objectStoreNames.contains('smart_queues')) {
+				db.createObjectStore('smart_queues', { keyPath: 'id' });
 			}
 			if (db.objectStoreNames.contains('history')) {
 				db.deleteObjectStore('history');
@@ -274,7 +278,8 @@ async function copyAndClearGuestData(target: IDBPDatabase): Promise<void> {
 			'settings',
 			'tombstones',
 			'listening_sessions',
-			'content_cache'
+			'content_cache',
+			'smart_queues'
 		] as const;
 		const recordsByStore = new Map<string, any[]>();
 		for (const storeName of stores) recordsByStore.set(storeName, await guest.getAll(storeName));
@@ -787,6 +792,26 @@ export async function clearAllLocalData(): Promise<void> {
 	await db.clear('tombstones');
 	await db.clear('listening_sessions');
 	await db.clear('content_cache');
+	await db.clear('smart_queues');
+}
+
+// ---- Smart queues (saved rule sets; see lib/queues/smart.ts) ----
+export async function getSmartQueues(): Promise<SmartQueue[]> {
+	const db = await getLocalDB();
+	const queues: SmartQueue[] = await db.getAll('smart_queues');
+	return queues
+		.map((queue) => ({ ...queue, rules: normalizeRules(queue.rules) }))
+		.sort((a, b) => b.updated_at - a.updated_at);
+}
+
+export async function saveSmartQueue(queue: SmartQueue): Promise<void> {
+	const db = await getLocalDB();
+	await db.put('smart_queues', plainJSON({ ...queue, rules: normalizeRules(queue.rules) }));
+}
+
+export async function removeSmartQueue(id: string): Promise<void> {
+	const db = await getLocalDB();
+	await db.delete('smart_queues', id);
 }
 
 export interface LocalSyncSnapshot {

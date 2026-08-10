@@ -183,7 +183,40 @@
 		"folderPrompt": "Folder for {title}. Leave empty to remove it from a folder.",
 		"playLatestUnheard": "Play the latest unplayed episode of {title}",
 		"noUnplayedEpisodes": "No unplayed episode is available for this podcast.",
-		"playEpisodeError": "The latest unplayed episode could not be loaded."
+		"playEpisodeError": "The latest unplayed episode could not be loaded.",
+		"smartQueues": "Smart queues",
+		"smartQueuesHint": "A saved set of rules, not a saved list — the answer is recomputed every time you open this.",
+		"smartQueueNew": "New smart queue",
+		"smartQueueName": "Name",
+		"smartQueueNamePlaceholder": "Short commute",
+		"smartQueueMaxLength": "At most",
+		"smartQueueAnyLength": "Any length",
+		"smartQueueAge": "Published",
+		"smartQueueAnyAge": "Any time",
+		"smartQueueDays": {
+			"one": "last {count} day",
+			"other": "last {count} days"
+		},
+		"smartQueueSort": "Order",
+		"smartQueueNewest": "Newest first",
+		"smartQueueOldest": "Oldest first",
+		"smartQueueShortest": "Shortest first",
+		"smartQueueLimit": "At most",
+		"smartQueueUnplayedOnly": "Unplayed only",
+		"smartQueueDownloadedOnly": "Downloaded only",
+		"smartQueuePreview": {
+			"one": "{count} episode · {duration}",
+			"other": "{count} episodes · {duration}"
+		},
+		"smartQueueSaved": "Smart queue saved.",
+		"smartQueueFilled": {
+			"one": "{count} episode added to the queue.",
+			"other": "{count} episodes added to the queue."
+		},
+		"smartQueueNoMatches": "Nothing matches these rules right now.",
+		"smartQueueEdit": "Edit {name}",
+		"smartQueueDelete": "Delete {name}",
+		"smartQueueConfirmDelete": "Delete the smart queue “{name}”?"
 	},
 	"inbox": {
 		"title": "New",
@@ -211,7 +244,8 @@
 		"newEpisodesCount": {
 			"one": "{count} new episode",
 			"other": "{count} new episodes"
-		}
+		},
+		"newEpisodesTemplate": "{count} new episodes"
 	},
 	"profileStats": {
 		"title": "Your listening",

@@ -7,6 +7,7 @@ import {
 	clearPodcastPlaybackSettingsContext
 } from '$lib/stores/podcast-settings';
 import { audioDownloads } from '$lib/downloads/manager.svelte';
+import { clearWatchedFeeds } from '$lib/background/feed-mirror';
 
 let transition: Promise<void> = Promise.resolve();
 let requestedUserId: string | null | undefined;
@@ -35,6 +36,9 @@ export function activateAccountContext(
 	transition = transition.then(async () => {
 		if (activeUserId === userId) return;
 		if (player.isActive || player.isPlaying) await player.stop();
+		// The background mirror belongs to whoever was signed in; the next Inbox
+		// refresh rebuilds it for this listener.
+		await clearWatchedFeeds();
 		await switchLocalDataContext(userId, options);
 		prefs.activateContext(userId, options);
 		player.activatePreferences(prefs.playbackSpeed);
@@ -76,6 +80,7 @@ export async function resetAllLocalData(): Promise<void> {
 	if (player.isActive || player.isPlaying) await player.stop();
 	await clearAllLocalData();
 	await audioDownloads.clearAll();
+	await clearWatchedFeeds();
 	clearPodcastPlaybackSettingsContext();
 	prefs.resetSynced();
 	await player.loadContext();
