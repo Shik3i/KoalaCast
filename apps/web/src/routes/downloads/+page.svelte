@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { t } from '$lib/i18n';
-	import { audioDownloads, type AudioDownload } from '$lib/downloads/manager.svelte';
+	import { audioDownloads, DOWNLOAD_ERROR, type AudioDownload } from '$lib/downloads/manager.svelte';
 	import { optimizeArtwork } from '$lib/artwork';
+	import { prefs } from '$lib/stores/prefs.svelte';
 
 	onMount(() => audioDownloads.load());
 
@@ -10,6 +11,10 @@
 		audioDownloads.items
 			.filter((item) => item.state === 'downloaded')
 			.reduce((sum, item) => sum + item.bytesDownloaded, 0)
+	);
+	const budgetBytes = $derived(prefs.downloadBudgetBytes);
+	const budgetPercent = $derived(
+		budgetBytes > 0 ? Math.min(100, Math.round((downloadedBytes / budgetBytes) * 100)) : 0
 	);
 
 	function formatBytes(bytes: number) {
@@ -19,10 +24,28 @@
 		return `${(bytes / 1024 ** unit).toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
 	}
 
+	/** Publishers without a Content-Length leave the total unknown all the way to
+	 *  the last byte; a percentage stuck at 0 % reads as a stalled download. */
+	function hasKnownSize(item: AudioDownload) {
+		return item.totalBytes > 0;
+	}
+
 	function progress(item: AudioDownload) {
 		return item.totalBytes > 0
 			? Math.round((item.bytesDownloaded / item.totalBytes) * 100)
 			: 0;
+	}
+
+	// The manager records stable codes, not sentences, so the reason can be shown
+	// in the listener's language. Anything unrecognised is a browser/network
+	// message and is passed through as-is rather than hidden.
+	function errorText(code: string) {
+		if (code === DOWNLOAD_ERROR.noAudioUrl) return t('downloads.errorNoAudio');
+		if (code === DOWNLOAD_ERROR.corsBlocked) return t('downloads.errorCors');
+		if (code.startsWith(DOWNLOAD_ERROR.http)) {
+			return t('downloads.errorHttp', { status: code.slice(DOWNLOAD_ERROR.http.length) });
+		}
+		return code;
 	}
 </script>
 
@@ -38,6 +61,22 @@
 		<div class="storage">
 			<strong>{formatBytes(downloadedBytes)}</strong>
 			<span>{t('downloads.audioStored')}</span>
+			{#if budgetBytes > 0}
+				<div
+					class="budget"
+					role="progressbar"
+					aria-valuenow={budgetPercent}
+					aria-valuemin="0"
+					aria-valuemax="100"
+					aria-label={t('downloads.budgetLabel')}
+				>
+					<i class:full={budgetPercent >= 100} style={`width:${budgetPercent}%`}></i>
+				</div>
+				<small>{t('downloads.budgetUsage', {
+					used: formatBytes(downloadedBytes),
+					budget: formatBytes(budgetBytes)
+				})}</small>
+			{/if}
 			<small>{t('downloads.browserStorage', {
 				used: formatBytes(audioDownloads.usageBytes),
 				quota: formatBytes(audioDownloads.quotaBytes)
@@ -56,11 +95,20 @@
 				<div class="meta">
 					<a href={`/episode/${item.episodeId}`}>{item.title}</a>
 					<span>{item.podcastTitle}</span>
-					{#if item.state === 'downloading'}
-						<div class="progress"><i style={`width:${progress(item)}%`}></i></div>
-						<small>{formatBytes(item.bytesDownloaded)} / {item.totalBytes ? formatBytes(item.totalBytes) : '…'} · {progress(item)}%</small>
+					{#if item.state === 'queued'}
+						<div class="progress waiting"><i></i></div>
+						<small>{t('downloads.queued')}</small>
+					{:else if item.state === 'downloading'}
+						<div class="progress" class:indeterminate={!hasKnownSize(item)}>
+							<i style={hasKnownSize(item) ? `width:${progress(item)}%` : undefined}></i>
+						</div>
+						{#if hasKnownSize(item)}
+							<small>{formatBytes(item.bytesDownloaded)} / {formatBytes(item.totalBytes)} · {progress(item)}%</small>
+						{:else}
+							<small>{t('downloads.sizeUnknown', { received: formatBytes(item.bytesDownloaded) })}</small>
+						{/if}
 					{:else if item.state === 'failed'}
-						<small class="error">{t('downloads.failed')}: {item.error}</small>
+						<small class="error">{t('downloads.failed')}: {errorText(item.error)}</small>
 					{:else if item.state === 'cancelled'}
 						<small>{t('downloads.cancelled')} · {formatBytes(item.bytesDownloaded)}</small>
 					{:else}
@@ -68,7 +116,7 @@
 					{/if}
 				</div>
 				<div class="actions">
-					{#if item.state === 'downloading'}
+					{#if item.state === 'downloading' || item.state === 'queued'}
 						<button onclick={() => audioDownloads.cancel(item.episodeId)}>{t('downloads.cancel')}</button>
 					{:else if item.state === 'failed' || item.state === 'cancelled'}
 						<button onclick={() => audioDownloads.retry(item.episodeId)}>{t('downloads.retry')}</button>
@@ -106,6 +154,17 @@
 	.meta .error { color: var(--danger, #d75b5b); }
 	.progress { height: 4px; overflow: hidden; background: var(--track); margin-top: 5px; }
 	.progress i { display: block; height: 100%; background: var(--accent-fill); transition: width .15s linear; }
+	/* No Content-Length, so there is no percentage to draw — show motion instead of
+	   a bar frozen at zero, which reads as a stalled transfer. */
+	.progress.indeterminate i, .progress.waiting i { width: 35%; animation: slide 1.4s ease-in-out infinite; }
+	.progress.waiting i { background: var(--ink-4); }
+	@keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+	@media (prefers-reduced-motion: reduce) {
+		.progress.indeterminate i, .progress.waiting i { animation: none; width: 100%; opacity: .4; }
+	}
+	.budget { height: 6px; overflow: hidden; background: var(--track); margin: 10px 0 6px; }
+	.budget i { display: block; height: 100%; background: var(--accent-fill); transition: width .2s ease; }
+	.budget i.full { background: var(--danger, #d75b5b); }
 	.actions { display: flex; align-items: center; gap: 8px; }
 	button { min-height: 40px; padding: 0 14px; border: 1px solid var(--border-strong); color: var(--ink-2); background: transparent; }
 	button.remove { width: 40px; padding: 0; }

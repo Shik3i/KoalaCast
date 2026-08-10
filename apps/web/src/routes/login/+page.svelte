@@ -13,7 +13,7 @@
 	async function handleLogin(e: Event) {
 		e.preventDefault();
 		if (!usernameInput.trim() || !passwordInput) {
-			authError = 'Please enter both username and password.';
+			authError = t('login.missingCredentials');
 			return;
 		}
 
@@ -29,7 +29,9 @@
 
 			const data = await res.json();
 			if (!res.ok) {
-				authError = data.error || 'Login failed. Please check your credentials.';
+				// The server's own message is in English; fall back to the catalogue so
+				// the common case (wrong password) is at least in the right language.
+				authError = data.error || t('login.failed');
 				return;
 			}
 
@@ -37,7 +39,7 @@
 			if (data.user_id) await activateLoggedInAccount(data.user_id);
 			await goto('/account');
 		} catch (err) {
-			authError = 'Network error during login.';
+			authError = t('login.networkError');
 		} finally {
 			isLoggingIn = false;
 		}

@@ -190,7 +190,7 @@
 		"subtitle": "Latest episodes from the shows you follow.",
 		"unplayedOnly": "Unplayed only",
 		"showSettings": "Show settings",
-		"panelHint": "Choose how much each show contributes. Pick <strong>Only newest</strong> for hourly news shows so they don't flood your feed.",
+		"panelHint": "Choose how much each show contributes. Pick {mode} for hourly news shows so they don't flood your feed.",
 		"modeAll": "All",
 		"modeLatest": "Only newest",
 		"emptyNoSubscriptions": "Subscribe to some shows and their newest episodes land here.",
@@ -206,7 +206,12 @@
 			"other": "{count} episodes"
 		},
 		"markedPlayed": "Marked {count} episodes as played.",
-		"markedUnplayed": "Marked {count} episodes as unplayed."
+		"markedUnplayed": "Marked {count} episodes as unplayed.",
+		"panelHintMode": "Only newest",
+		"newEpisodesCount": {
+			"one": "{count} new episode",
+			"other": "{count} new episodes"
+		}
 	},
 	"profileStats": {
 		"title": "Your listening",
@@ -394,7 +399,21 @@
 		"syncError": "Sync error — will retry automatically",
 		"syncedAt": "Synced · last {time}",
 		"syncReady": "Sync ready",
-		"syncDescription": "Subscriptions, progress, and listening statistics sync automatically across your devices."
+		"syncDescription": "Subscriptions, progress, and listening statistics sync automatically across your devices.",
+		"opmlTooLarge": "The OPML file is larger than 5 MB.",
+		"opmlNoFeeds": "This OPML file contains no feeds.",
+		"installApp": "Install as an app",
+		"installAppHint": "Opens KoalaCast in its own window, with media keys and offline access.",
+		"installAppDone": "KoalaCast is installed.",
+		"opmlBackup": "Automatic backup",
+		"opmlBackupHint": "Choose a file once; KoalaCast keeps it up to date with your subscriptions.",
+		"opmlBackupStatus": "Writing to {file} · last saved {time}",
+		"opmlBackupOn": "Automatic OPML backup is on.",
+		"opmlBackupOff": "Automatic OPML backup is off.",
+		"opmlExported": {
+			"one": "Exported {count} subscription.",
+			"other": "Exported {count} subscriptions."
+		}
 	},
 	"globalStats": {
 		"summaryLabel": "Global summary",
@@ -469,7 +488,10 @@
 		"createAccount": "Create a new account",
 		"showPassword": "Show password",
 		"hidePassword": "Hide password",
-		"recoverAccount": "Recover account"
+		"recoverAccount": "Recover account",
+		"missingCredentials": "Please enter both your username and your password.",
+		"networkError": "Could not reach the server. Check your connection and try again.",
+		"failed": "Sign-in failed. Please check your username and password."
 	},
 	"recover": {
 		"title": "Recover account",
@@ -564,7 +586,16 @@
 		"boostEnabled": "Volume Boost Enabled (2.2x)",
 		"boostDisabled": "Volume Boost Off",
 		"skipSilenceEnabled": "Skip Silence Enabled",
-		"skipSilenceDisabled": "Skip Silence Off"
+		"skipSilenceDisabled": "Skip Silence Off",
+		"jumpBackTo": "Back to {time}",
+		"previousEpisode": "Previous episode",
+		"queueMoveUp": "Move up",
+		"queueMoveDown": "Move down",
+		"queueRemove": "Remove from queue",
+		"queueMore": {
+			"one": "and {count} more",
+			"other": "and {count} more"
+		}
 	},
 	"shortcuts": {
 		"title": "Keyboard Shortcuts",
@@ -683,7 +714,8 @@
 		"handoffFailed": "Continue link could not be shared.",
 		"unknownDuration": "Unknown duration",
 		"chaptersLoadError": "Chapters could not be loaded.",
-		"transcriptLoadError": "Transcript could not be loaded."
+		"transcriptLoadError": "Transcript could not be loaded.",
+		"followTranscript": "Follow along"
 	},
 	"downloads": {
 		"title": "Downloads",
@@ -698,7 +730,14 @@
 		"failed": "Failed",
 		"ready": "Available offline",
 		"empty": "No downloads yet",
-		"emptyHint": "Download an episode and its progress and storage will appear here."
+		"emptyHint": "Download an episode and its progress and storage will appear here.",
+		"queued": "Waiting for a free slot",
+		"sizeUnknown": "{received} downloaded · total size unknown",
+		"errorNoAudio": "This episode has no audio file",
+		"errorCors": "The publisher does not allow downloads in the browser",
+		"errorHttp": "The server answered with {status}",
+		"budgetLabel": "Download budget",
+		"budgetUsage": "Budget: {used} of {budget}"
 	},
 	"quiet": {
 		"shell": {
@@ -760,7 +799,9 @@
 			"durationUnknownShort": "Unknown",
 			"noFitResults": "Every checked latest episode is longer than this session.",
 			"clearTimeFilter": "Show all lengths",
-			"loadMore": "Load more ↓"
+			"loadMore": "Load more ↓",
+			"loadFailed": "Today's charts could not be loaded",
+			"loadFailedHint": "You are seeing the last saved list. Check your connection and try again."
 		},
 		"nav": {
 			"primary": "Primary navigation",
@@ -879,7 +920,7 @@
 		"workerStopped": "Stopped",
 		"enabled": "enabled",
 		"disabled": "disabled",
-		"lockedByEnv": "Locked by the <code>KC_REGISTRATION_ENABLED</code> environment variable — change it there.",
+		"lockedByEnv": "Locked by the {variable} environment variable — change it there.",
 		"disableRegistration": "Disable registration",
 		"enableRegistration": "Enable registration",
 		"registeredUsers": "Registered Users ({count})",

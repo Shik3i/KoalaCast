@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { clearAllLocalData, saveLocalSubscriptions, getLocalSubscriptions } from '$lib/idb/db';
+	import { saveLocalSubscriptions, getLocalSubscriptions } from '$lib/idb/db';
+	import { resetAllLocalData } from '$lib/stores/account-context';
 	import {
 		COLOR_PALETTES,
 		DEFAULT_PALETTE,
@@ -19,6 +20,9 @@
 	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
 	import { LOCALES, t } from '$lib/i18n';
 	import { confirmDialog } from '$lib/stores/confirm.svelte';
+	import { install } from '$lib/stores/install.svelte';
+	import { opmlBackup, opmlBackupSupported } from '$lib/backup/opml-backup.svelte';
+	import { buildOpml } from '$lib/opml';
 	import VisualizerSignal from '$lib/components/VisualizerSignal.svelte';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
@@ -59,6 +63,7 @@
 	let opmlReport = $state<any>(null);
 	let opmlError = $state('');
 
+	onMount(() => void opmlBackup.load());
 	onMount(() => {
 		const openHashSection = () => {
 			const id = window.location.hash.slice(1);
@@ -241,9 +246,13 @@
 		}
 	}
 
+	async function handleInstall() {
+		if (await install.promptInstall()) toast.success(t('settings.installAppDone'));
+	}
+
 	async function handleResetLocalData() {
 		if (await confirmDialog.ask(t('settings.confirmReset'))) {
-			await clearAllLocalData();
+			await resetAllLocalData();
 			toast.success(t('settings.localDataReset'));
 		}
 	}
@@ -259,9 +268,11 @@
 
 		try {
 			const xmlText = await file.text();
-			if (xmlText.length > MAX_OPML_CHARS) throw new Error('OPML file exceeds 5 MB');
+			// Both of these are things the listener can act on, so they say what is
+			// actually wrong instead of collapsing into the generic read error below.
+			if (xmlText.length > MAX_OPML_CHARS) throw new OpmlError(t('settings.opmlTooLarge'));
 			const feeds = parseOpmlFeeds(xmlText);
-			if (feeds.length === 0) throw new Error('OPML contains no feeds');
+			if (feeds.length === 0) throw new OpmlError(t('settings.opmlNoFeeds'));
 			const processableFeeds = feeds.slice(0, MAX_LOCAL_OPML_FEEDS);
 			const existing = new Set((await getLocalSubscriptions()).map((sub) => sub.feed_url));
 			const imported = processableFeeds.filter((feed) => !existing.has(feed.feed_url));
@@ -285,12 +296,15 @@
 
 			toast.success(t('settings.opmlImported', { imported: imported.length, skipped: feeds.length - imported.length }));
 		} catch (err: any) {
-			opmlError = t('settings.opmlReadError');
+			opmlError = err instanceof OpmlError ? err.message : t('settings.opmlReadError');
 		} finally {
 			isImportingOpml = false;
 			target.value = '';
 		}
 	}
+
+	/** Carries an already-translated, listener-facing reason. */
+	class OpmlError extends Error {}
 
 	function parseOpmlFeeds(xmlText: string): Array<{ feed_url: string; title: string }> {
 		const document = new DOMParser().parseFromString(xmlText.replace(/^\uFEFF/, ''), 'application/xml');
@@ -317,28 +331,13 @@
 
 	// Export is generated on-device from local subscriptions so it works without an
 	// account (the server export endpoint only sees account-synced subscriptions).
-	function escapeXml(s: string): string {
-		return (s || '').replace(
-			/[<>&"']/g,
-			(c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c] as string
-		);
-	}
-
 	async function handleExportOpml() {
 		const subs = (await getLocalSubscriptions()).filter((s) => s.feed_url);
 		if (subs.length === 0) {
 			toast.error(t('settings.opmlNothingToExport'));
 			return;
 		}
-		const outlines = subs
-			.map(
-				(s) =>
-					`    <outline type="rss" text="${escapeXml(s.title)}" title="${escapeXml(s.title)}" xmlUrl="${escapeXml(s.feed_url)}" />`
-			)
-			.join('\n');
-		const xml =
-			`<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n  <head>\n    <title>KoalaCast Subscriptions</title>\n  </head>\n  <body>\n${outlines}\n  </body>\n</opml>\n`;
-		const blob = new Blob([xml], { type: 'application/xml' });
+		const blob = new Blob([buildOpml(subs)], { type: 'application/xml' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
@@ -347,7 +346,16 @@
 		a.click();
 		a.remove();
 		URL.revokeObjectURL(url);
-		toast.success(`Exported ${subs.length} subscription${subs.length === 1 ? '' : 's'}.`);
+		toast.success(t('settings.opmlExported', { count: subs.length }));
+	}
+
+	async function toggleOpmlBackup(enabled: boolean) {
+		if (!enabled) {
+			await opmlBackup.disable();
+			toast.success(t('settings.opmlBackupOff'));
+			return;
+		}
+		if (await opmlBackup.choose()) toast.success(t('settings.opmlBackupOn'));
 	}
 </script>
 
@@ -535,6 +543,19 @@
 					<i class="ph ph-sparkle" aria-hidden="true"></i> {t('settings.latestEpisode')}
 				</button>
 			</div>
+			<!-- Only rendered once the browser has actually offered an install, so this
+			     never promises something the current browser cannot do. -->
+			{#if install.available || install.installed}
+				<h4 class="date-heading preference-heading">{t('settings.installApp')}</h4>
+				<p class="subtitle">{t('settings.installAppHint')}</p>
+				{#if install.installed}
+					<p class="subtitle"><i class="ph ph-check-circle" aria-hidden="true"></i> {t('settings.installAppDone')}</p>
+				{:else}
+					<button type="button" class="btn-secondary" onclick={handleInstall}>
+						<i class="ph ph-download-simple" aria-hidden="true"></i> {t('settings.installApp')}
+					</button>
+				{/if}
+			{/if}
 			<h4 class="date-heading preference-heading">{t('settings.startScreen')}</h4>
 			<p class="subtitle">{t('settings.startScreenHint')}</p>
 			<div class="theme-selector" role="group" aria-label={t('settings.startScreen')}>
@@ -802,6 +823,34 @@
 			</div>
 		{/if}
 
+		<!-- Only where the browser can hold on to a file handle. Elsewhere the manual
+		     export above is the whole story, and pretending otherwise would promise a
+		     backup that never happens. -->
+		{#if opmlBackupSupported()}
+			<div class="consent-row">
+				<div>
+					<h4>{t('settings.opmlBackup')}</h4>
+					<p>
+						{opmlBackup.enabled && opmlBackup.lastWrittenAt
+							? t('settings.opmlBackupStatus', {
+									file: opmlBackup.fileName,
+									time: new Date(opmlBackup.lastWrittenAt).toLocaleDateString(prefs.uiLanguage)
+								})
+							: t('settings.opmlBackupHint')}
+					</p>
+				</div>
+				<label class="consent-switch">
+					<input
+						type="checkbox"
+						checked={opmlBackup.enabled}
+						onchange={(event) => toggleOpmlBackup(event.currentTarget.checked)}
+						aria-label={t('settings.opmlBackup')}
+					/>
+					<span aria-hidden="true"></span>
+				</label>
+			</div>
+		{/if}
+
 		<div class="opml-actions">
 			<label class="btn btn-import">
 				<i class="ph ph-upload-simple" aria-hidden="true"></i>
@@ -844,6 +893,13 @@
 							{t('settings.syncReady')}
 						{/if}
 					</span>
+					<!-- A bare red dot told a listener whose data never arrived nothing
+					     at all about why: the network, the session, or a rejected
+					     record. The Android client has always shown this. It is a
+					     diagnostic, so it keeps the wording it arrived in. -->
+					{#if sync.lastError}
+						<small class="sync-detail">{sync.lastError}</small>
+					{/if}
 				</div>
 				<button type="button" class="btn-secondary" onclick={() => sync.syncNow()} disabled={sync.status === 'syncing'}>
 					<i class="ph ph-arrows-clockwise" aria-hidden="true"></i> {t('settings.syncNow')}
@@ -1408,6 +1464,7 @@
 	}
 	.sync-info { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
 	.sync-state { font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.sync-detail { color: var(--text-secondary); font-size: 0.78rem; overflow-wrap: anywhere; }
 	.sync-hint { font-size: 0.8rem; color: var(--text-muted); }
 	.sync-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
 	.sync-dot.idle { background: var(--accent-green); }

@@ -190,7 +190,7 @@
 		"subtitle": "Die neuesten Folgen der Sendungen, denen du folgst.",
 		"unplayedOnly": "Nur ungehörte",
 		"showSettings": "Sendungseinstellungen",
-		"panelHint": "Lege fest, wie viel jede Sendung beisteuert. Wähle <strong>Nur neueste</strong> für stündliche Nachrichten, damit sie deinen Feed nicht überschwemmen.",
+		"panelHint": "Lege fest, wie viel jede Sendung beisteuert. Wähle {mode} für stündliche Nachrichten, damit sie deinen Feed nicht überschwemmen.",
 		"modeAll": "Alle",
 		"modeLatest": "Nur neueste",
 		"emptyNoSubscriptions": "Abonniere ein paar Sendungen und ihre neuesten Folgen landen hier.",
@@ -206,7 +206,12 @@
 			"other": "{count} Folgen"
 		},
 		"markedPlayed": "{count} Folgen als gehört markiert.",
-		"markedUnplayed": "{count} Folgen als ungehört markiert."
+		"markedUnplayed": "{count} Folgen als ungehört markiert.",
+		"panelHintMode": "Nur neueste",
+		"newEpisodesCount": {
+			"one": "{count} neue Folge",
+			"other": "{count} neue Folgen"
+		}
 	},
 	"profileStats": {
 		"title": "Dein Hören",
@@ -394,7 +399,21 @@
 		"syncError": "Synchronisierungsfehler — neuer Versuch erfolgt automatisch",
 		"syncedAt": "Synchronisiert · zuletzt {time}",
 		"syncReady": "Synchronisierung bereit",
-		"syncDescription": "Abos, Fortschritt und Hörstatistiken werden automatisch zwischen deinen Geräten synchronisiert."
+		"syncDescription": "Abos, Fortschritt und Hörstatistiken werden automatisch zwischen deinen Geräten synchronisiert.",
+		"opmlTooLarge": "Die OPML-Datei ist größer als 5 MB.",
+		"opmlNoFeeds": "Diese OPML-Datei enthält keine Feeds.",
+		"installApp": "Als App installieren",
+		"installAppHint": "Öffnet KoalaCast in einem eigenen Fenster, mit Medientasten und Offline-Zugriff.",
+		"installAppDone": "KoalaCast ist installiert.",
+		"opmlBackup": "Automatisches Backup",
+		"opmlBackupHint": "Einmal eine Datei wählen; KoalaCast hält sie mit deinen Abos aktuell.",
+		"opmlBackupStatus": "Schreibt nach {file} · zuletzt {time}",
+		"opmlBackupOn": "Automatisches OPML-Backup ist aktiv.",
+		"opmlBackupOff": "Automatisches OPML-Backup ist aus.",
+		"opmlExported": {
+			"one": "{count} Abo exportiert.",
+			"other": "{count} Abos exportiert."
+		}
 	},
 	"globalStats": {
 		"summaryLabel": "Globale Zusammenfassung",
@@ -469,7 +488,10 @@
 		"createAccount": "Neues Konto erstellen",
 		"showPassword": "Passwort anzeigen",
 		"hidePassword": "Passwort verbergen",
-		"recoverAccount": "Konto wiederherstellen"
+		"recoverAccount": "Konto wiederherstellen",
+		"missingCredentials": "Bitte gib Benutzernamen und Passwort ein.",
+		"networkError": "Der Server ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.",
+		"failed": "Anmeldung fehlgeschlagen. Prüfe Benutzernamen und Passwort."
 	},
 	"recover": {
 		"title": "Konto wiederherstellen",
@@ -564,7 +586,16 @@
 		"boostEnabled": "Lautstärke-Boost aktiviert (2,2×)",
 		"boostDisabled": "Lautstärke-Boost deaktiviert",
 		"skipSilenceEnabled": "Stille überspringen aktiviert",
-		"skipSilenceDisabled": "Stille überspringen deaktiviert"
+		"skipSilenceDisabled": "Stille überspringen deaktiviert",
+		"jumpBackTo": "Zurück zu {time}",
+		"previousEpisode": "Vorherige Folge",
+		"queueMoveUp": "Nach oben",
+		"queueMoveDown": "Nach unten",
+		"queueRemove": "Aus der Warteschlange entfernen",
+		"queueMore": {
+			"one": "und {count} weitere",
+			"other": "und {count} weitere"
+		}
 	},
 	"shortcuts": {
 		"title": "Tastenkürzel",
@@ -683,7 +714,8 @@
 		"handoffFailed": "Fortsetzungslink konnte nicht geteilt werden.",
 		"unknownDuration": "Unbekannte Dauer",
 		"chaptersLoadError": "Kapitel konnten nicht geladen werden.",
-		"transcriptLoadError": "Transkript konnte nicht geladen werden."
+		"transcriptLoadError": "Transkript konnte nicht geladen werden.",
+		"followTranscript": "Mitlaufen"
 	},
 	"downloads": {
 		"title": "Downloads",
@@ -698,7 +730,14 @@
 		"failed": "Fehlgeschlagen",
 		"ready": "Offline verfügbar",
 		"empty": "Noch keine Downloads",
-		"emptyHint": "Lade eine Folge herunter; Fortschritt und Speicher erscheinen dann hier."
+		"emptyHint": "Lade eine Folge herunter; Fortschritt und Speicher erscheinen dann hier.",
+		"queued": "Wartet auf einen freien Platz",
+		"sizeUnknown": "{received} geladen · Gesamtgröße unbekannt",
+		"errorNoAudio": "Diese Folge hat keine Audiodatei",
+		"errorCors": "Der Anbieter erlaubt keine Downloads im Browser",
+		"errorHttp": "Der Server hat mit {status} geantwortet",
+		"budgetLabel": "Download-Budget",
+		"budgetUsage": "Budget: {used} von {budget}"
 	},
 	"quiet": {
 		"shell": {
@@ -760,7 +799,9 @@
 			"durationUnknownShort": "Unbekannt",
 			"noFitResults": "Alle geprüften neuesten Folgen sind länger als diese Zeit.",
 			"clearTimeFilter": "Alle Längen anzeigen",
-			"loadMore": "Mehr laden ↓"
+			"loadMore": "Mehr laden ↓",
+			"loadFailed": "Die aktuellen Charts konnten nicht geladen werden",
+			"loadFailedHint": "Du siehst die zuletzt gespeicherte Liste. Prüfe deine Verbindung und versuche es erneut."
 		},
 		"nav": {
 			"primary": "Hauptnavigation",
@@ -879,7 +920,7 @@
 		"workerStopped": "Gestoppt",
 		"enabled": "aktiviert",
 		"disabled": "deaktiviert",
-		"lockedByEnv": "Gesperrt durch die Umgebungsvariable <code>KC_REGISTRATION_ENABLED</code> — ändere sie dort.",
+		"lockedByEnv": "Gesperrt durch die Umgebungsvariable {variable} — ändere sie dort.",
 		"disableRegistration": "Registrierung deaktivieren",
 		"enableRegistration": "Registrierung aktivieren",
 		"registeredUsers": "Registrierte Benutzer ({count})",

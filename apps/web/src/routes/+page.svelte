@@ -64,6 +64,8 @@
 	let isHydratingMetadata = $state(false);
 	let isLoading = $state(false);
 	let isLoadingMore = $state(false);
+	/** Every storefront request failed; what is on screen is stale or a placeholder. */
+	let loadFailed = $state(false);
 	let limit = $state(PAGE_SIZE);
 	let visibleChartCount = $state(12);
 	let reachedEnd = $state(false);
@@ -143,6 +145,7 @@
 
 	async function loadDiscover(background = false) {
 		const id = ++requestId;
+		loadFailed = false;
 		if (!background && podcasts.length === 0) isLoading = true;
 		const languages = prefs.languages.length ? prefs.languages : detectBrowserLanguages();
 		try {
@@ -177,7 +180,7 @@
 				cached,
 				DISCOVER_CONCURRENCY,
 				async ({ request, entry }) => {
-					if (entry?.fresh) return entry.value.results ?? [];
+					if (entry?.fresh) return { results: entry.value.results ?? [], failed: false };
 					const controller = new AbortController();
 					const timeout = background ? window.setTimeout(() => controller.abort(), 2500) : 0;
 					try {
@@ -185,20 +188,26 @@
 							signal: controller.signal,
 							cache: 'no-cache'
 						});
-						const data = response.ok ? await response.json() : { results: [] };
-						if (response.ok) await cacheContent(request.key, data);
-						return data.results ?? [];
+						if (!response.ok) return { results: entry?.value.results ?? [], failed: true };
+						const data = await response.json();
+						await cacheContent(request.key, data);
+						return { results: data.results ?? [], failed: false };
 					} catch {
-						return entry?.value.results ?? [];
+						// A failure here used to be indistinguishable from an empty chart:
+						// the listener got a blank grid, or a curated placeholder list
+						// presented as if it were today's chart, and no way to retry.
+						return { results: entry?.value.results ?? [], failed: true };
 					} finally {
 						if (timeout) window.clearTimeout(timeout);
 					}
 				}
 			);
 			if (id !== requestId) return;
-			applyDiscoverLists(lists, languages);
+			applyDiscoverLists(lists.map((list) => list.results), languages);
+			loadFailed = lists.length > 0 && lists.every((list) => list.failed);
 		} catch {
 			if (podcasts.length === 0) podcasts = languages.includes('en') ? FEATURED_PODCASTS : [];
+			loadFailed = true;
 			reachedEnd = true;
 		} finally {
 			if (id === requestId) {
@@ -639,7 +648,16 @@
 					</div>
 				</article>
 			{/each}
-			{#if fitsSession && arranged.length === 0}
+			{#if loadFailed}
+				<div class="empty-filter" role="alert">
+					<i class="ph ph-cloud-warning" aria-hidden="true"></i>
+					<p>{t('quiet.discover.loadFailed')}</p>
+					<small>{t('quiet.discover.loadFailedHint')}</small>
+					<button type="button" onclick={() => loadDiscover()} disabled={isLoading}>
+						{isLoading ? t('common.loading') : t('common.retry')}
+					</button>
+				</div>
+			{:else if fitsSession && arranged.length === 0}
 				<div class="empty-filter">
 					<p>{t('quiet.discover.noFitResults')}</p>
 					<button type="button" onclick={() => (fitsSession = false)}>{t('quiet.discover.clearTimeFilter')}</button>

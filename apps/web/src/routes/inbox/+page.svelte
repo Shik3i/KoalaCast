@@ -134,17 +134,20 @@
 				}
 				if (entry && podcastSettings.autoDownload) {
 					const knownIds = new Set(entry.value.map((episode) => episode.id));
-					const newest = episodes.find(
-						(episode) => !knownIds.has(episode.id) && episode.enclosure_url
-					);
-					if (newest) {
+					// Episodes arrive newest-first, so the slice is the newest N — the
+					// count the listener chose in Settings, which used to be ignored in
+					// favour of a hardcoded single episode.
+					const fresh = episodes
+						.filter((episode) => !knownIds.has(episode.id) && episode.enclosure_url)
+						.slice(0, prefs.autoDownloadCount);
+					for (const episode of fresh) {
 						await audioDownloads.startAuto({
-							episode_id: newest.id,
-							podcast_id: newest.podcast_id,
-							title: newest.title,
-							podcast_title: newest.podcast_title,
-							artwork_url: newest.artwork_url,
-							enclosure_url: newest.enclosure_url
+							episode_id: episode.id,
+							podcast_id: episode.podcast_id,
+							title: episode.title,
+							podcast_title: episode.podcast_title,
+							artwork_url: episode.artwork_url,
+							enclosure_url: episode.enclosure_url
 						}).catch(() => false);
 					}
 				}
@@ -168,6 +171,12 @@
 			.sort((a, b) => (b.pub_date ?? 0) - (a.pub_date ?? 0))
 			.slice(0, PER_FEED);
 	}
+
+	// Emphasis used to live inside the translation and be rendered with {@html}.
+	// Catalogues are contributed as plain JSON files, which made every translation
+	// a place where markup could be smuggled in; the placeholder keeps the sentence
+	// translatable and the <strong> in the template where it belongs.
+	const panelHintParts = $derived(t('inbox.panelHint').split('{mode}'));
 
 	// Apply per-podcast mode ('latest' keeps only the newest episode of that show),
 	// the unplayed filter, then sort the whole feed newest-first.
@@ -419,7 +428,7 @@
 	{#if showSettings}
 		<section class="settings-panel">
 			<p class="panel-hint">
-				{@html t('inbox.panelHint')}
+				{panelHintParts[0]}<strong>{t('inbox.panelHintMode')}</strong>{panelHintParts[1] ?? ''}
 			</p>
 			<div class="settings-list">
 				{#each subscriptions as sub (sub.podcast_id)}

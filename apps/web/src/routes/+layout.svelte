@@ -18,6 +18,8 @@
 	} from '$lib/stores/account-context';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { shell } from '$lib/stores/shell.svelte';
+	import { install } from '$lib/stores/install.svelte';
+	import { opmlBackup } from '$lib/backup/opml-backup.svelte';
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import { getLocalSubscriptions } from '$lib/idb/db';
@@ -69,6 +71,10 @@
 			// Storage may be disabled; the app must still mount on the default route.
 		}
 		void getLocalSubscriptions().then(preloadSubscriptionArtwork);
+		// Rewrites the listener's chosen OPML file at most once a day, and only once
+		// the account context above has settled — so the backup describes the library
+		// that is actually loaded, not the one from before the switch.
+		void opmlBackup.write();
 	});
 	onMount(() => {
 		const warmPlayer = (event: Event) => {
@@ -94,6 +100,8 @@
 	$effect(() => {
 		if (player.isActive) ensurePlayer();
 	});
+	// Must be registered before the browser fires it, which it does very early.
+	onMount(() => install.listen());
 	onMount(() => {
 		online = navigator.onLine;
 		const update = () => (online = navigator.onLine);

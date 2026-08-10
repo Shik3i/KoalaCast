@@ -35,7 +35,9 @@
 	let timeBookmarks = $state<LocalTimeBookmark[]>([]);
 	let requestedStartMs = $state<number | null>(null);
 	const currentDownload = $derived(audioDownloads.get(episodeId));
-	const audioDownloadBusy = $derived(currentDownload?.state === 'downloading');
+	const audioDownloadBusy = $derived(
+		currentDownload?.state === 'downloading' || currentDownload?.state === 'queued'
+	);
 
 	const accentVars = $derived(
 		showAccent

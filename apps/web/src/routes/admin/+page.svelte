@@ -12,6 +12,9 @@
 	let lastRefreshedAt = $state(0);
 	let userQuery = $state('');
 	let feedQuery = $state('');
+	// The variable name is rendered as a real <code> element rather than as markup
+	// carried inside the translation catalogue; see the same change in the Inbox.
+	const lockedHintParts = $derived(t('admin.lockedByEnv').split('{variable}'));
 	const filteredUsers = $derived(users.filter((user) => user.username.toLowerCase().includes(userQuery.trim().toLowerCase())));
 	const filteredFeeds = $derived(feedHealth.filter((feed) => `${feed.title || ''} ${feed.feed_url || ''}`.toLowerCase().includes(feedQuery.trim().toLowerCase())));
 
@@ -190,7 +193,7 @@
 						</p>
 						{#if systemStatus.registration_locked}
 							<p class="reg-hint">
-								{@html t('admin.lockedByEnv')}
+								{lockedHintParts[0]}<code>KC_REGISTRATION_ENABLED</code>{lockedHintParts[1] ?? ''}
 							</p>
 						{/if}
 					</div>

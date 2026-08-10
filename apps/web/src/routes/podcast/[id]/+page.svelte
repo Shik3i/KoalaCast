@@ -22,12 +22,16 @@
 	import { slide } from 'svelte/transition';
 	import { optimizeArtwork } from '$lib/artwork';
 	import {
+		getAllPodcastPlaybackSettings,
 		getPodcastPlaybackSettings,
 		savePodcastPlaybackSettings,
 		type PodcastPlaybackSettings
 	} from '$lib/stores/podcast-settings';
 	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
-	import { setBrowserNotificationsEnabled } from '$lib/notifications/browser';
+	import {
+		disableBrowserNotifications,
+		setBrowserNotificationsEnabled
+	} from '$lib/notifications/browser';
 	import { safeExternalHref } from '$lib/safe-url';
 
 	let podcastId = $state('');
@@ -307,6 +311,14 @@
 	async function toggleNotifications(enabled: boolean) {
 		if (!enabled) {
 			updateShowSetting({ notifyNewEpisodes: false });
+			// Once the last show has notifications off there is nothing left to push,
+			// so the browser subscription and its server row go too. Leaving them in
+			// place meant "off" only stopped the local notification, while the server
+			// kept sending — and the endpoint stayed registered forever.
+			const stillWanted = getAllPodcastPlaybackSettings().some(
+				(setting) => setting.podcastId !== podcast?.id && setting.notifyNewEpisodes
+			);
+			if (!stillWanted) await disableBrowserNotifications();
 			return;
 		}
 		const granted = await setBrowserNotificationsEnabled(true);

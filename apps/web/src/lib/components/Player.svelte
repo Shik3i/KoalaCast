@@ -66,6 +66,16 @@
 	let lastPlayPauseToken = 0;
 	let activeSession: LocalListeningSession | null = null;
 	let lastListeningSampleAt = 0;
+	let lastSleepTickAt = Date.now();
+	/** Position under the handle while dragging; null when not scrubbing. */
+	let scrubbingMs = $state<number | null>(null);
+	let hoverPreviewMs = $state<number | null>(null);
+	let hoverPercent = $state(0);
+	let jumpBackFromMs = $state<number | null>(null);
+	let jumpBackTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Only offer a way back from a jump big enough to lose your place. */
+	const JUMP_BACK_THRESHOLD_MS = 15_000;
+	const JUMP_BACK_VISIBLE_MS = 8_000;
 	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
 	let remotePlaybackAvailable = $state(false);
 	let remotePlaybackState = $state<RemotePlaybackState>('disconnected');
@@ -109,6 +119,31 @@
 				)
 			: transcriptCues
 	);
+	let followTranscript = $state(true);
+	let transcriptListElement: HTMLElement | null = $state(null);
+
+	/** The cue being spoken right now, so the transcript can be read along with. */
+	const activeTranscriptCue = $derived.by(() => {
+		if (transcriptCues.length === 0) return null;
+		const seconds = currentTimeMs / 1000;
+		for (let index = transcriptCues.length - 1; index >= 0; index--) {
+			if (seconds >= Number(transcriptCues[index].start ?? 0)) return transcriptCues[index];
+		}
+		return null;
+	});
+
+	// Following is switched off while searching: the listener is reading a specific
+	// passage, and yanking the list back to the playhead every few seconds would
+	// make that impossible.
+	$effect(() => {
+		const cue = activeTranscriptCue;
+		if (!cue || !followTranscript || !showTranscriptDrawer || transcriptQuery.trim()) return;
+		const host = transcriptListElement;
+		if (!host) return;
+		const row = host.querySelector<HTMLElement>('.transcript-row.active');
+		if (!row) return;
+		row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+	});
 
 	let lastFetchedTrack = '';
 	let chaptersGeneration = 0;
@@ -594,14 +629,82 @@
 		}
 	}
 
-	function seekTo(ms: number) {
+	function seekTo(ms: number, options: { offerReturn?: boolean } = {}) {
 		if (!audioEl) return;
+		const fromMs = currentTimeMs;
 		const forwardMs = ms - currentTimeMs;
 		if (forwardMs > 2_000 && activeSession) activeSession.manual_skipped_ms += forwardMs;
 		audioEl.currentTime = ms / 1000;
 		currentTimeMs = ms;
+		if (options.offerReturn !== false && Math.abs(ms - fromMs) >= JUMP_BACK_THRESHOLD_MS) {
+			offerJumpBack(fromMs);
+		}
 		saveProgress('SEEK');
 	}
+
+	/**
+	 * A mis-aimed scrub used to be unrecoverable: the position it came from was
+	 * gone the moment the pointer went down. This keeps it around for a few
+	 * seconds, which is how long it takes to realise the jump was wrong.
+	 */
+	function offerJumpBack(fromMs: number) {
+		jumpBackFromMs = fromMs;
+		if (jumpBackTimer) clearTimeout(jumpBackTimer);
+		jumpBackTimer = setTimeout(() => (jumpBackFromMs = null), JUMP_BACK_VISIBLE_MS);
+	}
+
+	function dismissJumpBack() {
+		jumpBackFromMs = null;
+		if (jumpBackTimer) clearTimeout(jumpBackTimer);
+		jumpBackTimer = null;
+	}
+
+	function jumpBack() {
+		const target = jumpBackFromMs;
+		dismissJumpBack();
+		if (target !== null) seekTo(target, { offerReturn: false });
+	}
+
+	/** Live position while the handle is held; the seek itself happens on release. */
+	function previewScrub(value: number) {
+		scrubbingMs = Number.isFinite(value) ? Math.max(0, value) : null;
+	}
+
+	function commitScrub(value: number) {
+		scrubbingMs = null;
+		seekTo(Number(value));
+	}
+
+	// The time under the pointer, so a scrub can be aimed before it is committed.
+	function updateHoverPreview(event: PointerEvent) {
+		const host = event.currentTarget as HTMLElement | null;
+		if (!host) return;
+		const bounds = host.getBoundingClientRect();
+		if (bounds.width <= 0) return;
+		const ratio = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+		const total = durationMs || track?.duration_ms || 0;
+		if (total <= 0) return;
+		hoverPercent = ratio * 100;
+		hoverPreviewMs = ratio * total;
+	}
+
+	function clearHoverPreview() {
+		hoverPreviewMs = null;
+	}
+
+	// Chapter boundaries drawn on the timeline. Below two chapters there is nothing
+	// to orient by, and a marker at 0 % or 100 % is just the end of the bar.
+	const chapterMarkers = $derived.by(() => {
+		const total = durationMs || track?.duration_ms || 0;
+		if (total <= 0 || chapters.length < 2) return [];
+		return chapters
+			.map((chapter) => {
+				const startSec = typeof chapter.startTime === 'number' ? chapter.startTime : chapter.start;
+				const percent = ((Number(startSec) || 0) * 1000 / total) * 100;
+				return { percent, title: String(chapter.title ?? '') };
+			})
+			.filter((marker) => marker.percent > 0.5 && marker.percent < 99.5);
+	});
 
 	function skip(seconds: number) {
 		if (!audioEl) return;
@@ -609,7 +712,10 @@
 			const remaining = Math.max(0, (audioEl.duration || Infinity) - audioEl.currentTime);
 			activeSession.manual_skipped_ms += Math.round(Math.min(seconds, remaining) * 1000);
 		}
-		audioEl.currentTime = Math.max(0, Math.min(audioEl.duration || 0, audioEl.currentTime + seconds));
+		// `duration` is NaN until metadata arrives, and `NaN || 0` is 0 — which turned
+		// every forward jump before that moment into a jump back to the start.
+		const upperBound = Number.isFinite(audioEl.duration) ? audioEl.duration : Infinity;
+		audioEl.currentTime = Math.max(0, Math.min(upperBound, audioEl.currentTime + seconds));
 		currentTimeMs = Math.round(audioEl.currentTime * 1000);
 		saveProgress('SEEK');
 	}
@@ -635,10 +741,14 @@
 		player.setSleepTimer(value);
 	}
 
+	// While the handle is held, every readout follows the handle rather than the
+	// audio: dragging used to move the thumb and nothing else, so you were aiming
+	// at a timestamp you could not see until you let go.
+	const displayTimeMs = $derived(scrubbingMs ?? currentTimeMs);
 	const progressPercent = $derived(
-		durationMs > 0 ? Math.min(100, (currentTimeMs / durationMs) * 100) : 0
+		durationMs > 0 ? Math.min(100, (displayTimeMs / durationMs) * 100) : 0
 	);
-	const remainingMs = $derived(Math.max(0, (durationMs || track?.duration_ms || 0) - currentTimeMs));
+	const remainingMs = $derived(Math.max(0, (durationMs || track?.duration_ms || 0) - displayTimeMs));
 
 	function startListeningSession() {
 		if (!track || activeSession) return;
@@ -712,9 +822,17 @@
 			: Math.max(0, track?.duration_ms || 0);
 		player.updatePosition(currentTimeMs, durationMs || track?.duration_ms || 0);
 
-		if (player.sleepTimerEndsAt && Date.now() >= player.sleepTimerEndsAt) {
-			audioEl.pause();
-			player.setSleepTimer('');
+		// `timeupdate` only fires while audio is advancing, which is exactly when the
+		// sleep timer should be running. The ceiling keeps a stalled buffer or a
+		// suspended tab from eating the whole timer in one tick.
+		if (player.sleepRemainingMs !== null) {
+			const now = Date.now();
+			const elapsed = Math.min(now - lastSleepTickAt, 5_000);
+			lastSleepTickAt = now;
+			if (player.tickSleepTimer(elapsed)) {
+				audioEl.pause();
+				toast.info(t('player.sleepTimer'));
+			}
 		}
 		if (player.sleepAtChapterEnd && activeChapterIndex >= 0) {
 			const chapter = chapters[activeChapterIndex];
@@ -775,7 +893,11 @@
 		const hasDuration = dur > 1000;
 		const remMs = hasDuration ? Math.max(0, dur - currentTimeMs) : Infinity;
 		const pct = hasDuration ? Math.min(100, (currentTimeMs / dur) * 100) : 0;
-		const isCompleted = forceCompleted || (hasDuration && (remMs < 120000 || pct > 95));
+		// The two-minute tail is an absolute figure, so on a three-minute news bulletin
+		// it declared the episode finished after sixty seconds and evicted it from
+		// Continue Listening. Cap it at a tenth of the episode for short formats.
+		const completionTailMs = Math.min(120_000, dur * 0.1);
+		const isCompleted = forceCompleted || (hasDuration && (remMs < completionTailMs || pct > 95));
 
 			await saveLocalPlaybackState({
 			episode_id: track.episode_id,
@@ -814,7 +936,14 @@
 			navigator.mediaSession.setActionHandler('nexttrack', () => {
 				player.playNext();
 			});
-			navigator.mediaSession.setActionHandler('previoustrack', () => skip(-15));
+			// A head unit's "previous" means the previous track. Mapping it to a
+			// fifteen-second jump made the two transport buttons do unrelated things.
+			// With nothing behind us it still falls back to a jump, which is better
+			// than a dead button.
+			navigator.mediaSession.setActionHandler('previoustrack', () => {
+				if (player.hasPrevious) void player.playPrevious();
+				else skip(-15);
+			});
 		} catch (_) {}
 	}
 
@@ -1029,14 +1158,17 @@
 			player.isPlaying = false;
 			resetSilenceTrimming();
 		});
+		// The playback speed is deliberately NOT restored here. It lives in `prefs`
+		// under an account-scoped key and is applied by activatePreferences(); reading
+		// the bare key here handed a signed-in listener the *guest* speed, and writing
+		// it back through setSpeed() stamped a fresh `updated_at` on every page load —
+		// which made the browser win every last-writer-wins race against the phone.
 		try {
-			const saved = localStorage.getItem('koalacast_playback_speed');
-			if (saved) {
-				const spd = parseFloat(saved);
-				if (spd >= 0.25 && spd <= 4) setSpeed(spd);
-			}
 			const vol = localStorage.getItem('koalacast_volume');
-			if (vol !== null) player.volume = Math.max(0, Math.min(1, parseFloat(vol)));
+			if (vol !== null) {
+				const parsed = parseFloat(vol);
+				if (Number.isFinite(parsed)) player.volume = Math.max(0, Math.min(1, parsed));
+			}
 		} catch (_) {}
 
 		player.loadQueue();
@@ -1067,14 +1199,24 @@
 		};
 
 		window.addEventListener('keydown', handleKeyDown);
+		// Progress is otherwise only written every 30 s and on pause, so closing the
+		// tab mid-episode threw away up to half a minute of listening. `pagehide` is
+		// the last event a browser reliably delivers before it discards the page —
+		// including a mobile app switch that never comes back.
+		const persistNow = () => {
+			void flushListeningSession();
+			void saveProgress('PROGRESS_TICK');
+		};
 		const handleVisibility = () => {
-			if (document.visibilityState === 'hidden') flushListeningSession();
+			if (document.visibilityState === 'hidden') persistNow();
 		};
 		document.addEventListener('visibilitychange', handleVisibility);
+		window.addEventListener('pagehide', persistNow);
 		return () => {
 			player.registerPlaybackFinalizer(null);
 			window.removeEventListener('keydown', handleKeyDown);
 			document.removeEventListener('visibilitychange', handleVisibility);
+			window.removeEventListener('pagehide', persistNow);
 			flushListeningSession(true);
 			resetSilenceTrimming();
 		};
@@ -1090,6 +1232,8 @@
 	}
 
 	const speeds = [0.75, 1.0, 1.15, 1.25, 1.5, 1.75, 2.0, 2.5];
+	/** Enough to plan the next stretch of listening without turning the sheet into a list view. */
+	const NP_QUEUE_VISIBLE = 5;
 </script>
 
 {#key audioElementGeneration}
@@ -1101,6 +1245,9 @@
 		player.isPlaying = true;
 		loadError = '';
 		loadErrorCode = '';
+		// The sleep timer counts listening time, so its clock restarts here rather
+		// than charging the pause to it.
+		lastSleepTickAt = Date.now();
 		startListeningSession();
 	}}
 	oncanplay={() => {
@@ -1179,7 +1326,15 @@
 					</div>
 				{/if}
 				<div class="controls">
-					<button class="ctrl transport-edge" onclick={() => seekTo(0)} aria-label={t('player.restartEpisode')} title={t('player.restartEpisode')}>
+					<!-- Restarts the episode, or steps back to the one before it once
+					     there is something to step back to — the same rule the system's
+					     previous-track control follows. -->
+					<button
+						class="ctrl transport-edge"
+						onclick={() => (player.hasPrevious ? player.playPrevious() : seekTo(0))}
+						aria-label={player.hasPrevious ? t('player.previousEpisode') : t('player.restartEpisode')}
+						title={player.hasPrevious ? t('player.previousEpisode') : t('player.restartEpisode')}
+					>
 						<i class="ph ph-skip-back" aria-hidden="true"></i>
 					</button>
 					<button class="ctrl jump-control" onclick={() => skip(-15)} aria-label={t('player.skipBack')} title={t('player.skipBack')}>
@@ -1197,18 +1352,45 @@
 				</div>
 
 				<div class="timeline">
-					<span class="time">{formatTime(currentTimeMs)}</span>
-					<input
-						type="range"
-						min="0"
-						max={durationMs || track.duration_ms || 100}
-						value={currentTimeMs}
-						style="--progress: {progressPercent}%"
-						onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
-						aria-label={t('player.timeline')}
-					/>
+					<span class="time">{formatTime(displayTimeMs)}</span>
+					<div class="timeline-track">
+						{#if chapterMarkers.length}
+							<div class="chapter-marks" aria-hidden="true">
+								{#each chapterMarkers as marker}
+									<span style="left: {marker.percent}%"></span>
+								{/each}
+							</div>
+						{/if}
+						<input
+							type="range"
+							min="0"
+							max={durationMs || track.duration_ms || 100}
+							value={displayTimeMs}
+							style="--progress: {progressPercent}%"
+							oninput={(e) => previewScrub(Number((e.target as HTMLInputElement).value))}
+							onchange={(e) => commitScrub(Number((e.target as HTMLInputElement).value))}
+							onpointermove={updateHoverPreview}
+							onpointerleave={clearHoverPreview}
+							aria-label={t('player.timeline')}
+							aria-valuetext={formatTime(displayTimeMs)}
+						/>
+						{#if hoverPreviewMs !== null}
+							<span class="scrub-tooltip" style="left: {hoverPercent}%">{formatTime(hoverPreviewMs)}</span>
+						{/if}
+					</div>
 					<span class="time">-{formatTime(remainingMs)}</span>
 				</div>
+				{#if jumpBackFromMs !== null}
+					<div class="jump-back" transition:slide={{ duration: 150 }}>
+						<button onclick={jumpBack}>
+							<i class="ph ph-arrow-u-up-left" aria-hidden="true"></i>
+							{t('player.jumpBackTo', { time: formatTime(jumpBackFromMs) })}
+						</button>
+						<button class="jump-back-dismiss" onclick={dismissJumpBack} aria-label={t('common.close')}>
+							<i class="ph ph-x" aria-hidden="true"></i>
+						</button>
+					</div>
+				{/if}
 			</div>
 
 			<div class="extras">
@@ -1292,21 +1474,46 @@
 				</div>
 
 				<div class="np-timeline">
-					<span class="time">{formatTime(currentTimeMs)}</span>
+					<span class="time">{formatTime(displayTimeMs)}</span>
 					<div class="np-slider-host" class:visualizing={prefs.visualizer === 'level'} style="--audio-level: {visualizerLevel}">
 						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} spectrum={visualizerSpectrum} peaks={visualizerPeaks} playing={isPlaying} variant="full" />
+						{#if chapterMarkers.length}
+							<div class="chapter-marks" aria-hidden="true">
+								{#each chapterMarkers as marker}
+									<span style="left: {marker.percent}%"></span>
+								{/each}
+							</div>
+						{/if}
 						<input
 							type="range"
 							min="0"
 							max={durationMs || track.duration_ms || 100}
-							value={currentTimeMs}
+							value={displayTimeMs}
 							style="--progress: {progressPercent}%"
-							onchange={(e) => seekTo(Number((e.target as HTMLInputElement).value))}
+							oninput={(e) => previewScrub(Number((e.target as HTMLInputElement).value))}
+							onchange={(e) => commitScrub(Number((e.target as HTMLInputElement).value))}
+							onpointermove={updateHoverPreview}
+							onpointerleave={clearHoverPreview}
 							aria-label={t('player.timeline')}
+							aria-valuetext={formatTime(displayTimeMs)}
 						/>
+						{#if hoverPreviewMs !== null}
+							<span class="scrub-tooltip" style="left: {hoverPercent}%">{formatTime(hoverPreviewMs)}</span>
+						{/if}
 					</div>
 					<span class="time">{formatTime(durationMs || track.duration_ms)}</span>
 				</div>
+				{#if jumpBackFromMs !== null}
+					<div class="jump-back np-jump-back" transition:slide={{ duration: 150 }}>
+						<button onclick={jumpBack}>
+							<i class="ph ph-arrow-u-up-left" aria-hidden="true"></i>
+							{t('player.jumpBackTo', { time: formatTime(jumpBackFromMs) })}
+						</button>
+						<button class="jump-back-dismiss" onclick={dismissJumpBack} aria-label={t('common.close')}>
+							<i class="ph ph-x" aria-hidden="true"></i>
+						</button>
+					</div>
+				{/if}
 
 				<div class="np-controls">
 					<button class="np-ctrl" onclick={() => skip(-10)} aria-label={t('player.skipBack10')} title={t('player.skipBack10')}>
@@ -1431,9 +1638,18 @@
 								<input type="search" bind:value={transcriptQuery} placeholder={t('episode.searchTranscript')} />
 								<small>{t('episode.transcriptMatches', { count: filteredTranscriptCues.length })}</small>
 							</label>
-							<div class="chapters-list">
+							<label class="np-transcript-follow">
+								<input type="checkbox" bind:checked={followTranscript} />
+								{t('episode.followTranscript')}
+							</label>
+							<div class="chapters-list" bind:this={transcriptListElement}>
 								{#each filteredTranscriptCues as cue}
-									<button class="chapter-row" onclick={() => seekTo(Number(cue.start || 0) * 1000)}>
+									<button
+										class="chapter-row transcript-row"
+										class:active={cue === activeTranscriptCue}
+										aria-current={cue === activeTranscriptCue ? 'true' : undefined}
+										onclick={() => seekTo(Number(cue.start || 0) * 1000)}
+									>
 										<span class="ch-time">{formatTime(Number(cue.start || 0) * 1000)}</span>
 										<span class="ch-title">{cue.text}</span>
 									</button>
@@ -1443,12 +1659,54 @@
 					</div>
 				{/if}
 
-				{#if player.upNext}
-					<button class="np-upnext" onclick={() => player.upNext && player.playFromQueue(player.upNext)}>
-						<span class="upnext-label"><i class="ph ph-queue" aria-hidden="true"></i> {t('player.upNext')}</span>
-						<span class="upnext-title" title={player.upNext.title}>{player.upNext.title}</span>
-						<i class="ph ph-play" aria-hidden="true"></i>
-					</button>
+				<!-- This used to be the very next title and nothing else, with reordering
+				     available only over in the Library. Everything the queue needs is
+				     now here, where the listener already is. -->
+				{#if player.queue.length > 0}
+					<section class="np-queue" aria-label={t('player.upNext')}>
+						<header>
+							<span class="upnext-label"><i class="ph ph-queue" aria-hidden="true"></i> {t('player.upNext')}</span>
+							<a href="/library?view=queue" onclick={() => (expanded = false)}>{t('player.queueCount', { count: player.queue.length })}</a>
+						</header>
+						<ol>
+							{#each player.queue.slice(0, NP_QUEUE_VISIBLE) as queued, index (queued.episode_id)}
+								<li>
+									<button class="np-queue-play" onclick={() => player.playFromQueue(queued)} title={queued.title}>
+										<i class="ph ph-play" aria-hidden="true"></i>
+										<span class="upnext-title">{queued.title}</span>
+									</button>
+									<div class="np-queue-actions">
+										<button
+											onclick={() => player.moveInQueue(queued.episode_id, -1)}
+											disabled={index === 0}
+											aria-label={t('player.queueMoveUp')}
+											title={t('player.queueMoveUp')}
+										>
+											<i class="ph ph-arrow-up" aria-hidden="true"></i>
+										</button>
+										<button
+											onclick={() => player.moveInQueue(queued.episode_id, 1)}
+											disabled={index === player.queue.length - 1}
+											aria-label={t('player.queueMoveDown')}
+											title={t('player.queueMoveDown')}
+										>
+											<i class="ph ph-arrow-down" aria-hidden="true"></i>
+										</button>
+										<button
+											onclick={() => player.removeFromQueue(queued.episode_id)}
+											aria-label={t('player.queueRemove')}
+											title={t('player.queueRemove')}
+										>
+											<i class="ph ph-x" aria-hidden="true"></i>
+										</button>
+									</div>
+								</li>
+							{/each}
+						</ol>
+						{#if player.queue.length > NP_QUEUE_VISIBLE}
+							<small class="np-queue-more">{t('player.queueMore', { count: player.queue.length - NP_QUEUE_VISIBLE })}</small>
+						{/if}
+					</section>
 				{/if}
 			</div>
 		</div>
@@ -1628,6 +1886,63 @@
 		gap: 0.75rem;
 		width: 100%;
 	}
+
+	/* Wrapper so chapter ticks and the hover readout can be positioned over the
+	   track; the input keeps every bit of its own behaviour. */
+	.timeline-track {
+		position: relative;
+		flex: 1;
+		display: flex;
+		align-items: center;
+		min-width: 0;
+	}
+	.chapter-marks {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 2;
+	}
+	.chapter-marks span {
+		position: absolute;
+		top: 50%;
+		width: 2px;
+		height: 9px;
+		transform: translate(-50%, -50%);
+		border-radius: 1px;
+		background: color-mix(in srgb, var(--player-text) 55%, transparent);
+	}
+	.scrub-tooltip {
+		position: absolute;
+		bottom: calc(100% + 6px);
+		transform: translateX(-50%);
+		padding: 2px 6px;
+		border-radius: 4px;
+		background: var(--player-text);
+		color: var(--player-bg);
+		font: 600 10px/1.4 var(--font-mono);
+		pointer-events: none;
+		white-space: nowrap;
+		z-index: 4;
+	}
+	.jump-back {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		margin-top: 4px;
+	}
+	.jump-back button {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 10px;
+		border: 1px solid color-mix(in srgb, var(--player-text) 22%, transparent);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--player-text) 8%, transparent);
+		color: var(--player-text);
+		font-size: 0.72rem;
+	}
+	.jump-back-dismiss { padding: 4px 7px; }
+	.np-jump-back { justify-content: center; margin-top: 8px; }
 
 	.timeline input[type='range'] {
 		flex: 1;
@@ -2009,20 +2324,61 @@
 		height: 44px;
 	}
 
-	.np-upnext {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		width: min(88vw, 380px);
-		padding: 0.7rem 0.9rem;
+	.np-queue {
+		width: min(88vw, 420px);
+		padding: 0.6rem 0.7rem 0.7rem;
 		border-radius: 12px;
 		border: 1px solid color-mix(in srgb, var(--player-text) 14%, transparent);
 		background: color-mix(in srgb, var(--player-text) 7%, transparent);
 		color: var(--player-text);
 		text-align: left;
 	}
-	.np-upnext:hover { background: color-mix(in srgb, var(--player-text) 12%, transparent); }
-	.np-upnext .upnext-label {
+	.np-queue header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+		margin-bottom: 0.35rem;
+	}
+	.np-queue header a { color: inherit; opacity: 0.75; font-size: 0.72rem; }
+	.np-queue header a:hover { opacity: 1; text-decoration: underline; }
+	.np-queue ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+	.np-queue li {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		border-radius: 8px;
+	}
+	.np-queue li:hover { background: color-mix(in srgb, var(--player-text) 8%, transparent); }
+	.np-queue-play {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex: 1;
+		min-width: 0;
+		padding: 0.45rem 0.5rem;
+		border: 0;
+		background: none;
+		color: inherit;
+		text-align: left;
+	}
+	.np-queue-actions { display: flex; gap: 1px; }
+	.np-queue-actions button {
+		width: 30px;
+		height: 30px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		color: inherit;
+		opacity: 0.65;
+	}
+	.np-queue-actions button:hover:not(:disabled) { opacity: 1; background: color-mix(in srgb, var(--player-text) 14%, transparent); }
+	.np-queue-actions button:disabled { opacity: 0.25; }
+	.np-queue-more { display: block; margin-top: 0.4rem; opacity: 0.7; font-size: 0.72rem; }
+
+	.np-queue .upnext-label {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
@@ -2033,7 +2389,7 @@
 		color: color-mix(in srgb, var(--player-text) 65%, transparent);
 		flex-shrink: 0;
 	}
-	.np-upnext .upnext-title {
+	.np-queue .upnext-title {
 		flex: 1;
 		min-width: 0;
 		font-size: 0.9rem;
@@ -2102,6 +2458,22 @@
 		gap: .75rem;
 		margin: .75rem 0;
 	}
+
+	.np-transcript-follow {
+		display: inline-flex;
+		align-items: center;
+		gap: .5rem;
+		margin-bottom: .5rem;
+		color: var(--ink-3);
+		font-size: .8rem;
+	}
+	/* The line being spoken. The left rule is what the eye tracks when the list is
+	   scrolling itself; colour alone would be lost at a glance. */
+	.transcript-row.active {
+		border-left: 3px solid var(--show-accent, var(--accent-green));
+		background: color-mix(in srgb, var(--show-accent, var(--accent-green)) 12%, transparent);
+	}
+	.transcript-row.active .ch-title { color: var(--ink-strong); font-weight: 600; }
 
 	.np-transcript-search input {
 		min-width: 0;
