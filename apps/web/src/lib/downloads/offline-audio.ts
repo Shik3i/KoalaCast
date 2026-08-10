@@ -57,4 +57,23 @@ export async function migrateGuestAudioDownloads(
 		const response = await guestCache.match(offlineAudioPath(episodeId, null));
 		if (response) await accountCache.put(offlineAudioPath(episodeId, userId), response);
 	}
+	// A migration is a move, not a copy. Leaving the originals behind doubled the
+	// storage an episode occupied and left audio in a namespace nothing would ever
+	// clean up again.
+	await caches.delete(audioDownloadCacheName(null));
+}
+
+/**
+ * Removes every audio-download cache this origin holds, for every account that
+ * ever signed in here. Used by "delete all local data", which previously left
+ * gigabytes of downloaded audio in place.
+ */
+export async function purgeAllAudioDownloads(): Promise<void> {
+	if (typeof caches === 'undefined') return;
+	const names = await caches.keys();
+	await Promise.all(
+		names
+			.filter((name) => name.startsWith(`${AUDIO_DOWNLOAD_CACHE_PREFIX}-`))
+			.map((name) => caches.delete(name))
+	);
 }

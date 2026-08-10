@@ -10,6 +10,7 @@ import {
 	addToLocalQueueIfAbsent,
 	addManyToLocalQueue,
 	removeFromLocalQueue,
+	reorderLocalQueue,
 	clearLocalQueue,
 	getLocalCurrentPlayback,
 	saveLocalCurrentPlayback,
@@ -29,6 +30,9 @@ export interface CurrentTrack {
 	duration_ms: number;
 	categories?: string[];
 }
+
+/** Deep enough to walk back through an evening's listening, short enough to stay in memory. */
+const HISTORY_LIMIT = 25;
 
 function itemToTrack(i: LocalQueueItem): CurrentTrack {
 	return {
@@ -54,7 +58,10 @@ class PlayerStore {
 	volume = $state(1);
 	playbackSpeed = $state(1);
 	defaultPlaybackSpeed = $state(1);
+	/** Wall-clock instant the timer fires, for display; recomputed as it counts down. */
 	sleepTimerEndsAt = $state<number | null>(null);
+	/** Listening time left on the timer. Only advances while audio is playing. */
+	sleepRemainingMs = $state<number | null>(null);
 	sleepAtEpisodeEnd = $state(false);
 	sleepAtChapterEnd = $state(false);
 	sleepTimerValue = $state('');
@@ -77,7 +84,39 @@ class PlayerStore {
 		this.playPauseToken++;
 	}
 
-	play(track: CurrentTrack, positionMs?: number) {
+	/**
+	 * What was playing before, newest first, so "previous" can mean the previous
+	 * episode rather than a fifteen-second jump back. The system's previous-track
+	 * button and every car head unit send that command expecting a track change.
+	 */
+	history = $state<CurrentTrack[]>([]);
+
+	get hasPrevious(): boolean {
+		return this.history.length > 0;
+	}
+
+	/** Resumes the episode played before this one; the current one goes back on the queue. */
+	async playPrevious(): Promise<boolean> {
+		const previous = this.history[0];
+		if (!previous) return false;
+		this.history = this.history.slice(1);
+		const interrupted = this.current;
+		this.play(previous, undefined, { recordHistory: false });
+		if (interrupted) await this.playNextAfterCurrent(interrupted);
+		return true;
+	}
+
+	play(track: CurrentTrack, positionMs?: number, options: { recordHistory?: boolean } = {}) {
+		const previous = this.current;
+		if (
+			options.recordHistory !== false &&
+			previous &&
+			previous.episode_id !== track.episode_id
+		) {
+			this.history = [previous, ...this.history.filter(
+				(entry) => entry.episode_id !== previous.episode_id
+			)].slice(0, HISTORY_LIMIT);
+		}
 		this.current = track;
 		this.requestedPositionMs =
 			positionMs !== undefined && Number.isFinite(positionMs) ? Math.max(0, positionMs) : null;
@@ -153,10 +192,31 @@ class PlayerStore {
 		this.sleepAtEpisodeEnd = nextValue === 'episode';
 		this.sleepAtChapterEnd = nextValue === 'chapter';
 		if (nextValue === '' || nextValue === 'episode' || nextValue === 'chapter') {
+			this.sleepRemainingMs = null;
 			this.sleepTimerEndsAt = null;
 		} else {
-			this.sleepTimerEndsAt = Date.now() + Number(nextValue) * 60_000;
+			this.sleepRemainingMs = Number(nextValue) * 60_000;
+			this.sleepTimerEndsAt = Date.now() + this.sleepRemainingMs;
 		}
+	}
+
+	/**
+	 * Counts the timer down by the time that just elapsed, and reports whether it
+	 * has run out.
+	 *
+	 * The deadline used to be a plain wall-clock instant, so pausing for a phone
+	 * call spent the whole timer: coming back, the next few seconds of audio ended
+	 * with the player stopping again. "Thirty minutes" means thirty minutes of
+	 * listening. [sleepTimerEndsAt] is kept in step for the queue rail, which shows
+	 * when the session will end.
+	 */
+	tickSleepTimer(elapsedMs: number): boolean {
+		if (this.sleepRemainingMs === null) return false;
+		this.sleepRemainingMs = Math.max(0, this.sleepRemainingMs - Math.max(0, elapsedMs));
+		this.sleepTimerEndsAt = Date.now() + this.sleepRemainingMs;
+		if (this.sleepRemainingMs > 0) return false;
+		this.setSleepTimer('');
+		return true;
 	}
 
 	async loadQueue() {
@@ -170,6 +230,8 @@ class PlayerStore {
 		this.isPlaying = false;
 		this.playToken = 0;
 		this.requestedPositionMs = null;
+		// History belongs to the account that was listening, not to the browser.
+		this.history = [];
 		const [items, saved] = await Promise.all([getLocalQueue(), getLocalCurrentPlayback()]);
 		this.current = saved ? itemToTrack({ ...saved, id: '', position_order: 0, added_at: 0 }) : null;
 		this.positionMs = saved?.position_ms ?? 0;
@@ -229,6 +291,25 @@ class PlayerStore {
 					added_at: now + index
 				}))
 		);
+		await this.loadQueue();
+	}
+
+	/**
+	 * Moves one episode up or down the queue.
+	 *
+	 * The reorder is computed over the *stored* queue, not over [queue], because
+	 * that one hides whatever is playing: swapping two neighbours as they appear on
+	 * screen could otherwise place them either side of a hidden entry and land them
+	 * in an order nobody asked for.
+	 */
+	async moveInQueue(episode_id: string, direction: -1 | 1) {
+		const items = await getLocalQueue();
+		const ids = items.map((item) => item.episode_id);
+		const index = ids.indexOf(episode_id);
+		const target = index + direction;
+		if (index < 0 || target < 0 || target >= ids.length) return;
+		[ids[index], ids[target]] = [ids[target], ids[index]];
+		await reorderLocalQueue(ids);
 		await this.loadQueue();
 	}
 

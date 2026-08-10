@@ -3,14 +3,17 @@ import {
 	audioDownloadCacheName,
 	migrateGuestAudioDownloads,
 	offlineAudioPath,
+	purgeAllAudioDownloads,
 	removeAudioDownload
 } from '$lib/downloads/offline-audio';
 import {
 	audioEffectsProxyUrl,
 	publisherAllowsAudioEffects
 } from '$lib/audio/source';
+import { prefs } from '$lib/stores/prefs.svelte';
+import { getLocalPlaybackState } from '$lib/idb/db';
 
-export type DownloadState = 'downloading' | 'downloaded' | 'cancelled' | 'failed';
+export type DownloadState = 'queued' | 'downloading' | 'downloaded' | 'cancelled' | 'failed';
 
 export interface AudioDownload {
 	episodeId: string;
@@ -37,8 +40,35 @@ export interface DownloadRequest {
 
 const STORAGE_KEY = 'koalacast_audio_downloads_v3';
 const GUEST_MIGRATION_KEY = 'koalacast_guest_audio_downloads_migrated';
-const DEFAULT_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RETENTION_DAYS: Record<string, number> = { '7d': 7, '14d': 14, '30d': 30 };
+/** Progress is published every 200 ms; writing it through to disk that often
+ *  serialised the whole list synchronously on the main thread. */
+const PERSIST_INTERVAL_MS = 2_000;
 let audioProxyEnabledPromise: Promise<boolean> | null = null;
+
+/** Stable, translatable failure codes; see `downloadErrorMessage`. */
+export const DOWNLOAD_ERROR = {
+	noAudioUrl: 'no-audio-url',
+	corsBlocked: 'cors-blocked',
+	http: 'http-'
+} as const;
+
+/**
+ * True when the connection is known to be metered. The Network Information API
+ * is the only signal a browser offers, and it is absent on iOS and desktop
+ * Safari — there "WLAN only" can be no stricter than "not a slow cellular link
+ * and not data-saver", which is what the checks below express.
+ */
+function onMeteredConnection(): boolean {
+	const connection = (navigator as Navigator & {
+		connection?: { saveData?: boolean; effectiveType?: string; type?: string };
+	}).connection;
+	if (!connection) return false;
+	if (connection.saveData) return true;
+	if (connection.type) return connection.type === 'cellular';
+	return connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g';
+}
 
 function audioProxyEnabled(): Promise<boolean> {
 	if (!audioProxyEnabledPromise) {
@@ -61,6 +91,42 @@ class AudioDownloadManager {
 	private controllers = new Map<string, AbortController>();
 	private activeOwner: string | null = null;
 	private generation = 0;
+	private activeTransfers = 0;
+	private waiting: Array<() => void> = [];
+	private persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+	/**
+	 * Waits for a transfer slot. The limit is read at the moment a slot is handed
+	 * out, so raising "parallel downloads" in Settings releases waiting episodes
+	 * immediately and lowering it simply stops new ones from starting.
+	 */
+	private acquireSlot(signal: AbortSignal): Promise<void> {
+		if (signal.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'));
+		if (this.activeTransfers < prefs.downloadConcurrency) {
+			this.activeTransfers += 1;
+			return Promise.resolve();
+		}
+		return new Promise<void>((resolve, reject) => {
+			const onAbort = () => {
+				this.waiting = this.waiting.filter((entry) => entry !== grant);
+				reject(new DOMException('Aborted', 'AbortError'));
+			};
+			const grant = () => {
+				signal.removeEventListener('abort', onAbort);
+				this.activeTransfers += 1;
+				resolve();
+			};
+			signal.addEventListener('abort', onAbort, { once: true });
+			this.waiting.push(grant);
+		});
+	}
+
+	private releaseSlot() {
+		this.activeTransfers = Math.max(0, this.activeTransfers - 1);
+		while (this.activeTransfers < prefs.downloadConcurrency && this.waiting.length > 0) {
+			this.waiting.shift()?.();
+		}
+	}
 
 	private storageKey(owner = this.activeOwner) {
 		return owner ? `${STORAGE_KEY}:account:${encodeURIComponent(owner)}` : `${STORAGE_KEY}:guest`;
@@ -105,7 +171,7 @@ class AudioDownloadManager {
 			const parsed = JSON.parse(localStorage.getItem(this.storageKey()) || '[]') as AudioDownload[];
 			this.items = parsed.map((item) => ({
 				...item,
-				state: item.state === 'downloading' ? 'cancelled' : item.state
+				state: item.state === 'downloading' || item.state === 'queued' ? 'cancelled' : item.state
 			}));
 		} catch {
 			this.items = [];
@@ -137,6 +203,7 @@ class AudioDownloadManager {
 		}
 		await this.refreshStorage();
 		this.persist();
+		await this.enforceRetention();
 	}
 
 	get(episodeId: string) {
@@ -146,7 +213,10 @@ class AudioDownloadManager {
 	async start(request: DownloadRequest) {
 		await this.load();
 		const generation = this.generation;
-		if (!request.enclosure_url) throw new Error('Episode has no audio URL');
+		// Failures are stored as stable codes rather than English sentences: this
+		// string is rendered in the Downloads list, where a German listener used to
+		// be told "Publisher does not allow browser downloads".
+		if (!request.enclosure_url) throw new Error(DOWNLOAD_ERROR.noAudioUrl);
 		this.controllers.get(request.episode_id)?.abort();
 		const controller = new AbortController();
 		this.controllers.set(request.episode_id, controller);
@@ -157,7 +227,7 @@ class AudioDownloadManager {
 			podcastTitle: request.podcast_title || '',
 			artworkUrl: request.artwork_url || '',
 			enclosureUrl: request.enclosure_url,
-			state: 'downloading',
+			state: 'queued',
 			bytesDownloaded: 0,
 			totalBytes: 0,
 			error: '',
@@ -165,6 +235,15 @@ class AudioDownloadManager {
 		});
 
 		try {
+			await this.acquireSlot(controller.signal);
+		} catch {
+			this.patch(request.episode_id, { state: 'cancelled' });
+			this.controllers.delete(request.episode_id);
+			return;
+		}
+
+		try {
+			this.patch(request.episode_id, { state: 'downloading' });
 			const origin = location.origin;
 			const directAllowed = await publisherAllowsAudioEffects(request.enclosure_url, origin);
 			const source = directAllowed
@@ -172,10 +251,10 @@ class AudioDownloadManager {
 				: (await audioProxyEnabled())
 					? audioEffectsProxyUrl(request.enclosure_url)
 					: '';
-			if (!source) throw new Error('Publisher does not allow browser downloads');
+			if (!source) throw new Error(DOWNLOAD_ERROR.corsBlocked);
 			const response = await fetch(source, { cache: 'no-store', signal: controller.signal });
 			if (!response.ok || !response.body) {
-				throw new Error(`HTTP ${response.status}`);
+				throw new Error(`${DOWNLOAD_ERROR.http}${response.status}`);
 			}
 			const totalBytes = Number(response.headers.get('content-length')) || 0;
 			let bytesDownloaded = 0;
@@ -205,6 +284,7 @@ class AudioDownloadManager {
 				totalBytes: totalBytes || bytesDownloaded,
 				error: ''
 			});
+			await this.enforceRetention();
 			await this.enforceBudget();
 		} catch (error: any) {
 			if (generation !== this.generation) return;
@@ -215,6 +295,7 @@ class AudioDownloadManager {
 			});
 			if (!cancelled) throw error;
 		} finally {
+			this.releaseSlot();
 			if (generation === this.generation) {
 				this.controllers.delete(request.episode_id);
 				await this.refreshStorage();
@@ -223,16 +304,18 @@ class AudioDownloadManager {
 	}
 
 	async startAuto(request: DownloadRequest): Promise<boolean> {
-		const connection = (navigator as Navigator & {
-			connection?: { saveData?: boolean; effectiveType?: string };
-		}).connection;
-		if (connection?.saveData || connection?.effectiveType === '2g') return false;
+		// "Download over Wi-Fi only" is a promise about the listener's data plan, so
+		// an automatic download is the one place it must be honoured. A manual tap is
+		// an explicit decision and stays allowed.
+		if (prefs.downloadWifiOnly && onMeteredConnection()) return false;
 		if (this.get(request.episode_id)?.state === 'downloaded') return false;
 		await this.start(request);
 		return true;
 	}
 
-	async enforceBudget(budgetBytes = DEFAULT_BUDGET_BYTES) {
+	/** 0 means "no budget"; anything else evicts least-recently-touched first. */
+	async enforceBudget(budgetBytes = prefs.downloadBudgetBytes) {
+		if (!budgetBytes || budgetBytes <= 0) return;
 		let used = this.items
 			.filter((item) => item.state === 'downloaded')
 			.reduce((sum, item) => sum + item.bytesDownloaded, 0);
@@ -243,6 +326,30 @@ class AudioDownloadManager {
 			if (used <= budgetBytes) break;
 			used -= item.bytesDownloaded;
 			await this.remove(item.episodeId);
+		}
+	}
+
+	/**
+	 * Applies the "keep downloads" setting. Runs on load and after every finished
+	 * transfer, which is as often as the answer can change without a timer nobody
+	 * would notice running.
+	 */
+	async enforceRetention(retention = prefs.downloadRetention) {
+		if (retention === 'keep') return;
+		const downloaded = this.items.filter((item) => item.state === 'downloaded');
+		if (downloaded.length === 0) return;
+		if (retention === 'finished') {
+			for (const item of downloaded) {
+				const state = await getLocalPlaybackState(item.episodeId).catch(() => undefined);
+				if (state?.completed) await this.remove(item.episodeId);
+			}
+			return;
+		}
+		const days = RETENTION_DAYS[retention];
+		if (!days) return;
+		const cutoff = Date.now() - days * DAY_MS;
+		for (const item of downloaded) {
+			if (item.updatedAt < cutoff) await this.remove(item.episodeId);
 		}
 	}
 
@@ -271,6 +378,17 @@ class AudioDownloadManager {
 		await this.refreshStorage();
 	}
 
+	/** Cancels everything in flight and removes every stored file, for every owner. */
+	async clearAll() {
+		for (const controller of this.controllers.values()) controller.abort();
+		this.controllers.clear();
+		this.waiting = [];
+		this.items = [];
+		this.persist();
+		await purgeAllAudioDownloads();
+		await this.refreshStorage();
+	}
+
 	async refreshStorage() {
 		if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return;
 		const estimate = await navigator.storage.estimate();
@@ -290,10 +408,29 @@ class AudioDownloadManager {
 		this.items = this.items.map((item) =>
 			item.episodeId === episodeId ? { ...item, ...patch, updatedAt: Date.now() } : item
 		);
-		this.persist();
+		// A byte-count tick is worth nothing after a reload, so it may wait. A state
+		// change is what tells the next visit whether the file is there, so it may not.
+		this.persist(patch.state !== undefined);
 	}
 
-	private persist() {
+	/**
+	 * @param immediate write through now. Progress ticks arrive every 200 ms and
+	 *   each one serialises the whole list, which is a synchronous main-thread
+	 *   write; several parallel downloads made that measurable as jank.
+	 */
+	private persist(immediate = true) {
+		if (!immediate) {
+			if (this.persistTimer) return;
+			this.persistTimer = setTimeout(() => {
+				this.persistTimer = null;
+				this.persist();
+			}, PERSIST_INTERVAL_MS);
+			return;
+		}
+		if (this.persistTimer) {
+			clearTimeout(this.persistTimer);
+			this.persistTimer = null;
+		}
 		try {
 			localStorage.setItem(this.storageKey(), JSON.stringify(this.items));
 		} catch {}

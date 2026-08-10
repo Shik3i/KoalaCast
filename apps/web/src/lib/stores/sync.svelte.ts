@@ -88,6 +88,15 @@ class SyncStore {
 	status = $state<SyncStatus>('off');
 	lastSyncedAt = $state<number | null>(null);
 	userId = $state<string | null>(null);
+	/**
+	 * Why the last run failed, or null after one succeeds. The Android client has
+	 * always surfaced this; a bare red dot in Settings told a listener whose data
+	 * never arrived nothing at all about whether it was the network, the session
+	 * or a rejected record.
+	 */
+	lastError = $state<string | null>(null);
+	/** Records the server sent that this build could not read. */
+	skippedChangesets = $state(0);
 
 	#timer: ReturnType<typeof setInterval> | null = null;
 	#onVisible: (() => void) | null = null;
@@ -158,7 +167,15 @@ class SyncStore {
 		this.#generation++;
 		this.userId = userId;
 		this.status = 'idle';
-		if (!this.#timer) this.#timer = setInterval(() => this.syncNow(), INTERVAL_MS);
+		// Only tick while the tab is actually in front. A backgrounded phone browser
+		// woke the radio every 45 seconds for a sync nobody was waiting on; becoming
+		// visible again already triggers one through the listener below.
+		if (!this.#timer) {
+			this.#timer = setInterval(() => {
+				if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+				void this.syncNow();
+			}, INTERVAL_MS);
+		}
 		if (!this.#onVisible) {
 			this.#onVisible = () => {
 				if (document.visibilityState === 'visible') this.syncNow();
@@ -196,6 +213,7 @@ class SyncStore {
 		this.#controller = controller;
 		this.#inFlight = true;
 		this.status = 'syncing';
+		this.skippedChangesets = 0;
 		try {
 			await this.#pull(userId, generation, controller.signal);
 			this.#assertRun(userId, generation, controller.signal);
@@ -203,13 +221,21 @@ class SyncStore {
 			this.#assertRun(userId, generation, controller.signal);
 			this.status = 'idle';
 			this.lastSyncedAt = Date.now();
+			// A skipped record is not a failed sync — the rest went through — but it
+			// must still be said out loud, or the data silently goes missing.
+			this.lastError =
+				this.skippedChangesets > 0
+					? `${this.skippedChangesets} unreadable record(s) skipped, rest synced`
+					: null;
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			if (generation !== this.#generation || this.userId !== userId) return;
 			// A 401 means the session is gone — stop rather than spin.
 			if (err instanceof SyncAuthError) {
+				this.lastError = 'session expired';
 				this.disable();
 			} else {
+				this.lastError = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
 				this.status = 'error';
 			}
 		} finally {
@@ -242,7 +268,17 @@ class SyncStore {
 			const changesets: Changeset[] = data.changesets || [];
 			for (const cs of changesets) {
 				this.#assertRun(userId, generation, signal);
-				await applyChangeset(cs);
+				// A malformed record must never stop the pull. Throwing here left the
+				// cursor un-advanced, so the same bad row came back every 45 seconds
+				// and sync was wedged for good. Skip it, count it, keep going — the
+				// Android client has isolated bad operations this way for a while.
+				try {
+					await applyChangeset(cs);
+				} catch (err) {
+					if (err instanceof DOMException && err.name === 'AbortError') throw err;
+					this.skippedChangesets++;
+					console.warn('sync: skipping unusable changeset', cs?.entity_type, cs?.entity_id, err);
+				}
 			}
 			const lastCursor = changesets.at(-1)?.server_cursor;
 			const nextCursor = Number.isFinite(data.next_cursor)

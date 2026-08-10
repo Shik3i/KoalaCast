@@ -36,6 +36,18 @@ const OFFLINE_FILES = new Set([
 	'/illustrations/empty-queue.webp'
 ]);
 
+/**
+ * A push payload decides where the notification takes the listener, so it is
+ * only ever allowed to name a path on this origin. An absolute URL would sail
+ * past the pathname comparison below and open an arbitrary site in a window the
+ * listener believes belongs to KoalaCast. A leading `//` is a host, not a path.
+ */
+function safeNotificationPath(value: unknown): string {
+	if (typeof value !== 'string') return '/inbox';
+	if (!value.startsWith('/') || value.startsWith('//')) return '/inbox';
+	return value;
+}
+
 sw.addEventListener('push', (event) => {
 	let payload: { title?: string; body?: string; tag?: string; url?: string } = {};
 	try {
@@ -49,14 +61,14 @@ sw.addEventListener('push', (event) => {
 			icon: '/icon-192.png',
 			badge: '/icon-72.png',
 			tag: payload.tag || 'koalacast-update',
-			data: { url: payload.url || '/inbox' }
+			data: { url: safeNotificationPath(payload.url) }
 		})
 	);
 });
 
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
-	const target = String(event.notification.data?.url || '/inbox');
+	const target = safeNotificationPath(event.notification.data?.url);
 	event.waitUntil(
 		sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clients) => {
 			const existing = clients.find((client) => new URL(client.url).pathname === target);
@@ -66,6 +78,27 @@ sw.addEventListener('notificationclick', (event) => {
 	);
 });
 const PRECACHE = [...PRECACHE_BUILD, ...files.filter((path) => OFFLINE_FILES.has(path))];
+
+// Both runtime caches grew without limit: every artwork variant and every
+// visited episode URL stayed until the browser evicted the whole origin. These
+// are the *runtime* additions only — the precached shell is not counted and
+// never trimmed, so the app keeps working offline no matter how full they get.
+const MAX_RUNTIME_ENTRIES = 300;
+const MAX_PUBLIC_API_ENTRIES = 200;
+
+async function trimCache(cacheName: string, maxEntries: number, keep: (url: URL) => boolean) {
+	const cache = await caches.open(cacheName);
+	const keys = await cache.keys();
+	const evictable = keys.filter((request) => !keep(new URL(request.url)));
+	// Cache.keys() returns insertion order, so the head of the list is the oldest.
+	const excess = evictable.length - maxEntries;
+	for (let index = 0; index < excess; index++) await cache.delete(evictable[index]);
+}
+
+/** The executable shell and the '/' offline fallback are never evicted. */
+function keepInAppShell(url: URL): boolean {
+	return url.origin === sw.location.origin && (PRECACHE.includes(url.pathname) || url.pathname === '/');
+}
 
 sw.addEventListener('install', (event) => {
 	event.waitUntil(
@@ -156,6 +189,7 @@ sw.addEventListener('fetch', (event) => {
 				const response = await fetch(request);
 				if (response.ok && response.headers.get('X-KoalaCast-Image-Fallback') !== 'true') {
 					await cache.put(request, response.clone());
+					event.waitUntil(trimCache(CACHE, MAX_RUNTIME_ENTRIES, keepInAppShell));
 				}
 				return response;
 			})
@@ -179,13 +213,19 @@ sw.addEventListener('fetch', (event) => {
 				// already painted its IndexedDB snapshot.
 				if (request.cache === 'reload' || request.cache === 'no-cache') {
 					const fresh = await fetch(request);
-					if (fresh.ok) await cache.put(request, fresh.clone());
+					if (fresh.ok) {
+						await cache.put(request, fresh.clone());
+						event.waitUntil(trimCache(PUBLIC_API_CACHE, MAX_PUBLIC_API_ENTRIES, () => false));
+					}
 					return fresh;
 				}
 				const cached = await cache.match(request);
 				const update = fetch(request)
 					.then(async (fresh) => {
-						if (fresh.ok) await cache.put(request, fresh.clone());
+						if (fresh.ok) {
+						await cache.put(request, fresh.clone());
+						event.waitUntil(trimCache(PUBLIC_API_CACHE, MAX_PUBLIC_API_ENTRIES, () => false));
+					}
 						return fresh;
 					})
 					.catch(() => cached);
@@ -218,7 +258,14 @@ sw.addEventListener('fetch', (event) => {
 				.then((response) => {
 					if (response.ok) {
 						const copy = response.clone();
-						caches.open(CACHE).then((cache) => cache.put(request, copy));
+						event.waitUntil(
+							caches
+								.open(CACHE)
+								.then((cache) => cache.put(request, copy))
+								.then(() => trimCache(CACHE, MAX_RUNTIME_ENTRIES, keepInAppShell))
+								// A full quota must not turn a served page into a failed one.
+								.catch(() => undefined)
+						);
 					}
 					return response;
 				})

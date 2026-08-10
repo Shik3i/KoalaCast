@@ -148,6 +148,12 @@ const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 let activeContext = 'guest';
+// Serialises context switches against each other *and* against getLocalDB(). The
+// window between closing the old database and publishing the new one contains
+// several awaits; a concurrent reader (the 30-second progress write, the sync
+// loop) used to reopen the *old* context in that gap, leak the connection and
+// write the next listener's data into the previous account's database.
+let contextSwitch: Promise<void> = Promise.resolve();
 
 function contextDBName(context: string): string {
 	return context === 'guest'
@@ -213,13 +219,22 @@ function plainJSON<T>(value: T): T {
 }
 
 export function getLocalDB(): Promise<IDBPDatabase> {
-	if (!dbPromise) {
-		dbPromise = openLocalDB(contextDBName(activeContext)).catch((err) => {
-			dbPromise = null;
+	if (dbPromise) return dbPromise;
+	// Queue behind any context switch in flight. Opening eagerly here would read a
+	// half-updated `activeContext` and hand back the previous account's database.
+	const pending: Promise<IDBPDatabase> = contextSwitch
+		.catch(() => {})
+		.then(() =>
+			// The switch installs its own connection; adopt it rather than opening a
+			// second one to the same database.
+			dbPromise && dbPromise !== pending ? dbPromise : openLocalDB(contextDBName(activeContext))
+		)
+		.catch((err) => {
+			if (dbPromise === pending) dbPromise = null;
 			throw err;
 		});
-	}
-	return dbPromise;
+	dbPromise = pending;
+	return pending;
 }
 
 export function getLocalDataContext(): string {
@@ -279,9 +294,21 @@ async function copyAndClearGuestData(target: IDBPDatabase): Promise<void> {
 	}
 }
 
-export async function switchLocalDataContext(
+export function switchLocalDataContext(
 	userId: string | null,
 	options: { migrateGuest?: boolean } = {}
+): Promise<void> {
+	const run = contextSwitch.then(
+		() => performContextSwitch(userId, options),
+		() => performContextSwitch(userId, options)
+	);
+	contextSwitch = run.catch(() => {});
+	return run;
+}
+
+async function performContextSwitch(
+	userId: string | null,
+	options: { migrateGuest?: boolean }
 ): Promise<void> {
 	const nextContext = userId ? `user:${userId}` : 'guest';
 	if (nextContext === activeContext) return;
