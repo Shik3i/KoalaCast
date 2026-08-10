@@ -784,6 +784,69 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /api/v1/auth/account:
+    delete:
+      tags: [Authentication]
+      operationId: deleteAccount
+      summary: Permanently delete the account and every record belonging to it
+      description: >-
+        Irreversible. Requires the account password or a recovery code in the
+        body even though the request is already authenticated, so a borrowed
+        unlocked device cannot delete an account. Every dependent row is removed
+        in one transaction and all sessions and device credentials are revoked.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Exactly one of the two is required.
+              properties:
+                password:
+                  type: string
+                recovery_code:
+                  type: string
+      responses:
+        '204':
+          description: Account deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/auth/export:
+    get:
+      tags: [Authentication]
+      operationId: exportAccount
+      summary: Download every record stored for the account
+      description: >-
+        Returns account metadata, subscriptions, favorites and the latest
+        synchronized payload per entity. Never includes password hashes,
+        recovery-code hashes, session secrets or device-token hashes.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Account export
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /api/v1/sync:
     get:
       tags: [Sync]

@@ -3,7 +3,8 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { activateAccountContext } from '$lib/stores/account-context';
+	import { activateAccountContext, resetAllLocalData } from '$lib/stores/account-context';
+	import { confirmDialog } from '$lib/stores/confirm.svelte';
 
 	interface UserSession {
 		id: string;
@@ -79,6 +80,60 @@
 		await activateAccountContext(null);
 		toast.success(t('toast.signedOut'));
 		goto('/login');
+	}
+
+	// ---- Export and deletion ----
+	let deleteCredential = $state('');
+	let isDeleting = $state(false);
+	let deleteError = $state('');
+	let showDeleteForm = $state(false);
+
+	function exportAccountData() {
+		// A plain navigation, not fetch + blob: the response already carries a
+		// Content-Disposition and can be large, so the browser streams it to disk
+		// instead of the page holding the whole export in memory.
+		window.location.href = '/api/v1/auth/export';
+	}
+
+	async function deleteAccount(event: Event) {
+		event.preventDefault();
+		if (!deleteCredential.trim() || isDeleting) return;
+		if (!(await confirmDialog.ask(t('account.deleteConfirm')))) return;
+
+		isDeleting = true;
+		deleteError = '';
+		try {
+			const res = await fetch('/api/v1/auth/account', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				// The same field serves both: a recovery code is the way back in when
+				// the password is what got lost, so it has to work here too.
+				body: JSON.stringify(
+					deleteCredential.includes('-')
+						? { recovery_code: deleteCredential.trim() }
+						: { password: deleteCredential }
+				)
+			});
+			if (res.status === 401) {
+				deleteError = t('account.deleteInvalidCredential');
+				return;
+			}
+			if (!res.ok && res.status !== 204) {
+				deleteError = t('account.deleteFailed');
+				return;
+			}
+			// The server rows are gone; the copy in this browser has to follow, or the
+			// next visit silently re-syncs a deleted account's library back into view.
+			await resetAllLocalData();
+			await activateAccountContext(null);
+			toast.success(t('account.deleteDone'));
+			goto('/');
+		} catch (_) {
+			deleteError = t('account.deleteFailed');
+		} finally {
+			isDeleting = false;
+			deleteCredential = '';
+		}
 	}
 
 	function formatDate(timestampMs: number): string {
@@ -181,6 +236,57 @@
 							</div>
 						{/each}
 					</div>
+				{/if}
+			</section>
+
+			<!--
+				Required before this app can ship on Google Play: an account that can be
+				created in the app has to be deletable in the app. It is also simply the
+				right half of the promise the privacy policy makes.
+			-->
+			<section class="card danger-card">
+				<header class="section-header">
+					<h3><i class="ph ph-warning-octagon" aria-hidden="true"></i> {t('account.dataControl')}</h3>
+					<p class="subtitle">{t('account.dataControlHint')}</p>
+				</header>
+
+				<div class="card-actions">
+					<button type="button" class="btn btn-secondary" onclick={exportAccountData}>
+						<i class="ph ph-download-simple" aria-hidden="true"></i> {t('account.exportData')}
+					</button>
+					{#if !showDeleteForm}
+						<button type="button" class="btn btn-danger" onclick={() => (showDeleteForm = true)}>
+							<i class="ph ph-trash" aria-hidden="true"></i> {t('account.deleteAccount')}
+						</button>
+					{/if}
+				</div>
+
+				{#if showDeleteForm}
+					<form class="delete-form" onsubmit={deleteAccount}>
+						<p class="delete-warning">{t('account.deleteWarning')}</p>
+						<label for="delete-credential">{t('account.deleteCredentialLabel')}</label>
+						<input
+							id="delete-credential"
+							type="password"
+							bind:value={deleteCredential}
+							placeholder={t('account.deleteCredentialPlaceholder')}
+							autocomplete="current-password"
+							required
+						/>
+						{#if deleteError}<p class="delete-error" role="alert">{deleteError}</p>{/if}
+						<div class="card-actions">
+							<button type="submit" class="btn btn-danger" disabled={!deleteCredential.trim() || isDeleting}>
+								{isDeleting ? t('account.deleting') : t('account.deleteConfirmButton')}
+							</button>
+							<button
+								type="button"
+								class="btn btn-secondary"
+								onclick={() => { showDeleteForm = false; deleteCredential = ''; deleteError = ''; }}
+							>
+								{t('common.cancel')}
+							</button>
+						</div>
+					</form>
 				{/if}
 			</section>
 		</div>
@@ -325,6 +431,27 @@
 		font-size: 0.8rem;
 		color: var(--text-muted);
 	}
+
+	.danger-card {
+		border-color: color-mix(in srgb, var(--danger, #d75b5b) 40%, var(--border-ui));
+	}
+	.delete-form {
+		display: grid;
+		gap: 0.6rem;
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-ui);
+	}
+	.delete-form label { color: var(--text-secondary); font-size: 0.85rem; }
+	.delete-form input {
+		padding: 0.65rem 0.8rem;
+		border: 1px solid var(--border-ui);
+		border-radius: var(--radius-control, 8px);
+		background: var(--bg-panel);
+		color: inherit;
+	}
+	.delete-warning { color: var(--danger, #d75b5b); font-size: 0.9rem; font-weight: 600; }
+	.delete-error { color: var(--danger, #d75b5b); font-size: 0.85rem; }
 
 	.card-actions {
 		display: flex;

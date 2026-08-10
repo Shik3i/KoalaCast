@@ -21,6 +21,7 @@ import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.OpmlReport
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.apiCall
+import net.koalastuff.koalacast.core.network.dto.DeleteAccountRequest
 import net.koalastuff.koalacast.core.network.dto.DeviceLoginRequest
 import net.koalastuff.koalacast.core.network.dto.GlobalStatsPreference
 import net.koalastuff.koalacast.core.network.dto.RecoveryRequest
@@ -119,6 +120,35 @@ class AccountRepository @Inject constructor(
         store.beginAccountTransition()
         accountData.switchTo(AccountDataNamespace.GUEST_OWNER)
         store.clear()
+    }
+
+    /**
+     * Deletes the account on the server and everything this device holds for it.
+     *
+     * The local half matters as much as the remote one: leaving the Room database
+     * and the downloaded files behind would let the next launch show a library
+     * belonging to an account that no longer exists. On success the app falls
+     * back to guest exactly as a sign-out does.
+     */
+    suspend fun deleteAccount(credential: String): DataResult<Unit> = withContext(dispatcher) {
+        val trimmed = credential.trim()
+        // A recovery code is the way back in when the password is what got lost,
+        // so it has to work here too. They are told apart the same way the web
+        // client does it: recovery codes are grouped with dashes, passwords are not.
+        val request = if (trimmed.contains('-')) {
+            DeleteAccountRequest(recoveryCode = trimmed)
+        } else {
+            DeleteAccountRequest(password = trimmed)
+        }
+        when (val result = apiCall { api.deleteAccount(request) }) {
+            is DataResult.Failure -> result
+            is DataResult.Success -> {
+                store.beginAccountTransition()
+                accountData.switchTo(AccountDataNamespace.GUEST_OWNER)
+                store.clear()
+                DataResult.Success(Unit)
+            }
+        }
     }
 
     suspend fun sessions(): DataResult<List<AccountSession>> = withContext(dispatcher) {

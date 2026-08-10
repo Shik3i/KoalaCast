@@ -178,6 +178,11 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Post("/auth/logout", authHandler.Logout)
 			r.Get("/auth/sessions", authHandler.ListSessions)
 			r.Delete("/auth/sessions/{id}", authHandler.RevokeSession)
+			// Deletion and export are destructive/bulk and re-check the credential
+			// themselves, so they sit behind the same tight limiter as sign-in
+			// rather than the general authenticated allowance.
+			r.With(authLimiter.Limit).Delete("/auth/account", authHandler.DeleteAccount)
+			r.With(authLimiter.Limit).Get("/auth/export", authHandler.ExportAccount)
 			r.Get("/stats/preferences", globalStatsHandler.GetPreference)
 			r.Put("/stats/preferences", globalStatsHandler.UpdatePreference)
 			r.Get("/push/config", pushHandler.GetConfig)

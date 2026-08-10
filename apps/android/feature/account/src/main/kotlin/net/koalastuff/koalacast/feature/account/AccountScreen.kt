@@ -117,6 +117,9 @@ fun AccountScreen(
         onRecover = viewModel::recover,
         onRecoverySaved = viewModel::confirmRecoveryCodeSaved,
         onLogout = viewModel::logout,
+        onDeleteCredential = viewModel::setDeleteCredential,
+        onShowDelete = viewModel::showDeleteAccount,
+        onDeleteAccount = viewModel::deleteAccount,
         onSync = viewModel::syncNow,
         onRevoke = viewModel::revokeSession,
         onGlobalStats = viewModel::setGlobalStats,
@@ -147,6 +150,9 @@ internal fun AccountContent(
     onSync: () -> Unit,
     onRevoke: (String) -> Unit,
     onGlobalStats: (Boolean) -> Unit,
+    onDeleteCredential: (String) -> Unit,
+    onShowDelete: (Boolean) -> Unit,
+    onDeleteAccount: () -> Unit,
     onImport: () -> Unit,
     onExport: () -> Unit,
     modifier: Modifier = Modifier,
@@ -213,6 +219,9 @@ internal fun AccountContent(
                 onSync = onSync,
                 onRevoke = onRevoke,
                 onGlobalStats = onGlobalStats,
+                onDeleteCredential = onDeleteCredential,
+                onShowDelete = onShowDelete,
+                onDeleteAccount = onDeleteAccount,
             )
         }
 
@@ -416,6 +425,9 @@ private fun SignedInContent(
     onSync: () -> Unit,
     onRevoke: (String) -> Unit,
     onGlobalStats: (Boolean) -> Unit,
+    onDeleteCredential: (String) -> Unit,
+    onShowDelete: (Boolean) -> Unit,
+    onDeleteAccount: () -> Unit,
 ) {
     val account = checkNotNull(state.account)
     // Signing out clears this device's copy of the account's data, and anything
@@ -510,6 +522,77 @@ private fun SignedInContent(
         }
         state.sessions.forEach { session -> SessionRow(session, onRevoke) }
     }
+
+    Hairline()
+    DeleteAccountSection(state, onDeleteCredential, onShowDelete, onDeleteAccount)
+}
+
+/**
+ * Permanent account deletion.
+ *
+ * Google Play requires an app that can create an account to let it be deleted
+ * from inside the app. It also asks for the credential again: the session is
+ * already authenticated, but this is irreversible and a borrowed unlocked phone
+ * must not be two taps from wiping somebody's account.
+ */
+@Composable
+private fun DeleteAccountSection(
+    state: AccountUiState,
+    onDeleteCredential: (String) -> Unit,
+    onShowDelete: (Boolean) -> Unit,
+    onDeleteAccount: () -> Unit,
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = stringResource(R.string.account_delete_title),
+            body = stringResource(R.string.account_delete_body),
+            confirmLabel = stringResource(R.string.account_delete_confirm),
+            onConfirm = {
+                confirmDelete = false
+                onDeleteAccount()
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
+
+    Section(stringResource(R.string.account_delete_section)) {
+        Text(
+            text = stringResource(R.string.account_delete_body),
+            style = KoalaTheme.type.bodySmall,
+            color = KoalaTheme.colors.ink3,
+        )
+        if (!state.showDeleteAccount) {
+            OutlineButton(
+                text = stringResource(R.string.account_delete),
+                onClick = { onShowDelete(true) },
+                enabled = !state.busy,
+            )
+        } else {
+            KoalaTextField(
+                value = state.deleteCredential,
+                onValueChange = onDeleteCredential,
+                placeholder = stringResource(R.string.account_delete_credential),
+                leadingIcon = null,
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                AccentButton(
+                    text = stringResource(R.string.account_delete_confirm),
+                    onClick = { confirmDelete = true },
+                    enabled = state.deleteCredential.isNotBlank() && !state.busy,
+                )
+                OutlineButton(
+                    text = stringResource(R.string.account_delete_cancel),
+                    onClick = { onShowDelete(false) },
+                    enabled = !state.busy,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -599,6 +682,7 @@ private fun noticeMessage(notice: String): String = stringResource(
         "signed_out" -> R.string.account_notice_signed_out
         "password_changed" -> R.string.account_notice_password
         "session_revoked" -> R.string.account_notice_revoked
+        "account_deleted" -> R.string.account_notice_deleted
         else -> R.string.account_notice_done
     },
 )

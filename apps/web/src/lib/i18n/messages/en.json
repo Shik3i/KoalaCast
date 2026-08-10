@@ -506,7 +506,20 @@
 		"ipSubnet": "IP Subnet",
 		"direct": "Direct",
 		"unknown": "Unknown",
-		"lastActive": "Last active"
+		"lastActive": "Last active",
+		"dataControl": "Your data",
+		"dataControlHint": "Download everything stored for this account, or delete the account for good.",
+		"exportData": "Export my data",
+		"deleteAccount": "Delete account",
+		"deleteWarning": "This deletes your account and every synchronized record on the server. It cannot be undone.",
+		"deleteCredentialLabel": "Confirm with your password or a recovery code",
+		"deleteCredentialPlaceholder": "Password or recovery code",
+		"deleteConfirm": "Permanently delete this account and all of its data?",
+		"deleteConfirmButton": "Delete permanently",
+		"deleting": "Deleting…",
+		"deleteDone": "Your account and its data have been deleted.",
+		"deleteFailed": "The account could not be deleted. Please try again.",
+		"deleteInvalidCredential": "That password or recovery code is not correct."
 	},
 	"login": {
 		"pageTitle": "Sign In — KoalaCast",

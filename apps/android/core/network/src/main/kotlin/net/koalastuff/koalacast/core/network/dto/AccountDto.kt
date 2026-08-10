@@ -41,6 +41,13 @@ data class RecoveryRequest(
     @SerialName("new_password") val newPassword: String,
 )
 
+/** Exactly one of the two is sent; the server accepts either. */
+@Serializable
+data class DeleteAccountRequest(
+    val password: String? = null,
+    @SerialName("recovery_code") val recoveryCode: String? = null,
+)
+
 @Serializable
 data class AuthMessageResponse(
     val message: String = "",

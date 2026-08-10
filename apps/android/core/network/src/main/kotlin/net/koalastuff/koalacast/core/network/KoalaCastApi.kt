@@ -2,6 +2,7 @@ package net.koalastuff.koalacast.core.network
 
 import net.koalastuff.koalacast.core.network.dto.AddFeedRequest
 import net.koalastuff.koalacast.core.network.dto.ChaptersResponse
+import net.koalastuff.koalacast.core.network.dto.DeleteAccountRequest
 import net.koalastuff.koalacast.core.network.dto.DiscoverResponse
 import net.koalastuff.koalacast.core.network.dto.EpisodeDto
 import net.koalastuff.koalacast.core.network.dto.EpisodesResponse
@@ -30,6 +31,7 @@ import retrofit2.http.DELETE
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -135,6 +137,15 @@ interface KoalaCastApi {
 
     @DELETE("api/v1/auth/sessions/{id}")
     suspend fun revokeSession(@Path("id") id: String): Response<AuthMessageResponse>
+
+    /**
+     * Irreversible. Carries the credential again even though the request is
+     * already authenticated, so a borrowed unlocked phone cannot delete an
+     * account in two taps. HTTP method with a body, hence @HTTP rather than
+     * @DELETE, which Retrofit does not allow one on.
+     */
+    @HTTP(method = "DELETE", path = "api/v1/auth/account", hasBody = true)
+    suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<Unit>
 
     @GET("api/v1/sync")
     suspend fun pullSync(

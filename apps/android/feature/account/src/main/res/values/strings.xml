@@ -60,4 +60,12 @@
     <string name="account_notice_password">Password changed. You can sign in now.</string>
     <string name="account_notice_revoked">Session revoked.</string>
     <string name="account_notice_done">Done.</string>
+    <string name="account_delete_section">Delete account</string>
+    <string name="account_delete">Delete account</string>
+    <string name="account_delete_title">Delete this account?</string>
+    <string name="account_delete_body">This permanently deletes your account and every synchronized record on the server, along with everything stored on this device. It cannot be undone.</string>
+    <string name="account_delete_confirm">Delete permanently</string>
+    <string name="account_delete_cancel">Cancel</string>
+    <string name="account_delete_credential">Password or recovery code</string>
+    <string name="account_notice_deleted">Your account and its data have been deleted.</string>
 </resources>

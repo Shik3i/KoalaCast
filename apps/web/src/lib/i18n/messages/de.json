@@ -506,7 +506,20 @@
 		"ipSubnet": "IP-Subnetz",
 		"direct": "Direkt",
 		"unknown": "Unbekannt",
-		"lastActive": "Zuletzt aktiv"
+		"lastActive": "Zuletzt aktiv",
+		"dataControl": "Deine Daten",
+		"dataControlHint": "Lade alles herunter, was zu diesem Konto gespeichert ist — oder lösche das Konto endgültig.",
+		"exportData": "Meine Daten exportieren",
+		"deleteAccount": "Konto löschen",
+		"deleteWarning": "Damit werden dein Konto und alle synchronisierten Daten auf dem Server gelöscht. Das lässt sich nicht rückgängig machen.",
+		"deleteCredentialLabel": "Mit Passwort oder Wiederherstellungscode bestätigen",
+		"deleteCredentialPlaceholder": "Passwort oder Wiederherstellungscode",
+		"deleteConfirm": "Dieses Konto und alle zugehörigen Daten endgültig löschen?",
+		"deleteConfirmButton": "Endgültig löschen",
+		"deleting": "Wird gelöscht …",
+		"deleteDone": "Dein Konto und deine Daten wurden gelöscht.",
+		"deleteFailed": "Das Konto konnte nicht gelöscht werden. Bitte versuche es erneut.",
+		"deleteInvalidCredential": "Passwort oder Wiederherstellungscode stimmt nicht."
 	},
 	"login": {
 		"pageTitle": "Anmelden — KoalaCast",

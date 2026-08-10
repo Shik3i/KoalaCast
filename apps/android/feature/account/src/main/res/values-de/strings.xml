@@ -60,4 +60,12 @@
     <string name="account_notice_password">Passwort geändert. Du kannst dich jetzt anmelden.</string>
     <string name="account_notice_revoked">Sitzung widerrufen.</string>
     <string name="account_notice_done">Erledigt.</string>
+    <string name="account_delete_section">Konto löschen</string>
+    <string name="account_delete">Konto löschen</string>
+    <string name="account_delete_title">Dieses Konto löschen?</string>
+    <string name="account_delete_body">Damit werden dein Konto und alle synchronisierten Daten auf dem Server endgültig gelöscht — zusammen mit allem, was auf diesem Gerät gespeichert ist. Das lässt sich nicht rückgängig machen.</string>
+    <string name="account_delete_confirm">Endgültig löschen</string>
+    <string name="account_delete_cancel">Abbrechen</string>
+    <string name="account_delete_credential">Passwort oder Wiederherstellungscode</string>
+    <string name="account_notice_deleted">Dein Konto und deine Daten wurden gelöscht.</string>
 </resources>

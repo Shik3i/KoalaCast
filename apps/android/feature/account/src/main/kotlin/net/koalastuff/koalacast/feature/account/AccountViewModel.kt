@@ -39,6 +39,9 @@ data class AccountUiState(
     val opmlReport: OpmlReport? = null,
     val opmlExport: String? = null,
     val opmlImporting: Boolean = false,
+    /** The delete flow is behind its own confirmation and its own credential field. */
+    val deleteCredential: String = "",
+    val showDeleteAccount: Boolean = false,
 )
 
 @HiltViewModel
@@ -123,6 +126,30 @@ class AccountViewModel @Inject constructor(
         accounts.logout()
         sync.signedOut()
         form.value = AccountUiState(notice = "signed_out")
+    }
+
+    fun setDeleteCredential(value: String) = form.update { it.copy(deleteCredential = value) }
+
+    fun showDeleteAccount(show: Boolean) =
+        form.update { it.copy(showDeleteAccount = show, deleteCredential = "", error = null) }
+
+    /**
+     * Deletes the account on the server and every trace of it on this device.
+     *
+     * Required before the app can ship on Google Play — an account that can be
+     * created in the app has to be deletable in the app — and the right half of
+     * what the privacy screen already promises.
+     */
+    fun deleteAccount() = launchAction {
+        val credential = state.value.deleteCredential
+        if (credential.isBlank()) return@launchAction
+        when (val result = accounts.deleteAccount(credential)) {
+            is DataResult.Failure -> fail(result.error)
+            is DataResult.Success -> {
+                sync.signedOut()
+                form.value = AccountUiState(notice = "account_deleted")
+            }
+        }
     }
 
     fun syncNow() = viewModelScope.launch { sync.syncNow() }
