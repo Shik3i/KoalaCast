@@ -67,6 +67,13 @@
 	let activeSession: LocalListeningSession | null = null;
 	let lastListeningSampleAt = 0;
 	let lastSleepTickAt = Date.now();
+	/**
+	 * The episode reached its end, so closing the player must not undo that.
+	 * `stop()` runs the finalizer, which writes progress once more — without this
+	 * the second write re-derives completion from the heuristic and can answer
+	 * "not finished" for an episode that demonstrably was.
+	 */
+	let reachedEnd = false;
 	/** Position under the handle while dragging; null when not scrubbing. */
 	let scrubbingMs = $state<number | null>(null);
 	let hoverPreviewMs = $state<number | null>(null);
@@ -539,6 +546,7 @@
 			trackSettings = getPodcastPlaybackSettings(t.podcast_id);
 			player.setPlaybackSpeed(trackSettings.speed ?? player.defaultPlaybackSpeed, false);
 			outroHandled = false;
+			reachedEnd = false;
 			pendingIntroOutroSkippedMs = 0;
 			loadError = '';
 			loadErrorCode = '';
@@ -875,12 +883,18 @@
 		await flushListeningSession(true);
 		await saveProgress('MARK_PLAYED', true);
 		// Stop here if a "sleep at end of episode" timer is armed.
+		reachedEnd = true;
 		if (player.sleepAtEpisodeEnd) {
 			player.setSleepTimer('');
+			await player.stop();
 			return;
 		}
-		// Otherwise autoplay the next queued episode, if any.
-		await player.playNext();
+		// Otherwise autoplay the next queued episode, if any. With nothing queued
+		// the transport used to stay put on the finished episode — which reads as
+		// "ready to play" for something that was just marked as played, and on
+		// Android even rewound itself to 0:00. There is nothing left to control, so
+		// the player closes.
+		if (!(await player.playNext())) await player.stop();
 	}
 
 	async function saveProgress(eventType = 'PROGRESS_TICK', forceCompleted = false) {
@@ -1151,7 +1165,7 @@
 			const element = audioEl;
 			element.pause();
 			await flushListeningSession(true);
-			await saveProgress('PROGRESS_TICK');
+			await saveProgress('PROGRESS_TICK', reachedEnd);
 			element.removeAttribute('src');
 			element.load();
 			isPlaying = false;

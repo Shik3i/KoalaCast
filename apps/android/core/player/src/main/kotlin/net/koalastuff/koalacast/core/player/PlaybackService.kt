@@ -769,8 +769,17 @@ class PlaybackService : MediaLibraryService() {
 
             val next = queue.head().takeIf { advanceQueue }
             if (next == null) {
+                // Nothing more to play — either the queue is empty or a sleep timer
+                // asked to stop here. Rewinding to zero left the transport sitting
+                // there showing a finished episode at 0:00, which reads as "ready to
+                // play from the start" for an episode that was just marked played.
+                // Clearing the item ends the session instead, and the mini player
+                // goes with it.
                 player.pause()
-                player.seekTo(0)
+                player.clearMediaItems()
+                activeTrack = null
+                activePlaybackOwnerId = null
+                activePlaybackGeneration = null
                 return@launch
             }
             queue.remove(next.track.episodeId)
