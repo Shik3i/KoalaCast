@@ -3,6 +3,7 @@ package rss
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -210,4 +211,23 @@ func LimitResponseBody(body io.ReadCloser, maxBytes int64) io.ReadCloser {
 		Reader: io.LimitReader(body, maxBytes),
 		Closer: body,
 	}
+}
+
+var ErrResponseTooLarge = errors.New("response body exceeds configured byte limit")
+
+// ReadResponseBody reads at most maxBytes and deliberately probes one byte past
+// the boundary. io.LimitReader alone makes a truncated XML document look like a
+// malformed publisher feed, hiding the actual operational cause.
+func ReadResponseBody(body io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, ErrResponseTooLarge
+	}
+	payload, err := io.ReadAll(io.LimitReader(body, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(payload)) > maxBytes {
+		return nil, ErrResponseTooLarge
+	}
+	return payload, nil
 }

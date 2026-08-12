@@ -7,16 +7,23 @@
 	let systemStatus = $state<any>(null);
 	let users = $state<any[]>([]);
 	let feedHealth = $state<any[]>([]);
+	let apiErrors = $state<any[]>([]);
 	let isLoading = $state(true);
 	let errorMsg = $state('');
 	let lastRefreshedAt = $state(0);
 	let userQuery = $state('');
 	let feedQuery = $state('');
+	let errorQuery = $state('');
 	// The variable name is rendered as a real <code> element rather than as markup
 	// carried inside the translation catalogue; see the same change in the Inbox.
 	const lockedHintParts = $derived(t('admin.lockedByEnv').split('{variable}'));
 	const filteredUsers = $derived(users.filter((user) => user.username.toLowerCase().includes(userQuery.trim().toLowerCase())));
 	const filteredFeeds = $derived(feedHealth.filter((feed) => `${feed.title || ''} ${feed.feed_url || ''}`.toLowerCase().includes(feedQuery.trim().toLowerCase())));
+	const filteredErrors = $derived(apiErrors.filter((entry) =>
+		`${entry.status_code} ${entry.method} ${entry.path} ${entry.message} ${entry.request_id} ${entry.user_id}`
+			.toLowerCase()
+			.includes(errorQuery.trim().toLowerCase())
+	));
 
 	onMount(() => {
 		loadAdminData();
@@ -27,14 +34,15 @@
 		errorMsg = '';
 
 		try {
-			const [statusRes, usersRes, healthRes] = await Promise.all([
+			const [statusRes, usersRes, healthRes, errorsRes] = await Promise.all([
 				fetch('/api/v1/admin/status'),
 				fetch('/api/v1/admin/users'),
-				fetch('/api/v1/admin/feed-health')
+				fetch('/api/v1/admin/feed-health'),
+				fetch('/api/v1/admin/errors?limit=250')
 			]);
 
-			if (!statusRes.ok || !usersRes.ok || !healthRes.ok) {
-				const statuses = [statusRes.status, usersRes.status, healthRes.status];
+			if (!statusRes.ok || !usersRes.ok || !healthRes.ok || !errorsRes.ok) {
+				const statuses = [statusRes.status, usersRes.status, healthRes.status, errorsRes.status];
 				errorMsg = statuses.some((status) => status === 401 || status === 403)
 					? t('admin.accessDenied')
 					: t('admin.metricsNetworkError');
@@ -46,6 +54,8 @@
 			users = userData.users || [];
 			const healthData = await healthRes.json();
 			feedHealth = healthData.feeds || [];
+			const errorsData = await errorsRes.json();
+			apiErrors = errorsData.errors || [];
 			lastRefreshedAt = Date.now();
 		} catch (err: any) {
 			errorMsg = t('admin.metricsNetworkError');
@@ -258,6 +268,44 @@
 			{/if}
 		</section>
 
+		<!-- Persisted API Error Table -->
+		<section class="card" id="errors">
+			<h3>{t('admin.errors')} · API ({apiErrors.length})</h3>
+			<input class="table-search" bind:value={errorQuery} type="search" placeholder="HTTP 400 · /api/v1/…" aria-label={t('admin.errors')} />
+			{#if apiErrors.length === 0}
+				<p class="empty-note">—</p>
+			{:else}
+				<div class="table-scroll">
+					<table class="admin-table error-table">
+						<thead>
+							<tr>
+								<th>{t('account.lastActive')}</th>
+								<th>{t('admin.httpStatus')}</th>
+								<th>Request</th>
+								<th>{t('admin.errors')}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each filteredErrors as entry}
+								<tr>
+									<td class="error-time">{new Date(entry.occurred_at).toLocaleString()}</td>
+									<td><span class="error-status">{entry.status_code}</span></td>
+									<td><code>{entry.method} {entry.path}</code></td>
+									<td>
+										<details>
+											<summary>{entry.message || `${entry.method} ${entry.path}`}</summary>
+											<small>Request-ID: <code>{entry.request_id || '—'}</code></small>
+											<small>User-ID: <code>{entry.user_id || '—'}</code></small>
+										</details>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</section>
+
 		<!-- Feed Health Table -->
 		<section class="card" id="feeds">
 			<h3>{t('admin.feedHealth')}</h3>
@@ -399,6 +447,11 @@
 	.admin-table details { max-width: 360px; }
 	.admin-table summary { cursor: pointer; color: var(--ink-2); font-weight: 700; }
 	.admin-table details code, .admin-table details small { display: block; margin-top: 5px; overflow-wrap: anywhere; color: var(--ink-4); }
+	.error-table { min-width: 760px; }
+	.error-table td { vertical-align: top; }
+	.error-table td > code { overflow-wrap: anywhere; white-space: normal; }
+	.error-time { white-space: nowrap; font-family: var(--font-mono); font-size: 10px !important; }
+	.error-status { display: inline-flex; padding: 4px 6px; border-radius: 4px; background: color-mix(in srgb, var(--color-danger) 16%, transparent); color: var(--color-danger); font: 700 10px/1 var(--font-mono); }
 
 	.badge {
 		padding: 0.2rem 0.5rem;

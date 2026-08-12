@@ -1,9 +1,11 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -293,9 +295,16 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 		return fmt.Errorf("unexpected HTTP status: %d", resp.StatusCode)
 	}
 
-	// Read response body with byte limit
-	limitReader := rss.LimitResponseBody(resp.Body, w.cfg.FeedMaxResponseBytes)
-	parsedFeed, err := rss.ParseFeedXML(limitReader)
+	feedBody, err := rss.ReadResponseBody(resp.Body, w.cfg.FeedMaxResponseBytes)
+	if err != nil {
+		category := "READ_ERROR"
+		if errors.Is(err, rss.ErrResponseTooLarge) {
+			category = "RESPONSE_TOO_LARGE"
+		}
+		w.updateFeedError(podcastID, category, resp.StatusCode, err.Error())
+		return fmt.Errorf("failed to read feed response: %w", err)
+	}
+	parsedFeed, err := rss.ParseFeedXML(bytes.NewReader(feedBody))
 	if err != nil {
 		w.updateFeedError(podcastID, "PARSE_ERROR", resp.StatusCode, err.Error())
 		return fmt.Errorf("failed to parse feed XML: %w", err)

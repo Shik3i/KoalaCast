@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestOpenDB_Migrations(t *testing.T) {
@@ -26,13 +27,47 @@ func TestOpenDB_Migrations(t *testing.T) {
 	defer db.Close()
 
 	// Verify tables were created by migration
-	tables := []string{"users", "sessions", "podcasts", "episodes", "subscriptions", "playback_states", "listening_sessions", "sync_log"}
+	tables := []string{"users", "sessions", "podcasts", "episodes", "subscriptions", "playback_states", "listening_sessions", "sync_log", "error_events"}
 	for _, table := range tables {
 		var name string
 		err := db.SQL.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)
 		if err != nil {
 			t.Errorf("expected table %s to exist, error: %v", table, err)
 		}
+	}
+}
+
+func TestErrorEventsRetentionRemovesEntriesOlderThanSevenDays(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	database, err := OpenDB(filepath.Join(t.TempDir(), "error-retention.db"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	old := time.Now().Add(-8 * 24 * time.Hour).UnixMilli()
+	now := time.Now().UnixMilli()
+	if _, err := database.SQL.Exec(`
+		INSERT INTO error_events (occurred_at, status_code, method, path, message)
+		VALUES (?, 500, 'GET', '/api/v1/old', 'old')
+	`, old); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 249; i++ {
+		if _, err := database.SQL.Exec(`
+			INSERT INTO error_events (occurred_at, status_code, method, path, message)
+			VALUES (?, 400, 'GET', '/api/v1/current', 'current')
+		`, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var oldCount int
+	if err := database.SQL.QueryRow("SELECT COUNT(*) FROM error_events WHERE path = '/api/v1/old'").Scan(&oldCount); err != nil {
+		t.Fatal(err)
+	}
+	if oldCount != 0 {
+		t.Fatalf("expected seven-day retention trigger to remove old error, count=%d", oldCount)
 	}
 }
 

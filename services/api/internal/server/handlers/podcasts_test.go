@@ -29,6 +29,38 @@ func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) 
 	return fn(req)
 }
 
+func TestPodcastHandlerAddFeedReportsResponseTooLarge(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	database, err := db.OpenDB(filepath.Join(t.TempDir(), "large-feed.db"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	body := `<?xml version="1.0"?><rss><channel><title>Large</title><description><![CDATA[` + strings.Repeat("x", 1024) + `]]></description></channel></rss>`
+	feedClient := &http.Client{Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	})}
+	handler := &PodcastHandler{DB: database, MaxResponseB: 256, FeedHTTPClient: feedClient}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/podcasts/feed",
+		strings.NewReader(`{"feed_url":"https://feeds.example/large.xml"}`))
+	recorder := httptest.NewRecorder()
+
+	handler.AddFeed(recorder, req)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "feed exceeds maximum response size of 256 bytes") {
+		t.Fatalf("missing explicit size error: %s", recorder.Body.String())
+	}
+}
+
 func TestPodcastHandler_GetEpisodesIncrementalAndConditional(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	database, err := db.OpenDB(filepath.Join(t.TempDir(), "episodes-cache.db"), logger)

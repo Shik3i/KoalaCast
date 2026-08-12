@@ -2,13 +2,28 @@ package rss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestReadResponseBodyDetectsLimitInsteadOfReturningTruncatedXML(t *testing.T) {
+	payload := strings.Repeat("x", 129)
+	_, err := ReadResponseBody(strings.NewReader(payload), 128)
+	if !errors.Is(err, ErrResponseTooLarge) {
+		t.Fatalf("expected ErrResponseTooLarge, got %v", err)
+	}
+
+	withinLimit, err := ReadResponseBody(strings.NewReader(payload[:128]), 128)
+	if err != nil || len(withinLimit) != 128 {
+		t.Fatalf("exact-limit response failed: bytes=%d err=%v", len(withinLimit), err)
+	}
+}
 
 type mockResolver struct {
 	hosts map[string][]net.IP

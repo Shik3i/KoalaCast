@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
@@ -250,6 +252,77 @@ func (h *AdminHandler) FeedHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"feeds": feeds,
+	})
+}
+
+func (h *AdminHandler) ListErrors(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if parsed, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && parsed > 0 && parsed <= 500 {
+		limit = parsed
+	}
+	status := 0
+	if parsed, err := strconv.Atoi(r.URL.Query().Get("status")); err == nil && parsed >= 400 && parsed <= 599 {
+		status = parsed
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	statement := `
+		SELECT id, occurred_at, status_code, method, path, message, request_id, user_id, source
+		FROM error_events
+		WHERE 1 = 1
+	`
+	args := make([]any, 0, 4)
+	if status != 0 {
+		statement += " AND status_code = ?"
+		args = append(args, status)
+	}
+	if query != "" {
+		statement += " AND (path LIKE ? OR message LIKE ? OR request_id LIKE ?)"
+		pattern := "%" + query + "%"
+		args = append(args, pattern, pattern, pattern)
+	}
+	statement += " ORDER BY occurred_at DESC, id DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := h.DB.SQL.QueryContext(r.Context(), statement, args...)
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type ErrorItem struct {
+		ID         int64  `json:"id"`
+		OccurredAt int64  `json:"occurred_at"`
+		StatusCode int    `json:"status_code"`
+		Method     string `json:"method"`
+		Path       string `json:"path"`
+		Message    string `json:"message"`
+		RequestID  string `json:"request_id"`
+		UserID     string `json:"user_id"`
+		Source     string `json:"source"`
+	}
+
+	errors := make([]ErrorItem, 0)
+	for rows.Next() {
+		var item ErrorItem
+		if err := rows.Scan(&item.ID, &item.OccurredAt, &item.StatusCode, &item.Method,
+			&item.Path, &item.Message, &item.RequestID, &item.UserID, &item.Source); err != nil {
+			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+			return
+		}
+		errors = append(errors, item)
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"errors": errors,
+		"count":  len(errors),
 	})
 }
 

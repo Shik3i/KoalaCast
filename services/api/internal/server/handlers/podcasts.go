@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -475,8 +476,14 @@ func (h *PodcastHandler) ingestFeedURLOnce(ctx context.Context, feedURL string) 
 		existingID = canonicalID
 	}
 
-	limitReader := rss.LimitResponseBody(resp.Body, h.MaxResponseB)
-	parsedFeed, err := rss.ParseFeedXML(limitReader)
+	feedBody, err := rss.ReadResponseBody(resp.Body, h.MaxResponseB)
+	if errors.Is(err, rss.ErrResponseTooLarge) {
+		return "", &ingestError{Status: http.StatusRequestEntityTooLarge, Msg: "feed exceeds maximum response size of " + strconv.FormatInt(h.MaxResponseB, 10) + " bytes"}
+	}
+	if err != nil {
+		return "", &ingestError{Status: http.StatusBadRequest, Msg: "failed to read feed: " + err.Error()}
+	}
+	parsedFeed, err := rss.ParseFeedXML(bytes.NewReader(feedBody))
 	if err != nil {
 		return "", &ingestError{Status: http.StatusBadRequest, Msg: "failed to parse feed XML: " + err.Error()}
 	}
@@ -634,11 +641,11 @@ func (h *PodcastHandler) GetPodcast(w http.ResponseWriter, r *http.Request) {
 }
 
 // resolveITunesID turns a numeric iTunes collection ID into a stored podcast ID
-// by looking up its feed URL and ingesting it. Returns false for non-numeric IDs
-// or when resolution/ingestion fails.
-func (h *PodcastHandler) resolveITunesID(ctx context.Context, id string) (string, bool) {
+// by looking up its feed URL and ingesting it. Resolution errors are preserved
+// so callers do not misreport an upstream or ingestion failure as a 404.
+func (h *PodcastHandler) resolveITunesID(ctx context.Context, id string) (string, error) {
 	if !numericIDPattern.MatchString(id) {
-		return "", false
+		return "", errors.New("not an iTunes podcast ID")
 	}
 	if h.ITunes == nil {
 		h.ITunes = itunes.NewITunesClient()
@@ -646,14 +653,17 @@ func (h *PodcastHandler) resolveITunesID(ctx context.Context, id string) (string
 
 	feedURL, err := h.ITunes.LookupFeedURL(id)
 	if err != nil || feedURL == "" {
-		return "", false
+		if err != nil {
+			return "", err
+		}
+		return "", errors.New("iTunes lookup returned no feed URL")
 	}
 
 	podcastID, err := h.ingestFeedURL(ctx, feedURL)
 	if err != nil {
-		return "", false
+		return "", err
 	}
-	return podcastID, true
+	return podcastID, nil
 }
 
 func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Request, id string) {
@@ -675,8 +685,18 @@ func (h *PodcastHandler) getAndReturnPodcast(w http.ResponseWriter, r *http.Requ
 		// A numeric ID is an iTunes collection ID from Discover/Top Charts, which
 		// carries no feed URL. Resolve it to a feed via the iTunes Lookup API and
 		// ingest it on demand, then serve the freshly stored podcast.
-		if resolvedID, ok := h.resolveITunesID(r.Context(), id); ok {
+		if resolvedID, resolveErr := h.resolveITunesID(r.Context(), id); resolveErr == nil {
 			h.getAndReturnPodcast(w, r, resolvedID)
+			return
+		} else if numericIDPattern.MatchString(id) {
+			status := http.StatusBadGateway
+			var ie *ingestError
+			if errors.As(resolveErr, &ie) {
+				status = ie.Status
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to resolve podcast: " + resolveErr.Error()})
 			return
 		}
 		http.Error(w, `{"error":"podcast not found"}`, http.StatusNotFound)
@@ -730,8 +750,18 @@ func (h *PodcastHandler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 		_ = h.DB.SQL.QueryRowContext(r.Context(),
 			"SELECT EXISTS(SELECT 1 FROM podcasts WHERE id = ?)", podcastID).Scan(&exists)
 		if exists == 0 {
-			if resolved, ok := h.resolveITunesID(r.Context(), podcastID); ok {
+			if resolved, resolveErr := h.resolveITunesID(r.Context(), podcastID); resolveErr == nil {
 				podcastID = resolved
+			} else {
+				status := http.StatusBadGateway
+				var ie *ingestError
+				if errors.As(resolveErr, &ie) {
+					status = ie.Status
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to resolve podcast: " + resolveErr.Error()})
+				return
 			}
 		}
 	}

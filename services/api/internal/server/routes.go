@@ -31,6 +31,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	r.Use(middleware.Compress(5))
 	r.Use(customMiddleware.RequestID)
 	r.Use(customMiddleware.Logger(logger))
+	r.Use(customMiddleware.ErrorRecorder(database, logger))
 	r.Use(middleware.Recoverer)
 
 	healthHandler := &handlers.HealthHandler{DB: database}
@@ -212,6 +213,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Post("/admin/users/{id}/suspend", adminHandler.SuspendUser)
 			r.Delete("/admin/users/{id}/sessions", adminHandler.RevokeUserSessions)
 			r.Get("/admin/feed-health", adminHandler.FeedHealth)
+			r.Get("/admin/errors", adminHandler.ListErrors)
 			r.Post("/admin/podcasts/{id}/refresh", adminHandler.ManualRefreshFeed)
 			r.Get("/admin/status", adminHandler.SystemStatus)
 		})

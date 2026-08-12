@@ -63,7 +63,7 @@ func LoadConfig() (*Config, error) {
 		AdminPassword:            os.Getenv("ADMIN_PASSWORD"),
 		FeedWorkerConcurrency:    getEnvInt("FEED_WORKER_CONCURRENCY", 5),
 		FeedRequestTimeoutMS:     getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
-		FeedMaxResponseBytes:     int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 10485760)),
+		FeedMaxResponseBytes:     int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 33554432)),
 		FeedMaxStoredEpisodes:    getEnvInt("FEED_MAX_STORED_EPISODES", 200),
 		WebPushVAPIDPublicKey:    strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PUBLIC_KEY")),
 		WebPushVAPIDPrivateKey:   strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PRIVATE_KEY")),

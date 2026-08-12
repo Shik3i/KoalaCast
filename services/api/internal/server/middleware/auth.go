@@ -39,6 +39,7 @@ func AuthRequired(database *db.DB) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), UserContextKey, user)
+			ObserveErrorUser(ctx, user.ID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -50,6 +51,7 @@ func OptionalAuth(database *db.DB) func(http.Handler) http.Handler {
 			user, _ := AuthenticateRequest(r, database)
 			if user != nil {
 				ctx := context.WithValue(r.Context(), UserContextKey, user)
+				ObserveErrorUser(ctx, user.ID)
 				r = r.WithContext(ctx)
 			}
 			next.ServeHTTP(w, r)
