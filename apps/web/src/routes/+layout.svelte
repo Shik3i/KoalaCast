@@ -24,6 +24,7 @@
 	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
 	import { onMount } from 'svelte';
 	import { getLocalSubscriptions } from '$lib/idb/db';
+	import { appVersion } from '$lib/app-version';
 	import { preloadSubscriptionArtwork, setArtworkProxyEnabled } from '$lib/artwork';
 
 	let { children } = $props();
@@ -180,6 +181,7 @@
 			<a href="/privacy">{t('footer.privacy')}</a>
 			<a href="https://github.com/Shik3i/KoalaCast" target="_blank" rel="noopener noreferrer">{t('footer.github')}</a>
 			<a href="https://github.com/Shik3i/KoalaCast/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">{t('footer.license')}</a>
+			<span>{t('footer.copyright')} · v{appVersion}</span>
 		</footer>
 	</main>
 	{#if showRunningOrder}

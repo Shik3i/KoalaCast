@@ -7,6 +7,7 @@
 		type LocalSubscription
 	} from '$lib/idb/db';
 	import { t } from '$lib/i18n';
+	import { appVersion } from '$lib/app-version';
 	import { podcastHref } from '$lib/podcast-link';
 	import { sync } from '$lib/stores/sync.svelte';
 	import { waitForAccountContext } from '$lib/stores/account-context';
@@ -96,6 +97,6 @@
 		<a href="https://github.com/Shik3i/KoalaCast/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" title={t('footer.license')}>
 			<i class="ph ph-file-text" aria-hidden="true"></i><span>{t('footer.license')}</span>
 		</a>
-		<small>{t('footer.copyright')}</small>
+		<small>{t('footer.copyright')} · v{appVersion}</small>
 	</footer>
 </aside>

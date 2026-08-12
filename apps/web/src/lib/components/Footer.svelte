@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
+	import { appVersion } from '$lib/app-version';
 
 	// The policy body stays in reviewed English; navigation labels follow the UI locale.
 </script>
@@ -16,7 +17,7 @@
 				<span class="brand-title">KoalaCast</span>
 			</div>
 			<p class="tagline">{t('footer.blurb')}</p>
-			<p class="copyright">{t('footer.copyright')}</p>
+			<p class="copyright">{t('footer.copyright')} · v{appVersion}</p>
 		</div>
 
 		<div class="footer-links">

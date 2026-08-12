@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_title">Settings</string>
+    <string name="settings_app_version">KoalaCast version %1$s</string>
 
     <string name="settings_account_title">Account</string>
     <string name="settings_account_signed_out_note">You are using KoalaCast without an account. Everything works, but nothing leaves this device. Sign in to sync subscriptions, progress and settings across your devices.</string>

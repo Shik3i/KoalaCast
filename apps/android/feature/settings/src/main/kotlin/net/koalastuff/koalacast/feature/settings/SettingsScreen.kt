@@ -2,7 +2,10 @@
 
 package net.koalastuff.koalacast.feature.settings
 
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
@@ -91,6 +94,7 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val appVersion = remember(context) { context.installedAppVersion() }
     val storageTreeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
@@ -134,6 +138,7 @@ fun SettingsScreen(
                 viewModel.setDownloadStorage(storage)
             }
         },
+        appVersion = appVersion,
         modifier = modifier,
         contentPadding = contentPadding,
     )
@@ -164,6 +169,7 @@ internal fun SettingsContent(
     onDownloadConcurrencyChange: (Int) -> Unit,
     onDownloadBudgetMbChange: (Int) -> Unit,
     onDownloadStorageChange: (DownloadStorage) -> Unit,
+    appVersion: String,
     onBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -691,8 +697,30 @@ internal fun SettingsContent(
                 leadingIcon = PhosphorIcons.ShieldCheck,
             )
         }
+
+        Hairline()
+
+        MonoText(
+            text = stringResource(R.string.settings_app_version, appVersion),
+            color = colors.ink4,
+            style = KoalaTheme.type.monoSmall,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
     }
 }
+
+private fun Context.installedAppVersion(): String = runCatching {
+    val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.getPackageInfo(
+            packageName,
+            PackageManager.PackageInfoFlags.of(0),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        packageManager.getPackageInfo(packageName, 0)
+    }
+    packageInfo.versionName
+}.getOrNull().orEmpty()
 
 /**
  * The same nine palettes the web client offers, in the same order. Each row shows
