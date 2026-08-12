@@ -190,7 +190,7 @@
 	<nav class="quiet-mobile-nav" class:has-player={player.isActive} aria-label={t('nav.primary')}>
 		{#each appLinks as link}
 			<a href={link.href} class:active={active(link.href)} aria-current={active(link.href) ? 'page' : undefined}>
-				<i class="{active(link.href) ? 'ph-fill' : 'ph'} {link.icon}" aria-hidden="true"></i>
+				<i class="ph {link.icon}" aria-hidden="true"></i>
 				<span>{link.label}</span>
 			</a>
 		{/each}

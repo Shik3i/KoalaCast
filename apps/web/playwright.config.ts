@@ -20,6 +20,7 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'compact-android',
+			testIgnore: /sidebar-navigation\.spec\.ts/,
 			use: {
 				...devices['Pixel 5'],
 				viewport: { width: 360, height: 740 }
@@ -27,6 +28,7 @@ export default defineConfig({
 		},
 		{
 			name: 'compact-small',
+			testIgnore: /sidebar-navigation\.spec\.ts/,
 			use: {
 				...devices['Galaxy S9+'],
 				viewport: { width: 320, height: 640 }
@@ -43,6 +45,14 @@ export default defineConfig({
 		{
 			name: 'desktop-account',
 			testMatch: /account-layout\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				viewport: { width: 1200, height: 900 }
+			}
+		},
+		{
+			name: 'desktop-navigation',
+			testMatch: /sidebar-navigation\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				viewport: { width: 1200, height: 900 }
