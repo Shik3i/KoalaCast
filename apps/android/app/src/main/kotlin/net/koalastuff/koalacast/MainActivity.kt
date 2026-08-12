@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
+import net.koalastuff.koalacast.core.data.repository.AppReadiness
 import net.koalastuff.koalacast.core.model.PaletteId
 import net.koalastuff.koalacast.core.model.StartScreen
 import net.koalastuff.koalacast.core.model.ThemeMode
@@ -39,6 +40,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var artworkUrls: ArtworkUrls
 
+    @Inject
+    lateinit var appReadiness: AppReadiness
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -46,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val prefs by preferences.preferences.collectAsStateWithLifecycle(initialValue = null)
+            val appReady by appReadiness.ready.collectAsStateWithLifecycle()
 
             LaunchedEffect(Unit) {
                 if (
@@ -65,7 +70,7 @@ class MainActivity : ComponentActivity() {
                 themeMode = prefs?.themeMode ?: ThemeMode.DARK,
                 palette = prefs?.palette ?: PaletteId.DEFAULT,
             ) {
-                CompositionLocalProvider(LocalArtworkUrls provides artworkUrls) {
+                if (appReady) CompositionLocalProvider(LocalArtworkUrls provides artworkUrls) {
                     KoalaCastApp(
                         onboardingComplete = prefs?.onboardingComplete,
                         startScreen = prefs?.startScreen ?: StartScreen.DEFAULT,

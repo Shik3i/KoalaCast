@@ -15,19 +15,22 @@ that makes it true.
 
 ## Data types to declare
 
-Declare each as **collected**, not shared, **optional**, and for *App
-functionality* only.
+Declare each as **collected**, not shared, and **optional**. Select the purposes
+listed below.
 
-| Data type | When | Why |
-| :--- | :--- | :--- |
-| **User IDs** (username) | Only with an account | Identifies the account for sync and for the opt-in leaderboard |
-| **App activity — other user-generated content** | Only with an account | Subscriptions, favorites, queue and per-show settings, so devices agree |
-| **App activity — other actions** | Only with an account | Playback positions and listening sessions, so a device resumes where another left off |
-| **App info and performance — other** | Only with notifications on | A Web Push endpoint, so the server can wake the device for a new episode |
+| Data type | When | Purpose | Why |
+| :--- | :--- | :--- | :--- |
+| **User IDs** (username) | Only with an account | App functionality; Account management | Identifies the account for sync and for the opt-in leaderboard |
+| **Device or other IDs** (app-generated installation UUID) | Only with an account | App functionality; Account management | Identifies the Android installation for device authentication, session management and sync conflict attribution |
+| **App activity — other user-generated content** | Only with an account | App functionality | Subscriptions, favorites, queue and per-show settings, so devices agree |
+| **App activity — other actions** | Only with an account | App functionality | Playback positions and listening sessions, so a device resumes where another left off |
+| **App info and performance — other** | Only with notifications on | App functionality | A Web Push endpoint, so the server can wake the device for a new episode |
 
 Nothing else. In particular **do not** declare location, contacts, photos,
-files, financial info, health, messages, or a device/advertising ID: none is
-requested, and the app contains no advertising or analytics SDK.
+files, financial info, health, messages, or an advertising ID: none is
+requested, and the app contains no advertising or analytics SDK. The
+app-generated installation UUID above is nevertheless a **Device or other ID**
+under the Play Console definition.
 
 ## Answers that are easy to get wrong
 
@@ -54,5 +57,9 @@ reflex.
 - Artwork proxying: `core/data/.../server/ArtworkUrls.kt`.
 - Push endpoint stored only while notifications are on, and deleted when they
   are turned off: `services/api/internal/server/handlers/push.go`.
+- Installation UUID generated and persisted by Android:
+  `apps/android/core/data/src/main/kotlin/net/koalastuff/koalacast/core/data/auth/SecureAccountStore.kt`;
+  sent during device login by `AccountRepository.kt`, and stored by
+  `services/api/internal/server/handlers/auth.go`.
 - Deletion removes every row: `services/api/internal/server/handlers/account.go`
   with `account_test.go` asserting each user-scoped table empties.

@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
 	testDir: './tests/ui',
+	globalSetup: './tests/ui/global-setup.ts',
 	fullyParallel: false,
 	workers: 2,
 	globalTimeout: 180_000,
@@ -15,11 +16,6 @@ export default defineConfig({
 		serviceWorkers: 'block',
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
-	},
-	webServer: {
-		command: 'npm run preview -- --host 127.0.0.1 --port 4173',
-		url: 'http://127.0.0.1:4173',
-		reuseExistingServer: !process.env.CI
 	},
 	projects: [
 		{

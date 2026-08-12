@@ -45,17 +45,24 @@ interface SubscriptionDao {
         upsert(
             subscription.copy(
                 addedAt = existing.addedAt,
+                updatedAt = maxOf(subscription.updatedAt, existing.updatedAt),
                 inboxMode = existing.inboxMode,
                 folder = existing.folder,
             ),
         )
     }
 
-    @Query("UPDATE subscriptions SET inboxMode = :mode WHERE podcastId = :podcastId")
-    suspend fun setInboxMode(podcastId: String, mode: String)
+    @Query(
+        "UPDATE subscriptions SET inboxMode = :mode, " +
+            "updatedAt = MAX(updatedAt + 1, :updatedAt) WHERE podcastId = :podcastId",
+    )
+    suspend fun setInboxMode(podcastId: String, mode: String, updatedAt: Long)
 
-    @Query("UPDATE subscriptions SET folder = :folder WHERE podcastId = :podcastId")
-    suspend fun setFolder(podcastId: String, folder: String)
+    @Query(
+        "UPDATE subscriptions SET folder = :folder, " +
+            "updatedAt = MAX(updatedAt + 1, :updatedAt) WHERE podcastId = :podcastId",
+    )
+    suspend fun setFolder(podcastId: String, folder: String, updatedAt: Long)
 
     @Query("DELETE FROM subscriptions")
     suspend fun clear()

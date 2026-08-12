@@ -41,14 +41,19 @@ class EpisodeDownloadWorker @AssistedInject constructor(
     private val dao: EpisodeDownloadDao,
     private val client: OkHttpClient,
     private val accountStore: SecureAccountStore,
+    private val accountData: AccountDataNamespace,
+    private val appReadiness: AppReadiness,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        appReadiness.await()
         val episodeId = inputData.getString(KEY_EPISODE_ID) ?: return@withContext Result.failure()
         val ownerId = inputData.getString(KEY_OWNER_ID) ?: return@withContext Result.failure()
         val generation = inputData.getLong(KEY_ACCOUNT_GENERATION, -1)
         if (!isCurrentAccount(ownerId, generation)) return@withContext Result.success()
-        val row = dao.get(episodeId) ?: return@withContext Result.failure()
+        val row = accountData.withDataLock {
+            if (isCurrentAccount(ownerId, generation)) dao.get(episodeId) else null
+        } ?: return@withContext if (isCurrentAccount(ownerId, generation)) Result.failure() else Result.success()
         val concurrency = inputData.getInt(KEY_CONCURRENCY, 2).coerceIn(1, 4)
         return@withContext DownloadWorkerLimiter.withLimit(concurrency) {
             if (!isCurrentAccount(ownerId, generation)) {
@@ -120,6 +125,13 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                 val start = if (append) existing else 0L
                 val responseLength = response.body.contentLength().takeIf { it >= 0 }
                 val total = contentRange?.total ?: responseLength?.plus(start) ?: 0L
+                val allowedBytes = reserveBudget(
+                    ownerId,
+                    generation,
+                    episodeId,
+                    total,
+                    budgetBytes,
+                )
                 if (!append) target.truncate()
 
                 var downloaded = start
@@ -134,6 +146,9 @@ class EpisodeDownloadWorker @AssistedInject constructor(
                             }
                             val read = input.read(buffer)
                             if (read < 0) break
+                            if (downloaded + read > allowedBytes) {
+                                throw DownloadBudgetException()
+                            }
                             output.write(buffer, 0, read)
                             downloaded += read
                             if (downloaded - lastUpdate >= UPDATE_BYTES) {
@@ -168,6 +183,7 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             if (error is ObsoleteDownloadException) return Result.success()
+            if (error is DownloadBudgetException) target.truncate()
             val retry = error !is PermanentDownloadException && runAttemptCount < MAX_RETRY_ATTEMPTS
             update(
                 episodeId,
@@ -192,15 +208,20 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         path: String? = null,
         error: String? = null,
     ) {
-        dao.updateProgressFromWorker(
-            id,
-            state.name,
-            bytes,
-            total,
-            path,
-            error,
-            System.currentTimeMillis(),
-        )
+        val ownerId = inputData.getString(KEY_OWNER_ID) ?: return
+        val generation = inputData.getLong(KEY_ACCOUNT_GENERATION, -1)
+        accountData.withDataLock {
+            if (!isCurrentAccount(ownerId, generation)) return@withDataLock
+            dao.updateProgressFromWorker(
+                id,
+                state.name,
+                bytes,
+                total,
+                path,
+                error,
+                System.currentTimeMillis(),
+            )
+        }
     }
 
     private fun createForeground(title: String, progress: Int): ForegroundInfo {
@@ -281,17 +302,70 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         currentEpisodeId: String,
         budgetBytes: Long,
     ) {
-        if (!isCurrentAccount(ownerId, generation)) return
         if (budgetBytes <= 0) return
-        val completed = dao.getAllOldestFirst()
-            .filter { it.state == DownloadState.DONE.name && it.localPath != null }
-        var used = completed.sumOf { it.bytesDownloaded }
-        for (item in completed) {
-            if (used <= budgetBytes) break
-            if (item.episodeId == currentEpisodeId) continue
-            deleteLocation(item.localPath!!)
-            dao.delete(item.episodeId)
-            used -= item.bytesDownloaded
+        accountData.withDataLock {
+            if (!isCurrentAccount(ownerId, generation)) return@withDataLock
+            val completed = dao.getAllOldestFirst()
+                .filter { it.state == DownloadState.DONE.name && it.localPath != null }
+            var used = completed.sumOf { it.bytesDownloaded }
+            for (item in completed) {
+                if (used <= budgetBytes) break
+                if (item.episodeId == currentEpisodeId) continue
+                deleteLocation(item.localPath!!)
+                dao.delete(item.episodeId)
+                used -= item.bytesDownloaded
+            }
+        }
+    }
+
+    private suspend fun reserveBudget(
+        ownerId: String,
+        generation: Long,
+        currentEpisodeId: String,
+        totalBytes: Long,
+        budgetBytes: Long,
+    ): Long {
+        if (budgetBytes <= 0) return Long.MAX_VALUE
+        if (totalBytes > budgetBytes) throw DownloadBudgetException()
+        return accountData.withDataLock {
+            if (!isCurrentAccount(ownerId, generation)) throw ObsoleteDownloadException()
+            val allDownloads = dao.getAllOldestFirst()
+            val current = allDownloads.firstOrNull { it.episodeId == currentEpisodeId }
+                ?: throw ObsoleteDownloadException()
+            val completed = allDownloads
+                .filter {
+                    it.episodeId != currentEpisodeId &&
+                        it.state == DownloadState.DONE.name &&
+                        it.localPath != null
+                }
+            val activeReservations = allDownloads
+                .filter {
+                    it.episodeId != currentEpisodeId &&
+                        it.state == DownloadState.DOWNLOADING.name
+                }
+                .sumOf { maxOf(it.bytesDownloaded, it.totalBytes) }
+            var completedBytes = completed.sumOf { it.bytesDownloaded }
+            if (totalBytes > 0) {
+                for (item in completed) {
+                    if (completedBytes + activeReservations + totalBytes <= budgetBytes) break
+                    deleteLocation(item.localPath!!)
+                    dao.delete(item.episodeId)
+                    completedBytes -= item.bytesDownloaded
+                }
+            }
+            val available = (budgetBytes - completedBytes - activeReservations).coerceAtLeast(0)
+            val reservation = totalBytes.takeIf { it > 0 } ?: available
+            if (reservation <= 0 || reservation > available) throw DownloadBudgetException()
+            dao.updateProgressFromWorker(
+                currentEpisodeId,
+                DownloadState.DOWNLOADING.name,
+                current.bytesDownloaded,
+                reservation,
+                current.localPath,
+                null,
+                System.currentTimeMillis(),
+            )
+            reservation
         }
     }
 
@@ -331,10 +405,11 @@ class EpisodeDownloadWorker @AssistedInject constructor(
  * fooled that way, and it also lets a lowered limit take effect for the episodes
  * that are still waiting rather than only for the next batch.
  */
-private object DownloadWorkerLimiter {
+internal object DownloadWorkerLimiter {
     private val mutex = Mutex()
     private var active = 0
-    private val waiting = ArrayDeque<CompletableDeferred<Unit>>()
+    private data class Waiter(val signal: CompletableDeferred<Unit>, val limit: Int)
+    private val waiting = ArrayDeque<Waiter>()
 
     suspend fun <T> withLimit(concurrency: Int, block: suspend () -> T): T {
         val limit = concurrency.coerceIn(1, 4)
@@ -342,7 +417,7 @@ private object DownloadWorkerLimiter {
         try {
             return block()
         } finally {
-            release(limit)
+            release()
         }
     }
 
@@ -352,25 +427,44 @@ private object DownloadWorkerLimiter {
                 active++
                 null
             } else {
-                CompletableDeferred<Unit>().also { waiting.addLast(it) }
+                Waiter(CompletableDeferred<Unit>(), limit).also { waiting.addLast(it) }
             }
         }
-        waiter?.await()
+        if (waiter == null) return
+        try {
+            waiter.signal.await()
+        } catch (error: CancellationException) {
+            mutex.withLock {
+                if (!waiting.remove(waiter)) {
+                    active--
+                    grantWaiters()
+                }
+            }
+            throw error
+        }
     }
 
-    private suspend fun release(limit: Int) {
+    private suspend fun release() {
         mutex.withLock {
             active--
-            while (active < limit && waiting.isNotEmpty()) {
-                waiting.removeFirst().complete(Unit)
-                active++
-            }
+            grantWaiters()
+        }
+    }
+
+    private fun grantWaiters() {
+        while (true) {
+            val index = waiting.indexOfFirst { active < it.limit }
+            if (index < 0) return
+            val waiter = waiting.removeAt(index)
+            active++
+            waiter.signal.complete(Unit)
         }
     }
 }
 
-private class PermanentDownloadException(message: String) : Exception(message)
+private open class PermanentDownloadException(message: String) : Exception(message)
 private class ObsoleteDownloadException : Exception()
+private class DownloadBudgetException : PermanentDownloadException("Download budget exceeded")
 
 internal data class ParsedContentRange(
     val start: Long?,

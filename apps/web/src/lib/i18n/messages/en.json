@@ -782,6 +782,7 @@
 		"sizeUnknown": "{received} downloaded · total size unknown",
 		"errorNoAudio": "This episode has no audio file",
 		"errorCors": "The publisher does not allow downloads in the browser",
+		"errorBudget": "The episode exceeds the configured download budget",
 		"errorHttp": "The server answered with {status}",
 		"budgetLabel": "Download budget",
 		"budgetUsage": "Budget: {used} of {budget}"

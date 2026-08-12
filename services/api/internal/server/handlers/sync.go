@@ -663,6 +663,9 @@ func validateSyncOperation(op *SyncPushOperation) error {
 	if op.ClientOpID == "" || op.DeviceID == "" || op.EntityID == "" {
 		return fmt.Errorf("client_op_id, device_id and entity_id are required")
 	}
+	if len(op.ClientOpID) > 256 || len(op.DeviceID) > 128 || len(op.EntityID) > 512 || op.ClientTimestamp < 0 {
+		return fmt.Errorf("operation identifiers are too long or timestamp is invalid")
+	}
 	if !json.Valid(op.Payload) {
 		return fmt.Errorf("payload must be valid JSON")
 	}
@@ -679,9 +682,29 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		if err := json.Unmarshal(op.Payload, &p); err != nil {
 			return fmt.Errorf("invalid playback_state payload")
 		}
+		if op.ClientTimestamp == 0 {
+			op.ClientTimestamp = p.ClientTimestamp
+		}
+		if op.ClientTimestamp == 0 {
+			op.ClientTimestamp = 1
+		}
+		if p.DeviceID == "" {
+			p.DeviceID = op.DeviceID
+		}
+		if p.PlaybackSessionID == "" {
+			p.PlaybackSessionID = "legacy:" + op.DeviceID + ":" + op.EntityID
+		}
+		if p.PerSessionSeq == 0 {
+			p.PerSessionSeq = op.ClientTimestamp
+		}
+		if p.ClientTimestamp == 0 {
+			p.ClientTimestamp = op.ClientTimestamp
+		}
 		if p.EpisodeID == "" || p.EpisodeID != op.EntityID || p.PositionMS < 0 ||
 			math.IsNaN(p.ProgressPercent) || math.IsInf(p.ProgressPercent, 0) ||
-			p.ProgressPercent < 0 || p.ProgressPercent > 100 || p.PerSessionSeq < 0 {
+			p.ProgressPercent < 0 || p.ProgressPercent > 100 || p.PerSessionSeq <= 0 ||
+			p.DeviceID != op.DeviceID || p.ClientTimestamp != op.ClientTimestamp ||
+			len(p.PlaybackSessionID) > 256 {
 			return fmt.Errorf("invalid playback_state values")
 		}
 		switch p.EventType {
@@ -689,6 +712,11 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		default:
 			return fmt.Errorf("invalid playback_state event_type")
 		}
+		encoded, err := json.Marshal(p)
+		if err != nil {
+			return fmt.Errorf("invalid playback_state payload")
+		}
+		op.Payload = encoded
 	case "listening_session":
 		if op.Action != "upsert" {
 			return fmt.Errorf("listening_session action must be upsert")
@@ -784,21 +812,24 @@ func (h *SyncHandler) applyOperation(ctx context.Context, tx *sql.Tx, userID str
 		}
 		return h.applyPlaybackState(ctx, tx, userID, p, syncVer, nowMs)
 	case "listening_session":
+		newest, err := isNewestSyncOperation(ctx, tx, userID, op)
+		if err != nil || !newest {
+			return false, err
+		}
 		var p ListeningSessionPayload
 		if err := json.Unmarshal(op.Payload, &p); err != nil {
 			return false, err
 		}
 		return h.applyListeningSession(ctx, tx, userID, p, syncVer)
 	case "subscription":
-		err := h.applySubscription(ctx, tx, userID, op, syncVer, nowMs)
-		return err == nil, err
+		return h.applySubscription(ctx, tx, userID, op, syncVer)
 	case "favorite":
-		err := h.applyFavorite(ctx, tx, userID, op, syncVer, nowMs)
-		return err == nil, err
+		return h.applyFavorite(ctx, tx, userID, op, syncVer)
 	case "queue", "settings", "podcast_settings":
 		// The append-only sync_log written by Push is the materialized record for
-		// these denormalized entities; no second table is required.
-		return true, nil
+		// these denormalized entities; deterministic LWW ordering is therefore
+		// enforced against the existing log before appending a new version.
+		return isNewestSyncOperation(ctx, tx, userID, op)
 	default:
 		return false, fmt.Errorf("unsupported entity type")
 	}
@@ -850,14 +881,14 @@ func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, use
 
 func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID string, p PlaybackStatePayload, syncVer, nowMs int64) (bool, error) {
 	// Conflict resolution rules
-	var existingPos, existingSeq int64
+	var existingPos, existingSeq, existingTimestamp int64
 	var existingCompleted int
-	var existingSessionID string
+	var existingSessionID, existingDeviceID string
 	err := tx.QueryRowContext(ctx, `
-		SELECT position_ms, completed, playback_session_id, per_session_seq
+		SELECT position_ms, completed, playback_session_id, per_session_seq, client_timestamp, device_id
 		FROM playback_states
 		WHERE user_id = ? AND episode_id = ?
-	`, userID, p.EpisodeID).Scan(&existingPos, &existingCompleted, &existingSessionID, &existingSeq)
+	`, userID, p.EpisodeID).Scan(&existingPos, &existingCompleted, &existingSessionID, &existingSeq, &existingTimestamp, &existingDeviceID)
 
 	completedInt := 0
 	if p.Completed {
@@ -874,6 +905,14 @@ func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID
 	}
 	if err != nil {
 		return false, err
+	}
+	sameSession := p.PlaybackSessionID == existingSessionID
+	if sameSession && p.PerSessionSeq <= existingSeq {
+		return false, nil
+	}
+	if !sameSession && (p.ClientTimestamp < existingTimestamp ||
+		(p.ClientTimestamp == existingTimestamp && p.DeviceID <= existingDeviceID)) {
+		return false, nil
 	}
 
 	// 1. Passive Ticks (PROGRESS_TICK): Cannot move position backwards or reopen completed episode
@@ -904,37 +943,73 @@ func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID
 	return err == nil, err
 }
 
-func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) error {
+func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer int64) (bool, error) {
+	newest, err := isNewestSyncOperation(ctx, tx, userID, op)
+	if err != nil || !newest {
+		return false, err
+	}
 	isDeleted := 0
 	if op.Action == "delete" {
 		isDeleted = 1
 	}
 
-	_, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		INSERT INTO subscriptions (user_id, podcast_id, created_at, updated_at, is_deleted, sync_version)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, podcast_id) DO UPDATE SET
 			is_deleted = excluded.is_deleted,
 			updated_at = excluded.updated_at,
 			sync_version = excluded.sync_version
-	`, userID, op.EntityID, nowMs, nowMs, isDeleted, syncVer)
-	return err
+		WHERE excluded.updated_at >= subscriptions.updated_at
+	`, userID, op.EntityID, op.ClientTimestamp, op.ClientTimestamp, isDeleted, syncVer)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	return rows > 0, err
 }
 
-func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer, nowMs int64) error {
+func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer int64) (bool, error) {
+	newest, err := isNewestSyncOperation(ctx, tx, userID, op)
+	if err != nil || !newest {
+		return false, err
+	}
 	isDeleted := 0
 	if op.Action == "delete" {
 		isDeleted = 1
 	}
 
-	_, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		INSERT INTO favorites (user_id, episode_id, created_at, is_deleted, sync_version)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, episode_id) DO UPDATE SET
 			is_deleted = excluded.is_deleted,
 			sync_version = excluded.sync_version
-	`, userID, op.EntityID, nowMs, isDeleted, syncVer)
-	return err
+	`, userID, op.EntityID, op.ClientTimestamp, isDeleted, syncVer)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	return rows > 0, err
+}
+
+func isNewestSyncOperation(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation) (bool, error) {
+	var timestamp int64
+	var deviceID string
+	err := tx.QueryRowContext(ctx, `
+		SELECT client_timestamp, device_id FROM sync_log
+		WHERE user_id = ? AND entity_type = ? AND entity_id = ?
+		ORDER BY client_timestamp DESC, device_id DESC, server_cursor DESC
+		LIMIT 1
+	`, userID, op.EntityType, op.EntityID).Scan(&timestamp, &deviceID)
+	if err == sql.ErrNoRows {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return op.ClientTimestamp > timestamp ||
+		(op.ClientTimestamp == timestamp && op.DeviceID > deviceID), nil
 }
 
 func (h *SyncHandler) MergeLocalData(w http.ResponseWriter, r *http.Request) {

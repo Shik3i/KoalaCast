@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-function toneDataUrl() {
+function toneWav() {
 	const sampleRate = 8_000;
 	const samples = sampleRate * 2;
 	const wav = Buffer.alloc(44 + samples * 2);
@@ -19,7 +19,7 @@ function toneDataUrl() {
 	for (let index = 0; index < samples; index++) {
 		wav.writeInt16LE(Math.round(Math.sin(index / 8) * 8_000), 44 + index * 2);
 	}
-	return `data:audio/wav;base64,${wav.toString('base64')}`;
+	return wav;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -52,11 +52,14 @@ test.beforeEach(async ({ page }) => {
 						description: 'The episode users came here to hear.',
 						pub_date: Math.floor(Date.now() / 1_000),
 						duration_ms: 2_000,
-						enclosure_url: toneDataUrl()
+					enclosure_url: '/test-audio.wav'
 					}
 				]
 			}
 		});
+	});
+	await page.route('**/test-audio.wav', async (route) => {
+		await route.fulfill({ body: toneWav(), contentType: 'audio/wav' });
 	});
 	await page.route(/\/api\/v1\/podcasts\/test-show(?:\?.*)?$/, async (route) => {
 		await route.fulfill({

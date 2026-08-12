@@ -29,14 +29,26 @@ func TestCORSPreflightAllowsPut(t *testing.T) {
 	}
 }
 
-func TestSecurityHeadersAllowsPublisherFetches(t *testing.T) {
+func TestSecurityHeadersLeavesStaticCSPToGeneratedMeta(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	SecurityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
 		ServeHTTP(recorder, request)
 
 	csp := recorder.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "connect-src 'self' https: http:") {
-		t.Fatalf("publisher fetches missing from CSP: %q", csp)
+	if csp != "" {
+		t.Fatalf("static response must not override generated hash CSP, got %q", csp)
+	}
+}
+
+func TestSecurityHeadersLocksDownAPIResponses(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	SecurityHeaders(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+		ServeHTTP(recorder, request)
+
+	csp := recorder.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "default-src 'none'") || !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Fatalf("API CSP is not restrictive: %q", csp)
 	}
 }

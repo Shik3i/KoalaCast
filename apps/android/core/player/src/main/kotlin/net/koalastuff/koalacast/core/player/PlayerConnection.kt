@@ -322,9 +322,14 @@ class PlayerConnection @Inject constructor(
         }
     }
 
-    fun stop() = onController {
-        it.pause()
-        it.seekTo(0)
+    fun stop() {
+        val generation = playGeneration.incrementAndGet()
+        onController {
+            // A newer play request supersedes this asynchronous stop command.
+            if (generation != playGeneration.get()) return@onController
+            it.pause()
+            it.seekTo(0)
+        }
     }
 
     private fun onController(block: (MediaController) -> Unit) {

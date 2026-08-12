@@ -97,9 +97,12 @@ func (h *PushHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authUser := customMiddleware.GetAuthUser(r.Context())
-	_, _ = h.DB.SQL.ExecContext(r.Context(),
+	if _, err := h.DB.SQL.ExecContext(r.Context(),
 		"DELETE FROM web_push_subscriptions WHERE user_id = ? AND endpoint = ?",
-		authUser.ID, request.Endpoint)
+		authUser.ID, request.Endpoint); err != nil {
+		http.Error(w, `{"error":"failed to remove push subscription"}`, http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

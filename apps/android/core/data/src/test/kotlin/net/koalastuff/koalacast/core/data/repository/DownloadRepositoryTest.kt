@@ -1,5 +1,12 @@
 package net.koalastuff.koalacast.core.data.repository
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -49,6 +56,32 @@ class DownloadRepositoryTest {
             parseContentRange("bytes */4096"),
         )
         assertEquals(null, parseContentRange("bytes invalid"))
+    }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `cancelled limiter waiter does not leak a permit`() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val active = launch {
+            DownloadWorkerLimiter.withLimit(1) {
+                entered.complete(Unit)
+                release.await()
+            }
+        }
+        entered.await()
+
+        val cancelled = launch {
+            DownloadWorkerLimiter.withLimit(1) {
+                throw AssertionError("cancelled waiter entered the critical section")
+            }
+        }
+        runCurrent()
+        cancelled.cancelAndJoin()
+        release.complete(Unit)
+        active.join()
+
+        assertTrue(withTimeout(1_000) { DownloadWorkerLimiter.withLimit(1) { true } })
     }
 
     private companion object {

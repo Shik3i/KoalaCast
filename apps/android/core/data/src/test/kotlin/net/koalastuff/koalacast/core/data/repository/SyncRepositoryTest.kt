@@ -139,7 +139,7 @@ class SyncRepositoryTest {
 
         val pending = pendingSyncOperations(
             operations = listOf(historicalSession, historicalSubscription),
-            generalWatermark = 500,
+            generalWatermarks = mapOf("subscription" to 500),
             listeningWatermark = 0,
         )
 
@@ -147,7 +147,7 @@ class SyncRepositoryTest {
         assertTrue(
             pendingSyncOperations(
                 operations = listOf(historicalSession),
-                generalWatermark = 500,
+                generalWatermarks = emptyMap(),
                 listeningWatermark = 100,
             ).isEmpty(),
         )
@@ -315,7 +315,7 @@ class SyncRepositoryTest {
         assertEquals(2, pullCalls)
         assertEquals(1, snapshotCalls)
         assertEquals(90L, store.cursor(USER_ID))
-        assertTrue(database.subscriptionDao().getAll().isEmpty())
+        assertEquals(listOf("stale"), database.subscriptionDao().getAll().map { it.podcastId })
         assertEquals("fresh", database.tombstoneDao().get("subscription:fresh")?.entityId)
         assertEquals(listOf("favorite"), database.favoriteDao().getAll().map { it.episodeId })
         assertEquals(42_000L, database.playbackStateDao().get("episode")!!.positionMs)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -13,6 +14,35 @@ import (
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 )
+
+func TestAudioRangeValidationRejectsMultipleAndOversizedRanges(t *testing.T) {
+	for _, value := range []string{
+		"bytes=0-1,4-5",
+		"bytes=-0",
+		"bytes=2147483648-",
+		"bytes=0-2147483648",
+		"bytes=999-1",
+	} {
+		if validAudioRange(value) {
+			t.Errorf("expected invalid range %q to be rejected", value)
+		}
+	}
+	for _, value := range []string{"bytes=0-", "bytes=-1024", "bytes=10-20"} {
+		if !validAudioRange(value) {
+			t.Errorf("expected range %q to be accepted", value)
+		}
+	}
+}
+
+func TestReadLimitedBodyRejectsOneByteOverLimit(t *testing.T) {
+	if _, err := readLimitedBody(bytes.NewReader([]byte("12345")), 4); err == nil {
+		t.Fatal("expected oversized response to be rejected")
+	}
+	body, err := readLimitedBody(bytes.NewReader([]byte("1234")), 4)
+	if err != nil || string(body) != "1234" {
+		t.Fatalf("expected exact-limit response, got body=%q err=%v", body, err)
+	}
+}
 
 func TestProxyHandler_GetChapters(t *testing.T) {
 	mockChapters := `{

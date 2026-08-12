@@ -10,12 +10,37 @@ const errors = [];
 
 for (const name of readdirSync(workflowDir).filter((entry) => /\.ya?ml$/.test(entry))) {
 	const source = readFileSync(resolve(workflowDir, name), 'utf8');
+	for (const match of source.matchAll(/uses:\s+([^\s@]+)@([^\s#]+)/g)) {
+		if (!match[1].startsWith('./') && !/^[0-9a-f]{40}$/.test(match[2])) {
+			errors.push(`${name}: ${match[1]} must be pinned to a full commit SHA`);
+		}
+	}
 	if (name !== androidRelease && releaseCreation.test(source)) {
 		errors.push(`${name}: GitHub Releases may only be created by ${androidRelease}`);
 	}
 	if (name !== androidRelease && androidBuildReference.test(source)) {
 		errors.push(`${name}: Android tests and builds may only run from ${androidRelease} after an android-v* tag`);
 	}
+}
+
+const dockerfile = readFileSync(resolve(root, 'Dockerfile'), 'utf8');
+for (const match of dockerfile.matchAll(/^FROM(?:\s+--platform=\S+)?\s+(\S+)/gm)) {
+	if (!/@sha256:[0-9a-f]{64}$/.test(match[1])) {
+		errors.push(`Dockerfile: base image ${match[1]} must be pinned to a sha256 digest`);
+	}
+}
+
+const composeSource = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
+if (!/SECURE_COOKIES=\$\{SECURE_COOKIES:-true\}/.test(composeSource)) {
+	errors.push('docker-compose.yml: SECURE_COOKIES must default to true');
+}
+
+const androidBuild = readFileSync(resolve(root, 'apps/android/app/build.gradle.kts'), 'utf8');
+if (/signingConfig\s*=\s*signingConfigs\.getByName\(["']debug["']\)/.test(androidBuild)) {
+	errors.push('apps/android/app/build.gradle.kts: release builds must never use the debug signing key');
+}
+if (!androidBuild.includes('verifyReleaseSigning') || !androidBuild.includes('explicitReleasePackagingRequested')) {
+	errors.push('apps/android/app/build.gradle.kts: release signing must fail before packaging work starts');
 }
 
 const dockerSource = readFileSync(resolve(workflowDir, 'docker-release.yml'), 'utf8');

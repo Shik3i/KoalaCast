@@ -23,6 +23,8 @@ type AuthUser struct {
 	ClientType         string
 }
 
+const authActivityWriteInterval = 5 * time.Minute
+
 const UserContextKey contextKey = "auth_user"
 
 func AuthRequired(database *db.DB) func(http.Handler) http.Handler {
@@ -86,13 +88,14 @@ func authenticateSessionToken(ctx context.Context, database *db.DB, token string
 
 	var user AuthUser
 	var isSuspended int
+	var lastUsedAt int64
 
 	err := database.SQL.QueryRowContext(ctx, `
-		SELECT u.id, u.username, u.normalized_username, u.role, u.is_suspended, s.id
+		SELECT u.id, u.username, u.normalized_username, u.role, u.is_suspended, s.id, s.last_used_at
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.token_hash = ? AND s.expires_at > ?
-	`, tokenHash, nowMs).Scan(&user.ID, &user.Username, &user.NormalizedUsername, &user.Role, &isSuspended, &user.SessionID)
+	`, tokenHash, nowMs).Scan(&user.ID, &user.Username, &user.NormalizedUsername, &user.Role, &isSuspended, &user.SessionID, &lastUsedAt)
 
 	if err != nil || isSuspended == 1 {
 		return nil, err
@@ -100,8 +103,9 @@ func authenticateSessionToken(ctx context.Context, database *db.DB, token string
 
 	user.ClientType = "web"
 
-	// Update last used timestamp
-	_, _ = database.SQL.ExecContext(ctx, "UPDATE sessions SET last_used_at = ? WHERE id = ?", nowMs, user.SessionID)
+	if nowMs-lastUsedAt >= authActivityWriteInterval.Milliseconds() {
+		_, _ = database.SQL.ExecContext(ctx, "UPDATE sessions SET last_used_at = ? WHERE id = ?", nowMs, user.SessionID)
+	}
 
 	return &user, nil
 }
@@ -113,19 +117,22 @@ func authenticateDeviceToken(ctx context.Context, database *db.DB, token string)
 
 	var user AuthUser
 	var isSuspended, isRevoked int
+	var lastSyncAt int64
 
 	err := database.SQL.QueryRowContext(ctx, `
-		SELECT u.id, u.username, u.normalized_username, u.role, u.is_suspended, d.device_id, d.client_type, d.is_revoked
+		SELECT u.id, u.username, u.normalized_username, u.role, u.is_suspended, d.device_id, d.client_type, d.is_revoked, d.last_sync_at
 		FROM device_credentials d
 		JOIN users u ON d.user_id = u.id
 		WHERE d.token_hash = ? AND (d.expires_at = 0 OR d.expires_at > ?)
-	`, tokenHash, nowMs).Scan(&user.ID, &user.Username, &user.NormalizedUsername, &user.Role, &isSuspended, &user.DeviceID, &user.ClientType, &isRevoked)
+	`, tokenHash, nowMs).Scan(&user.ID, &user.Username, &user.NormalizedUsername, &user.Role, &isSuspended, &user.DeviceID, &user.ClientType, &isRevoked, &lastSyncAt)
 
 	if err != nil || isSuspended == 1 || isRevoked == 1 {
 		return nil, err
 	}
 
-	_, _ = database.SQL.ExecContext(ctx, "UPDATE device_credentials SET last_sync_at = ? WHERE user_id = ? AND device_id = ?", nowMs, user.ID, user.DeviceID)
+	if nowMs-lastSyncAt >= authActivityWriteInterval.Milliseconds() {
+		_, _ = database.SQL.ExecContext(ctx, "UPDATE device_credentials SET last_sync_at = ? WHERE user_id = ? AND device_id = ?", nowMs, user.ID, user.DeviceID)
+	}
 
 	return &user, nil
 }

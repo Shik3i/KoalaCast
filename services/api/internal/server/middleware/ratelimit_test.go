@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -34,5 +35,26 @@ func TestRateLimiter(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Errorf("expected 429 Too Many Requests on 4th request, got %d", rec.Code)
+	}
+}
+
+func TestRateLimiterRetryAfterMatchesRemainingWindow(t *testing.T) {
+	limiter := NewRateLimiter(1, 1500*time.Millisecond)
+	handler := limiter.Limit(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/login", nil)
+	req.RemoteAddr = "192.168.1.60:12345"
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	time.Sleep(600 * time.Millisecond)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+	retryAfter, err := strconv.Atoi(rec.Header().Get("Retry-After"))
+	if err != nil || retryAfter != 1 {
+		t.Fatalf("expected Retry-After 1, got %q", rec.Header().Get("Retry-After"))
 	}
 }

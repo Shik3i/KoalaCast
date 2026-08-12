@@ -162,7 +162,7 @@ class LibraryRepository @Inject constructor(
     }
 
     suspend fun setInboxMode(podcastId: String, mode: InboxMode) {
-        subscriptions.setInboxMode(podcastId, mode.storageValue())
+        subscriptions.setInboxMode(podcastId, mode.storageValue(), clock.nowMs())
     }
 
     // ---- Favourites ----
@@ -216,7 +216,7 @@ class LibraryRepository @Inject constructor(
     }
 
     suspend fun setFolder(podcastId: String, folder: String) {
-        subscriptions.setFolder(podcastId, folder.trim())
+        subscriptions.setFolder(podcastId, folder.trim(), clock.nowMs())
     }
 
     // ---- Timestamp bookmarks ----

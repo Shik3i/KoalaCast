@@ -1,14 +1,21 @@
 package middleware
 
 import (
+	"math"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 )
 
+type rateWindow struct {
+	count   int
+	resetAt time.Time
+}
+
 type RateLimiter struct {
 	mu        sync.Mutex
-	requests  map[string][]time.Time
+	requests  map[string]rateWindow
 	limit     int
 	window    time.Duration
 	cleanFreq time.Duration
@@ -16,7 +23,7 @@ type RateLimiter struct {
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
-		requests:  make(map[string][]time.Time),
+		requests:  make(map[string]rateWindow),
 		limit:     limit,
 		window:    window,
 		cleanFreq: 5 * time.Minute,
@@ -27,41 +34,51 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 }
 
 func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Key on the client host IP only. r.RemoteAddr is "host:port"; keying on the
-		// raw value would bucket every ephemeral source port separately, so the limit
-		// would almost never trigger for a real client. Strip the port. When a
-		// RealIP middleware runs first, r.RemoteAddr already carries the resolved
-		// client IP for requests arriving via a trusted proxy.
-		ip := ClientHostIP(r.RemoteAddr)
+	return rl.LimitBy(func(r *http.Request) string { return ClientHostIP(r.RemoteAddr) })(next)
+}
 
-		rl.mu.Lock()
-		now := time.Now()
-		cutoff := now.Add(-rl.window)
+// LimitAuthenticated keys expensive account operations on the authenticated
+// principal instead of the source IP. That keeps one NAT from penalising all
+// listeners while still bounding a distributed sync flood for one account.
+func (rl *RateLimiter) LimitAuthenticated(next http.Handler) http.Handler {
+	return rl.LimitBy(func(r *http.Request) string {
+		user := GetAuthUser(r.Context())
+		if user == nil {
+			return "unauthenticated:" + ClientHostIP(r.RemoteAddr)
+		}
+		return "user:" + user.ID
+	})(next)
+}
 
-		// Filter timestamps within window
-		var valid []time.Time
-		for _, t := range rl.requests[ip] {
-			if t.After(cutoff) {
-				valid = append(valid, t)
+func (rl *RateLimiter) LimitBy(key func(*http.Request) string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			bucketKey := key(r)
+
+			rl.mu.Lock()
+			now := time.Now()
+			window := rl.requests[bucketKey]
+			if window.resetAt.IsZero() || !now.Before(window.resetAt) {
+				window = rateWindow{resetAt: now.Add(rl.window)}
 			}
-		}
 
-		if len(valid) >= rl.limit {
+			if window.count >= rl.limit {
+				retryAfter := max(1, int(math.Ceil(time.Until(window.resetAt).Seconds())))
+				rl.mu.Unlock()
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = w.Write([]byte(`{"error":"too many requests, please slow down"}`))
+				return
+			}
+
+			window.count++
+			rl.requests[bucketKey] = window
 			rl.mu.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Retry-After", "60")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"error":"too many requests, please slow down"}`))
-			return
-		}
 
-		valid = append(valid, now)
-		rl.requests[ip] = valid
-		rl.mu.Unlock()
-
-		next.ServeHTTP(w, r)
-	})
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func (rl *RateLimiter) cleanupLoop() {
@@ -69,19 +86,10 @@ func (rl *RateLimiter) cleanupLoop() {
 	for range ticker.C {
 		rl.mu.Lock()
 		now := time.Now()
-		cutoff := now.Add(-rl.window)
 
-		for ip, timestamps := range rl.requests {
-			var valid []time.Time
-			for _, t := range timestamps {
-				if t.After(cutoff) {
-					valid = append(valid, t)
-				}
-			}
-			if len(valid) == 0 {
-				delete(rl.requests, ip)
-			} else {
-				rl.requests[ip] = valid
+		for key, window := range rl.requests {
+			if !now.Before(window.resetAt) {
+				delete(rl.requests, key)
 			}
 		}
 		rl.mu.Unlock()

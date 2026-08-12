@@ -42,6 +42,7 @@
 	function errorText(code: string) {
 		if (code === DOWNLOAD_ERROR.noAudioUrl) return t('downloads.errorNoAudio');
 		if (code === DOWNLOAD_ERROR.corsBlocked) return t('downloads.errorCors');
+		if (code === DOWNLOAD_ERROR.budgetExceeded) return t('downloads.errorBudget');
 		if (code.startsWith(DOWNLOAD_ERROR.http)) {
 			return t('downloads.errorHttp', { status: code.slice(DOWNLOAD_ERROR.http.length) });
 		}

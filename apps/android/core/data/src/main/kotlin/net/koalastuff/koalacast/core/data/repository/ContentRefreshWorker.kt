@@ -48,9 +48,11 @@ class ContentRefreshWorker @AssistedInject constructor(
     private val podcasts: PodcastRepository,
     private val queue: QueueRepository,
     private val accountStore: SecureAccountStore,
+    private val appReadiness: AppReadiness,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        appReadiness.await()
         val ownerId = accountStore.activeOwnerId()
         val generation = accountStore.accountGeneration()
         val subscriptions = subscriptionDao.getAll().map { it.toModel() }

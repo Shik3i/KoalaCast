@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestCompactSyncLog(t *testing.T) {
@@ -24,31 +25,40 @@ func TestCompactSyncLog(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	ins := func(opID, entityType, entityID string, cursor int64) {
+	ins := func(opID, deviceID, entityType, entityID string, clientTimestamp, cursor int64) {
 		_, err := database.SQL.Exec(`
 			INSERT INTO sync_log (user_id, device_id, client_op_id, entity_type, entity_id, action, payload_json, client_timestamp, server_timestamp, server_cursor)
-			VALUES ('u1','devA',?,?,?,'upsert','{}',0,0,?)
-		`, opID, entityType, entityID, cursor)
+			VALUES ('u1',?,?,?,?,'upsert','{}',?,0,?)
+		`, deviceID, opID, entityType, entityID, clientTimestamp, cursor)
 		if err != nil {
 			t.Fatalf("insert sync_log: %v", err)
 		}
 	}
 
-	// Three progress ticks for the same episode, plus one subscription.
-	ins("p:ep1:1", "playback_state", "ep1", 1)
-	ins("p:ep1:2", "playback_state", "ep1", 2)
-	ins("p:ep1:3", "playback_state", "ep1", 3)
-	ins("s:pod1:9", "subscription", "pod1", 4)
+	// Playback keeps the latest accepted cursor because per-session sequence wins
+	// over wall-clock time. Other entities use timestamp/device conflict ordering.
+	ins("p:ep1:1", "devA", "playback_state", "ep1", 100, 1)
+	ins("p:ep1:2", "devA", "playback_state", "ep1", 200, 2)
+	ins("p:ep1:3", "devA", "playback_state", "ep1", 150, 3)
+	ins("s:pod1:9", "devA", "subscription", "pod1", 400, 4)
+	ins("s:pod1:stale", "devZ", "subscription", "pod1", 150, 5)
+	if _, err := database.SQL.Exec(`
+		INSERT INTO processed_sync_operations (user_id, device_id, client_op_id, server_cursor, processed_at)
+		VALUES ('u1','devA','expired',4,?), ('u1','devA','current',4,?)
+	`, time.Now().Add(-syncOperationLedgerRetention-time.Hour).UnixMilli(), time.Now().UnixMilli()); err != nil {
+		t.Fatalf("seed operation ledger: %v", err)
+	}
 
 	deleted, err := database.CompactSyncLog(context.Background())
 	if err != nil {
 		t.Fatalf("CompactSyncLog: %v", err)
 	}
-	if deleted != 2 {
-		t.Fatalf("expected 2 superseded rows deleted, got %d", deleted)
+	if deleted != 3 {
+		t.Fatalf("expected 3 superseded rows deleted, got %d", deleted)
 	}
 
-	// ep1 should retain only its newest op (cursor 3); pod1 untouched.
+	// ep1 retains its latest accepted sequence (cursor 3), while pod1 rejects the
+	// later-appended but older timestamp (cursor 5).
 	var epCursor int64
 	if err := database.SQL.QueryRow(
 		"SELECT server_cursor FROM sync_log WHERE entity_id = 'ep1'").Scan(&epCursor); err != nil {
@@ -57,6 +67,14 @@ func TestCompactSyncLog(t *testing.T) {
 	if epCursor != 3 {
 		t.Errorf("expected ep1 to retain cursor 3, got %d", epCursor)
 	}
+	var subscriptionCursor int64
+	if err := database.SQL.QueryRow(
+		"SELECT server_cursor FROM sync_log WHERE entity_id = 'pod1'").Scan(&subscriptionCursor); err != nil {
+		t.Fatalf("query pod1: %v", err)
+	}
+	if subscriptionCursor != 4 {
+		t.Errorf("expected pod1 to retain conflict winner cursor 4, got %d", subscriptionCursor)
+	}
 
 	var total int
 	if err := database.SQL.QueryRow("SELECT COUNT(*) FROM sync_log").Scan(&total); err != nil {
@@ -64,5 +82,12 @@ func TestCompactSyncLog(t *testing.T) {
 	}
 	if total != 2 {
 		t.Errorf("expected 2 rows retained (ep1 latest + pod1), got %d", total)
+	}
+	var ledgerOps string
+	if err := database.SQL.QueryRow("SELECT client_op_id FROM processed_sync_operations").Scan(&ledgerOps); err != nil {
+		t.Fatalf("query retained operation: %v", err)
+	}
+	if ledgerOps != "current" {
+		t.Errorf("expected only current operation retained, got %q", ledgerOps)
 	}
 }

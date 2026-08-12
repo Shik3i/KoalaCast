@@ -14,14 +14,20 @@ val hasReleaseSigning = listOf(
     releaseKeyAlias,
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
+val explicitReleasePackagingRequested = gradle.startParameter.taskNames.any { requestedTask ->
+    requestedTask.substringAfterLast(':') in setOf("assembleRelease", "bundleRelease", "packageRelease")
+}
+check(!explicitReleasePackagingRequested || hasReleaseSigning) {
+    "Release packaging requires ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD"
+}
 
 android {
     namespace = "net.koalastuff.koalacast"
 
     defaultConfig {
         applicationId = "net.koalastuff.koalacast"
-        versionCode = 36
-        versionName = "0.10.1"
+        versionCode = 37
+        versionName = "0.10.2"
     }
 
     signingConfigs {
@@ -47,10 +53,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // A local release remains installable with the debug key. CI requires
-            // all four release-signing variables and therefore selects production.
             signingConfig = signingConfigs.findByName("production")
-                ?: signingConfigs.getByName("debug")
         }
     }
 
@@ -59,6 +62,27 @@ android {
             "/META-INF/{AL2.0,LGPL2.1}",
             "/META-INF/DEPENDENCIES",
         )
+    }
+}
+
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    doLast {
+        val missingSigningVariables = listOf(
+            "ANDROID_KEYSTORE_FILE",
+            "ANDROID_KEYSTORE_PASSWORD",
+            "ANDROID_KEY_ALIAS",
+            "ANDROID_KEY_PASSWORD",
+        ).filter { System.getenv(it).isNullOrBlank() }
+        check(missingSigningVariables.isEmpty()) {
+            "Release packaging requires ${missingSigningVariables.joinToString(", ")}"
+        }
+    }
+}
+
+// Fail before compilation/minification, while retaining direct-task protection.
+tasks.configureEach {
+    if (name in setOf("preReleaseBuild", "assembleRelease", "bundleRelease", "packageRelease")) {
+        dependsOn(verifyReleaseSigning)
     }
 }
 

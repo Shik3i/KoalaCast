@@ -9,6 +9,8 @@ export interface LocalSubscription {
 	title: string;
 	artwork_url: string;
 	added_at: number;
+	/** Last local metadata mutation; unlike added_at this changes for folder/inbox edits. */
+	updated_at?: number;
 	// Controls how this show appears in the New/Inbox feed: 'all' lists every
 	// recent episode, 'latest' only the single newest one (ideal for hourly news
 	// shows that would otherwise flood the feed). Defaults to 'all' when unset.
@@ -31,6 +33,15 @@ export interface LocalPlaybackState {
 	enclosure_url?: string;
 	duration_ms?: number;
 	categories?: string[];
+	event_type?: 'PROGRESS_TICK' | 'SEEK' | 'RESTART' | 'MARK_PLAYED' | 'MARK_UNPLAYED';
+	playback_session_id?: string;
+	per_session_seq?: number;
+}
+
+let lastLocalMutationAt = 0;
+function nextLocalMutationAt(previous = 0): number {
+	lastLocalMutationAt = Math.max(Date.now(), previous + 1, lastLocalMutationAt + 1);
+	return lastLocalMutationAt;
 }
 
 // Fine-grained listening telemetry. Each record covers one uninterrupted play
@@ -367,6 +378,7 @@ export async function saveLocalSubscription(sub: LocalSubscription): Promise<voi
 	const existing = (await db.get('subscriptions', sub.podcast_id)) as LocalSubscription | undefined;
 	await db.put('subscriptions', {
 		...sub,
+		updated_at: sub.updated_at || sub.added_at || Date.now(),
 		folder: sub.folder ?? existing?.folder ?? ''
 	});
 	// Re-subscribing clears any prior deletion tombstone.
@@ -378,7 +390,10 @@ export async function saveLocalSubscriptions(subscriptions: LocalSubscription[])
 	const db = await getLocalDB();
 	const tx = db.transaction(['subscriptions', 'tombstones'], 'readwrite');
 	for (const sub of subscriptions) {
-		tx.objectStore('subscriptions').put({ ...sub });
+		tx.objectStore('subscriptions').put({
+			...sub,
+			updated_at: sub.updated_at || sub.added_at || Date.now()
+		});
 		tx.objectStore('tombstones').delete(tombstoneId('subscription', sub.podcast_id));
 	}
 	await tx.done;
@@ -400,6 +415,7 @@ export async function setSubscriptionInboxMode(
 	const sub = (await db.get('subscriptions', podcast_id)) as LocalSubscription | undefined;
 	if (!sub) return;
 	sub.inbox_mode = mode;
+	sub.updated_at = nextLocalMutationAt(sub.updated_at || sub.added_at || 0);
 	await db.put('subscriptions', sub);
 }
 
@@ -447,7 +463,10 @@ export async function setEpisodePlayed(
 		position_ms: played ? existing?.position_ms ?? 0 : 0,
 		completed: played,
 		progress_percent: played ? 100 : 0,
-		last_played_at: Date.now(),
+		last_played_at: nextLocalMutationAt(existing?.last_played_at || 0),
+		event_type: played ? 'MARK_PLAYED' : 'MARK_UNPLAYED',
+		playback_session_id: `manual:${crypto.randomUUID()}`,
+		per_session_seq: 1,
 		title: meta.title ?? existing?.title,
 		podcast_title: meta.podcast_title ?? existing?.podcast_title,
 		artwork_url: meta.artwork_url ?? existing?.artwork_url,
@@ -464,7 +483,6 @@ export async function setEpisodesPlayed(
 	if (episodes.length === 0) return;
 	const db = await getLocalDB();
 	const tx = db.transaction('playback_states', 'readwrite');
-	const now = Date.now();
 	for (const meta of episodes) {
 		const existing = (await tx.store.get(meta.episode_id)) as LocalPlaybackState | undefined;
 		await tx.store.put({
@@ -474,7 +492,10 @@ export async function setEpisodesPlayed(
 			position_ms: played ? existing?.position_ms ?? 0 : 0,
 			completed: played,
 			progress_percent: played ? 100 : 0,
-			last_played_at: now,
+			last_played_at: nextLocalMutationAt(existing?.last_played_at || 0),
+			event_type: played ? 'MARK_PLAYED' : 'MARK_UNPLAYED',
+			playback_session_id: `manual:${crypto.randomUUID()}`,
+			per_session_seq: 1,
 			title: meta.title ?? existing?.title,
 			podcast_title: meta.podcast_title ?? existing?.podcast_title,
 			artwork_url: meta.artwork_url ?? existing?.artwork_url,
@@ -652,7 +673,11 @@ export async function setLocalSubscriptionFolder(
 	const db = await getLocalDB();
 	const sub = (await db.get('subscriptions', podcast_id)) as LocalSubscription | undefined;
 	if (!sub) return;
-	await db.put('subscriptions', { ...sub, folder: folder.trim() });
+	await db.put('subscriptions', {
+		...sub,
+		folder: folder.trim(),
+		updated_at: nextLocalMutationAt(sub.updated_at || sub.added_at || 0)
+	});
 }
 
 // Timestamp bookmarks are local-first and scoped by the active guest/account
@@ -856,16 +881,16 @@ function validateLocalSyncSnapshot(snapshot: LocalSyncSnapshot): void {
 
 export async function replaceLocalSyncSnapshot(
 	snapshot: LocalSyncSnapshot,
-	pushWatermark: number
+	pushWatermarks: Record<string, number>
 ): Promise<void> {
 	validateLocalSyncSnapshot(snapshot);
 	const db = await getLocalDB();
 	const pendingSubscriptions = (await db.getAll('subscriptions') as LocalSubscription[])
-		.filter((item) => item.added_at > pushWatermark);
+		.filter((item) => (item.updated_at || item.added_at) > (pushWatermarks.subscription || 0));
 	const pendingFavorites = (await db.getAll('favorites') as LocalFavorite[])
-		.filter((item) => item.added_at > pushWatermark);
+		.filter((item) => item.added_at > (pushWatermarks.favorite || 0));
 	const pendingTombstones = (await db.getAll('tombstones') as LocalTombstone[])
-		.filter((item) => item.deleted_at > pushWatermark);
+		.filter((item) => item.deleted_at > (pushWatermarks[item.entity_type] || 0));
 	const stores = [
 		'subscriptions',
 		'favorites',

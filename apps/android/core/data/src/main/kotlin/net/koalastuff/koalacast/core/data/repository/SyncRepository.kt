@@ -206,13 +206,16 @@ class SyncRepository @Inject constructor(
         ) {
             throw IOException("sync snapshot contains invalid records")
         }
-        val pushWatermark = store.pushWatermark(userId)
+        val subscriptionWatermark = store.pushWatermark(userId, "subscription")
+        val favoriteWatermark = store.pushWatermark(userId, "favorite")
         database.withTransaction {
             ensureGeneration(generation)
             val localFolders = subscriptions.getAll().associate { it.podcastId to it.folder }
-            val pendingSubscriptions = subscriptions.getAll().filter { it.addedAt > pushWatermark }
-            val pendingFavorites = favorites.getAll().filter { it.addedAt > pushWatermark }
-            val pendingTombstones = tombstones.getAll().filter { it.deletedAt > pushWatermark }
+            val pendingSubscriptions = subscriptions.getAll().filter { it.updatedAt > subscriptionWatermark }
+            val pendingFavorites = favorites.getAll().filter { it.addedAt > favoriteWatermark }
+            val pendingTombstones = tombstones.getAll().filter {
+                it.deletedAt > store.pushWatermark(userId, it.entityType)
+            }
             subscriptions.clear()
             favorites.clear()
             queue.clear()
@@ -230,6 +233,9 @@ class SyncRepository @Inject constructor(
                         artworkUrl = payload.string("artwork_url"),
                         addedAt = payload.long("added_at").takeIf { it > 0 }
                             ?: payload.long("created_at").takeIf { it > 0 }
+                            ?: System.currentTimeMillis(),
+                        updatedAt = payload.long("updated_at").takeIf { it > 0 }
+                            ?: payload.long("added_at").takeIf { it > 0 }
                             ?: System.currentTimeMillis(),
                         inboxMode = payload.string("inbox_mode")
                             .takeIf { it == SubscriptionEntity.INBOX_MODE_LATEST }
@@ -302,12 +308,13 @@ class SyncRepository @Inject constructor(
 
     internal suspend fun push(userId: String, deviceId: String, generation: Long): List<String> {
         ensureGeneration(generation)
-        val previousWatermark = store.pushWatermark(userId)
+        val previousWatermarks = GENERAL_SYNC_ENTITIES.associateWith {
+            store.pushWatermark(userId, it)
+        }
         val previousListeningWatermark = store.listeningSessionPushWatermark(userId)
-        val nextWatermark = System.currentTimeMillis()
         val operations = pendingSyncOperations(
             operations = buildOperations(deviceId, listeningAfter = previousListeningWatermark),
-            generalWatermark = previousWatermark,
+            generalWatermarks = previousWatermarks,
             listeningWatermark = previousListeningWatermark,
         )
         // The newest session actually in this push, not the clock. Sessions are
@@ -326,7 +333,14 @@ class SyncRepository @Inject constructor(
             pushBatch(batch, generation, rejected)
         }
 
-        store.setPushWatermark(userId, nextWatermark)
+        val nextWatermarks = previousWatermarks.toMutableMap()
+        operations.filter { it.entityType != "listening_session" }.forEach { operation ->
+            nextWatermarks[operation.entityType] = maxOf(
+                nextWatermarks[operation.entityType] ?: 0,
+                operation.clientTimestamp,
+            )
+        }
+        store.setPushWatermarks(userId, nextWatermarks)
         store.setListeningSessionPushWatermark(userId, nextListeningWatermark)
         // Cursor deliberately stays unchanged. The next pull re-reads our own
         // idempotent operations so a concurrent device cannot be skipped.
@@ -383,11 +397,11 @@ class SyncRepository @Inject constructor(
         subscriptions.getAll().forEach { item ->
             if (item.podcastId == item.feedUrl) return@forEach
             operations += operation(
-                id = "s:${item.podcastId}:${item.addedAt}",
+                id = "s:${item.podcastId}:${item.updatedAt}",
                 deviceId = deviceId,
                 type = "subscription",
                 entityId = item.podcastId,
-                timestamp = item.addedAt,
+                timestamp = item.updatedAt,
                 payload = subscriptionPayload(item),
             )
         }
@@ -752,6 +766,9 @@ class SyncRepository @Inject constructor(
         enclosureUrl = payload.string("enclosure_url").ifBlank { null },
         durationMs = payload.longOrNull("duration_ms"),
         categories = payload.strings("categories"),
+        eventType = payload.string("event_type").ifBlank { "PROGRESS_TICK" },
+        playbackSessionId = payload.string("playback_session_id"),
+        perSessionSeq = payload.long("per_session_seq"),
     )
 
     private fun listeningEntity(
@@ -792,6 +809,7 @@ class SyncRepository @Inject constructor(
         put("title", item.title)
         put("artwork_url", item.artworkUrl)
         put("added_at", item.addedAt)
+        put("updated_at", item.updatedAt)
         put("inbox_mode", item.inboxMode)
         put("folder", item.folder)
     }
@@ -821,10 +839,10 @@ class SyncRepository @Inject constructor(
         nullable("enclosure_url", item.enclosureUrl)
         item.durationMs?.let { put("duration_ms", it) }
         put("categories", JsonArray(item.categories.map(::JsonPrimitive)))
-        put("event_type", "PROGRESS_TICK")
-        put("playback_session_id", "")
+        put("event_type", item.eventType)
+        put("playback_session_id", item.playbackSessionId.ifBlank { "sync:$deviceId:${item.episodeId}" })
         put("device_id", deviceId)
-        put("per_session_seq", 0)
+        put("per_session_seq", item.perSessionSeq.takeIf { it > 0 } ?: item.lastPlayedAt)
         put("client_timestamp", item.lastPlayedAt)
     }
 
@@ -983,17 +1001,25 @@ class SyncRepository @Inject constructor(
         const val PAGE_LIMIT = 500
         const val PUSH_BATCH = 250
         const val MAX_SYNCED_DOWNLOAD_BUDGET_BYTES = 10L * 1024 * 1024 * 1024
+        val GENERAL_SYNC_ENTITIES = setOf(
+            "subscription",
+            "favorite",
+            "playback_state",
+            "queue",
+            "podcast_settings",
+            "settings",
+        )
     }
 }
 
 internal fun pendingSyncOperations(
     operations: List<SyncOperationDto>,
-    generalWatermark: Long,
+    generalWatermarks: Map<String, Long>,
     listeningWatermark: Long,
 ): List<SyncOperationDto> = operations.filter { operation ->
     operation.clientTimestamp > if (operation.entityType == "listening_session") {
         listeningWatermark
     } else {
-        generalWatermark
+        generalWatermarks[operation.entityType] ?: 0
     }
 }

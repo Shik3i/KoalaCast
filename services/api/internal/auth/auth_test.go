@@ -30,6 +30,14 @@ func TestArgon2PasswordHashing(t *testing.T) {
 	}
 }
 
+func TestArgon2RejectsUnsafeEncodedParameters(t *testing.T) {
+	encoded := "$argon2id$v=19$m=4294967295,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	match, err := VerifyPassword("password", encoded)
+	if err == nil || match {
+		t.Fatalf("expected unsafe parameters to be rejected, got match=%v err=%v", match, err)
+	}
+}
+
 func TestPepperPasswordHashing(t *testing.T) {
 	// 1. Create a legacy unpeppered hash
 	SetPepper("")

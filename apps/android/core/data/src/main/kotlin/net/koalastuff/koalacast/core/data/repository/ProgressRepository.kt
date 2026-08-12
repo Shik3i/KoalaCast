@@ -14,6 +14,9 @@ import net.koalastuff.koalacast.core.model.PlaybackProgress
 import net.koalastuff.koalacast.core.model.Track
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Playback position and the listening telemetry behind the Profile screen. Both
@@ -29,6 +32,8 @@ class ProgressRepository @Inject constructor(
     private val listeningSessions: ListeningSessionDao,
     private val clock: Clock,
 ) {
+    private data class SyncSession(val id: String, val sequence: AtomicLong)
+    private val syncSessions = ConcurrentHashMap<String, SyncSession>()
 
     val inProgress: Flow<List<PlaybackProgress>> =
         playbackStates.observeInProgress().map { list -> list.map { it.toModel() } }
@@ -73,6 +78,10 @@ class ProgressRepository @Inject constructor(
         }
 
         val isCompleted = percent >= COMPLETION_THRESHOLD_PERCENT
+        val existing = playbackStates.get(track.episodeId)
+        val session = syncSessions.computeIfAbsent(track.episodeId) {
+            SyncSession(UUID.randomUUID().toString(), AtomicLong(0))
+        }
         playbackStates.upsert(
             PlaybackStateEntity(
                 episodeId = track.episodeId,
@@ -80,13 +89,16 @@ class ProgressRepository @Inject constructor(
                 positionMs = positionMs.coerceAtLeast(0),
                 completed = isCompleted,
                 progressPercent = percent,
-                lastPlayedAt = clock.nowMs(),
+                lastPlayedAt = maxOf(clock.nowMs(), (existing?.lastPlayedAt ?: 0) + 1),
                 title = track.title,
                 podcastTitle = track.podcastTitle,
                 artworkUrl = track.artworkUrl,
                 enclosureUrl = track.enclosureUrl,
                 durationMs = effectiveDuration,
                 categories = track.categories,
+                eventType = "PROGRESS_TICK",
+                playbackSessionId = session.id,
+                perSessionSeq = session.sequence.incrementAndGet(),
             ),
         )
 
@@ -99,6 +111,7 @@ class ProgressRepository @Inject constructor(
      */
     suspend fun setPlayed(track: Track, played: Boolean) {
         val existing = playbackStates.get(track.episodeId)
+        val timestamp = maxOf(clock.nowMs(), (existing?.lastPlayedAt ?: 0) + 1)
         playbackStates.upsert(
             PlaybackStateEntity(
                 episodeId = track.episodeId,
@@ -106,13 +119,16 @@ class ProgressRepository @Inject constructor(
                 positionMs = if (played) existing?.positionMs ?: 0L else 0L,
                 completed = played,
                 progressPercent = if (played) 100 else 0,
-                lastPlayedAt = clock.nowMs(),
+                lastPlayedAt = timestamp,
                 title = track.title.ifBlank { existing?.title.orEmpty() },
                 podcastTitle = track.podcastTitle.ifBlank { existing?.podcastTitle.orEmpty() },
                 artworkUrl = track.artworkUrl.ifBlank { existing?.artworkUrl.orEmpty() },
                 enclosureUrl = track.enclosureUrl.ifBlank { existing?.enclosureUrl.orEmpty() },
                 durationMs = track.durationMs.takeIf { it > 0 } ?: existing?.durationMs,
                 categories = track.categories.ifEmpty { existing?.categories ?: emptyList() },
+                eventType = if (played) "MARK_PLAYED" else "MARK_UNPLAYED",
+                playbackSessionId = "manual:${UUID.randomUUID()}",
+                perSessionSeq = 1,
             ),
         )
     }

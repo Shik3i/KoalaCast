@@ -57,7 +57,8 @@ func TestOpenDB_RepairsPartialGlobalStatisticsMigration(t *testing.T) {
 			('000003_episode_transcripts.up.sql',0),
 			('000004_sync_log_compaction_index.up.sql',0),
 			('000005_listening_sessions.up.sql',0),
-			('000007_episode_chapters.up.sql',0)
+			('000007_episode_chapters.up.sql',0),
+			('000011_sync_hardening.up.sql',0)
 	`); err != nil {
 		t.Fatal(err)
 	}

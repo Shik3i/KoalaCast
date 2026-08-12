@@ -154,11 +154,17 @@
 
 	let lastFetchedTrack = '';
 	let chaptersGeneration = 0;
+	let progressSessionEpisode = '';
+	let progressSessionId = '';
+	let progressSessionSeq = 0;
+	let progressTimestamp = 0;
 	$effect(() => {
 		const currentTrack = track;
+		void player.playToken;
 		const generation = ++chaptersGeneration;
 		const controller = new AbortController();
 		if (!currentTrack) {
+			lastFetchedTrack = '';
 			chapters = [];
 			transcriptCues = [];
 			return () => controller.abort();
@@ -170,6 +176,7 @@
 			.then((res) => (res.ok ? res.json() : null))
 			.then((epData) => {
 				if (generation !== chaptersGeneration || track?.episode_id !== currentTrack.episode_id) return;
+				if (!epData) lastFetchedTrack = '';
 				if (epData && epData.chapters_url) {
 					fetchChapters(epData.chapters_url, currentTrack.episode_id, generation, controller.signal);
 				} else {
@@ -183,7 +190,10 @@
 				}
 			})
 			.catch((error) => {
-				if (error?.name !== 'AbortError' && generation === chaptersGeneration) chapters = [];
+				if (error?.name !== 'AbortError' && track?.episode_id === currentTrack.episode_id) {
+					chapters = [];
+					lastFetchedTrack = '';
+				}
 			});
 		return () => controller.abort();
 	});
@@ -204,9 +214,13 @@
 				chapters = data.chapters || [];
 			} else {
 				chapters = [];
+				lastFetchedTrack = '';
 			}
 		} catch (error: any) {
-			if (error?.name !== 'AbortError' && generation === chaptersGeneration) chapters = [];
+			if (error?.name !== 'AbortError' && generation === chaptersGeneration) {
+				chapters = [];
+				lastFetchedTrack = '';
+			}
 		} finally {
 			if (generation === chaptersGeneration) loadingChapters = false;
 		}
@@ -340,6 +354,7 @@
 		return null;
 	}
 
+	let sourceSwitchController: AbortController | null = null;
 	async function switchAudioSource(source: string, crossOrigin: boolean): Promise<boolean> {
 		if (!audioEl) return false;
 		const element = audioEl;
@@ -347,6 +362,9 @@
 		const resolved = new URL(source, location.href).href;
 		const expectedCrossOrigin = crossOrigin ? 'anonymous' : null;
 		if (current === resolved && element.crossOrigin === expectedCrossOrigin) return true;
+		sourceSwitchController?.abort();
+		const switchController = new AbortController();
+		sourceSwitchController = switchController;
 
 		const resumeAt = Number.isFinite(element.currentTime) ? element.currentTime : 0;
 		const wasPlaying = !element.paused;
@@ -359,10 +377,15 @@
 			const cleanup = () => {
 				element.removeEventListener('loadedmetadata', onReady);
 				element.removeEventListener('error', onError);
+				switchController.signal.removeEventListener('abort', onAbort);
 			};
 			const onReady = () => {
 				cleanup();
-				resolve(true);
+				resolve((element.currentSrc || element.src) === resolved && audioEl === element);
+			};
+			const onAbort = () => {
+				cleanup();
+				resolve(false);
 			};
 			const onError = () => {
 				cleanup();
@@ -370,9 +393,11 @@
 			};
 			element.addEventListener('loadedmetadata', onReady, { once: true });
 			element.addEventListener('error', onError, { once: true });
+			switchController.signal.addEventListener('abort', onAbort, { once: true });
 			element.load();
 		});
-		if (!ready) return false;
+		if (sourceSwitchController === switchController) sourceSwitchController = null;
+		if (!ready || switchController.signal.aborted || audioEl !== element || (element.currentSrc || element.src) !== resolved) return false;
 		if (resumeAt > 0 && Number.isFinite(element.duration)) {
 			element.currentTime = Math.min(resumeAt, Math.max(0, element.duration - 0.1));
 		}
@@ -463,17 +488,20 @@
 		visualizerPeaks = new Array(VISUALIZER_BANDS).fill(0);
 	}
 
-	// Redrawn at the display's refresh rate, not on a timer. A 50 ms interval is
-	// three frames on a 60 Hz screen and six on a 120 Hz one, which is exactly the
-	// stepping that made every bar look like it was catching up with the audio.
+	// Drive scheduling with requestAnimationFrame but publish at 30 FPS. Faster
+	// panels otherwise doubled/quadrupled the per-frame array allocation rate with
+	// no useful extra information for a speech visualiser.
 	$effect(() => {
 		if (!audioEl || !isPlaying || prefs.visualizer === 'off') {
 			resetVisualizer();
 			return;
 		}
 		let frame = 0;
-		const tick = () => {
+		let lastPaintAt = 0;
+		const tick = (timestamp: number) => {
 			frame = requestAnimationFrame(tick);
+			if (timestamp - lastPaintAt < 1000 / 30) return;
+			lastPaintAt = timestamp;
 			const level = audioEngine.getLevel();
 			// Speech sits far below full scale; without the lift the bars would
 			// spend the whole episode in the bottom fifth of the track.
@@ -913,13 +941,23 @@
 		const completionTailMs = Math.min(120_000, dur * 0.1);
 		const isCompleted = forceCompleted || (hasDuration && (remMs < completionTailMs || pct > 95));
 
-			await saveLocalPlaybackState({
+		if (progressSessionEpisode !== track.episode_id) {
+			progressSessionEpisode = track.episode_id;
+			progressSessionId = crypto.randomUUID();
+			progressSessionSeq = 0;
+		}
+		progressSessionSeq += 1;
+		progressTimestamp = Math.max(Date.now(), progressTimestamp + 1);
+		await saveLocalPlaybackState({
 			episode_id: track.episode_id,
 			podcast_id: track.podcast_id,
 			position_ms: currentTimeMs,
 			completed: isCompleted,
 			progress_percent: pct,
-			last_played_at: Date.now(),
+			last_played_at: progressTimestamp,
+			event_type: eventType as 'PROGRESS_TICK' | 'SEEK' | 'RESTART' | 'MARK_PLAYED' | 'MARK_UNPLAYED',
+			playback_session_id: progressSessionId,
+			per_session_seq: progressSessionSeq,
 			// Denormalized so the "Continue Listening" shelf can render + resume
 			// without another fetch.
 			title: track.title,

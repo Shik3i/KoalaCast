@@ -5,6 +5,22 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: {
+		csp: {
+			mode: 'hash',
+			directives: {
+				'default-src': ['self'],
+				'base-uri': ['self'],
+				'object-src': ['none'],
+				'frame-ancestors': ['none'],
+				'form-action': ['self'],
+				'script-src': ['self'],
+				'style-src': ['self', 'unsafe-inline'],
+				'img-src': ['self', 'data:', 'https:', 'http:'],
+				'media-src': ['self', 'https:', 'http:'],
+				'font-src': ['self'],
+				'connect-src': ['self', 'https:', 'http:']
+			}
+		},
 		// The icon subset keeps the complete shell CSS below 70 KiB. Inlining that
 		// critical shell removes the only render-blocking request while the
 		// compressed document remains small.

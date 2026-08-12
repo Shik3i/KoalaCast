@@ -275,14 +275,16 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 
 	if resp.StatusCode == http.StatusNotModified {
 		// 304 Not Modified -> Schedule next fetch with exponential backoff
-		_, _ = w.db.SQL.ExecContext(ctx, `
+		if _, err := w.db.SQL.ExecContext(ctx, `
 			UPDATE podcasts
 			SET last_fetch_attempt_at = ?,
 				next_scheduled_fetch_at = ?,
 				consecutive_error_count = 0,
 				last_error_category = ''
 			WHERE id = ?
-		`, nowMs, nowMs+86400000, podcastID)
+		`, nowMs, nowMs+86400000, podcastID); err != nil {
+			return fmt.Errorf("record not-modified feed refresh: %w", err)
+		}
 		return nil
 	}
 
@@ -439,7 +441,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 func (w *FeedWorker) updateFeedError(podcastID, category string, httpStatus int, errorMsg string) {
 	nowMs := time.Now().UnixMilli()
 	// Exponential backoff multiplier
-	_, _ = w.db.SQL.Exec(`
+	if _, err := w.db.SQL.Exec(`
 		UPDATE podcasts
 		SET last_fetch_attempt_at = ?,
 			consecutive_error_count = consecutive_error_count + 1,
@@ -452,5 +454,7 @@ func (w *FeedWorker) updateFeedError(podcastID, category string, httpStatus int,
 				END
 			) * 3600000
 		WHERE id = ?
-	`, nowMs, category, httpStatus, nowMs, podcastID)
+	`, nowMs, category, httpStatus, nowMs, podcastID); err != nil {
+		w.logger.Warn("failed to record feed refresh error", "podcast_id", podcastID, "error", err)
+	}
 }

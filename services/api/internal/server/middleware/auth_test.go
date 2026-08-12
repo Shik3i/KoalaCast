@@ -79,3 +79,39 @@ func TestDeviceToken_RejectedWhenExpired(t *testing.T) {
 		t.Errorf("expected expired device token to be rejected, got user=%v", user)
 	}
 }
+
+func TestDeviceToken_ThrottlesActivityWrites(t *testing.T) {
+	database := newTestDB(t)
+	token := "throttled-token-123"
+	seedUserAndDeviceToken(t, database, token, time.Now().UnixMilli()+3600_000)
+
+	var seeded int64
+	if err := database.SQL.QueryRow("SELECT last_sync_at FROM device_credentials WHERE id = 'd1'").Scan(&seeded); err != nil {
+		t.Fatalf("read seeded timestamp: %v", err)
+	}
+	if _, err := AuthenticateRequest(requestWithBearer(token), database); err != nil {
+		t.Fatalf("authenticate recent credential: %v", err)
+	}
+	var unchanged int64
+	if err := database.SQL.QueryRow("SELECT last_sync_at FROM device_credentials WHERE id = 'd1'").Scan(&unchanged); err != nil {
+		t.Fatalf("read unchanged timestamp: %v", err)
+	}
+	if unchanged != seeded {
+		t.Fatalf("recent authentication wrote last_sync_at: got %d, want %d", unchanged, seeded)
+	}
+
+	old := time.Now().Add(-authActivityWriteInterval - time.Minute).UnixMilli()
+	if _, err := database.SQL.Exec("UPDATE device_credentials SET last_sync_at = ? WHERE id = 'd1'", old); err != nil {
+		t.Fatalf("age credential: %v", err)
+	}
+	if _, err := AuthenticateRequest(requestWithBearer(token), database); err != nil {
+		t.Fatalf("authenticate stale credential: %v", err)
+	}
+	var refreshed int64
+	if err := database.SQL.QueryRow("SELECT last_sync_at FROM device_credentials WHERE id = 'd1'").Scan(&refreshed); err != nil {
+		t.Fatalf("read refreshed timestamp: %v", err)
+	}
+	if refreshed <= old {
+		t.Fatalf("stale authentication did not refresh last_sync_at: got %d, old %d", refreshed, old)
+	}
+}

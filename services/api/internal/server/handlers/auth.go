@@ -37,6 +37,14 @@ type RecoveryVerifyRequest struct {
 	NewPassword  string `json:"new_password"`
 }
 
+func randomToken() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw), nil
+}
+
 func (h *AuthHandler) IsRegistrationEnabled(r *http.Request) bool {
 	// 1. Environment Enforced Override Takes Top Priority
 	if h.Config.RegistrationEnabledEnv != nil {
@@ -202,9 +210,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate Random Session Token
-	rawTokenBytes := make([]byte, 32)
-	_, _ = rand.Read(rawTokenBytes)
-	rawToken := hex.EncodeToString(rawTokenBytes)
+	rawToken, err := randomToken()
+	if err != nil {
+		http.Error(w, `{"error":"failed to create session token"}`, http.StatusInternalServerError)
+		return
+	}
 
 	tokenHashBytes := sha256.Sum256([]byte(rawToken))
 	tokenHash := hex.EncodeToString(tokenHashBytes[:])
@@ -236,7 +246,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Unix(expiresAtMs/1000, 0),
 		HttpOnly: true,
 		Secure:   h.Config.SecureCookies,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	w.Header().Set("Content-Type", "application/json")
@@ -256,6 +266,14 @@ func (h *AuthHandler) DeviceLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	normalizedUsername := strings.ToLower(strings.TrimSpace(req.Username))
+	req.DeviceID = strings.TrimSpace(req.DeviceID)
+	req.DeviceName = strings.TrimSpace(req.DeviceName)
+	req.ClientType = strings.ToLower(strings.TrimSpace(req.ClientType))
+	if len(req.DeviceID) > 128 || len(req.DeviceName) > 128 ||
+		(req.ClientType != "android" && req.ClientType != "web") {
+		http.Error(w, `{"error":"invalid device metadata"}`, http.StatusBadRequest)
+		return
+	}
 
 	var userID, username, pwdHash, role string
 	var isSuspended int
@@ -288,25 +306,38 @@ func (h *AuthHandler) DeviceLogin(w http.ResponseWriter, r *http.Request) {
 		req.DeviceName = "Native Client"
 	}
 
-	rawTokenBytes := make([]byte, 32)
-	_, _ = rand.Read(rawTokenBytes)
-	rawToken := hex.EncodeToString(rawTokenBytes)
+	rawToken, err := randomToken()
+	if err != nil {
+		http.Error(w, `{"error":"failed to create device token"}`, http.StatusInternalServerError)
+		return
+	}
 
 	tokenHashBytes := sha256.Sum256([]byte(rawToken))
 	tokenHash := hex.EncodeToString(tokenHashBytes[:])
 
 	nowMs := time.Now().UnixMilli()
 
-	// Revoke existing device token if present for this device_id
-	_, _ = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM device_credentials WHERE user_id = ? AND device_id = ?", userID, req.DeviceID)
-
 	deviceID := uuid.New().String()
 	expiresAtMs := nowMs + (90 * 86400 * 1000) // 90 days
-	_, err = h.DB.SQL.ExecContext(r.Context(), `
+	tx, err := h.DB.SQL.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, `{"error":"failed to issue device credentials"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(r.Context(), "DELETE FROM device_credentials WHERE user_id = ? AND device_id = ?", userID, req.DeviceID); err != nil {
+		http.Error(w, `{"error":"failed to issue device credentials"}`, http.StatusInternalServerError)
+		return
+	}
+	_, err = tx.ExecContext(r.Context(), `
 		INSERT INTO device_credentials (id, user_id, device_id, name, token_hash, client_type, client_schema_version, created_at, last_sync_at, is_revoked, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 0, ?)
 	`, deviceID, userID, req.DeviceID, req.DeviceName, tokenHash, req.ClientType, nowMs, nowMs, expiresAtMs)
 	if err != nil {
+		http.Error(w, `{"error":"failed to issue device credentials"}`, http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		http.Error(w, `{"error":"failed to issue device credentials"}`, http.StatusInternalServerError)
 		return
 	}
@@ -323,15 +354,20 @@ func (h *AuthHandler) DeviceLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	authUser := customMiddleware.GetAuthUser(r.Context())
+	var err error
 	if authUser != nil && authUser.SessionID != "" {
 		// Web client: drop the browser session row.
-		_, _ = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE id = ?", authUser.SessionID)
+		_, err = h.DB.SQL.ExecContext(r.Context(), "DELETE FROM sessions WHERE id = ?", authUser.SessionID)
 	} else if authUser != nil && authUser.DeviceID != "" {
 		// Native client (Bearer device token): revoke this device's credential so
 		// the token stops working immediately instead of lingering until expiry.
-		_, _ = h.DB.SQL.ExecContext(r.Context(),
+		_, err = h.DB.SQL.ExecContext(r.Context(),
 			"DELETE FROM device_credentials WHERE user_id = ? AND device_id = ?",
 			authUser.ID, authUser.DeviceID)
+	}
+	if err != nil {
+		http.Error(w, `{"error":"failed to revoke session"}`, http.StatusInternalServerError)
+		return
 	}
 
 	// Clear session cookie
@@ -342,7 +378,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
 		Secure:   h.Config.SecureCookies,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	w.Header().Set("Content-Type", "application/json")

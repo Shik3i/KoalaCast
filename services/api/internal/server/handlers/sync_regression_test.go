@@ -127,8 +127,8 @@ func TestSyncPushRollsBackWholeBatchOnMaterializationError(t *testing.T) {
 
 func TestSyncLedgerSurvivesCompactionAndPreventsReplay(t *testing.T) {
 	handler, database, authCtx := newSyncTestHandler(t)
-	upsert := `{"operations":[{"client_op_id":"sub-upsert","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{}}]}`
-	deleteOp := `{"operations":[{"client_op_id":"sub-delete","device_id":"dev","entity_type":"subscription","action":"delete","entity_id":"pod-1","payload":{}}]}`
+	upsert := `{"operations":[{"client_op_id":"sub-upsert","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{},"client_timestamp":1}]}`
+	deleteOp := `{"operations":[{"client_op_id":"sub-delete","device_id":"dev","entity_type":"subscription","action":"delete","entity_id":"pod-1","payload":{},"client_timestamp":2}]}`
 	if rec := pushSync(t, handler, authCtx, upsert); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body.String())
 	}
@@ -148,6 +148,33 @@ func TestSyncLedgerSurvivesCompactionAndPreventsReplay(t *testing.T) {
 	}
 	if deleted != 1 {
 		t.Fatal("compacted operation replay resurrected deleted subscription")
+	}
+}
+
+func TestSyncMetadataConflictsUseTimestampThenDeviceID(t *testing.T) {
+	handler, database, authCtx := newSyncTestHandler(t)
+	operations := []string{
+		`{"operations":[{"client_op_id":"sub-a","device_id":"dev-a","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{},"client_timestamp":100}]}`,
+		`{"operations":[{"client_op_id":"sub-z","device_id":"dev-z","entity_type":"subscription","action":"delete","entity_id":"pod-1","payload":{},"client_timestamp":100}]}`,
+		`{"operations":[{"client_op_id":"sub-a-retry","device_id":"dev-a","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{},"client_timestamp":100}]}`,
+		`{"operations":[{"client_op_id":"fav-new","device_id":"dev-a","entity_type":"favorite","action":"upsert","entity_id":"ep-1","payload":{},"client_timestamp":200}]}`,
+		`{"operations":[{"client_op_id":"fav-stale","device_id":"dev-z","entity_type":"favorite","action":"delete","entity_id":"ep-1","payload":{},"client_timestamp":199}]}`,
+	}
+	for _, body := range operations {
+		if rec := pushSync(t, handler, authCtx, body); rec.Code != http.StatusOK {
+			t.Fatalf("push failed: %d %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	var subscriptionDeleted, favoriteDeleted int
+	if err := database.SQL.QueryRow(`SELECT is_deleted FROM subscriptions WHERE user_id='u1' AND podcast_id='pod-1'`).Scan(&subscriptionDeleted); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.SQL.QueryRow(`SELECT is_deleted FROM favorites WHERE user_id='u1' AND episode_id='ep-1'`).Scan(&favoriteDeleted); err != nil {
+		t.Fatal(err)
+	}
+	if subscriptionDeleted != 1 || favoriteDeleted != 0 {
+		t.Fatalf("non-deterministic metadata conflict: subscription_deleted=%d favorite_deleted=%d", subscriptionDeleted, favoriteDeleted)
 	}
 }
 

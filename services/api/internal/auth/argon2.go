@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,9 +10,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/sync/semaphore"
 )
+
+const argon2QueueTimeout = 5 * time.Second
+const fallbackDummyHash = "$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 type Argon2Params struct {
 	Memory      uint32
@@ -32,7 +38,11 @@ var DefaultArgon2Params = Argon2Params{
 var (
 	pepperMu  sync.RWMutex
 	pepperKey []byte
-	dummyHash = mustDummyHash()
+	// Each Argon2id invocation reserves 64 MiB. Bound concurrent login/register
+	// work independently of the per-IP limiter so a distributed attempt cannot
+	// exhaust the process heap.
+	argon2Slots = semaphore.NewWeighted(2)
+	dummyHash   = mustDummyHash()
 )
 
 // SetPepper configures the global server pepper key. If secret is non-empty,
@@ -44,7 +54,9 @@ func SetPepper(secret string) {
 
 	// Compute a fresh dummyHash with the new pepper outside of pepperMu to avoid deadlocks.
 	buf := make([]byte, 16)
-	_, _ = rand.Read(buf)
+	if _, err := rand.Read(buf); err != nil {
+		return
+	}
 	if h, err := HashPassword(base64.RawStdEncoding.EncodeToString(buf)); err == nil {
 		pepperMu.Lock()
 		dummyHash = h
@@ -71,11 +83,13 @@ func preparePassword(password string) []byte {
 // real verification, closing the user-enumeration timing side channel.
 func mustDummyHash() string {
 	buf := make([]byte, 16)
-	_, _ = rand.Read(buf)
+	if _, err := rand.Read(buf); err != nil {
+		return fallbackDummyHash
+	}
 	h, err := HashPassword(base64.RawStdEncoding.EncodeToString(buf))
 	if err != nil {
 		// Fall back to a static valid hash; the goal is timing parity, not secrecy.
-		return "$argon2id$v=19$m=65536,t=3,p=2$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+		return fallbackDummyHash
 	}
 	return h
 }
@@ -90,6 +104,13 @@ func DummyVerify(password string) {
 }
 
 func HashPassword(password string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), argon2QueueTimeout)
+	defer cancel()
+	if err := argon2Slots.Acquire(ctx, 1); err != nil {
+		return "", fmt.Errorf("failed to reserve password hashing capacity: %w", err)
+	}
+	defer argon2Slots.Release(1)
+
 	params := DefaultArgon2Params
 	salt := make([]byte, params.SaltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -137,6 +158,18 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	}
 
 	params.KeyLength = uint32(len(decodedHash))
+	if params.Memory == 0 || params.Memory > DefaultArgon2Params.Memory ||
+		params.Iterations == 0 || params.Iterations > DefaultArgon2Params.Iterations ||
+		params.Parallelism == 0 || params.Parallelism > DefaultArgon2Params.Parallelism ||
+		params.KeyLength == 0 || params.KeyLength > 64 {
+		return false, fmt.Errorf("unsafe argon2 parameters")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), argon2QueueTimeout)
+	defer cancel()
+	if err := argon2Slots.Acquire(ctx, 1); err != nil {
+		return false, fmt.Errorf("failed to reserve password verification capacity: %w", err)
+	}
+	defer argon2Slots.Release(1)
 
 	// 1. Primary check: verify using active pepper (or raw if pepper is empty)
 	pwBytes := preparePassword(password)

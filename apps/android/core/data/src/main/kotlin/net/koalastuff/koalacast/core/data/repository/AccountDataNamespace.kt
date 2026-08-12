@@ -33,6 +33,9 @@ class AccountDataNamespace @Inject constructor(
 ) {
     private val mutex = Mutex()
 
+    /** Serialises worker DAO writes with archive/restore account switches. */
+    suspend fun <T> withDataLock(block: suspend () -> T): T = mutex.withLock { block() }
+
     suspend fun initialize(ownerId: String, legacyUserId: String? = null) {
         val mustSwitch = mutex.withLock {
             database.withTransaction {

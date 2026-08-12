@@ -782,6 +782,7 @@
 		"sizeUnknown": "{received} geladen · Gesamtgröße unbekannt",
 		"errorNoAudio": "Diese Folge hat keine Audiodatei",
 		"errorCors": "Der Anbieter erlaubt keine Downloads im Browser",
+		"errorBudget": "Die Folge überschreitet das festgelegte Download-Limit",
 		"errorHttp": "Der Server hat mit {status} geantwortet",
 		"budgetLabel": "Download-Budget",
 		"budgetUsage": "Budget: {used} von {budget}"

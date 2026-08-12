@@ -23,6 +23,7 @@ data class SubscriptionEntity(
     val title: String,
     val artworkUrl: String,
     val addedAt: Long,
+    val updatedAt: Long = addedAt,
     /**
      * How this show appears in the inbox: `all` lists every recent episode,
      * `latest` only the newest one — which is what makes an hourly news show
@@ -63,6 +64,9 @@ data class PlaybackStateEntity(
     val enclosureUrl: String? = null,
     val durationMs: Long? = null,
     val categories: List<String> = emptyList(),
+    val eventType: String = "PROGRESS_TICK",
+    val playbackSessionId: String = "",
+    val perSessionSeq: Long = 0,
 )
 
 @Entity(tableName = "queue", indices = [Index("positionOrder"), Index(value = ["episodeId"], unique = true)])

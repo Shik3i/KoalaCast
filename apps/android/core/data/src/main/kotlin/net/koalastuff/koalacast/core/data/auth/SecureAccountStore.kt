@@ -130,6 +130,22 @@ class SecureAccountStore @Inject constructor(
         prefs.edit { putLong(scopedKey("push_watermark", userId), timestamp.coerceAtLeast(0)) }
     }
 
+    fun pushWatermark(userId: String, entityType: String): Long {
+        val key = scopedKey("push_watermark_v2_$entityType", userId)
+        if (prefs.contains(key)) return prefs.getLong(key, 0)
+        // Metadata edits were invisible to the legacy subscription watermark;
+        // force one full subscription upload during migration.
+        return if (entityType == "subscription") 0 else pushWatermark(userId)
+    }
+
+    fun setPushWatermarks(userId: String, values: Map<String, Long>) {
+        prefs.edit {
+            values.forEach { (entityType, timestamp) ->
+                putLong(scopedKey("push_watermark_v2_$entityType", userId), timestamp.coerceAtLeast(0))
+            }
+        }
+    }
+
     /**
      * Listening telemetry was added after the general sync watermark. Keeping a
      * separate watermark lets upgraded installations backfill older sessions

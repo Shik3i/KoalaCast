@@ -1,6 +1,11 @@
 package db
 
-import "context"
+import (
+	"context"
+	"time"
+)
+
+const syncOperationLedgerRetention = 30 * 24 * time.Hour
 
 // CompactSyncLog bounds the append-only sync_log by deleting every entry that has
 // been superseded by a newer one for the same (user, entity_type, entity_id).
@@ -15,15 +20,42 @@ import "context"
 //
 // Without it, high-frequency PROGRESS_TICK updates would grow the log unbounded.
 func (db *DB) CompactSyncLog(ctx context.Context) (int64, error) {
-	res, err := db.SQL.ExecContext(ctx, `
+	tx, err := db.SQL.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `
 		DELETE FROM sync_log
-		WHERE id NOT IN (
-			SELECT MAX(id) FROM sync_log GROUP BY user_id, entity_type, entity_id
+		WHERE id IN (
+			SELECT id FROM (
+				SELECT id, ROW_NUMBER() OVER (
+					PARTITION BY user_id, entity_type, entity_id
+					ORDER BY
+						CASE WHEN entity_type = 'playback_state' THEN server_cursor END DESC,
+						CASE WHEN entity_type <> 'playback_state' THEN client_timestamp END DESC,
+						CASE WHEN entity_type <> 'playback_state' THEN device_id END DESC,
+						server_cursor DESC,
+						id DESC
+				) AS conflict_rank
+				FROM sync_log
+			) WHERE conflict_rank > 1
 		)
 	`)
 	if err != nil {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
+	// Idempotency only needs to outlive every realistic offline retry. Keeping a
+	// rolling month prevents an authenticated client from growing this table
+	// forever with unique operation IDs.
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM processed_sync_operations WHERE processed_at < ?
+	`, time.Now().Add(-syncOperationLedgerRetention).UnixMilli()); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
 	return n, nil
 }

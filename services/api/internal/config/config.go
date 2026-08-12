@@ -99,7 +99,9 @@ func LoadConfig() (*Config, error) {
 		if appEnv == "development" || appEnv == "dev" {
 			// Generate ephemeral development secret
 			randomBytes := make([]byte, 32)
-			_, _ = rand.Read(randomBytes)
+			if _, err := rand.Read(randomBytes); err != nil {
+				return nil, fmt.Errorf("generate development SESSION_SECRET: %w", err)
+			}
 			cfg.SessionSecret = hex.EncodeToString(randomBytes)
 			slog.Warn("SESSION_SECRET is unset in development mode; generated ephemeral runtime secret")
 		} else {

@@ -171,6 +171,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		})
 
 		// Authenticated Routes
+		syncLimiter := customMiddleware.NewRateLimiter(240, 1*time.Minute)
 		r.Group(func(r chi.Router) {
 			r.Use(customMiddleware.AuthRequired(database))
 
@@ -190,10 +191,10 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Delete("/push/subscriptions", pushHandler.Unsubscribe)
 
 			// Cross-Device Sync Engine
-			r.Get("/sync", syncHandler.Pull)
-			r.Get("/sync/snapshot", syncHandler.Snapshot)
-			r.Post("/sync", syncHandler.Push)
-			r.Post("/sync/merge", syncHandler.MergeLocalData)
+			r.With(syncLimiter.LimitAuthenticated).Get("/sync", syncHandler.Pull)
+			r.With(syncLimiter.LimitAuthenticated).Get("/sync/snapshot", syncHandler.Snapshot)
+			r.With(syncLimiter.LimitAuthenticated).Post("/sync", syncHandler.Push)
+			r.With(syncLimiter.LimitAuthenticated).Post("/sync/merge", syncHandler.MergeLocalData)
 
 			// OPML export reads the account's server-side subscriptions (local-first
 			// clients generate their OPML on-device instead).

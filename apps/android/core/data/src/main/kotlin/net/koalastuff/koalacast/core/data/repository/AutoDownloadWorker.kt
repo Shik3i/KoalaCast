@@ -54,9 +54,11 @@ class AutoDownloadWorker @AssistedInject constructor(
     private val preferences: PreferencesRepository,
     private val clock: Clock,
     private val accountStore: SecureAccountStore,
+    private val appReadiness: AppReadiness,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        appReadiness.await()
         val ownerId = accountStore.activeOwnerId()
         val generation = accountStore.accountGeneration()
         val prefs = preferences.preferences.first()

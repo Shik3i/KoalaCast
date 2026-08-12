@@ -74,6 +74,17 @@ interface Changeset {
 	server_cursor: number;
 }
 
+type GeneralSyncEntity = Exclude<SyncOperation['entity_type'], 'listening_session'>;
+type PushWatermarks = Record<GeneralSyncEntity, number>;
+const GENERAL_SYNC_ENTITIES: GeneralSyncEntity[] = [
+	'subscription',
+	'favorite',
+	'playback_state',
+	'queue',
+	'podcast_settings',
+	'settings'
+];
+
 function deviceId(): string {
 	if (typeof localStorage === 'undefined') return 'ssr';
 	let id = localStorage.getItem('koalacast_device_id');
@@ -135,9 +146,30 @@ class SyncStore {
 			return 0;
 		}
 	}
-	#setPushWatermark(userId: string, value: number) {
+	#pushWatermarksKey(userId: string): string {
+		return `koalacast_sync_push_watermarks_v2_${userId}`;
+	}
+	#getPushWatermarks(userId: string): PushWatermarks {
+		const legacy = this.#getPushWatermark(userId);
+		const fallback = Object.fromEntries(
+			GENERAL_SYNC_ENTITIES.map((entity) => [entity, entity === 'subscription' ? 0 : legacy])
+		) as PushWatermarks;
 		try {
-			localStorage.setItem(this.#pushWatermarkKey(userId), String(value));
+			const parsed = JSON.parse(localStorage.getItem(this.#pushWatermarksKey(userId)) || 'null');
+			if (!parsed || typeof parsed !== 'object') return fallback;
+			return Object.fromEntries(
+				GENERAL_SYNC_ENTITIES.map((entity) => [
+					entity,
+					Number.isFinite(parsed[entity]) ? Math.max(0, Number(parsed[entity])) : fallback[entity]
+				])
+			) as PushWatermarks;
+		} catch {
+			return fallback;
+		}
+	}
+	#setPushWatermarks(userId: string, value: PushWatermarks) {
+		try {
+			localStorage.setItem(this.#pushWatermarksKey(userId), JSON.stringify(value));
 		} catch {
 			/* ignore */
 		}
@@ -309,7 +341,7 @@ class SyncStore {
 		const snapshot = await res.json();
 		this.#assertRun(userId, generation, signal);
 		if (!Number.isFinite(snapshot.cursor)) throw new Error('sync snapshot missing cursor');
-		await replaceLocalSyncSnapshot(snapshot, this.#getPushWatermark(userId));
+		await replaceLocalSyncSnapshot(snapshot, this.#getPushWatermarks(userId));
 		const queuePayloads = Array.isArray(snapshot.queue) ? snapshot.queue : [];
 		if (queuePayloads.length === 0) {
 			await replaceLocalQueueFromSync([], 0, { authoritative: true });
@@ -335,29 +367,29 @@ class SyncStore {
 	async #push(userId: string, generation: number, signal: AbortSignal): Promise<void> {
 		const dev = deviceId();
 		const ops: SyncOperation[] = [];
-		const previousWatermark = this.#getPushWatermark(userId);
-		const nextWatermark = Date.now();
+		const previousWatermarks = this.#getPushWatermarks(userId);
 
 		const subs = await getLocalSubscriptions();
 		for (const s of subs) {
 			// OPML imports are resolved lazily on first open. Their feed URL is
 			// only a local placeholder, not a valid server-side podcast id.
 			if (s.podcast_id === s.feed_url) continue;
-			if (s.added_at <= previousWatermark) continue;
+			const updatedAt = s.updated_at || s.added_at;
+			if (updatedAt <= previousWatermarks.subscription) continue;
 			ops.push({
-				client_op_id: `s:${s.podcast_id}:${s.added_at}`,
+				client_op_id: `s:${s.podcast_id}:${updatedAt}`,
 				device_id: dev,
 				entity_type: 'subscription',
 				action: 'upsert',
 				entity_id: s.podcast_id,
 				payload: s satisfies LocalSubscription,
-				client_timestamp: s.added_at
+				client_timestamp: updatedAt
 			});
 		}
 
 		const favs = await getLocalFavorites();
 		for (const f of favs) {
-			if (f.added_at <= previousWatermark) continue;
+			if (f.added_at <= previousWatermarks.favorite) continue;
 			ops.push({
 				client_op_id: `f:${f.episode_id}:${f.added_at}`,
 				device_id: dev,
@@ -371,7 +403,7 @@ class SyncStore {
 
 		const states = await getAllLocalPlaybackStates();
 		for (const p of states) {
-			if (p.last_played_at <= previousWatermark) continue;
+			if (p.last_played_at <= previousWatermarks.playback_state) continue;
 			ops.push({
 				client_op_id: `p:${p.episode_id}:${p.last_played_at}`,
 				device_id: dev,
@@ -382,10 +414,10 @@ class SyncStore {
 				// other devices on pull (so they get title/artwork without a refetch).
 				payload: {
 					...p,
-					event_type: 'PROGRESS_TICK',
-					playback_session_id: '',
+					event_type: p.event_type || 'PROGRESS_TICK',
+					playback_session_id: p.playback_session_id || `sync:${dev}:${p.episode_id}`,
 					device_id: dev,
-					per_session_seq: 0,
+					per_session_seq: p.per_session_seq || p.last_played_at,
 					client_timestamp: p.last_played_at
 				},
 				client_timestamp: p.last_played_at
@@ -411,7 +443,7 @@ class SyncStore {
 		}
 
 		const queueUpdatedAt = await getLocalQueueUpdatedAt();
-		if (queueUpdatedAt > previousWatermark) {
+		if (queueUpdatedAt > previousWatermarks.queue) {
 			ops.push({
 				client_op_id: `q:main:${queueUpdatedAt}`,
 				device_id: dev,
@@ -423,7 +455,7 @@ class SyncStore {
 			});
 		}
 
-		if (prefs.updatedAt > previousWatermark) {
+		if (prefs.updatedAt > previousWatermarks.settings) {
 			ops.push({
 				client_op_id: `g:global:${prefs.updatedAt}`,
 				device_id: dev,
@@ -436,7 +468,7 @@ class SyncStore {
 		}
 
 		for (const setting of getAllPodcastPlaybackSettings()) {
-			if (setting.updatedAt <= previousWatermark) continue;
+			if (setting.updatedAt <= previousWatermarks.podcast_settings) continue;
 			const { podcastId, ...payload } = setting;
 			ops.push({
 				client_op_id: `ps:${podcastId}:${setting.updatedAt}`,
@@ -452,7 +484,7 @@ class SyncStore {
 		const tombstones = await getTombstones();
 		for (const t of tombstones) {
 			if (t.entity_type !== 'subscription' && t.entity_type !== 'favorite') continue;
-			if (t.deleted_at <= previousWatermark) continue;
+			if (t.deleted_at <= previousWatermarks[t.entity_type]) continue;
 			ops.push({
 				client_op_id: `d:${t.entity_type}:${t.entity_id}:${t.deleted_at}`,
 				device_id: dev,
@@ -465,7 +497,6 @@ class SyncStore {
 		}
 
 		if (ops.length === 0) {
-			this.#setPushWatermark(userId, nextWatermark);
 			return;
 		}
 
@@ -485,7 +516,15 @@ class SyncStore {
 			}
 			this.#setSessionWatermarks(userId, sessionWatermarks);
 		}
-		this.#setPushWatermark(userId, nextWatermark);
+		const nextWatermarks = { ...previousWatermarks };
+		for (const op of ops) {
+			if (op.entity_type === 'listening_session') continue;
+			nextWatermarks[op.entity_type] = Math.max(
+				nextWatermarks[op.entity_type],
+				op.client_timestamp
+			);
+		}
+		this.#setPushWatermarks(userId, nextWatermarks);
 		// Deliberately do NOT advance the cursor here: letting the next pull re-read
 		// our own ops (idempotent) avoids skipping a concurrent device's ops that
 		// landed at a lower cursor.
@@ -528,6 +567,7 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 				title: p.title || 'Podcast',
 				artwork_url: p.artwork_url || '',
 				added_at: p.added_at || cs.client_timestamp || Date.now(),
+				updated_at: p.updated_at || cs.client_timestamp || p.added_at || Date.now(),
 				inbox_mode: p.inbox_mode,
 				folder: p.folder
 			});
@@ -575,7 +615,10 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 			artwork_url: p.artwork_url,
 			enclosure_url: p.enclosure_url,
 			duration_ms: p.duration_ms,
-			categories: p.categories
+			categories: p.categories,
+			event_type: p.event_type,
+			playback_session_id: p.playback_session_id,
+			per_session_seq: p.per_session_seq
 		});
 	} else if (cs.entity_type === 'listening_session') {
 		if (isDelete) return;

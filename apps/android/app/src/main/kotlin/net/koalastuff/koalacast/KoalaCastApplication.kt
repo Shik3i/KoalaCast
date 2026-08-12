@@ -19,6 +19,7 @@ import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -30,15 +31,16 @@ import net.koalastuff.koalacast.core.data.repository.ContentRefreshWorker
 import net.koalastuff.koalacast.core.data.repository.SyncCoordinator
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.AccountDataNamespace
+import net.koalastuff.koalacast.core.data.repository.AppReadiness
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import kotlin.math.roundToInt
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 
 @HiltAndroidApp
 class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * The same client the API uses, so artwork requests inherit its timeouts and — for
@@ -71,6 +73,9 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
     @Inject
     lateinit var preferences: PreferencesRepository
 
+    @Inject
+    lateinit var appReadiness: AppReadiness
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -83,7 +88,7 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
         // here makes the route button usable before playback starts; failures are
         // non-fatal on devices without Google Play services.
         runCatching { Cast.getSingletonInstance(this).initialize() }
-        runBlocking(Dispatchers.IO) {
+        applicationScope.launch {
             accountStore.setServerOrigin(preferences.serverUrl.first())
             val account = accountStore.account.value
             val ownerId = accountStore.activeOwnerId()
@@ -93,16 +98,13 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
                 preferences.migrateUserScope(it.userId, ownerId)
             }
             preferences.migrateLegacyForCurrentOwner()
-        }
-        syncCoordinator.start()
-        // Idempotent (KEEP policy), so registering on every start costs nothing
-        // and survives a reboot or an app update clearing the schedule.
-        AutoDownloadWorker.schedule(this)
-        ContentRefreshWorker.schedule(this)
-        // Launcher-side cache; refreshing at start is soon enough for something
-        // the listener reaches before the app is open.
-        CoroutineScope(Dispatchers.IO).launch { appShortcuts.refresh() }
-        CoroutineScope(Dispatchers.IO).launch {
+            appReadiness.markReady()
+            syncCoordinator.start()
+            // Idempotent (KEEP policy), so registering on every start costs nothing
+            // and survives a reboot or an app update clearing the schedule.
+            AutoDownloadWorker.schedule(this@KoalaCastApplication)
+            ContentRefreshWorker.schedule(this@KoalaCastApplication)
+            appShortcuts.refresh()
             library.allSubscriptions
                 .map { subscriptions ->
                     subscriptions.map { it.artworkUrl }.filter(String::isNotBlank).distinct()

@@ -39,6 +39,22 @@ export async function removeAudioDownload(episodeId: string): Promise<void> {
 	await cache.delete(offlineAudioPath(episodeId));
 }
 
+export async function purgeAudioDownloadsForOwner(owner: string | null): Promise<void> {
+	if (typeof caches === 'undefined') return;
+	await caches.delete(audioDownloadCacheName(owner));
+}
+
+export async function purgeAudioDownloadsExcept(owner: string | null): Promise<void> {
+	if (typeof caches === 'undefined') return;
+	const keep = audioDownloadCacheName(owner);
+	const names = await caches.keys();
+	await Promise.all(
+		names
+			.filter((name) => name.startsWith(`${AUDIO_DOWNLOAD_CACHE_PREFIX}-`) && name !== keep)
+			.map((name) => caches.delete(name))
+	);
+}
+
 export async function resolveOfflineAudioUrl(
 	episodeId: string,
 	fallbackUrl: string

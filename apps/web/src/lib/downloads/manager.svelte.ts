@@ -4,6 +4,8 @@ import {
 	migrateGuestAudioDownloads,
 	offlineAudioPath,
 	purgeAllAudioDownloads,
+	purgeAudioDownloadsForOwner,
+	purgeAudioDownloadsExcept,
 	removeAudioDownload
 } from '$lib/downloads/offline-audio';
 import {
@@ -12,6 +14,7 @@ import {
 } from '$lib/audio/source';
 import { prefs } from '$lib/stores/prefs.svelte';
 import { getLocalPlaybackState } from '$lib/idb/db';
+import { blocksWifiOnlyAutoDownload, type NetworkConnectionInfo } from '$lib/downloads/policy';
 
 export type DownloadState = 'queued' | 'downloading' | 'downloaded' | 'cancelled' | 'failed';
 
@@ -51,23 +54,20 @@ let audioProxyEnabledPromise: Promise<boolean> | null = null;
 export const DOWNLOAD_ERROR = {
 	noAudioUrl: 'no-audio-url',
 	corsBlocked: 'cors-blocked',
+	budgetExceeded: 'budget-exceeded',
 	http: 'http-'
 } as const;
 
 /**
- * True when the connection is known to be metered. The Network Information API
- * is the only signal a browser offers, and it is absent on iOS and desktop
- * Safari — there "WLAN only" can be no stricter than "not a slow cellular link
- * and not data-saver", which is what the checks below express.
+ * True unless the connection is known to be non-cellular. When the Network
+ * Information API is absent, an automatic transfer cannot honestly guarantee
+ * "Wi-Fi only", so it waits for a manual download instead.
  */
 function onMeteredConnection(): boolean {
 	const connection = (navigator as Navigator & {
-		connection?: { saveData?: boolean; effectiveType?: string; type?: string };
+		connection?: NetworkConnectionInfo;
 	}).connection;
-	if (!connection) return false;
-	if (connection.saveData) return true;
-	if (connection.type) return connection.type === 'cellular';
-	return connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g';
+	return blocksWifiOnlyAutoDownload(connection);
 }
 
 function audioProxyEnabled(): Promise<boolean> {
@@ -93,6 +93,7 @@ class AudioDownloadManager {
 	private generation = 0;
 	private activeTransfers = 0;
 	private waiting: Array<() => void> = [];
+	private reservations = new Map<string, { bytes: number; generation: number }>();
 	private persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 	/**
@@ -137,6 +138,8 @@ class AudioDownloadManager {
 		this.generation += 1;
 		for (const controller of this.controllers.values()) controller.abort();
 		this.controllers.clear();
+		this.reservations.clear();
+		const previousOwner = this.activeOwner;
 		if (
 			userId &&
 			options.migrateGuest &&
@@ -157,8 +160,15 @@ class AudioDownloadManager {
 			}
 			localStorage.setItem(GUEST_MIGRATION_KEY, '1');
 		}
+		if (previousOwner !== null && previousOwner !== userId) {
+			await purgeAudioDownloadsForOwner(previousOwner);
+			try {
+				localStorage.removeItem(this.storageKey(previousOwner));
+			} catch (_) {}
+		}
 		this.activeOwner = userId;
 		activateOfflineAudioContext(userId);
+		await purgeAudioDownloadsExcept(userId);
 		this.items = [];
 		this.loaded = false;
 		await this.load();
@@ -257,12 +267,17 @@ class AudioDownloadManager {
 				throw new Error(`${DOWNLOAD_ERROR.http}${response.status}`);
 			}
 			const totalBytes = Number(response.headers.get('content-length')) || 0;
+			const allowedBytes = await this.reserveBudget(request.episode_id, totalBytes, generation);
 			let bytesDownloaded = 0;
 			let lastPublishedAt = 0;
 			this.patch(request.episode_id, { totalBytes });
 			const progressStream = new TransformStream<Uint8Array, Uint8Array>({
 				transform: (chunk, streamController) => {
 					bytesDownloaded += chunk.byteLength;
+					if (bytesDownloaded > allowedBytes) {
+						streamController.error(new Error(DOWNLOAD_ERROR.budgetExceeded));
+						return;
+					}
 					if (performance.now() - lastPublishedAt >= 200) {
 						lastPublishedAt = performance.now();
 						this.patch(request.episode_id, { bytesDownloaded, totalBytes });
@@ -295,12 +310,50 @@ class AudioDownloadManager {
 			});
 			if (!cancelled) throw error;
 		} finally {
+			const reservation = this.reservations.get(request.episode_id);
+			if (reservation?.generation === generation) this.reservations.delete(request.episode_id);
 			this.releaseSlot();
 			if (generation === this.generation) {
 				this.controllers.delete(request.episode_id);
 				await this.refreshStorage();
 			}
 		}
+	}
+
+	private async reserveBudget(
+		episodeId: string,
+		totalBytes: number,
+		generation: number
+	): Promise<number> {
+		const budgetBytes = prefs.downloadBudgetBytes;
+		if (!budgetBytes || budgetBytes <= 0) return Number.POSITIVE_INFINITY;
+		if (totalBytes > budgetBytes) throw new Error(DOWNLOAD_ERROR.budgetExceeded);
+		const reservedByOthers = [...this.reservations.entries()]
+			.filter(([id]) => id !== episodeId)
+			.reduce((sum, [, reservation]) => sum + reservation.bytes, 0);
+		let used = this.items
+			.filter((item) => item.episodeId !== episodeId && item.state === 'downloaded')
+			.reduce((sum, item) => sum + item.bytesDownloaded, 0);
+		const requested = totalBytes > 0
+			? totalBytes
+			: Math.max(0, budgetBytes - used - reservedByOthers);
+		this.reservations.set(episodeId, { bytes: requested, generation });
+		if (totalBytes > 0) {
+			const oldestFirst = this.items
+				.filter((item) => item.episodeId !== episodeId && item.state === 'downloaded')
+				.sort((a, b) => a.updatedAt - b.updatedAt);
+			for (const item of oldestFirst) {
+				if (used + reservedByOthers + requested <= budgetBytes) break;
+				used -= item.bytesDownloaded;
+				await this.remove(item.episodeId);
+			}
+		}
+		const available = Math.max(0, budgetBytes - used - reservedByOthers);
+		if (requested <= 0 || requested > available) {
+			this.reservations.delete(episodeId);
+			throw new Error(DOWNLOAD_ERROR.budgetExceeded);
+		}
+		return requested;
 	}
 
 	async startAuto(request: DownloadRequest): Promise<boolean> {
@@ -380,9 +433,11 @@ class AudioDownloadManager {
 
 	/** Cancels everything in flight and removes every stored file, for every owner. */
 	async clearAll() {
+		this.generation += 1;
 		for (const controller of this.controllers.values()) controller.abort();
 		this.controllers.clear();
 		this.waiting = [];
+		this.reservations.clear();
 		this.items = [];
 		this.persist();
 		await purgeAllAudioDownloads();

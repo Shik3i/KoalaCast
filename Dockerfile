@@ -15,7 +15,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.6.1@sha256:923441d7c25f1e2eb5789f
 # Pinned to BUILDPLATFORM and built exactly once: the output is a bundle of
 # static files with no architecture-specific content, so building it per target
 # platform was pure waste.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS builder-web
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS builder-web
 WORKDIR /app
 RUN npm install --global npm@11.16.0
 COPY apps/web/package.json apps/web/package-lock.json* ./
@@ -28,7 +28,7 @@ RUN npm run build
 # Runs on the native architecture and cross-compiles to the target. CGO is
 # required for the SQLite driver, so a target-matched C toolchain is installed
 # via xx rather than emulating the whole build.
-FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine AS builder-api
+FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder-api
 COPY --from=xx / /
 RUN apk add --no-cache clang lld
 ARG TARGETPLATFORM
@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build,id=go-build-$TARGETPLATFORM 
     xx-verify koalacast
 
 # Stage 3: Minimal runtime image
-FROM alpine:3.21 AS runner
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS runner
 RUN apk add --no-cache ca-certificates sqlite-libs tzdata wget
 
 WORKDIR /app

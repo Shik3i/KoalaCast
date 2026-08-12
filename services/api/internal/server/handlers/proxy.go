@@ -14,6 +14,7 @@ import (
 	"image/jpeg"
 	_ "image/png"
 	"io"
+	"math/big"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -100,6 +101,7 @@ type ProxyHandler struct {
 	memCache          *MemoryLRUCache
 	requestGroup      singleflight.Group
 	audioProxyEnabled bool
+	audioSlots        chan struct{}
 }
 
 func NewProxyHandler(audioProxyEnabled bool) *ProxyHandler {
@@ -118,6 +120,7 @@ func NewProxyHandler(audioProxyEnabled bool) *ProxyHandler {
 		// Bounded 100 MB In-Memory RAM LRU cache
 		memCache:          NewMemoryLRUCache(100 * 1024 * 1024),
 		audioProxyEnabled: audioProxyEnabled,
+		audioSlots:        make(chan struct{}, 16),
 	}
 }
 
@@ -134,6 +137,8 @@ const maxDecodedPixels = 40 * 1000 * 1000
 // gives DNS, TLS and the first upstream response a realistic window.
 const imageProxyTimeout = 8 * time.Second
 const maxAudioDownloadBytes = int64(2 * 1024 * 1024 * 1024)
+const maxAudioStreamDuration = 4 * time.Hour
+const audioStreamIdleTimeout = 45 * time.Second
 
 // A redirect chain plus one ranged byte. Generous enough for a cold CDN, short
 // enough that the client can fall back rather than stall before playback.
@@ -166,22 +171,33 @@ func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
 		return
 	}
+	rangeHeader := strings.TrimSpace(r.Header.Get("Range"))
+	if rangeHeader != "" && !validAudioRange(rangeHeader) {
+		w.Header().Set("Content-Range", "bytes */"+strconv.FormatInt(maxAudioDownloadBytes, 10))
+		http.Error(w, `{"error":"invalid or oversized byte range"}`, http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+	select {
+	case h.audioSlots <- struct{}{}:
+		defer func() { <-h.audioSlots }()
+	default:
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, `{"error":"audio proxy is at capacity"}`, http.StatusServiceUnavailable)
+		return
+	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, rawURL, nil)
+	streamContext, cancel := context.WithTimeout(r.Context(), maxAudioStreamDuration)
+	defer cancel()
+	req, err := http.NewRequestWithContext(streamContext, http.MethodGet, rawURL, nil)
 	if err != nil {
 		http.Error(w, `{"error":"invalid url"}`, http.StatusBadRequest)
 		return
 	}
 	req.Header.Set("User-Agent", "KoalaCast/1.0 Podcast Player")
 	req.Header.Set("Accept", "audio/*,application/octet-stream;q=0.8")
-	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
+	if rangeHeader != "" {
 		req.Header.Set("Range", rangeHeader)
 	}
-
-	// The server-wide write deadline is appropriate for JSON handlers but would
-	// terminate a normal podcast stream. Keep connect/TLS/header deadlines in the
-	// SSRF-safe client and allow response bytes to stream until client cancellation.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
 	resp, err := h.streamClient.Do(req)
 	if err != nil {
@@ -197,7 +213,14 @@ func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"audio file exceeds 2 GiB limit"}`, http.StatusRequestEntityTooLarge)
 		return
 	}
-	if resp.ContentLength < 0 && r.Header.Get("Range") == "" {
+	if resp.StatusCode == http.StatusPartialContent {
+		total, ok := audioContentRangeTotal(resp.Header.Get("Content-Range"))
+		if !ok || total > maxAudioDownloadBytes {
+			http.Error(w, `{"error":"invalid or oversized upstream content range"}`, http.StatusBadGateway)
+			return
+		}
+	}
+	if resp.ContentLength < 0 && rangeHeader == "" {
 		http.Error(w, `{"error":"audio size is unknown"}`, http.StatusBadGateway)
 		return
 	}
@@ -213,7 +236,80 @@ func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(resp.StatusCode)
 	if r.Method != http.MethodHead {
-		_, _ = io.Copy(w, io.LimitReader(resp.Body, maxAudioDownloadBytes+1))
+		_ = copyAudioStream(w, resp.Body, maxAudioDownloadBytes)
+	}
+}
+
+var audioRangePattern = regexp.MustCompile(`^bytes=(\d*)-(\d*)$`)
+var audioContentRangePattern = regexp.MustCompile(`^bytes \d+-\d+/(\d+)$`)
+
+func validAudioRange(value string) bool {
+	match := audioRangePattern.FindStringSubmatch(value)
+	if match == nil || (match[1] == "" && match[2] == "") {
+		return false
+	}
+	start, startOK := new(big.Int).SetString(match[1], 10)
+	end, endOK := new(big.Int).SetString(match[2], 10)
+	limit := big.NewInt(maxAudioDownloadBytes)
+	if match[1] == "" {
+		return endOK && end.Sign() > 0 && end.Cmp(limit) <= 0
+	}
+	if !startOK || start.Sign() < 0 || start.Cmp(limit) >= 0 {
+		return false
+	}
+	if match[2] == "" {
+		return true
+	}
+	if !endOK || end.Cmp(start) < 0 || end.Cmp(limit) >= 0 {
+		return false
+	}
+	length := new(big.Int).Sub(end, start)
+	length.Add(length, big.NewInt(1))
+	return length.Cmp(limit) <= 0
+}
+
+func audioContentRangeTotal(value string) (int64, bool) {
+	match := audioContentRangePattern.FindStringSubmatch(strings.TrimSpace(value))
+	if match == nil {
+		return 0, false
+	}
+	total, err := strconv.ParseInt(match[1], 10, 64)
+	return total, err == nil && total > 0
+}
+
+func copyAudioStream(w http.ResponseWriter, body io.ReadCloser, limit int64) error {
+	controller := http.NewResponseController(w)
+	buffer := make([]byte, 256*1024)
+	var written int64
+	for {
+		idleExpired := make(chan struct{}, 1)
+		timer := time.AfterFunc(audioStreamIdleTimeout, func() {
+			idleExpired <- struct{}{}
+			_ = body.Close()
+		})
+		n, readErr := body.Read(buffer)
+		timer.Stop()
+		select {
+		case <-idleExpired:
+			return fmt.Errorf("audio upstream idle timeout")
+		default:
+		}
+		if n > 0 {
+			written += int64(n)
+			if written > limit {
+				return fmt.Errorf("audio stream exceeded size limit")
+			}
+			_ = controller.SetWriteDeadline(time.Now().Add(audioStreamIdleTimeout))
+			if _, err := w.Write(buffer[:n]); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				return nil
+			}
+			return readErr
+		}
 	}
 }
 
@@ -448,10 +544,9 @@ func (h *ProxyHandler) GetChapters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limitReader := io.LimitReader(resp.Body, 2*1024*1024)
-	bodyBytes, err := io.ReadAll(limitReader)
+	bodyBytes, err := readLimitedBody(resp.Body, 2*1024*1024)
 	if err != nil {
-		http.Error(w, `{"error":"failed to read chapters response"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"chapters response exceeds 2 MiB limit"}`, http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -505,10 +600,9 @@ func (h *ProxyHandler) GetTranscript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limitReader := io.LimitReader(resp.Body, 5*1024*1024)
-	bodyBytes, err := io.ReadAll(limitReader)
+	bodyBytes, err := readLimitedBody(resp.Body, 5*1024*1024)
 	if err != nil {
-		http.Error(w, `{"error":"failed to read transcript response"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"transcript response exceeds 5 MiB limit"}`, http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -524,6 +618,17 @@ func (h *ProxyHandler) GetTranscript(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_ = json.NewEncoder(w).Encode(map[string]any{"cues": parsedCues})
+}
+
+func readLimitedBody(reader io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("response exceeds %d byte limit", limit)
+	}
+	return body, nil
 }
 
 type CueItem struct {
