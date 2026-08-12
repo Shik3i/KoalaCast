@@ -117,10 +117,9 @@ class KoalaCastWidgetProvider : AppWidgetProvider() {
         val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
         preferences.getString(KEY_TOGGLE_TOKEN, null)?.let { return it }
         val token = UUID.randomUUID().toString()
-        // commit(), not apply(): the playback service reads this token from another
-        // process to authenticate its state broadcasts, and an update that has not
-        // reached disk yet would be rejected.
-        preferences.edit().putString(KEY_TOGGLE_TOKEN, token).commit()
+        // apply() updates this process' in-memory SharedPreferences immediately;
+        // the service is not assigned to a separate Android process.
+        preferences.edit().putString(KEY_TOGGLE_TOKEN, token).apply()
         return token
     }
 

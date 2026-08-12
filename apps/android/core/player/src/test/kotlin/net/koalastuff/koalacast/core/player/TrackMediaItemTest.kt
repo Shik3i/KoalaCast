@@ -41,4 +41,12 @@ class TrackMediaItemTest {
             TrackMediaItem.toTrack(TrackMediaItem.from(track.copy(explicit = null)))?.explicit,
         )
     }
+
+    @Test
+    fun `stops marked explicit playback as soon as preference is disabled`() {
+        assertTrue(shouldStopForExplicitPreference(explicit = true, allowed = false))
+        assertFalse(shouldStopForExplicitPreference(explicit = false, allowed = false))
+        assertFalse(shouldStopForExplicitPreference(explicit = null, allowed = false))
+        assertFalse(shouldStopForExplicitPreference(explicit = true, allowed = true))
+    }
 }

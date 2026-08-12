@@ -9,15 +9,14 @@ KoalaCast: Podcast Player
 ## Short description (80 characters max)
 
 ```
-Open-source podcast player with offline listening, no ads or analytics tracking.
+Open-source podcast player: offline listening, no ads or behavioral tracking.
 ```
 
 ## Full description (4000 characters max)
 
 ```
 KoalaCast is a private, open-source podcast player for Android. Discover,
-subscribe to, stream and download podcasts without ads, advertising trackers or
-analytics SDKs.
+subscribe to, stream and download podcasts without ads or behavioral profiling.
 
 No account is required. Your subscriptions, downloads, queue and private
 listening statistics are stored on your device by default. An optional account
@@ -69,11 +68,12 @@ https://github.com/Shik3i/KoalaCast
 ## Verification notes
 
 - App name: 25/30 characters.
-- Short description: 80/80 characters.
+- Short description: 77/80 characters.
 - Use the US-English forms `synchronize`, `favorites`, and `organized`.
-- “No analytics tracking” means no advertising or analytics SDK tracking. It
-  does not claim that optional account sync or user-requested network operations
-  never transmit data.
+- “No behavioral tracking” means no advertising profile or user-level analytics.
+  It does not claim that optional account sync, user-requested network operations,
+  or the anonymous Google Cast SDK telemetry disclosed in the privacy policy never
+  transmit data.
 - Do not claim end-to-end encryption. Transport uses HTTPS, but synchronized
   account data is not end-to-end encrypted.
 - Do not add rankings, awards, price claims, promotional calls to action,

@@ -125,7 +125,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		icon: 'ph-lock-key',
 		highlight: true,
 		paragraphs: [
-			'KoalaCast does not use third-party analytics (no Google Analytics, no Plausible/Matomo scripts), tracking cookies, advertising networks, social media embeds, or behavioral profiling. It does not use automated decision-making within the meaning of Art. 22 GDPR.'
+			'KoalaCast operates no advertising, tracking cookies, behavioral profiling, or user-level analytics. The Android app includes the Google Cast SDK, which sends encrypted, anonymous Cast interaction, device, SDK, and app metadata to Google for aggregate usage/performance analysis and defect detection. Google states that these logs contain no identifier traceable to a user and cannot be disabled or deleted by KoalaCast or the listener. The web client contains no Google Analytics, Plausible, Matomo, advertising network, or social-media embed. KoalaCast does not use automated decision-making within the meaning of Art. 22 GDPR.'
 		]
 	},
 	{

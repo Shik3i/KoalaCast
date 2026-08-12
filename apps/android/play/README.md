@@ -13,6 +13,7 @@ so the next submission does not have to reconstruct it from memory.
 | [`store-listing-import.csv`](store-listing-import.csv) | Structured EN/DE reference and translation context |
 | [`data-safety.md`](data-safety.md) | Answers for the Data safety form |
 | [`declarations.md`](declarations.md) | App access, foreground service, permissions, account deletion |
+| [`release-notes-v0.11.0.md`](release-notes-v0.11.0.md) | Play release notes, English and German |
 | [`feature-graphic.png`](feature-graphic.png) | 1024×500 feature graphic |
 | [`screenshots/`](screenshots) | Phone screenshots, 1080×1920 |
 
@@ -51,7 +52,6 @@ adb exec-out screencap -p > apps/android/play/screenshots/01-discover.png
 adb shell wm size reset && adb shell wm density reset
 ```
 
-> The New, Library and Profile captures are from a fresh install with no
-> subscriptions, so they show empty states. Before uploading, retake them on a
-> device with a few subscriptions and some listening history — an empty library
-> is an honest screenshot but a poor advertisement.
+The committed captures use a release build with a real subscription and a fixed
+demo status bar. Re-capture them whenever the visible UI changes; do not upload
+stale screenshots from an older release.

@@ -1,9 +1,8 @@
 locale,language,is_source,field,character_limit,text,translation_context
 en-US,English,true,app_name,30,"KoalaCast: Podcast Player","Keep the KoalaCast brand unchanged. Podcast Player is the single primary search descriptor. Do not add promotional claims or more keywords."
-en-US,English,true,short_description,80,"Open-source podcast player with offline listening, no ads or analytics tracking.","Natural US English. Preserve the precise distinction: no advertising or analytics tracking. Do not broaden this into a claim that optional sync never transmits data."
+en-US,English,true,short_description,80,"Open-source podcast player: offline listening, no ads or behavioral tracking.","Natural US English. Preserve the precise distinction: no advertising or behavioral tracking. Do not broaden this into a claim that optional sync or anonymous Google Cast SDK telemetry never transmits data."
 en-US,English,true,full_description,4000,"KoalaCast is a private, open-source podcast player for Android. Discover,
-subscribe to, stream and download podcasts without ads, advertising trackers or
-analytics SDKs.
+subscribe to, stream and download podcasts without ads or behavioral profiling.
 
 No account is required. Your subscriptions, downloads, queue and private
 listening statistics are stored on your device by default. An optional account
@@ -49,12 +48,11 @@ instance or host your own. A self-hosted instance provides the same capabilities
 as the official service. The lightweight server uses Go and SQLite.
 
 KoalaCast is MIT-licensed and fully open source. Source code:
-https://github.com/Shik3i/KoalaCast","Translate naturally rather than literally. Preserve KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite and the GitHub URL. Keep the account optional and the official server optional. Preserve no advertising or analytics tracking without claiming no functional data transfer. Do not add rankings, awards, prices, calls to action, competitor names, end-to-end encryption or unsupported features."
+https://github.com/Shik3i/KoalaCast","Translate naturally rather than literally. Preserve KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite and the GitHub URL. Keep the account optional and the official server optional. Preserve no advertising or behavioral tracking without claiming no functional data transfer or no anonymous Cast SDK telemetry. Do not add rankings, awards, prices, calls to action, competitor names, end-to-end encryption or unsupported features."
 de-DE,German,false,app_name,30,"KoalaCast: Podcast-Player","Markenname KoalaCast unverändert lassen. Podcast-Player ist der einzige primäre Suchbegriff. Keine Werbeaussagen oder weiteren Keywords ergänzen."
-de-DE,German,false,short_description,80,"Open-Source-Podcast-Player mit Downloads, ohne Werbung und Analyse-Tracking.","Natürliches Deutsch. Die präzise Abgrenzung bewahren: kein Werbe- oder Analyse-Tracking. Nicht zu der Aussage erweitern, optionale Synchronisierung übertrage niemals Daten."
+de-DE,German,false,short_description,80,"Open-Source-Podcast-Player mit Downloads, ohne Werbung oder Nutzer-Tracking.","Natürliches Deutsch. Die präzise Abgrenzung bewahren: keine Werbung oder nutzerbezogene Analyse. Nicht zu der Aussage erweitern, optionale Synchronisierung oder anonyme Google-Cast-SDK-Telemetrie übertrage niemals Daten."
 de-DE,German,false,full_description,4000,"KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
-abonniere, streame und lade Podcasts herunter – ohne Werbung, Werbe-Tracker oder
-Analyse-SDKs.
+abonniere, streame und lade Podcasts herunter – ohne Werbung oder Nutzerprofile.
 
 Du brauchst kein Konto. Abos, Downloads, Warteschlange und private Hörstatistiken
 werden standardmäßig auf deinem Gerät gespeichert. Ein optionales Konto ergänzt
@@ -104,4 +102,4 @@ gehostete Instanz bietet dieselben Funktionen wie der offizielle Dienst. Der
 leichtgewichtige Server verwendet Go und SQLite.
 
 KoalaCast steht unter der MIT-Lizenz und ist vollständig Open Source. Quellcode:
-https://github.com/Shik3i/KoalaCast","Bereits redaktionell geprüfte deutsche Fassung. KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite und GitHub unverändert lassen. Konto und offizieller Server bleiben optional. Kein Werbe- oder Analyse-Tracking bewahren, ohne jegliche funktionale Datenübertragung auszuschließen. Keine Rankings, Auszeichnungen, Preise, Handlungsaufforderungen, Mitbewerbernamen, Ende-zu-Ende-Verschlüsselung oder nicht vorhandenen Funktionen ergänzen."
+https://github.com/Shik3i/KoalaCast","Bereits redaktionell geprüfte deutsche Fassung. KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite und GitHub unverändert lassen. Konto und offizieller Server bleiben optional. Keine Werbung oder verhaltensbezogene Nutzeranalyse bewahren, ohne funktionale Datenübertragung oder anonyme Cast-SDK-Telemetrie auszuschließen. Keine Rankings, Auszeichnungen, Preise, Handlungsaufforderungen, Mitbewerbernamen, Ende-zu-Ende-Verschlüsselung oder nicht vorhandenen Funktionen ergänzen."

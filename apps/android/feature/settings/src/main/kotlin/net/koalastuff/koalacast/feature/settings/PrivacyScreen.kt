@@ -120,7 +120,7 @@ private val PRIVACY_SECTIONS = listOf(
     ),
     PrivacySection(
         "7. No advertising or client tracking",
-        listOf("KoalaCast uses no third-party analytics, tracking cookies, advertising networks, social embeds, behavioral profiling, or automated decision-making under Art. 22 GDPR."),
+        listOf("KoalaCast operates no advertising, tracking cookies, behavioral profiling, or user-level analytics. The Google Cast SDK sends encrypted, anonymous Cast interaction, device, SDK, and app metadata to Google for aggregate usage/performance analysis and defect detection. Google states that these logs contain no identifier traceable to a user and cannot be disabled or deleted by KoalaCast or the listener."),
     ),
     PrivacySection(
         "8. External links",

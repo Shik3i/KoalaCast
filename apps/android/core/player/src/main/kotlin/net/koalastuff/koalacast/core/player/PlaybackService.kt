@@ -55,6 +55,9 @@ import net.koalastuff.koalacast.core.model.Track
 import kotlin.math.abs
 import javax.inject.Inject
 
+internal fun shouldStopForExplicitPreference(explicit: Boolean?, allowed: Boolean): Boolean =
+    !explicit.isAllowedByExplicitPreference(allowed)
+
 /**
  * Playback lives in a service, not in a screen: audio has to keep going when the
  * app is backgrounded, the screen is off, or the listener is in the car. The
@@ -205,6 +208,16 @@ class PlaybackService : MediaLibraryService() {
         scope.launch {
             preferences.preferences.collect { prefs ->
                 val track = TrackMediaItem.toTrack(player.currentMediaItem)
+                if (shouldStopForExplicitPreference(track?.explicit, prefs.allowExplicitContent)) {
+                    val finalPlayback = capturePlayback(finalise = true)
+                    player.pause()
+                    player.clearMediaItems()
+                    activeTrack = null
+                    activePlaybackOwnerId = null
+                    activePlaybackGeneration = null
+                    finalPlayback?.let { persist(it) }
+                    return@collect
+                }
                 val show = track?.let { library.podcastSettingsSnapshot(it.podcastId) }
                 localPlayer.skipSilenceEnabled = show?.skipSilence ?: prefs.skipSilence
                 boostWanted = show?.volumeBoost ?: prefs.volumeBoost

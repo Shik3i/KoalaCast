@@ -99,7 +99,8 @@ the project's principles:
 
 - **Local-first.** The entire app works with **no account**. Data lives on-device
   (Room). An account is optional and only enables cross-device sync.
-- **No tracking, no ads, no premium tier.** Ever.
+- **No behavioral tracking, no ads, no premium tier.** The Google Cast SDK's
+  anonymous product telemetry is disclosed in the privacy policy.
 - **Direct-to-publisher audio.** Episode audio streams/downloads **straight from the
   publisher's enclosure URL** — it never passes through KoalaCast servers.
 - **Self-hostable.** Anyone can point the app at their own KoalaCast server.
@@ -109,7 +110,7 @@ the project's principles:
    local-only or account-required. We are both.
 2. **Self-host server picker built into onboarding** — first-class, not an afterthought.
 3. **Dynamic per-show theming** — UI recolors from cover art (already in web; port it).
-4. **Privacy by architecture** — no audio proxy, no analytics, revocable device tokens.
+4. **Privacy by architecture** — no audio proxy or user-level analytics, revocable device tokens.
 5. **Calm, distraction-free design with real "wow" motion** — see §7.
 
 ---
@@ -327,8 +328,8 @@ internal/external app storage or SAF, budget cleanup, and a Room mirror for UI s
 ---
 
 ## 6. Non-functional requirements
-- **Privacy:** no analytics/crash SDKs that phone home by default (offer opt-in local
-  logs only). No audio proxying. Minimal permissions (INTERNET, POST_NOTIFICATIONS,
+- **Privacy:** no advertising, behavioral analytics, or crash-reporting SDK (the
+  Google Cast SDK's anonymous product telemetry is disclosed separately). No audio proxying. Minimal permissions (INTERNET, POST_NOTIFICATIONS,
   FOREGROUND_SERVICE + media; storage via SAF, no broad READ/WRITE).
 - **Accessibility:** TalkBack labels on all controls, large-text support, min 48dp
   touch targets, respect "reduce motion" (system animator scale) — mirror web's
@@ -425,4 +426,4 @@ per-subscription request fan-out entirely. See
 - Accessible (TalkBack + 48dp + reduce-motion) and themed (light + dark).
 - Covered by repository/logic unit tests, MockWebServer integration tests and
   Compose UI regression tests. Instrumented execution requires an attached device.
-- No new tracking, no third-party audio proxy, minimal permissions.
+- No new behavioral tracking, no third-party audio proxy, minimal permissions.

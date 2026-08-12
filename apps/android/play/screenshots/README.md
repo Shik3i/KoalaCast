@@ -8,7 +8,7 @@ store listing should show.
 | File | Screen |
 | :--- | :--- |
 | `01-discover.png` | Discover — cover story, genre filter, charts |
-| `02-search-genres.png` | Search |
+| `02-show.png` | Subscribed show and episode controls |
 | `03-new.png` | New — what the subscriptions published |
 | `04-library.png` | Library |
 | `05-profile.png` | Listening profile |
@@ -23,7 +23,5 @@ adb exec-out screencap -p > apps/android/play/screenshots/01-discover.png
 adb shell wm size reset && adb shell wm density reset
 ```
 
-> **Before uploading:** `03`, `04` and `05` are from a fresh install with no
-> subscriptions and no listening history, so they show empty states. They are
-> honest and they are poor advertisements. Retake them on a device with a few
-> subscriptions and some playback behind it.
+The committed set uses a real subscription and System UI demo mode so the status
+bar is stable and contains no emulator-only warning icons.

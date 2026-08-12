@@ -41,7 +41,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 
 ## Why KoalaCast
 
-1. **100% free and open source** — MIT licensed, no ads, no tracking, no premium tier.
+1. **100% free and open source** — MIT licensed, no ads, no behavioral tracking, no premium tier. The Android Cast SDK's anonymous product telemetry is disclosed in the privacy policy.
 2. **Local-first** — use the entire app with no account; data lives in browser IndexedDB or Android Room storage.
 3. **Optional cross-device sync** — an account syncs subscriptions, favorites, playback progress, and listening statistics.
 4. **Direct publisher audio by default** — playback streams straight from the publisher CDN. Self-hosters can opt into an audio relay for browser effects/downloads blocked by publisher CORS.

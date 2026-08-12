@@ -9,15 +9,14 @@ KoalaCast: Podcast-Player
 ## Kurzbeschreibung (max. 80 Zeichen)
 
 ```
-Open-Source-Podcast-Player mit Downloads, ohne Werbung und Analyse-Tracking.
+Open-Source-Podcast-Player mit Downloads, ohne Werbung oder Nutzer-Tracking.
 ```
 
 ## Vollständige Beschreibung (max. 4000 Zeichen)
 
 ```
 KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
-abonniere, streame und lade Podcasts herunter – ohne Werbung, Werbe-Tracker oder
-Analyse-SDKs.
+abonniere, streame und lade Podcasts herunter – ohne Werbung oder Nutzerprofile.
 
 Du brauchst kein Konto. Abos, Downloads, Warteschlange und private Hörstatistiken
 werden standardmäßig auf deinem Gerät gespeichert. Ein optionales Konto ergänzt
@@ -74,9 +73,10 @@ https://github.com/Shik3i/KoalaCast
 
 - App-Name: 25/30 Zeichen.
 - Kurzbeschreibung: 76/80 Zeichen.
-- „Ohne Analyse-Tracking“ bedeutet: kein Werbe- oder Analyse-SDK-Tracking. Es
-  behauptet nicht, dass optionale Kontosynchronisierung oder vom Nutzer
-  ausgelöste Netzwerkzugriffe niemals Daten übertragen.
+- „Ohne Nutzer-Tracking“ bedeutet: keine Werbeprofile oder nutzerbezogene
+  Analyse. Es behauptet nicht, dass optionale Kontosynchronisierung, vom Nutzer
+  ausgelöste Netzwerkzugriffe oder die in der Datenschutzerklärung offengelegte
+  anonyme Google-Cast-SDK-Telemetrie niemals Daten übertragen.
 - Keine Ende-zu-Ende-Verschlüsselung behaupten. Die Übertragung erfolgt per
   HTTPS, synchronisierte Kontodaten sind jedoch nicht Ende-zu-Ende verschlüsselt.
 - Keine Rankings, Auszeichnungen, Preisangaben, werblichen Handlungsaufforderungen,

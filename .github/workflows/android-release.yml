@@ -84,7 +84,11 @@ jobs:
 
       - name: Unit tests
         working-directory: apps/android
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: |
+          ./gradlew --no-daemon testDebugUnitTest
+          # Transport policy differs by build type. These tests prove that the
+          # package uploaded to Play rejects every cleartext server URL.
+          ./gradlew --no-daemon testReleaseUnitTest
 
       - name: Release lint
         working-directory: apps/android

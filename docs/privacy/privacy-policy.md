@@ -6,8 +6,8 @@ deployment's legal obligations.
 
 ## Core Privacy Rules
 
-1. **Zero Behavioral Tracking**: No third-party analytics, no tracking pixels, no advertising scripts, and no user profiling.
-2. **No Data Selling or Monetization**: User data is never sold, rented, or shared with third parties.
+1. **Zero Behavioral Tracking**: No advertising, tracking pixels, user profiling, or KoalaCast-operated user-level analytics. The Android Google Cast SDK sends encrypted, anonymous Cast interaction, device, SDK, and app metadata to Google for aggregate usage/performance analysis and defect detection; Google states that it cannot be disabled or deleted by the app or listener and is not traceable to an individual user.
+2. **No Data Selling or Monetization**: User data is never sold or rented. Data reaches only the processors and external services described in this policy—for example the selected KoalaCast server, podcast publishers, optional Web Push providers, and Google Cast—and is not disclosed for advertising or data-broker monetization.
 3. **No Personal Identification Required**: Accounts require only a self-chosen username and password. Email addresses and real names are never collected.
 4. **Local-First Architecture**: The web application is 100% functional without an account. Subscriptions, playback positions, queue, and settings remain stored locally in your browser's IndexedDB.
 5. **Direct Publisher Audio by Default**: Audio media files normally stream directly from podcast publishers to the browser or Android app. A self-hoster may explicitly enable `KC_AUDIO_EFFECTS_PROXY_ENABLED` as a last-resort browser relay for CORS-incompatible effects or downloads; it is disabled by default and Android playback remains direct.

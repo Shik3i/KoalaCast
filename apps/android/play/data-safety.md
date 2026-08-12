@@ -21,7 +21,7 @@ purposes and required/optional state listed below.
 
 | Data type | When | Purpose | Why |
 | :--- | :--- | :--- | :--- |
-| **App activity — app interactions** | When an online feature is used; required for that feature | App functionality; Fraud prevention, security, and compliance | API paths and technical request details reach the chosen server and may remain in access/security logs for at most seven days |
+| **App activity — app interactions** | Required; also collected automatically by the Google Cast SDK when Cast functionality is active | App functionality; Analytics; Fraud prevention, security, and compliance | API paths and technical request details reach the chosen server and may remain in access/security logs for at most seven days. The Cast SDK sends encrypted, anonymous Cast interaction, device, SDK and app metadata to Google for aggregate SDK usage/performance analysis and defect detection |
 | **App activity — in-app search history** | Only when the listener searches; optional | App functionality | Search terms are sent to the chosen server and may appear in the same maximum-seven-day technical logs |
 | **User IDs** (username) | Only with an account; optional | App functionality; Account management | Identifies the account for sync and for the opt-in leaderboard |
 | **Device or other IDs** (app-generated installation UUID) | Only with an account; optional | App functionality; Account management | Identifies the Android installation for device authentication, session management and sync conflict attribution |
@@ -32,7 +32,10 @@ Do not claim that account-free mode means no data leaves the device: discovery,
 search, feed resolution and metadata requests still contact the selected server.
 In particular **do not** declare location, contacts, photos,
 files, financial info, health, messages, or an advertising ID: none is
-requested, and the app contains no advertising or analytics SDK. The
+requested, and the app contains no advertising SDK or developer-operated
+behavioral analytics. The Google Cast SDK does perform the anonymous analytics
+described above; Google documents that this cannot be disabled or deleted by the
+developer or listener and that it is not used to model an individual user. The
 app-generated installation UUID above is nevertheless a **Device or other ID**
 under the Play Console definition.
 
@@ -72,6 +75,9 @@ logging is not ephemeral.
 - New-episode notifications are generated locally by Android's constrained
   `ContentRefreshWorker`; the native app does not register a browser Web Push
   endpoint or send notification data to a third party.
+- Google Cast SDK disclosure:
+  `https://developers.google.com/cast/docs/android_sender/data_disclosure`.
+  Re-check this vendor disclosure whenever the Cast dependency changes.
 - Installation UUID generated and persisted by Android:
   `apps/android/core/data/src/main/kotlin/net/koalastuff/koalacast/core/data/auth/SecureAccountStore.kt`;
   sent during device login by `AccountRepository.kt`, and stored by

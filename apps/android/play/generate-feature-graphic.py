@@ -63,7 +63,7 @@ def main() -> None:
     draw.text((text_x, 268), "Podcasts, calmly.", font=body_font, fill=ACCENT)
     draw.text(
         (text_x, 312),
-        "No ads. No tracking. No account needed.",
+        "No ads. No profiling. No account needed.",
         font=body_font,
         fill=INK,
     )
