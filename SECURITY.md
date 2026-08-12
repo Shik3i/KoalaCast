@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-KoalaCast is under active development. Security fixes are applied to the `main`
-branch and the latest published Docker images.
+KoalaCast is under active development. Security fixes are applied to `main`,
+the latest published Docker images and the latest Android release.
 
 | Version | Supported |
 | :--- | :--- |
-| `main` / latest release | ✅ |
+| `main` / latest Docker and Android releases | ✅ |
 | Older tagged releases | ❌ |
 
 ## Reporting a Vulnerability

@@ -8,26 +8,29 @@ that makes it true.
 
 | Question | Answer |
 | :--- | :--- |
-| Does the app collect or share any user data? | **Yes**, but only if the listener creates an account |
+| Does the app collect or share any user data? | **Yes** — online requests reach the selected KoalaCast server; account sync adds the optional account data below |
 | Is all data encrypted in transit? | **Yes** — the release app accepts HTTPS only; cleartext is disabled in its manifest and network-security config |
 | Can users request deletion? | **Yes** — in-app and via a URL, see `declarations.md` |
 | Can users delete synchronized data without deleting the account? | **Yes** — in-app and via public `/account`; execution requires sign-in plus password or recovery-code confirmation |
-| Is any data collected required? | **No.** Everything works without an account |
+| Is any data collected required? | **Mixed.** Request/interaction data is required for online features; search and account data are optional |
 
 ## Data types to declare
 
-Declare each as **collected**, not shared, and **optional**. Select the purposes
-listed below.
+Declare each as **collected** and not shared. Handling differs by row; select the
+purposes and required/optional state listed below.
 
 | Data type | When | Purpose | Why |
 | :--- | :--- | :--- | :--- |
-| **User IDs** (username) | Only with an account | App functionality; Account management | Identifies the account for sync and for the opt-in leaderboard |
-| **Device or other IDs** (app-generated installation UUID) | Only with an account | App functionality; Account management | Identifies the Android installation for device authentication, session management and sync conflict attribution |
-| **App activity — other user-generated content** | Only with an account | App functionality | Subscriptions, favorites, queue and per-show settings, so devices agree |
-| **App activity — other actions** | Only with an account | App functionality | Playback positions and listening sessions, so a device resumes where another left off |
-| **App info and performance — other** | Only with notifications on | App functionality | A Web Push endpoint, so the server can wake the device for a new episode |
+| **App activity — app interactions** | When an online feature is used; required for that feature | App functionality; Fraud prevention, security, and compliance | API paths and technical request details reach the chosen server and may remain in access/security logs for at most seven days |
+| **App activity — in-app search history** | Only when the listener searches; optional | App functionality | Search terms are sent to the chosen server and may appear in the same maximum-seven-day technical logs |
+| **User IDs** (username) | Only with an account; optional | App functionality; Account management | Identifies the account for sync and for the opt-in leaderboard |
+| **Device or other IDs** (app-generated installation UUID) | Only with an account; optional | App functionality; Account management | Identifies the Android installation for device authentication, session management and sync conflict attribution |
+| **App activity — other user-generated content** | Only with an account; optional | App functionality | Subscriptions, favorites, queue and per-show settings, so devices agree |
+| **App activity — other actions** | Only with an account; optional | App functionality | Playback positions and listening sessions, so a device resumes where another left off |
 
-Nothing else. In particular **do not** declare location, contacts, photos,
+Do not claim that account-free mode means no data leaves the device: discovery,
+search, feed resolution and metadata requests still contact the selected server.
+In particular **do not** declare location, contacts, photos,
 files, financial info, health, messages, or an advertising ID: none is
 requested, and the app contains no advertising or analytics SDK. The
 app-generated installation UUID above is nevertheless a **Device or other ID**
@@ -46,10 +49,12 @@ disclosed; that setting is in Settings ▸ Privacy.
 stored, which is the point of sync, and the privacy policy says so in the same
 words.
 
-**"Required or optional?" — Optional, for all of it.** Browsing, playback,
-downloads, the queue and the statistics all work with no account. This is the
-single most important answer on the form and the easiest to get wrong by
-reflex.
+**"Required or optional?" — answer per row.** Account/sync and search data are
+optional. Network request data is inherent when a listener chooses an online
+feature, even though already-downloaded and locally cached content works without
+an account. Google defines collection as transmission off-device and requires
+ephemeral processing to be included in the form response; seven-day technical
+logging is not ephemeral.
 
 ## Where this is enforced in code
 
@@ -64,8 +69,9 @@ reflex.
 - No account required: `apps/android/.../onboarding`, and the local-first Room
   database in `core:data`.
 - Artwork proxying: `core/data/.../server/ArtworkUrls.kt`.
-- Push endpoint stored only while notifications are on, and deleted when they
-  are turned off: `services/api/internal/server/handlers/push.go`.
+- New-episode notifications are generated locally by Android's constrained
+  `ContentRefreshWorker`; the native app does not register a browser Web Push
+  endpoint or send notification data to a third party.
 - Installation UUID generated and persisted by Android:
   `apps/android/core/data/src/main/kotlin/net/koalastuff/koalacast/core/data/auth/SecureAccountStore.kt`;
   sent during device login by `AccountRepository.kt`, and stored by

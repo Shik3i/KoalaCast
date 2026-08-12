@@ -20,7 +20,8 @@ schemas, and status codes served by [`services/api`](../../services/api). Use it
 
 > **Any change to the REST API must update `openapi.yaml` in the same pull request.**
 
-CI lints the spec on every push and PR using
+The path-filtered CI suite lints the spec whenever OpenAPI, API, web, container
+or workflow inputs change, using
 [Redocly CLI](https://redocly.com/docs/cli/) (see
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
 

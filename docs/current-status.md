@@ -1,6 +1,6 @@
 # KoalaCast Current Implementation Status
 
-**Last updated:** August 10, 2026
+**Last updated:** August 12, 2026
 **License:** MIT
 
 This document records shipped behavior. Proposed work belongs in
@@ -14,7 +14,7 @@ This document records shipped behavior. Proposed work belongs in
 | **Discovery and search** | Implemented | iTunes charts/search, optional Podcast Index search, direct RSS addition, language filters, multi-select preferred/hidden genres, account-synced per-podcast hiding, clear/reset behavior, and subscription-aware Inbox. |
 | **Playback** | Implemented | HTML audio + Media Session, compatible-browser Remote Playback, speed control, skip controls, silence trimming, volume boost, selectable audio visualisers, chapters, transcripts, queue, keyboard shortcuts, timestamp bookmarks, and handoff links. The timeline scrubs live with a hover readout and chapter markers, a jump of fifteen seconds or more offers the position it came from, the previous-track control steps back through the played history, the full-screen view carries a reorderable queue, and the transcript follows the playhead. The sleep timer counts listening time, not wall-clock time, so a pause does not spend it. Web Audio effects need CORS, so blocked enclosures are first retried against the host their redirect chain resolves to and only fall back to the audio relay when that host refuses too. |
 | **Local-first storage** | Implemented | Subscriptions with folders, queue plus reusable named queues, smart queues (saved rules evaluated over cached episodes), favorites, timestamp bookmarks, playback progress, listening sessions, and preferences work without an account in IndexedDB/LocalStorage. Deleting local data removes the downloaded audio and every stored preference, not only the database rows. |
-| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, and incremental sync for subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. Each client carries the other's unknown settings keys through a push, so a client that does not understand a key no longer deletes it from the server, and the settings blob is merged per field rather than as one lump — two devices editing different preferences no longer revert each other. Unreadable records are skipped and counted instead of wedging the pull. See [sync-protocol/specification.md](sync-protocol/specification.md). The default Inbox mode for new subscriptions is account-scoped; each podcast can override it. Named queues, folders, and timestamp bookmarks remain local. |
+| **Accounts and sync** | Implemented with documented boundaries | Username/password accounts, recovery codes, web sessions, Android device tokens, account export, account deletion, and transactional synchronized-data deletion that keeps the account. A generation/epoch blocks stale clients from restoring deleted data and makes web and Android clear their old local account copy before pushing. Incremental sync covers subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings. Unknown settings keys survive mixed-version clients, settings merge per field, and unreadable records are skipped and counted instead of wedging a pull. See [sync-protocol/specification.md](sync-protocol/specification.md). Named queues, folders, and timestamp bookmarks remain local. |
 | **Statistics** | Implemented | Personal listening duration, sessions, podcasts, speed and time-saved metrics. Signed-in users can separately opt into global aggregates, podcast rankings, and the listener leaderboard; participation defaults to off. |
 | **Themes and accessibility** | Implemented | System/light/dark modes, nine palettes (Fjord default; Eucalyptus retained), selectable start screen, configurable artwork privacy, download policies now honoured by both clients, scalable/resizable layout, reduced motion, focus treatment, tooltips, accessible names, and English/German UI. |
 | **SEO and sharing** | Implemented | Canonical/robots metadata, sitemap with Git-derived `lastmod`, WebSite/SoftwareApplication JSON-LD, `llms.txt`, `llms-full.txt`, and 1200×630 Open Graph/Twitter artwork. |
@@ -49,10 +49,11 @@ authenticated. The detailed live checklist is
 
 - CI runs Go formatting, vet and race tests; Svelte checks and unit tests;
   translation, documentation and SEO audits; OpenAPI linting; Docker build and
-  runtime smoke tests; and an arm64 cross-compile check.
+  runtime smoke tests. It is path-filtered to relevant web, API, contract,
+  container and workflow changes.
 - `v*` tags publish multi-architecture GHCR images with provenance and SBOM
   attestations. They do not create GitHub Releases.
 - `android-v*` tags build signed APK and AAB packages, verify signatures, attest
   artifacts, and are the only tags that create a GitHub Release.
-- GitHub-hosted action majors were reviewed against their official current
-  documentation on July 27, 2026.
+- Android release builds publish signed APK and AAB packages directly; the
+  release workflow does not wrap them in a redundant custom ZIP.

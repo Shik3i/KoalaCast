@@ -8,14 +8,14 @@
 
 # KoalaCast
 
-**A completely free, open-source, privacy-first podcast player for the web.**
+**A completely free, open-source, privacy-first podcast player for web and Android.**
 
 Calm, distraction-free listening — with optional account-backed cross-device sync.
 
 [![CI](https://github.com/Shik3i/KoalaCast/actions/workflows/ci.yml/badge.svg)](https://github.com/Shik3i/KoalaCast/actions/workflows/ci.yml)
 [![Docker Release](https://github.com/Shik3i/KoalaCast/actions/workflows/docker-release.yml/badge.svg)](https://github.com/Shik3i/KoalaCast/actions/workflows/docker-release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](services/api)
+[![Go 1.26.5](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](services/api)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-5-FF3E00?logo=svelte&logoColor=white)](apps/web)
 
 </div>
@@ -42,7 +42,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 ## Why KoalaCast
 
 1. **100% free and open source** — MIT licensed, no ads, no tracking, no premium tier.
-2. **Local-first** — use the entire app with no account; data lives in your browser's IndexedDB.
+2. **Local-first** — use the entire app with no account; data lives in browser IndexedDB or Android Room storage.
 3. **Optional cross-device sync** — an account syncs subscriptions, favorites, playback progress, and listening statistics.
 4. **Direct publisher audio by default** — playback streams straight from the publisher CDN. Self-hosters can opt into an audio relay for browser effects/downloads blocked by publisher CORS.
 5. **RSS as the source of truth** — standard RSS 2.0/Atom plus Podcasting 2.0 tags are preserved.
@@ -66,6 +66,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 | **Admin** | Registration toggle, user suspension, feed-health inspection, manual refresh, system metrics |
 | **Backend** | Go + chi, SQLite (WAL), SSRF-safe HTTP transport, background feed worker with ETag/304 + backoff |
 | **Ops** | Multi-stage single-binary Docker image, zero reverse-proxy sidecars, GitHub Actions CI, signed SLSA provenance + SBOM releases |
+| **Android** | Native Kotlin/Compose/Media3 client with Room, downloads, Android Auto/Wear browsing, Chromecast output, widget and HTTPS-only release networking |
 
 See the full, always-current breakdown in [docs/current-status.md](docs/current-status.md).
 
@@ -132,18 +133,26 @@ Deep dives live in [docs/](docs/):
 
 ```text
 KoalaCast/
-├── apps/web/            SvelteKit 5 web client (adapter-static SPA) → apps/web/README.md
+├── apps/
+│   ├── web/             SvelteKit 5 static SPA                    → apps/web/README.md
+│   └── android/         Native Kotlin/Compose/Media3 client       → apps/android/README.md
 ├── services/api/        Go REST API, SQLite, workers, SPA server    → services/api/README.md
 ├── packages/openapi/    OpenAPI 3 contract for the REST API        → packages/openapi/README.md
-├── infrastructure/      Minimal multi-stage Alpine Dockerfile       → infrastructure/README.md
 ├── docs/                Architecture, sync, privacy, feed specs    → docs/README.md
 ├── testdata/            Sample RSS feeds for tests                 → testdata/README.md
+├── tools/               Developer-only asset maintenance scripts   → tools/README.md
+├── Dockerfile           Multi-stage Node/Go/Alpine production image
 ├── docker-compose.yml   Single-command self-host stack
 ├── Makefile             Developer task runner (make help)
 └── .github/workflows/   CI and Docker release pipelines
 ```
 
-Every top-level directory has its own `README.md` describing its contents and conventions.
+Major code, contract, documentation and fixture directories have a focused
+`README.md`; repository-wide tooling remains documented here.
+Directory indexes: [applications](apps/README.md),
+[services](services/README.md), [packages](packages/README.md),
+[documentation](docs/README.md), [test fixtures](testdata/README.md) and
+[developer tools](tools/README.md).
 
 ---
 
@@ -151,7 +160,7 @@ Every top-level directory has its own `README.md` describing its contents and co
 
 ### Requirements
 
-- **Go** 1.25+
+- **Go** 1.26.5+
 - **Node.js** 24+
 - **Docker** 24+ with Compose (optional, for the container workflow)
 
@@ -162,7 +171,7 @@ Every top-level directory has its own `README.md` describing its contents and co
 | `make build` | Build the Go API binary and the SvelteKit static SPA bundle |
 | `make dev-api` | Run the Go API on `:3000` |
 | `make dev-web` | Run the SvelteKit dev server on `:5173` (proxies `/api` → `:3000`) |
-| `make test` | Go tests with `-race`, web unit tests, types, docs, translations, and SEO checks |
+| `make test` | Go tests with `-race`; web unit, type, docs, release-policy, translation and SEO checks |
 | `make fmt` / `make vet` | Format Go sources / run `go vet` |
 | `make docker-build` / `make docker-up` / `make docker-down` | Container workflow |
 | `make clean` | Remove build artifacts and local databases |
@@ -211,11 +220,16 @@ Full precedence rules: [docs/architecture/overview.md](docs/architecture/overvie
 # Backend — unit + integration with the race detector
 cd services/api && go test -race ./...
 
-# Frontend — unit tests, types, docs, translations, SEO, production build
-cd apps/web && npm test && npm run check && npm run check:docs && npm run check:i18n && npm run check:seo && npm run build
+# Frontend — unit/UI tests, types, docs, release policy, translations, SEO, build
+cd apps/web && npm test && npm run test:ui && npm run check && npm run check:docs && npm run check:release-policy && npm run check:i18n && npm run check:seo && npm run build
 ```
 
-CI runs the same checks plus `go vet`, `gofmt`, OpenAPI linting, and Docker builds on every push and PR — see [.github/workflows/ci.yml](.github/workflows/ci.yml).
+The path-filtered CI suite runs these checks plus `go vet`, `gofmt`, OpenAPI
+linting and a Docker runtime smoke test when web, API, contract, container or
+workflow inputs change. Android release gates run on `android-v*` tags and
+manual dispatch; Android changes must pass the documented Gradle gate locally.
+See [.github/workflows/ci.yml](.github/workflows/ci.yml) and
+[.github/workflows/android-release.yml](.github/workflows/android-release.yml).
 
 ---
 

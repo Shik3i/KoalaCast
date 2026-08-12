@@ -7,25 +7,28 @@
 >
 > Companion docs: [`docs/android-architecture.md`](../../docs/android-architecture.md)
 > (high-level architecture), [`docs/sync-protocol/specification.md`](../../docs/sync-protocol/specification.md)
-> (sync DTOs), [`apps/web/`](../web) (reference implementation — feature parity target).
+> (sync DTOs), [`apps/android/play/`](play/README.md) (Play Console declarations),
+> [`apps/web/`](../web) (reference implementation — feature parity target).
 
 ---
 
 ## Building it right now
 
-Requires JDK 17 and an Android SDK with platform 36 / build-tools 36. Point
+Requires JDK 17 and an Android SDK with platform 37 (target SDK 36). Point
 `local.properties` (`sdk.dir=…`) or `ANDROID_HOME` at the SDK.
 
 ```bash
 cd apps/android && ./gradlew assembleDebug
 ```
 
+The exact release gate is available from the repository root:
+
 ```bash
-cd apps/android && ./gradlew build
+make android-release-check
 ```
 
-`build` runs the unit tests and Android Lint across every module and is the same
-gate used by Android CI.
+It runs `test lint assembleRelease bundleRelease`, matching the tagged/manual
+Android release workflow.
 
 ### Release signing and recovery
 
@@ -127,7 +130,7 @@ the project's principles:
 | Images | **Coil** | Cover art + palette extraction for show-accent. |
 | Downloads | **OkHttp + WorkManager** | Resumable offline episodes in app-private storage; see §5. |
 | Testing | JUnit, Turbine (Flow), Compose UI tests, Robolectric, MockWebServer | |
-| Min SDK | **26 (Android 8.0)**, target/compile **36** | Pinned in `gradle/libs.versions.toml`. |
+| Android SDK | min **26** (Android 8.0), target **36**, compile **37** | Pinned in `gradle/libs.versions.toml`. |
 | Build | Gradle (Kotlin DSL), version catalog (`libs.versions.toml`) | |
 
 Module layout as built:
@@ -137,14 +140,13 @@ apps/android/
   app/                    # Hilt entry point, navigation, bottom bar
   core/
     model/                # domain models, DataResult
-    data/                 # repositories, DataStore   (+ Room in P3)
+    data/                 # Room, repositories, DataStore, sync + downloads
     network/              # Retrofit API, DTOs, host-selection interceptor
     ui/                   # design system (4b theme, components, icons, fonts)
-    player/               # Media3 service + controller          — P2
-    data/                 # Room, repositories, sync + WorkManager downloads
+    player/               # Media3 service + controller
   feature/
     onboarding/ discover/ search/ podcast/ episode/ settings/
-    library/ inbox/ downloads/ player/                            — P3–P5
+    library/ inbox/ downloads/ player/ account/ profile/
 ```
 
 ---
@@ -158,7 +160,7 @@ cookies).
 ### 2.1 Server selection (MUST be first-run + in settings)
 Self-hosters run their own server. The app must let the user choose the server:
 - Onboarding step + Settings entry: **"KoalaCast server"** with a text field
-  (default: the official instance URL — TBD; make it a `BuildConfig`/DataStore value).
+  (default: `https://cast.koalastuff.net`, persisted in DataStore).
 - Validate by calling `GET {base}/api/v1/healthz` (and `/readyz`) before saving.
 - Store in **DataStore**; all Retrofit calls use it as the base URL.
 - Support switching servers (warn that account/sync state is per-server).
@@ -181,10 +183,14 @@ Self-hosters run their own server. The app must let the user choose the server:
 | POST | `/auth/logout` | Bearer | Revokes the calling device's own token (native) / clears the web session. |
 | GET | `/auth/sessions` | Bearer | Lists web sessions **and** device credentials; each item has a `kind` (`"session"` \| `"device"`) and `is_current`. |
 | DELETE | `/auth/sessions/{id}` | Bearer | Revokes either a web session or a device token by id (user-scoped). |
-| GET | `/sync` | Bearer | **Pull** changes (subscriptions, favorites, playback state, listening sessions). |
+| GET | `/auth/export` | Bearer | Export all account data. |
+| DELETE | `/auth/data` | Bearer + credential confirmation | Delete synchronized data while retaining the account and current login. |
+| DELETE | `/auth/account` | Bearer + credential confirmation | Delete the account and all associated data. |
+| GET | `/sync` | Bearer | **Pull** incremental changes and current data generation. |
+| GET | `/sync/snapshot` | Bearer | Recover a complete materialized sync snapshot. |
 | POST | `/sync` | Bearer | **Push** local changes. |
 | POST | `/sync/merge` | Bearer | Merge local (pre-account) data on first sign-in. |
-| POST/GET | `/opml/import`, `/opml/export` | Bearer | OPML. |
+| POST/GET | `/opml/import`, `/opml/export` | optional/Bearer | Import works locally without an account; account export requires auth. |
 | … | `/admin/*` | Bearer + admin | Not needed for the client. |
 
 ### 2.3 Auth / token flow (native)
@@ -370,11 +376,10 @@ per-subscription request fan-out entirely. See
 2. **"New episodes" data source** — client-side fan-out is implemented, with an
    incremental `?since=` refresh per podcast; a batched multi-podcast endpoint
    remains open.
-3. **Sync granularity** — subscriptions, favorites, playback state and listening
-   sessions are materialized by the server. Lossless pagination (`next_cursor` /
-   `has_more`) and the `/sync/snapshot` recovery endpoint have shipped. Queue and
-   show-settings materialization remain backend work; the clients reconstruct
-   both from the sync log, which is authoritative for them anyway.
+3. **Sync granularity** — subscriptions, favorites, playback state, listening
+   sessions, queue, per-podcast settings and global settings are materialized by
+   the server. Lossless pagination (`next_cursor` / `has_more`), reset-generation
+   protection and the `/sync/snapshot` recovery endpoint have shipped.
 4. **Downloads engine** — implemented with OkHttp + WorkManager, resumable range
    requests and app-private storage.
 5. **Min / target SDK** — **26 / 36**, `compileSdk 37`, pinned in
@@ -390,12 +395,12 @@ per-subscription request fan-out entirely. See
 - **Artwork is proxied through the listener's own server by default**
   (`/api/v1/proxy/image`), so browsing does not leak the device's IP to publisher CDNs
   or Apple. Switchable in Settings. Audio is never proxied.
-- **Fonts and icons are bundled**, not fetched: Archivo / Bricolage Grotesque / Outfit /
-  IBM Plex Mono (OFL) and the Phosphor glyphs actually used (MIT, as path data in
+- **Fonts and icons are bundled**, not fetched: Nunito / Nunito Sans (OFL) and
+  the Phosphor glyphs actually used (MIT, as path data in
   `core:ui/icon/PhosphorIcons.kt`). The app makes no third-party request at launch.
-- **ViewModel-level tests are the next testing gap.** Repository, interceptor, URL and
-  sanitizer logic are covered; the ViewModels are not, because the repositories are
-  concrete classes. Introduce interfaces (or a test module) when P2 starts.
+- **Broader ViewModel and device integration coverage remains a testing gap.**
+  Repository, interceptor, URL, synchronization and sanitizer logic have focused
+  tests; release builds still need emulator/device smoke coverage before tagging.
 
 ---
 

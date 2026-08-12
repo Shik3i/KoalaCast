@@ -50,9 +50,11 @@ backend alongside it (`make dev-api`).
 | `npm run preview` | Preview the static SPA production build |
 | `npm run check` | `svelte-check` type verification (must be 0 errors) |
 | `npm run check:docs` | Validate tracked Markdown links and current-state assertions |
+| `npm run check:release-policy` | Validate tag, workflow and GitHub Release artifact boundaries |
 | `npm run check:i18n` | Validate translation catalogues |
 | `npm run check:seo` | Validate sitemap, robots, llms and social metadata |
 | `npm test` | Run Vitest unit tests |
+| `npm run test:ui` | Run Playwright UI regression tests |
 
 ---
 

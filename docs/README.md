@@ -8,26 +8,33 @@ Specifications and design docs for KoalaCast. Start with the root
 | Document | What it covers |
 | :--- | :--- |
 | [current-status.md](current-status.md) | Live feature matrix — what's implemented vs. planned |
-| [implementation-plan.md](implementation-plan.md) | Phased implementation roadmap |
 | [architecture/overview.md](architecture/overview.md) | System architecture and configuration precedence |
 | [sync-protocol/specification.md](sync-protocol/specification.md) | Cross-device synchronization engine protocol |
 | [feed-compatibility/rss-spec.md](feed-compatibility/rss-spec.md) | RSS/Atom parsing rules and feed aliasing |
 | [privacy/privacy-policy.md](privacy/privacy-policy.md) | Privacy principles and data retention |
 | [android-architecture.md](android-architecture.md) | Native Android client architecture and shipped boundaries |
 | [web-app-parity.md](web-app-parity.md) | Where mobile web and the Android app differ on purpose, and what is still outstanding |
+| [i18n.md](i18n.md) | Interface locales, catalogue validation and content-language filtering |
+| [roadmap.md](roadmap.md) | Remaining proposed work |
+| [roadmaps/audio-visualizer.md](roadmaps/audio-visualizer.md) | Audio visualizer status and remaining hardening |
+| [roadmaps/privacy-first-discover.md](roadmaps/privacy-first-discover.md) | Privacy-first discovery proposal |
 
 ## Directory Map
 
 ```text
 docs/
 ├── current-status.md
-├── implementation-plan.md
 ├── android-architecture.md
+├── i18n.md
+├── roadmap.md
 ├── web-app-parity.md
 ├── architecture/overview.md
 ├── sync-protocol/specification.md
 ├── feed-compatibility/rss-spec.md
-└── privacy/privacy-policy.md
+├── privacy/privacy-policy.md
+└── roadmaps/
+    ├── audio-visualizer.md
+    └── privacy-first-discover.md
 ```
 
 ## Conventions

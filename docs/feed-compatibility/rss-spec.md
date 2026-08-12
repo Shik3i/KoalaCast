@@ -16,6 +16,9 @@ User-submitted feed URLs undergo strict validation before fetching:
   - Loopback (`127.0.0.0/8`, `::1`)
   - Private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)
   - Link-local (`169.254.0.0/16`, `fe80::/10`)
+  - Carrier-grade NAT (`100.64.0.0/10`)
+  - Unspecified, multicast, reserved and documentation ranges
+  - IPv6 unique-local (`fc00::/7`) and multicast (`ff00::/8`)
   - Cloud metadata endpoints (`169.254.169.254`)
 - Validates redirects across every hop against the same IP filter rules.
 
@@ -25,6 +28,9 @@ When a podcast publisher moves their feed URL (e.g. HTTP 301/308 redirects or `<
 - Prevents duplicate podcasts from being created when users add old/new URLs.
 
 ### 4. Episode Identity Rules
-- Episodes use standard `<guid>` elements where present.
-- If GUID is missing or duplicated, a deterministic fallback hash is derived from `SHA256(enclosure_url + title + pub_date)`.
-- Prevents duplicate episodes during feed updates or minor title edits.
+- Episodes use `<guid>` (RSS) or `<id>` (Atom) where present.
+- Without one, a non-empty enclosure URL becomes the stable key after
+  lower-casing. Only an episode without both an ID and enclosure URL uses a
+  deterministic `SHA256(title|enclosure_url|publication_unix_time)` key.
+- Duplicate keys inside one feed are retained with deterministic `#dupN`
+  suffixes instead of silently dropping an episode.

@@ -3,7 +3,7 @@
 The Go REST backend and static web server for KoalaCast: podcast discovery/search, feed ingestion,
 accounts, cross-device sync, OPML, privacy image proxy, and admin — backed by SQLite.
 
-- **Language:** Go 1.25
+- **Language:** Go 1.26.5
 - **Router:** [chi](https://github.com/go-chi/chi) v5
 - **Storage:** SQLite (WAL mode, foreign keys, busy timeout)
 - **Module:** `github.com/Shik3i/KoalaCast/services/api`
@@ -72,18 +72,21 @@ All application routes are under `/api/v1`:
 | :--- | :--- | :--- | :--- |
 | GET/HEAD | `/proxy/image?url=&w=` | — | Privacy-safe artwork resizer with 100MB RAM LRU cache |
 | GET/HEAD | `/proxy/chapters` · `/proxy/transcript` | — | CORS-safe proxy for chapters & transcripts |
+| GET/HEAD | `/proxy/audio` · `/proxy/audio/resolve` | — | Optional operator-enabled browser audio relay and redirect resolution |
 | GET | `/podcasts/discover` | — | iTunes Top Charts (DB fallback) |
 | GET | `/podcasts/search?q=` | — | Search via Podcast Index or iTunes |
 | POST | `/podcasts/feed` | — | Add/ingest a podcast by RSS URL |
 | GET | `/podcasts/{id}` | — | Podcast details (numeric iTunes IDs are resolved & ingested on demand) |
 | GET | `/podcasts/{id}/episodes` | — | Paginated episodes |
 | GET | `/episodes/{id}` | — | Single episode |
-| GET | `/push/config` | ✓ | Web-Push availability and public VAPID key |
-| POST/DELETE | `/push/subscriptions` | ✓ | Register or remove this browser's Push API endpoint |
+| GET | `/stats/global` | — | Opt-in aggregate statistics |
 | POST | `/auth/register` · `/auth/login` · `/auth/device/login` · `/auth/recovery/verify` | rate-limited | Accounts |
-| GET/POST/DELETE | `/auth/me` · `/auth/logout` · `/auth/sessions` | session | Session management |
-| GET/POST | `/sync` · `/sync/merge` | session | Cross-device sync |
-| POST/GET | `/opml/import` · `/opml/export` | session | OPML |
+| GET/POST/DELETE | `/auth/me` · `/auth/logout` · `/auth/sessions/{id}` | session/device token | Identity and session management |
+| GET/DELETE | `/auth/export` · `/auth/data` · `/auth/account` | session/device token + confirmation | Export or delete synchronized/account data |
+| GET/PUT | `/stats/preferences` | session/device token | Global-statistics consent |
+| GET/POST/DELETE | `/push/config` · `/push/subscriptions` | session/device token | Web-Push configuration and registrations |
+| GET/POST | `/sync` · `/sync/snapshot` · `/sync/merge` | session/device token | Incremental sync, recovery snapshot and initial merge |
+| POST/GET | `/opml/import` · `/opml/export` | optional/session | Anonymous import or account export |
 | * | `/admin/*` | admin | Admin dashboard operations |
 
 The authoritative contract is [`packages/openapi/openapi.yaml`](../../packages/openapi/openapi.yaml).
@@ -99,8 +102,8 @@ gofmt -l .                   # must print nothing
 go vet ./...
 ```
 
-> Some tests (e.g. iTunes search fallback) perform live network calls and may be
-> flaky without internet access; CI runs them with connectivity.
+Tests use fixtures and controlled test servers; they must remain deterministic
+and must not depend on live catalog or publisher availability.
 
 ---
 

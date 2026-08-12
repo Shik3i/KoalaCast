@@ -16,7 +16,7 @@ so the next submission does not have to reconstruct it from memory.
 | [`feature-graphic.png`](feature-graphic.png) | 1024×500 feature graphic |
 | [`screenshots/`](screenshots) | Phone screenshots, 1080×1920 |
 
-## Before the first internal test
+## Before an internal test submission
 
 - [ ] Create the app in the Play Console (`net.koalastuff.koalacast`)
 - [ ] Accept Play App Signing; the CI keystore becomes the **upload** key
@@ -46,7 +46,7 @@ geometry, because the 320×640 viewport used for the parity comparison is below
 what a store listing should show:
 
 ```bash
-adb shell wm size 1080x2400 && adb shell wm density 440
+adb shell wm size 1080x1920 && adb shell wm density 440
 adb exec-out screencap -p > apps/android/play/screenshots/01-discover.png
 adb shell wm size reset && adb shell wm density reset
 ```

@@ -16,7 +16,7 @@ store listing should show.
 ## Retaking them
 
 ```bash
-adb shell wm size 1080x2400 && adb shell wm density 440
+adb shell wm size 1080x1920 && adb shell wm density 440
 adb shell am force-stop net.koalastuff.koalacast
 adb shell am start -n net.koalastuff.koalacast/.MainActivity
 adb exec-out screencap -p > apps/android/play/screenshots/01-discover.png

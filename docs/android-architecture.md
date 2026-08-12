@@ -1,8 +1,8 @@
 # Native Android Architecture
 
 KoalaCast ships a native Kotlin/Compose Android client in `apps/android`.
-P0–P6 are implemented; the detailed feature checklist and remaining P7 work
-live in [`apps/android/README.md`](../apps/android/README.md).
+P0–P7 are implemented. The detailed feature checklist and remaining test and
+parity work live in [`apps/android/README.md`](../apps/android/README.md).
 
 ## Architectural Principles
 

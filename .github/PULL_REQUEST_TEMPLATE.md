@@ -21,7 +21,7 @@
 - [ ] My change follows the [Contributing guidelines](../CONTRIBUTING.md)
 - [ ] `gofmt -l .` is clean and `go vet ./...` passes (backend changes)
 - [ ] `go test -race ./...` passes (backend changes)
-- [ ] `npm run check`, `npm test`, `npm run check:docs`, `npm run check:i18n`, `npm run check:seo`, and `npm run build` pass (web/docs changes)
+- [ ] `npm run check`, `npm test`, `npm run test:ui`, `npm run check:docs`, `npm run check:release-policy`, `npm run check:i18n`, `npm run check:seo`, and `npm run build` pass (web/docs changes)
 - [ ] I updated `packages/openapi/openapi.yaml` (if I changed the REST API)
 - [ ] I updated relevant documentation / READMEs
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/)

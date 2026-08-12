@@ -20,7 +20,7 @@ By participating, you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development Setup
 
-Requirements: **Go 1.25+**, **Node.js 24+**, and optionally **Docker 24+**.
+Requirements: **Go 1.26.5+**, **Node.js 24+**, and optionally **Docker 24+**.
 
 ```bash
 git clone https://github.com/Shik3i/KoalaCast.git
@@ -47,7 +47,10 @@ See the root [README](README.md#development) and each directory's README for det
 5. **Write a clear PR description**: what changed, why, and how you verified it. Link related issues.
 6. **Keep the branch up to date** with `main` and resolve conflicts before requesting review.
 
-CI (`.github/workflows/ci.yml`) runs on every PR and must be green before merge.
+CI (`.github/workflows/ci.yml`) runs when a PR changes web, API, OpenAPI,
+container or workflow inputs and must be green before merge. Android changes
+must pass the local Gradle release gate because Android publication CI runs only
+for `android-v*` tags or a manual dispatch.
 
 ---
 
