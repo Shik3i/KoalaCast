@@ -25,7 +25,11 @@ class VisualizerStyleTest {
     @Test
     fun `only bar shaped visualizers request the spectrum`() {
         assertTrue(VisualizerStyle.WAVEFORM.needsSpectrum)
-        assertTrue(VisualizerStyle.BARS.needsSpectrum)
+		assertTrue(VisualizerStyle.BARS.needsSpectrum)
+		assertTrue(VisualizerStyle.SPECTRUM.needsSpectrum)
+		assertTrue(VisualizerStyle.RIBBON.needsSpectrum)
+		assertTrue(VisualizerStyle.VU.needsSpectrum)
+		assertTrue(VisualizerStyle.CONSTELLATION.needsSpectrum)
         assertFalse(VisualizerStyle.PULSE.needsSpectrum)
         assertFalse(VisualizerStyle.LEVEL.needsSpectrum)
     }

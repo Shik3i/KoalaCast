@@ -162,6 +162,34 @@ fun VisualizerTrack(
             }
         }
 
+        VisualizerStyle.SPECTRUM -> Canvas(
+            modifier = modifier.fillMaxWidth().height(AUDIO_TRACK_HEIGHT).clearAndSetSemantics { },
+        ) {
+            revision.let { }
+            drawMirroredColumns(bands, active)
+        }
+
+        VisualizerStyle.RIBBON -> Canvas(
+            modifier = modifier.fillMaxWidth().height(AUDIO_TRACK_HEIGHT).clearAndSetSemantics { },
+        ) {
+            revision.let { }
+            drawRibbon(bands, active)
+        }
+
+        VisualizerStyle.VU -> Canvas(
+            modifier = modifier.fillMaxWidth().height(AUDIO_TRACK_HEIGHT).clearAndSetSemantics { },
+        ) {
+            revision.let { }
+            drawVuMeter(bands, active, inactive)
+        }
+
+        VisualizerStyle.CONSTELLATION -> Canvas(
+            modifier = modifier.fillMaxWidth().height(AUDIO_TRACK_HEIGHT).clearAndSetSemantics { },
+        ) {
+            revision.let { }
+            drawConstellation(bands, active)
+        }
+
     }
 }
 
@@ -260,6 +288,95 @@ private fun DrawScope.drawSpectrum(
                 cornerRadius = CornerRadius(PEAK_HEIGHT_PX / 2f, PEAK_HEIGHT_PX / 2f),
             )
         }
+    }
+}
+
+private fun DrawScope.drawMirroredColumns(bands: FloatArray, colour: Color) {
+    if (bands.isEmpty()) return
+    val centre = size.height / 2f
+    val slot = size.width / bands.size
+    val width = max(1.5f, slot - 2f)
+    bands.forEachIndexed { index, value ->
+        val columnHeight = max(2f, value.coerceIn(0f, 1f) * size.height * 0.9f)
+        drawRoundRect(
+            color = colour.copy(alpha = 0.82f),
+            topLeft = Offset(index * slot + (slot - width) / 2f, centre - columnHeight / 2f),
+            size = Size(width, columnHeight),
+            cornerRadius = CornerRadius(width / 2f, width / 2f),
+        )
+    }
+}
+
+private fun DrawScope.drawRibbon(bands: FloatArray, colour: Color) {
+    if (bands.size < 2) return
+    val centre = size.height / 2f
+    val step = size.width / (bands.size - 1)
+    val top = Path()
+    val bottom = Path()
+    bands.forEachIndexed { index, value ->
+        val x = index * step
+        val extent = 2f + value.coerceIn(0f, 1f) * size.height * 0.4f
+        if (index == 0) {
+            top.moveTo(x, centre - extent)
+            bottom.moveTo(x, centre + extent)
+        } else {
+            top.lineTo(x, centre - extent)
+            bottom.lineTo(x, centre + extent)
+        }
+    }
+    val body = Path().apply {
+        addPath(top)
+        for (index in bands.lastIndex downTo 0) {
+            val extent = 2f + bands[index].coerceIn(0f, 1f) * size.height * 0.4f
+            lineTo(index * step, centre + extent)
+        }
+        close()
+    }
+    drawPath(body, colour.copy(alpha = 0.16f))
+    drawPath(top, colour.copy(alpha = 0.78f), style = Stroke(width = 1.5f))
+    drawPath(bottom, colour.copy(alpha = 0.3f), style = Stroke(width = 1.2f))
+}
+
+private fun DrawScope.drawVuMeter(bands: FloatArray, colour: Color, inactive: Color) {
+    if (bands.isEmpty()) return
+    val half = (bands.size / 2).coerceAtLeast(1)
+    val low = bands.take(half).average().toFloat().coerceIn(0f, 1f) * 1.35f
+    val high = bands.drop(half).average().toFloat().coerceIn(0f, 1f) * 1.8f
+    val segments = 20
+    val gap = 2f
+    val segmentWidth = (size.width - gap * (segments - 1)) / segments
+    val laneHeight = 5f
+    listOf(low, high).forEachIndexed { lane, strength ->
+        val y = size.height / 2f + (lane - 1) * (laneHeight + 2f)
+        repeat(segments) { index ->
+            drawRoundRect(
+                color = if ((index + 1f) / segments <= strength) colour.copy(alpha = 0.82f) else inactive.copy(alpha = 0.55f),
+                topLeft = Offset(index * (segmentWidth + gap), y),
+                size = Size(segmentWidth, laneHeight),
+                cornerRadius = CornerRadius(1f, 1f),
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawConstellation(bands: FloatArray, colour: Color) {
+    if (bands.isEmpty()) return
+    val points = 18
+    val path = Path()
+    repeat(points) { index ->
+        val bandIndex = (index * (bands.size - 1) / (points - 1f)).toInt()
+        val energy = bands[bandIndex].coerceIn(0f, 1f)
+        val x = size.width * index / (points - 1f)
+        val y = size.height / 2f + (if (index % 2 == 0) -1f else 1f) * energy * size.height * 0.34f
+        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    drawPath(path, colour.copy(alpha = 0.24f), style = Stroke(width = 1f))
+    repeat(points) { index ->
+        val bandIndex = (index * (bands.size - 1) / (points - 1f)).toInt()
+        val energy = bands[bandIndex].coerceIn(0f, 1f)
+        val x = size.width * index / (points - 1f)
+        val y = size.height / 2f + (if (index % 2 == 0) -1f else 1f) * energy * size.height * 0.34f
+        drawCircle(colour.copy(alpha = 0.84f), radius = 1.5f + energy * 2.5f, center = Offset(x, y))
     }
 }
 

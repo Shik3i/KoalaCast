@@ -148,11 +148,28 @@ test('each visualizer uses a dedicated stage instead of covering the timeline', 
 	await page.getByRole('link', { name: 'Settings', exact: true }).click();
 	await page.locator('#playback > summary').click();
 
-	for (const [style, label] of Object.entries({ level: 'Level', waveform: 'Waveform', bars: 'Bars', pulse: 'Pulse' })) {
+	for (const [style, label] of Object.entries({
+		level: 'Level',
+		waveform: 'Waveform',
+		bars: 'Bars',
+		pulse: 'Pulse',
+		spectrum: 'Spectrum',
+		ribbon: 'Ribbon',
+		vu: 'VU Meter',
+		constellation: 'Constellation'
+	})) {
 		const styleButton = page.getByRole('group', { name: 'Audio visualizer' }).getByRole('button', { name: label, exact: true });
 		await styleButton.click();
 		await expect(styleButton).toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('.player-bar')).toBeVisible();
+		const preview = page.locator('.visualizer-preview');
+		await expect(preview.locator(`[data-visualizer="${style}"]`)).toBeVisible();
+		const previewContained = await preview.evaluate((host) => {
+			const signal = host.querySelector('[data-visualizer]')!.getBoundingClientRect();
+			const bounds = host.getBoundingClientRect();
+			return signal.left >= bounds.left && signal.right <= bounds.right && signal.top >= bounds.top && signal.bottom <= bounds.bottom;
+		});
+		expect(previewContained).toBe(true);
 
 		const stage = page.locator('.compact-visualizer');
 		await expect(stage).toBeVisible();

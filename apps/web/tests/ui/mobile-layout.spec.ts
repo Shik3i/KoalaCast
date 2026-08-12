@@ -61,6 +61,23 @@ test('audio controls remain visible without consuming the settings screen', asyn
 	expect(box?.width ?? 0).toBeLessThanOrEqual(360);
 });
 
+test('all visualizer choices and previews fit the compact playback settings', async ({ page }) => {
+	await page.goto('/settings#playback');
+	const group = page.getByRole('group', { name: 'Audio visualizer' });
+	await expect(group.getByRole('button')).toHaveCount(9);
+	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+
+	const constellation = group.getByRole('button', { name: 'Constellation', exact: true });
+	await constellation.click();
+	await expect(constellation).toHaveAttribute('aria-pressed', 'true');
+	const preview = page.locator('.visualizer-preview');
+	await expect(preview.locator('[data-visualizer="constellation"]')).toBeVisible();
+	const box = await preview.boundingBox();
+	const viewportWidth = await page.evaluate(() => window.innerWidth);
+	expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+	expect((box?.x ?? 0) + (box?.width ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(viewportWidth);
+});
+
 test('settings start as a compact overview', async ({ page }) => {
 	await page.goto('/settings');
 	await expect(page.locator('details.card')).toHaveCount(11);

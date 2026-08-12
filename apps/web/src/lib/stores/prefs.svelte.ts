@@ -36,7 +36,16 @@ import {
 export type DateFormat = 'absolute' | 'relative';
 export type DefaultInboxMode = 'all' | 'latest';
 export type StartScreen = 'discover' | 'inbox' | 'library';
-export type VisualizerStyle = 'off' | 'level' | 'waveform' | 'bars' | 'pulse';
+export type VisualizerStyle =
+	| 'off'
+	| 'level'
+	| 'waveform'
+	| 'bars'
+	| 'pulse'
+	| 'spectrum'
+	| 'ribbon'
+	| 'vu'
+	| 'constellation';
 export type DownloadRetention = 'keep' | 'finished' | '7d' | '14d' | '30d';
 export interface HiddenPodcastPreference {
 	key: string;
@@ -181,7 +190,7 @@ function initialVisualizer(): VisualizerStyle {
 		// Retired: a coarser, less legible restatement of the bars. Anyone who
 		// chose it lands there rather than silently having the visualiser off.
 		if (value === 'dots') return 'bars';
-		return value === 'level' || value === 'waveform' || value === 'bars' || value === 'pulse' ? value : 'off';
+		return value === 'level' || value === 'waveform' || value === 'bars' || value === 'pulse' || value === 'spectrum' || value === 'ribbon' || value === 'vu' || value === 'constellation' ? value : 'off';
 	} catch (_) {
 		return 'off';
 	}
@@ -742,7 +751,7 @@ class Prefs {
 		// same way a stored value is treated.
 		if (wins('visualizer') && payload.visualizer === 'dots') {
 			this.visualizer = 'bars';
-		} else if (wins('visualizer') && (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform' || payload.visualizer === 'bars' || payload.visualizer === 'pulse')) {
+		} else if (wins('visualizer') && (payload.visualizer === 'off' || payload.visualizer === 'level' || payload.visualizer === 'waveform' || payload.visualizer === 'bars' || payload.visualizer === 'pulse' || payload.visualizer === 'spectrum' || payload.visualizer === 'ribbon' || payload.visualizer === 'vu' || payload.visualizer === 'constellation')) {
 			this.visualizer = payload.visualizer;
 		}
 		if (wins('proxy_images') && typeof payload.proxy_images === 'boolean') this.proxyImages = payload.proxy_images;

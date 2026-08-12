@@ -1893,7 +1893,7 @@
 		background: color-mix(in srgb, var(--player-text) 4%, transparent);
 		overflow: hidden;
 	}
-	.compact-visualizer { height: 16px; padding: 2px 8px; }
+	.compact-visualizer { height: 22px; padding: 3px 8px; }
 
 	.controls {
 		display: flex;

@@ -21,7 +21,11 @@
     <string name="settings_visualizer_level">Pegel</string>
     <string name="settings_visualizer_waveform">Wellenform</string>
     <string name="settings_visualizer_bars">Balken</string>
-    <string name="settings_visualizer_pulse">Puls</string>
+	<string name="settings_visualizer_pulse">Puls</string>
+	<string name="settings_visualizer_spectrum">Spektrum</string>
+	<string name="settings_visualizer_ribbon">Band</string>
+	<string name="settings_visualizer_vu">VU-Meter</string>
+	<string name="settings_visualizer_constellation">Konstellation</string>
 
     <string name="settings_server_title">KoalaCast-Server</string>
     <string name="settings_server_placeholder">cast.example.org</string>

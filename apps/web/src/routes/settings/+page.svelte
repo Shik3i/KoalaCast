@@ -567,7 +567,11 @@
 					{ value: 'level' as const, icon: 'ph-chart-bar', label: t('settings.visualizerLevel') },
 					{ value: 'waveform' as const, icon: 'ph-waveform', label: t('settings.visualizerWaveform') },
 					{ value: 'bars' as const, icon: 'ph-chart-bar-horizontal', label: t('settings.visualizerBars') },
-					{ value: 'pulse' as const, icon: 'ph-circles-three-plus', label: t('settings.visualizerPulse') }
+					{ value: 'pulse' as const, icon: 'ph-circles-three-plus', label: t('settings.visualizerPulse') },
+					{ value: 'spectrum' as const, icon: 'ph-equalizer', label: t('settings.visualizerSpectrum') },
+					{ value: 'ribbon' as const, icon: 'ph-wave-sine', label: t('settings.visualizerRibbon') },
+					{ value: 'vu' as const, icon: 'ph-gauge', label: t('settings.visualizerVu') },
+					{ value: 'constellation' as const, icon: 'ph-dots-nine', label: t('settings.visualizerConstellation') }
 				] as option}
 					<button type="button" class="theme-btn" class:active={prefs.visualizer === option.value} aria-pressed={prefs.visualizer === option.value} onclick={() => prefs.setVisualizer(option.value)}>
 						<i class="ph {option.icon}" aria-hidden="true"></i> {option.label}

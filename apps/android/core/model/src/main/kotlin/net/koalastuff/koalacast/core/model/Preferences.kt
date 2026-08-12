@@ -99,14 +99,26 @@ enum class VisualizerStyle(val id: String) {
     BARS("bars"),
 
     /** The playhead sends out restrained rings in time with the recording. */
-    PULSE("pulse"),
+	PULSE("pulse"),
+
+	/** Symmetric frequency columns around a quiet centre axis. */
+	SPECTRUM("spectrum"),
+
+	/** A layered, continuous band with a softer secondary contour. */
+	RIBBON("ribbon"),
+
+	/** Two segmented meters for the low and high halves of the spectrum. */
+	VU("vu"),
+
+	/** Connected energy points spread across the full signal stage. */
+	CONSTELLATION("constellation"),
     ;
 
     /** True when this style needs the amplitude tap doing arithmetic at all. */
     val needsAudio: Boolean get() = this != OFF
 
     /** Styles that need per-frequency-band energy rather than one loudness figure. */
-    val needsSpectrum: Boolean get() = this == WAVEFORM || this == BARS
+	val needsSpectrum: Boolean get() = this == WAVEFORM || this == BARS || this == SPECTRUM || this == RIBBON || this == VU || this == CONSTELLATION
 
     companion object {
         val DEFAULT = OFF

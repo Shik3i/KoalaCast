@@ -841,7 +841,11 @@ private fun VisualizerStyle.labelRes(): Int = when (this) {
     VisualizerStyle.LEVEL -> R.string.settings_visualizer_level
     VisualizerStyle.WAVEFORM -> R.string.settings_visualizer_waveform
     VisualizerStyle.BARS -> R.string.settings_visualizer_bars
-    VisualizerStyle.PULSE -> R.string.settings_visualizer_pulse
+	VisualizerStyle.PULSE -> R.string.settings_visualizer_pulse
+	VisualizerStyle.SPECTRUM -> R.string.settings_visualizer_spectrum
+	VisualizerStyle.RIBBON -> R.string.settings_visualizer_ribbon
+	VisualizerStyle.VU -> R.string.settings_visualizer_vu
+	VisualizerStyle.CONSTELLATION -> R.string.settings_visualizer_constellation
 }
 
 @StringRes

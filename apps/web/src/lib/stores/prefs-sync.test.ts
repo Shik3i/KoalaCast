@@ -49,7 +49,7 @@ describe('shared preference sync', () => {
 		expect(prefs.syncPayload().download_budget_bytes).toBe(0);
 	});
 
-	it.each(['off', 'level', 'waveform', 'bars', 'pulse'] as const)(
+	it.each(['off', 'level', 'waveform', 'bars', 'pulse', 'spectrum', 'ribbon', 'vu', 'constellation'] as const)(
 		'accepts and syncs the %s visualizer',
 		(visualizer) => {
 			prefs.applySynced({ updated_at: 300, visualizer }, { authoritative: true });

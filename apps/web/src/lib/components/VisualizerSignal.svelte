@@ -28,6 +28,9 @@
 	});
 	const peakLine = $derived(peaks.length === displayBands.length ? peaks : displayBands);
 	const normalizedLevel = $derived(Math.max(0, Math.min(1, level)));
+	const average = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+	const vuLow = $derived(Math.min(1, average(displayBands.slice(0, Math.ceil(displayBands.length / 2))) * 1.35));
+	const vuHigh = $derived(Math.min(1, average(displayBands.slice(Math.ceil(displayBands.length / 2))) * 1.8));
 
 	const wavePath = $derived.by(() => {
 		if (displayBands.length < 2) return '';
@@ -40,8 +43,28 @@
 		}
 		return path;
 	});
+	const ribbonPath = $derived.by(() => {
+		if (displayBands.length < 2) return '';
+		const step = 100 / (displayBands.length - 1);
+		const height = (index: number) => 8 + Math.min(1, displayBands[index]) * 40;
+		let path = `M 0 ${50 - height(0)}`;
+		for (let index = 1; index < displayBands.length; index++) path += ` L ${index * step} ${50 - height(index)}`;
+		for (let index = displayBands.length - 1; index >= 0; index--) path += ` L ${index * step} ${50 + height(index)}`;
+		return `${path} Z`;
+	});
+	const constellation = $derived.by(() => Array.from({ length: 18 }, (_, index) => {
+		const bandIndex = Math.round(index * (displayBands.length - 1) / 17);
+		const energy = Math.min(1, displayBands[bandIndex] ?? 0);
+		return {
+			x: 3 + index * 94 / 17,
+			y: 50 + (index % 2 === 0 ? -1 : 1) * energy * 34,
+			radius: 1.25 + energy * 2.5
+		};
+	}));
+	const constellationPath = $derived(constellation.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' '));
 
 	const LEVEL_SEGMENTS = 18;
+	const VU_SEGMENTS = 20;
 </script>
 
 {#if playing && style !== 'off'}
@@ -74,6 +97,30 @@
 			<div class="pulse-rail left"></div>
 			<div class="pulse-core"><span></span><span></span><i></i></div>
 			<div class="pulse-rail right"></div>
+		{:else if style === 'spectrum'}
+			<div class="mirror-spectrum">
+				{#each displayBands as band}
+					<span style="--band: {Math.max(0.035, band)}"><i></i></span>
+				{/each}
+			</div>
+		{:else if style === 'ribbon'}
+			<svg class="ribbon" viewBox="0 0 100 100" preserveAspectRatio="none">
+				<path class="ribbon-glow" d={ribbonPath} />
+				<path class="ribbon-edge" d={wavePath} />
+				<path class="ribbon-edge lower" d={wavePath} transform="translate(0 100) scale(1 -1)" />
+			</svg>
+		{:else if style === 'vu'}
+			<div class="vu-meter">
+				<div class="vu-lane">{#each Array(VU_SEGMENTS) as _, index}<span class:active={(index + 1) / VU_SEGMENTS <= vuLow}></span>{/each}</div>
+				<div class="vu-lane">{#each Array(VU_SEGMENTS) as _, index}<span class:active={(index + 1) / VU_SEGMENTS <= vuHigh}></span>{/each}</div>
+			</div>
+		{:else if style === 'constellation'}
+			<svg class="constellation" viewBox="0 0 100 100" preserveAspectRatio="none">
+				<path d={constellationPath} />
+				{#each constellation as point}
+					<circle cx={point.x} cy={point.y} r={point.radius} />
+				{/each}
+			</svg>
 		{/if}
 	</div>
 {/if}
@@ -176,7 +223,54 @@
 	.pulse-core span + span { width: calc(5px + var(--level) * 10px); height: calc(5px + var(--level) * 10px); opacity: 0.55; }
 	.pulse-core i { width: 3px; height: 3px; background: currentColor; }
 
+	.mirror-spectrum {
+		display: flex;
+		align-items: stretch;
+		gap: 2px;
+		width: 100%;
+		height: 100%;
+	}
+	.mirror-spectrum span { position: relative; flex: 1 1 0; min-width: 1px; height: 100%; }
+	.mirror-spectrum i {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 50%;
+		height: max(2px, calc(var(--band) * 92%));
+		transform: translateY(-50%);
+		border-radius: 2px;
+		background: linear-gradient(to bottom, color-mix(in srgb, currentColor 38%, transparent), currentColor 50%, color-mix(in srgb, currentColor 38%, transparent));
+		opacity: 0.82;
+	}
+
+	.ribbon, .constellation { display: block; width: 100%; height: 100%; overflow: visible; }
+	.ribbon-glow { fill: currentColor; fill-opacity: 0.24; stroke: none; }
+	.ribbon-edge {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.25;
+		stroke-linecap: round;
+		vector-effect: non-scaling-stroke;
+		opacity: 0.75;
+	}
+	.ribbon-edge.lower { opacity: 0.3; }
+
+	.vu-meter { display: grid; gap: 3px; width: 100%; }
+	.vu-lane { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; height: 4px; }
+	.vu-lane span { border-radius: 1px; background: color-mix(in srgb, currentColor 12%, transparent); }
+	.vu-lane span.active { background: currentColor; opacity: 0.78; }
+	.vu-lane span.active:nth-last-child(-n + 4) { opacity: 1; }
+
+	.constellation path {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
+		opacity: 0.4;
+	}
+	.constellation circle { fill: currentColor; opacity: 0.96; vector-effect: non-scaling-stroke; }
+
 	@media (prefers-reduced-motion: reduce) {
-		.level-meter span, .pulse-core span { transition: none; }
+		.level-meter span, .pulse-core span, .vu-lane span { transition: none; }
 	}
 </style>
