@@ -137,6 +137,32 @@ test('desktop progress track and interaction area both stay compact', async ({
 	expect(metrics.backgroundClip).toBe('content-box');
 });
 
+test('episode completion is persisted before the final cross-device sync', async ({ page }, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop-player');
+	const pushed: Array<{ entity_type: string; payload: { completed?: boolean; event_type?: string } }> = [];
+	await page.route('**/api/v1/auth/status', (route) => route.fulfill({
+		json: { authenticated: true, user_id: 'completion-sync-user', username: 'Sync QA', role: 'user' }
+	}));
+	await page.route('**/api/v1/sync**', async (route) => {
+		if (route.request().method() === 'GET') {
+			return route.fulfill({ json: { changesets: [], next_cursor: 0, has_more: false, data_generation: 0 } });
+		}
+		const body = route.request().postDataJSON() as { operations?: typeof pushed };
+		pushed.push(...(body.operations ?? []));
+		return route.fulfill({ json: { applied_ops: body.operations?.length ?? 0, current_cursor: 0, data_generation: 0 } });
+	});
+
+	await page.goto('/podcast/test-show');
+	await page.getByRole('button', { name: 'Play episode', exact: true }).click();
+	await page.locator('audio').dispatchEvent('ended');
+
+	await expect.poll(() => pushed.some((operation) =>
+		operation.entity_type === 'playback_state' &&
+		operation.payload.completed === true &&
+		operation.payload.event_type === 'MARK_PLAYED'
+	)).toBe(true);
+});
+
 test('each visualizer uses a dedicated stage instead of covering the timeline', async ({ page }, testInfo) => {
 	test.skip(testInfo.project.name !== 'desktop-player');
 	test.setTimeout(60_000);

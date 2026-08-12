@@ -286,6 +286,11 @@
 		"noHourly": "No hourly pattern recorded yet",
 		"categories": "Categories",
 		"noCategory": "No category data recorded yet.",
+		"history": "Recently listened",
+		"historyCount": "Up to 1,000 episodes · {count} stored",
+		"historyMore": "Show 50 more",
+		"historyEpisode": "Episode",
+		"historyPodcast": "Podcast",
 		"timeSaved": "Time saved",
 		"baseline": "Baseline: playing everything at 1× in full",
 		"totalSaved": "Total saved",
@@ -304,7 +309,8 @@
 		"localOnly": "Stored only in this browser.",
 		"syncBody": "Listening sessions sync to your signed-in KoalaCast account so your statistics follow you across devices.",
 		"localBody": "Sign in to synchronize listening sessions across your devices. No third-party analytics receive this data.",
-		"exportJson": "Export JSON"
+		"exportJson": "Export JSON",
+		"support": "Support KoalaStuff on Ko-fi"
 	},
 	"settings": {
 		"title": "Settings",

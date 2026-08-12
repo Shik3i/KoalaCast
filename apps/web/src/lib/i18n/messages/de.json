@@ -286,6 +286,11 @@
 		"noHourly": "Noch kein Stundenmuster erfasst",
 		"categories": "Kategorien",
 		"noCategory": "Noch keine Kategoriedaten erfasst.",
+		"history": "Zuletzt gehört",
+		"historyCount": "Bis zu 1.000 Folgen · {count} gespeichert",
+		"historyMore": "50 weitere anzeigen",
+		"historyEpisode": "Folge",
+		"historyPodcast": "Podcast",
 		"timeSaved": "Gesparte Zeit",
 		"baseline": "Vergleich: vollständige Wiedergabe mit 1×",
 		"totalSaved": "Insgesamt gespart",
@@ -304,7 +309,8 @@
 		"localOnly": "Nur in diesem Browser gespeichert.",
 		"syncBody": "Hörsessions werden mit deinem angemeldeten KoalaCast-Konto synchronisiert, damit deine Statistik auf allen Geräten verfügbar ist.",
 		"localBody": "Melde dich an, um Hörsessions zwischen deinen Geräten zu synchronisieren. Diese Daten gehen nicht an Drittanbieter-Analysen.",
-		"exportJson": "JSON exportieren"
+		"exportJson": "JSON exportieren",
+		"support": "KoalaStuff auf Ko-fi unterstützen"
 	},
 	"settings": {
 		"title": "Einstellungen",

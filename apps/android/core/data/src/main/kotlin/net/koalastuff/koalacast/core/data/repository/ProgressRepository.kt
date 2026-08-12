@@ -44,6 +44,10 @@ class ProgressRepository @Inject constructor(
     val allProgress: Flow<List<PlaybackProgress>> =
         playbackStates.observeAll().map { list -> list.map { it.toModel() } }
 
+    /** User-facing history, newest first and intentionally bounded. */
+    val recentHistory: Flow<List<PlaybackProgress>> =
+        playbackStates.observeHistory(HISTORY_LIMIT).map { list -> list.map { it.toModel() } }
+
     fun progress(episodeId: String): Flow<PlaybackProgress?> =
         playbackStates.observe(episodeId).map { it?.toModel() }
 
@@ -152,5 +156,6 @@ class ProgressRepository @Inject constructor(
     private companion object {
         const val COMPLETION_THRESHOLD_PERCENT = 98
         const val MIN_SESSION_MS = 1_000L
+        const val HISTORY_LIMIT = 1_000
     }
 }

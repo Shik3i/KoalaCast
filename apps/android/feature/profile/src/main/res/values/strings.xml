@@ -46,7 +46,11 @@
     <string name="profile_intro">Intro and outro</string>
     <string name="profile_manual">Manual forward</string>
     <string name="profile_average_speed">Average listening speed: %.2f×</string>
+    <string name="profile_history">Recently listened</string>
+    <string name="profile_history_count">Up to 1,000 episodes · %1$d stored</string>
+    <string name="profile_history_more">Show 50 more</string>
     <string name="profile_privacy">Your data</string>
     <string name="profile_local_body">Listening history stays on this device unless you explicitly sign in and enable sync.</string>
     <string name="profile_export">Export JSON</string>
+    <string name="profile_support">Support KoalaStuff on Ko-fi</string>
 </resources>

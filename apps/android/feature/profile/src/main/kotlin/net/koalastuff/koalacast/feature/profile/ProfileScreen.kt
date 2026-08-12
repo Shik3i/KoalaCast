@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.feature.profile
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,7 +25,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,11 +54,13 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.util.Format
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.DateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Date
 
 @Composable
 fun ProfileScreen(
@@ -107,6 +113,7 @@ internal fun ProfileContent(
     val colors = KoalaTheme.colors
     val context = LocalContext.current
     val stats = state.stats
+    var visibleHistory by remember { mutableIntStateOf(20) }
 
     Column(
         modifier = modifier
@@ -331,6 +338,41 @@ internal fun ProfileContent(
         )
 
         Hairline()
+        SectionTitle(
+            stringResource(R.string.profile_history),
+            stringResource(R.string.profile_history_count, state.history.size),
+        )
+        state.history.take(visibleHistory).forEach { item ->
+            val track = item.track ?: return@forEach
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenPodcast(item.podcastId) }
+                    .padding(vertical = KoalaSpacing.gapSmall),
+            ) {
+                Text(
+                    text = track.title,
+                    style = KoalaTheme.type.listTitle,
+                    color = colors.ink2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                MonoText(
+                    text = "${track.podcastTitle} · ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.lastPlayedAtMs))}",
+                    color = colors.ink4,
+                    style = KoalaTheme.type.monoSmall,
+                    maxLines = 1,
+                )
+            }
+        }
+        if (visibleHistory < state.history.size) {
+            OutlineButton(
+                text = stringResource(R.string.profile_history_more),
+                onClick = { visibleHistory = (visibleHistory + 50).coerceAtMost(1000) },
+            )
+        }
+
+        Hairline()
         SectionTitle(stringResource(R.string.profile_privacy))
         Text(
             text = stringResource(R.string.profile_local_body),
@@ -338,6 +380,15 @@ internal fun ProfileContent(
             color = colors.ink3,
         )
         OutlineButton(text = stringResource(R.string.profile_export), onClick = onExport)
+        OutlineButton(
+            text = stringResource(R.string.profile_support),
+            leadingIcon = PhosphorIcons.Heart,
+            onClick = {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://support.koalastuff.net")),
+                )
+            },
+        )
     }
 }
 

@@ -41,7 +41,7 @@ class ProfileViewModel @Inject constructor(
 
     val state: StateFlow<ProfileUiState> = combine(
         progress.listeningHistory,
-        progress.allProgress,
+        progress.recentHistory,
         library.allSubscriptions,
         range,
         accounts.account,

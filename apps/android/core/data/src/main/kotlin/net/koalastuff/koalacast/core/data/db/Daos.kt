@@ -83,6 +83,9 @@ interface PlaybackStateDao {
     @Query("SELECT * FROM playback_states")
     fun observeAll(): Flow<List<PlaybackStateEntity>>
 
+    @Query("SELECT * FROM playback_states ORDER BY lastPlayedAt DESC LIMIT :limit")
+    fun observeHistory(limit: Int = 1000): Flow<List<PlaybackStateEntity>>
+
     @Query("SELECT episodeId FROM playback_states WHERE completed = 1")
     fun observeCompletedIds(): Flow<List<String>>
 

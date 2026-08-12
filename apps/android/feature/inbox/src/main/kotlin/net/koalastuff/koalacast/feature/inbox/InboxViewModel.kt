@@ -25,6 +25,7 @@ import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.PodcastRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
+import net.koalastuff.koalacast.core.data.repository.SyncRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.ContentTtl
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
@@ -37,6 +38,7 @@ import javax.inject.Inject
 
 data class InboxUiState(
     val loading: Boolean = true,
+    val refreshing: Boolean = false,
     val subscriptions: List<Subscription> = emptyList(),
     val rawEpisodes: List<InboxEpisode> = emptyList(),
     val completedIds: Set<String> = emptySet(),
@@ -90,6 +92,7 @@ class InboxViewModel @Inject constructor(
     private val downloads: DownloadRepository,
     private val preferences: PreferencesRepository,
     private val player: PlayerConnection,
+    private val sync: SyncRepository,
 ) : ViewModel() {
 
     private val filterPrefs = context.getSharedPreferences("inbox-filters", Context.MODE_PRIVATE)
@@ -183,15 +186,22 @@ class InboxViewModel @Inject constructor(
         }
     }
 
-    fun refresh() = refresh(force = true)
+    fun refresh() = refresh(force = true, syncFirst = true)
 
-    private fun refreshFromCache() = refresh(force = false)
+    private fun refreshFromCache() = refresh(force = false, syncFirst = false)
 
-    private fun refresh(force: Boolean) {
-        _state.update { it.copy(loading = it.rawEpisodes.isEmpty(), failedFeeds = 0) }
+    private fun refresh(force: Boolean, syncFirst: Boolean) {
+        _state.update {
+            it.copy(
+                loading = it.rawEpisodes.isEmpty(),
+                refreshing = syncFirst,
+                failedFeeds = 0,
+            )
+        }
 
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
+            if (syncFirst) sync.syncNow()
             var subscriptions = _state.value.subscriptions
             val semaphore = Semaphore(MAX_CONCURRENT_FEEDS)
             val cachedByPodcast = subscriptions.associate { subscription ->
@@ -220,7 +230,9 @@ class InboxViewModel @Inject constructor(
             subscriptions = library.subscriptionsSnapshot()
             _state.update { it.copy(subscriptions = subscriptions) }
             if (subscriptions.isEmpty()) {
-                _state.update { it.copy(loading = false, rawEpisodes = emptyList()) }
+                _state.update {
+                    it.copy(loading = false, refreshing = false, rawEpisodes = emptyList())
+                }
                 return@launch
             }
             val results = subscriptions.map { subscription ->
@@ -257,6 +269,7 @@ class InboxViewModel @Inject constructor(
             _state.update {
                 it.copy(
                     loading = false,
+                    refreshing = false,
                     rawEpisodes = results.flatMap(FeedResult::episodes),
                     failedFeeds = results.count(FeedResult::failed),
                 )

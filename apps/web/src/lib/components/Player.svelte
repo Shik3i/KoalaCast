@@ -910,6 +910,10 @@
 		player.isPlaying = false;
 		await flushListeningSession(true);
 		await saveProgress('MARK_PLAYED', true);
+		// flushListeningSession used to sync before MARK_PLAYED existed locally.
+		// Closing the tab after an episode ended therefore uploaded the listening
+		// session but left Android with the older, unfinished playback state.
+		if (sync.enabled) await sync.syncNow();
 		// Stop here if a "sleep at end of episode" timer is armed.
 		reachedEnd = true;
 		if (player.sleepAtEpisodeEnd) {

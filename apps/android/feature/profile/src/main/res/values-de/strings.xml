@@ -46,7 +46,11 @@
     <string name="profile_intro">Intro und Outro</string>
     <string name="profile_manual">Manuell vorgespult</string>
     <string name="profile_average_speed">Durchschnittliches Hörtempo: %.2f×</string>
+    <string name="profile_history">Zuletzt gehört</string>
+    <string name="profile_history_count">Bis zu 1.000 Folgen · %1$d gespeichert</string>
+    <string name="profile_history_more">50 weitere anzeigen</string>
     <string name="profile_privacy">Deine Daten</string>
     <string name="profile_local_body">Dein Hörverlauf bleibt auf diesem Gerät, solange du dich nicht ausdrücklich anmeldest und Sync aktivierst.</string>
     <string name="profile_export">JSON exportieren</string>
+    <string name="profile_support">KoalaStuff auf Ko-fi unterstützen</string>
 </resources>

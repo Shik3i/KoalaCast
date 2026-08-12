@@ -24,6 +24,7 @@
 	let history = $state<LocalPlaybackState[]>([]);
 	let subscriptionCount = $state(0);
 	let showArtwork = $state<Record<string, string>>({});
+	let visibleHistory = $state(20);
 	let loadedSyncAt = 0;
 
 	const rangeFloor = $derived.by(() => {
@@ -34,6 +35,9 @@
 	});
 	const filteredSessions = $derived(sessions.filter((item) => item.started_at >= rangeFloor));
 	const filteredStates = $derived(history.filter((item) => (item.last_played_at ?? 0) >= rangeFloor));
+	const recentHistory = $derived(
+		[...history].sort((a, b) => b.last_played_at - a.last_played_at).slice(0, 1000)
+	);
 	const stats = $derived(summarizeListening(filteredSessions, filteredStates));
 	const maxShowMs = $derived(stats.showTotals[0]?.ms || 1);
 	const maxWeekdayMs = $derived(Math.max(1, ...stats.weekdayTotals));
@@ -255,6 +259,26 @@
 		</aside>
 	</div>
 
+	<section class="history-section" id="history">
+		<header>
+			<h2>{t('profileStats.history')}</h2>
+			<span>{t('profileStats.historyCount', { count: recentHistory.length })}</span>
+		</header>
+		<div class="history-list">
+			{#each recentHistory.slice(0, visibleHistory) as item}
+				<a href={`/episode/${item.episode_id}`}>
+					<img src={optimizeArtwork(item.artwork_url, SUBSCRIPTION_ARTWORK_SIZE)} alt="" loading="lazy" onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
+					<span><strong>{item.title || t('profileStats.historyEpisode')}</strong><small>{item.podcast_title || t('profileStats.historyPodcast')}</small></span>
+					<time>{new Date(item.last_played_at).toLocaleString(prefs.uiLanguage, { dateStyle: 'medium', timeStyle: 'short' })}</time>
+					<em>{Math.round(item.progress_percent)}%</em>
+				</a>
+			{/each}
+		</div>
+		{#if visibleHistory < recentHistory.length}
+			<button class="history-more" onclick={() => (visibleHistory = Math.min(1000, visibleHistory + 50))}>{t('profileStats.historyMore')}</button>
+		{/if}
+	</section>
+
 	<section class="saved-section" id="time-saved">
 		<header><h2>{t('profileStats.timeSaved')}</h2><span>{t('profileStats.baseline')}</span></header>
 		<div class="saved-grid">
@@ -288,6 +312,7 @@
 		<a href="/settings"><i class="ph ph-gear" aria-hidden="true"></i><span>{t('quiet.nav.settings')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
 		<a href="/account"><i class="ph ph-user-circle" aria-hidden="true"></i><span>{t('nav.account')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
 		<a href="/privacy"><i class="ph ph-shield-check" aria-hidden="true"></i><span>{t('footer.privacy')}</span><i class="ph ph-caret-right" aria-hidden="true"></i></a>
+		<a href="https://support.koalastuff.net" target="_blank" rel="noopener noreferrer"><i class="ph ph-heart" aria-hidden="true"></i><span>{t('profileStats.support')}</span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></a>
 	</nav>
 </div>
 
@@ -311,7 +336,12 @@
 	.kpi-grid span, .saved-total > span, .privacy-card > div > span { color: var(--ink-4); font: 600 10px/1 var(--font-mono); letter-spacing: .01em; }
 	.kpi-grid strong { display: block; margin: 7px 0 5px; color: var(--ink-strong); font: 800 26px/1 var(--font-ui); letter-spacing: -.04em; }
 	.kpi-grid p { color: var(--ink-3); font-size: 12px; }
-	.activity-card, .rankings, .saved-section { padding: 20px 0; border-top: 1px solid var(--border-hair); }
+	.activity-card, .rankings, .history-section, .saved-section { padding: 20px 0; border-top: 1px solid var(--border-hair); }
+	.history-list { border-top: 1px solid var(--border-row); }
+	.history-list a { display: grid; grid-template-columns: 42px minmax(0,1fr) auto 42px; gap: 10px; align-items: center; min-height: 58px; border-bottom: 1px solid var(--border-row); }
+	.history-list img { width: 42px; height: 42px; border-radius: 5px; object-fit: cover; background: var(--bg-tile); }
+	.history-list span { min-width: 0; }.history-list strong, .history-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.history-list strong { font-size: 13px; }.history-list small, .history-list time, .history-list em { color: var(--ink-4); font: 500 10px/1.4 var(--font-mono); font-style: normal; }.history-list em { text-align: right; }
+	.history-more { min-height: 44px; margin-top: 12px; padding: 0 14px; border: 1px solid var(--border-ui); border-radius: var(--radius-control); color: var(--ink-2); font-weight: 700; }
 	section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 	section > header h2 { font-size: 17px; }
 	.activity-layout { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 6px; }
@@ -358,5 +388,5 @@
 	.profile-actions a > i:last-child { color: var(--ink-4); }
 	@media (max-width: 1050px) { .profile-analysis { grid-template-columns: 1fr; }.breakdowns { grid-template-columns: repeat(3,1fr); }.ranking-list a { grid-template-columns: 22px 36px minmax(0,1fr) 80px 46px; } }
 	@media (max-width: 760px) { .profile-head { grid-template-columns: 54px minmax(0,1fr) auto; }.profile-avatar { width: 54px; height: 54px; }.kpi-grid { grid-template-columns: repeat(2,1fr); }.saved-grid, .breakdowns { grid-template-columns: 1fr; } }
-	@media (max-width: 520px) { .profile-page { padding: 16px; }.heatmap { grid-auto-columns: 9px; overflow-x: auto; }.ranking-list a { grid-template-columns: 22px 34px minmax(0,1fr) 56px; }.ranking-list em { display: none; }.privacy-card { align-items: flex-start; flex-direction: column; } }
+	@media (max-width: 520px) { .profile-page { padding: 16px; }.heatmap { grid-auto-columns: 9px; overflow-x: auto; }.ranking-list a { grid-template-columns: 22px 34px minmax(0,1fr) 56px; }.ranking-list em, .history-list em { display: none; }.history-list a { grid-template-columns: 38px minmax(0,1fr) auto; }.history-list img { width: 38px; height: 38px; }.history-list time { max-width: 84px; text-align: right; }.privacy-card { align-items: flex-start; flex-direction: column; } }
 </style>

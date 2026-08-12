@@ -46,7 +46,9 @@ test('mobile navigation mirrors the Android destinations', async ({ page }) => {
 test('legacy more route redirects to profile actions', async ({ page }) => {
 	await page.goto('/more');
 	await expect(page).toHaveURL(/\/profile$/);
-	await expect(page.locator('.profile-actions').getByRole('link')).toHaveCount(4);
+	await expect(page.locator('.profile-actions').getByRole('link')).toHaveCount(5);
+	await expect(page.locator('.profile-actions').getByRole('link', { name: 'Support KoalaStuff on Ko-fi' }))
+		.toHaveAttribute('href', 'https://support.koalastuff.net');
 });
 
 test('audio controls remain visible without consuming the settings screen', async ({ page }) => {

@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,6 +96,7 @@ fun InboxScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun InboxContent(
     state: InboxUiState,
@@ -146,10 +149,15 @@ internal fun InboxContent(
         state.hideSpecials,
     ).count { it }
 
-    LazyColumn(
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
         modifier = modifier.fillMaxSize().background(colors.bgPanel),
-        contentPadding = contentPadding,
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = contentPadding,
+        ) {
         item(key = "header") {
             Column(
                 modifier = Modifier
@@ -297,6 +305,7 @@ internal fun InboxContent(
                     }
                 }
             }
+        }
         }
     }
 }
