@@ -1332,8 +1332,7 @@
 	<div class="player-shell" style={accentVars}>
 		<div class="player-bar" bind:this={playerBarElement}>
 			<!-- Seek progress line spanning the top of the bar -->
-			<div class="progress-track" class:visualizing={prefs.visualizer === 'level'} style="--progress: {progressPercent}%; --audio-level: {visualizerLevel}"></div>
-			<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} spectrum={visualizerSpectrum} peaks={visualizerPeaks} playing={isPlaying} variant="compact" />
+			<div class="progress-track" style="--progress: {progressPercent}%"></div>
 
 			<div class="track-info">
 				<button class="art-btn" onclick={() => (expanded = true)} aria-label={t('player.openFullscreen')} title={t('player.openFullscreen')}>
@@ -1402,6 +1401,11 @@
 						<i class="ph ph-skip-forward" aria-hidden="true"></i>
 					</button>
 				</div>
+				{#if isPlaying && prefs.visualizer !== 'off'}
+					<div class="visualizer-stage compact-visualizer">
+						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} spectrum={visualizerSpectrum} peaks={visualizerPeaks} variant="compact" />
+					</div>
+				{/if}
 
 				<div class="timeline">
 					<span class="time">{formatTime(displayTimeMs)}</span>
@@ -1525,10 +1529,15 @@
 					<a class="np-podcast" href={`/podcast/${track.podcast_id}`} onclick={() => (expanded = false)}>{track.podcast_title}</a>
 				</div>
 
+				{#if isPlaying && prefs.visualizer !== 'off'}
+					<div class="visualizer-stage np-visualizer">
+						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} spectrum={visualizerSpectrum} peaks={visualizerPeaks} variant="full" />
+					</div>
+				{/if}
+
 				<div class="np-timeline">
 					<span class="time">{formatTime(displayTimeMs)}</span>
-					<div class="np-slider-host" class:visualizing={prefs.visualizer === 'level'} style="--audio-level: {visualizerLevel}">
-						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} progress={progressPercent} spectrum={visualizerSpectrum} peaks={visualizerPeaks} playing={isPlaying} variant="full" />
+					<div class="np-slider-host">
 						{#if chapterMarkers.length}
 							<div class="chapter-marks" aria-hidden="true">
 								{#each chapterMarkers as marker}
@@ -1806,10 +1815,6 @@
 		background: linear-gradient(90deg, var(--show-accent, var(--accent-green)), color-mix(in srgb, var(--show-accent, var(--accent-green)) 60%, #fff));
 		transition: width 0.25s linear, background 0.4s ease;
 	}
-	/* Swells across most of the row, like the app's. A 3px bar that grew to 6px
-	   was not something anyone noticed. */
-	.progress-track.visualizing { height: calc(5px + var(--audio-level, 0) * 17px); box-shadow: 0 0 calc(var(--audio-level, 0) * 12px) var(--show-accent, var(--accent-green)); }
-
 	.art-btn {
 		position: relative;
 		padding: 0;
@@ -1880,6 +1885,15 @@
 		align-items: center;
 		gap: 0.35rem;
 	}
+	.visualizer-stage {
+		box-sizing: border-box;
+		width: 100%;
+		border: 1px solid color-mix(in srgb, var(--player-text) 10%, transparent);
+		border-radius: 6px;
+		background: color-mix(in srgb, var(--player-text) 4%, transparent);
+		overflow: hidden;
+	}
+	.compact-visualizer { height: 16px; padding: 2px 8px; }
 
 	.controls {
 		display: flex;
@@ -2243,7 +2257,7 @@
 	.np-timeline { display: flex; align-items: center; gap: 0.75rem; width: 100%; }
 	.np-slider-host { position: relative; display: flex; flex: 1; align-items: center; min-width: 0; }
 	.np-slider-host > input[type='range'] { position: relative; z-index: 3; width: 100%; }
-	.np-slider-host.visualizing > input[type='range'] { filter: drop-shadow(0 0 calc(var(--audio-level, 0) * 10px) var(--show-accent, var(--accent-green))); }
+	.np-visualizer { height: 42px; padding: 6px 12px; border-radius: 9px; }
 	.np-timeline input[type='range'] {
 		flex: 1;
 		-webkit-appearance: none;
@@ -2770,6 +2784,7 @@
 		.controls .jump-control:first-of-type { display: none; }
 		.play-btn { width: 44px; height: 44px; }
 		.timeline { display: none; }
+		.compact-visualizer { display: none; }
 	}
 	@media (max-height: 800px) {
 		.np-content { gap: .8rem; justify-content: flex-start; }

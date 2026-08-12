@@ -68,7 +68,7 @@ func LoadConfig() (*Config, error) {
 		WebPushVAPIDPublicKey:    strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PUBLIC_KEY")),
 		WebPushVAPIDPrivateKey:   strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PRIVATE_KEY")),
 		WebPushVAPIDSubject:      getEnv("WEB_PUSH_VAPID_SUBJECT", getEnv("PUBLIC_BASE_URL", "http://localhost:3000")),
-		AudioEffectsProxyEnabled: getEnvBool("KC_AUDIO_EFFECTS_PROXY_ENABLED", false),
+		AudioEffectsProxyEnabled: getEnvBool("KC_AUDIO_EFFECTS_PROXY_ENABLED", true),
 		// Secure cookies default ON in production; a deployment terminating TLS
 		// elsewhere (e.g. plain-HTTP local demo behind a proxy) can opt out with
 		// SECURE_COOKIES=false.

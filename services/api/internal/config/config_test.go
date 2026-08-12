@@ -99,7 +99,7 @@ func TestConfig_RegistrationEnabledOverride(t *testing.T) {
 	}
 }
 
-func TestConfig_AudioEffectsProxyOptIn(t *testing.T) {
+func TestConfig_AudioEffectsProxyDefaultsOnAndSupportsOptOut(t *testing.T) {
 	t.Setenv("SESSION_SECRET", "a-very-secure-production-secret-with-at-least-32-characters")
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("KC_AUDIO_EFFECTS_PROXY_ENABLED", "")
@@ -108,17 +108,17 @@ func TestConfig_AudioEffectsProxyOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error with default proxy setting: %v", err)
 	}
-	if defaultCfg.AudioEffectsProxyEnabled {
-		t.Fatal("expected audio effects proxy to be disabled by default")
+	if !defaultCfg.AudioEffectsProxyEnabled {
+		t.Fatal("expected audio effects proxy to be enabled by default")
 	}
 
-	t.Setenv("KC_AUDIO_EFFECTS_PROXY_ENABLED", "true")
-	enabledCfg, err := LoadConfig()
+	t.Setenv("KC_AUDIO_EFFECTS_PROXY_ENABLED", "false")
+	disabledCfg, err := LoadConfig()
 	if err != nil {
-		t.Fatalf("unexpected error with enabled proxy setting: %v", err)
+		t.Fatalf("unexpected error with disabled proxy setting: %v", err)
 	}
-	if !enabledCfg.AudioEffectsProxyEnabled {
-		t.Fatal("expected audio effects proxy to be enabled explicitly")
+	if disabledCfg.AudioEffectsProxyEnabled {
+		t.Fatal("expected audio effects proxy to support an explicit opt-out")
 	}
 }
 

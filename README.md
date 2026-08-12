@@ -208,7 +208,7 @@ The backend is configured entirely through environment variables. Copy [`.env.ex
 | `FEED_MAX_STORED_EPISODES` | `200` | Recent metadata-cache rows retained per podcast; rows referenced by user state are preserved |
 | `WEB_PUSH_VAPID_PUBLIC_KEY` / `_PRIVATE_KEY` | empty | Enables server-sent browser notifications; generate once with `cd services/api && go run ./cmd/vapid` |
 | `WEB_PUSH_VAPID_SUBJECT` | `PUBLIC_BASE_URL` | VAPID contact URI (`https:` or `mailto:`) |
-| `KC_AUDIO_EFFECTS_PROXY_ENABLED` | `false` | Optional relay fallback for CORS-blocked browser effects/downloads; uses the self-hoster's bandwidth |
+| `KC_AUDIO_EFFECTS_PROXY_ENABLED` | `true` | Relay fallback for CORS-blocked browser effects/downloads; set `false` to avoid relay bandwidth |
 
 Full precedence rules: [docs/architecture/overview.md](docs/architecture/overview.md).
 

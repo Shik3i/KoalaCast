@@ -73,7 +73,7 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 					{ label: 'Search & Discovery', text: 'Search queries (iTunes Search API & PodcastIndex API) are executed by the Go backend. Search APIs see only the KoalaCast server IP address.' },
 					{ label: 'RSS Feed Parsing', text: 'Podcast RSS XML feed files are fetched and parsed on the server side.' },
 					{ label: 'Chapters & Transcripts', text: 'Episode chapter JSON and WebVTT/SRT transcript files are fetched via CORS-safe proxy endpoints (/api/v1/proxy/chapters, /api/v1/proxy/transcript).' },
-					{ label: 'Downloads and optional audio effects', text: 'Browser downloads, Volume Boost, and Trim Silence use the publisher directly when its CORS policy permits browser access. A self-hoster may explicitly enable KC_AUDIO_EFFECTS_PROXY_ENABLED to relay only CORS-incompatible downloads or effect playback; this fallback is disabled by default.' }
+					{ label: 'Downloads and optional audio effects', text: 'Browser downloads, Volume Boost, Trim Silence, and visualizers use the publisher directly when its CORS policy permits browser access. For incompatible publishers, KoalaCast relays the requested audio through the instance by default; self-hosters can disable this bandwidth-using fallback with KC_AUDIO_EFFECTS_PROXY_ENABLED=false.' }
 				]
 			},
 			direct: {

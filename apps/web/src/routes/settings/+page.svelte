@@ -574,18 +574,10 @@
 					</button>
 				{/each}
 			</div>
-			<!-- The app shows each style drawn beside its name; a name alone tells
-			     nobody what "Pulse" is going to do to their progress bar. There is
-			     no audio here, so the component falls back to its canned shape. -->
+			<!-- Preview uses the same component and dimensions as the player stage. -->
 			{#if prefs.visualizer !== 'off'}
 				<div class="visualizer-preview">
-					{#if prefs.visualizer === 'level'}
-						<!-- Level is drawn by the progress track itself, not by the
-						     signal overlay, so it gets its own swollen-bar sample. -->
-						<span class="level-preview"></span>
-					{:else}
-						<VisualizerSignal style={prefs.visualizer} variant="preview" progress={55} level={0.7} />
-					{/if}
+					<VisualizerSignal style={prefs.visualizer} variant="preview" level={0.7} />
 				</div>
 			{/if}
 		</div>
@@ -1073,17 +1065,6 @@
 		border: 1px solid var(--border-ui);
 		border-radius: var(--radius-control);
 		background: var(--bg-sunken);
-	}
-
-	.level-preview {
-		flex: 1;
-		height: 7px;
-		border-radius: 999px;
-		background: linear-gradient(
-			to right,
-			var(--accent-fill) 0 55%,
-			var(--track) 55% 100%
-		);
 	}
 
 	.select-setting { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1rem; background: var(--bg-elevated); border: 1px solid var(--border-ui); border-radius: var(--radius-lg); }

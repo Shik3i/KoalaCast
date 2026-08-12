@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test';
 
 function toneWav() {
 	const sampleRate = 8_000;
-	const samples = sampleRate * 2;
+	// Long enough for effect-source negotiation and all four visualizer assertions.
+	// The former two-second fixture could end and close the player before the
+	// visualizer became visible on a slower CI machine.
+	const samples = sampleRate * 30;
 	const wav = Buffer.alloc(44 + samples * 2);
 	wav.write('RIFF', 0);
 	wav.writeUInt32LE(wav.length - 8, 4);
@@ -28,6 +31,7 @@ test.beforeEach(async ({ page }) => {
 		localStorage.setItem('koalacast_ui_language', 'en');
 		localStorage.removeItem('koalacast_volume_boost');
 		localStorage.removeItem('koalacast_skip_silence');
+		localStorage.removeItem('koalacast_visualizer');
 
 		const NativeAudioContext = window.AudioContext;
 		(window as any).__audioContextCount = 0;
@@ -131,6 +135,51 @@ test('desktop progress track and interaction area both stay compact', async ({
 	expect(metrics.height).toBe(20);
 	expect(metrics.paintedTrackHeight).toBe(4);
 	expect(metrics.backgroundClip).toBe('content-box');
+});
+
+test('each visualizer uses a dedicated stage instead of covering the timeline', async ({ page }, testInfo) => {
+	test.skip(testInfo.project.name !== 'desktop-player');
+	test.setTimeout(60_000);
+
+	const accountReady = page.waitForResponse((response) => response.url().includes('/api/v1/auth/status'));
+	await page.goto('/podcast/test-show');
+	await accountReady;
+	await page.getByRole('button', { name: 'Play episode', exact: true }).click();
+	await page.getByRole('link', { name: 'Settings', exact: true }).click();
+	await page.locator('#playback > summary').click();
+
+	for (const [style, label] of Object.entries({ level: 'Level', waveform: 'Waveform', bars: 'Bars', pulse: 'Pulse' })) {
+		const styleButton = page.getByRole('group', { name: 'Audio visualizer' }).getByRole('button', { name: label, exact: true });
+		await styleButton.click();
+		await expect(styleButton).toHaveAttribute('aria-pressed', 'true');
+		await expect(page.locator('.player-bar')).toBeVisible();
+
+		const stage = page.locator('.compact-visualizer');
+		await expect(stage).toBeVisible();
+		await expect(stage.locator(`[data-visualizer="${style}"]`)).toBeVisible();
+		await expect.poll(() => stage.locator('[data-visualizer]').evaluate((element) =>
+			Number.parseFloat((element as HTMLElement).style.getPropertyValue('--level'))
+		)).toBeGreaterThan(0);
+		await expect(page.locator('.timeline-track [data-visualizer]')).toHaveCount(0);
+
+		const geometry = await page.evaluate(() => {
+			const stage = document.querySelector('.compact-visualizer')!.getBoundingClientRect();
+			const timeline = document.querySelector('.timeline-track')!.getBoundingClientRect();
+			return { stageBottom: stage.bottom, timelineTop: timeline.top };
+		});
+		expect(geometry.stageBottom).toBeLessThanOrEqual(geometry.timelineTop);
+	}
+
+	await page.locator('.art-btn').click();
+	const fullStage = page.locator('.np-visualizer');
+	await expect(fullStage).toBeVisible();
+	await expect(page.locator('.np-slider-host [data-visualizer]')).toHaveCount(0);
+	const fullGeometry = await page.evaluate(() => {
+		const stage = document.querySelector('.np-visualizer')!.getBoundingClientRect();
+		const timeline = document.querySelector('.np-timeline')!.getBoundingClientRect();
+		return { stageBottom: stage.bottom, timelineTop: timeline.top };
+	});
+	expect(fullGeometry.stageBottom).toBeLessThanOrEqual(fullGeometry.timelineTop);
 });
 
 test('signed-in settings navigation keeps playback and the rail footer visible', async ({
