@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build,id=go-build-$TARGETPLATFORM 
     xx-verify koalacast
 
 # Stage 3: Minimal runtime image
-FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS runner
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS runner
 RUN apk add --no-cache ca-certificates sqlite-libs tzdata wget
 
 WORKDIR /app
