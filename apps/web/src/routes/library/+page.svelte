@@ -41,6 +41,7 @@
 	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
 	import { podcastHref } from '$lib/podcast-link';
 	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);
@@ -54,6 +55,7 @@
 	let librarySort = $state<'recent' | 'az'>('recent');
 	let activeCover = $state<string | null>(null);
 	let playingSubscriptionId = $state<string | null>(null);
+	let libraryReady = $state(false);
 	let activeFolder = $state('');
 	let longPressTimer: number | null = null;
 	const libraryTabs = ['subscriptions', 'episodes', 'queue', 'favorites'] as const;
@@ -87,6 +89,7 @@
 	});
 
 	onMount(async () => {
+		await waitForAccountContext();
 		const requestedView = new URLSearchParams(window.location.search).get('view');
 		if (requestedView === 'subscriptions' || requestedView === 'episodes' || requestedView === 'queue' || requestedView === 'favorites') {
 			activeTab = requestedView;
@@ -97,6 +100,7 @@
 		favorites = await getLocalFavorites();
 		namedQueues = await getLocalNamedQueues();
 		await loadSmartQueues();
+		libraryReady = true;
 	});
 
 	// ---- Smart queues ----
@@ -489,7 +493,12 @@
 				{/each}
 			</div>
 		{/if}
-		{#if subscriptions.length === 0}
+		{#if !libraryReady}
+			<div class="empty-state" role="status">
+				<i class="ph ph-spinner-gap empty-icon" aria-hidden="true"></i>
+				<p>{t('common.loading')}</p>
+			</div>
+		{:else if subscriptions.length === 0}
 			<div class="empty-state">
 				<i class="ph ph-books empty-icon" aria-hidden="true"></i>
 				<img class="empty-illustration" src="/illustrations/empty-library.webp" width="256" height="256" loading="lazy" decoding="async" alt="" />

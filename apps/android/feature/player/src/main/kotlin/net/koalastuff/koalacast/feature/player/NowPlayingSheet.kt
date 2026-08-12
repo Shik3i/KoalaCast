@@ -73,6 +73,7 @@ import net.koalastuff.koalacast.core.ui.util.Format
 fun NowPlayingScreen(
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
@@ -116,6 +117,7 @@ fun NowPlayingScreen(
         onOpenEpisode = onOpenEpisode,
         onTogglePlayPause = viewModel::togglePlayPause,
         onRetry = viewModel::retry,
+        onOpenSettings = onOpenSettings,
         onSeekBack = viewModel::seekBack,
         onSeekForward = viewModel::seekForward,
         onSeekTo = viewModel::seekTo,
@@ -137,6 +139,7 @@ internal fun NowPlayingContent(
     onOpenEpisode: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
     onRetry: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onSeekBack: () -> Unit,
     onSeekForward: () -> Unit,
     onSeekTo: (Long) -> Unit,
@@ -231,28 +234,35 @@ internal fun NowPlayingContent(
                 verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
             ) {
                 Text(
-                    text = stringResource(R.string.player_error),
+                    text = if (state.explicitBlocked) error else {
+                        stringResource(R.string.player_error)
+                    },
                     style = KoalaTheme.type.bodySmall,
                     color = colors.inkStrong,
                 )
-                MonoText(
-                    text = stringResource(
-                        R.string.player_error_diagnostic,
-                        stringResource(
-                            if (state.isOfflineSource) {
-                                R.string.player_source_offline
-                            } else {
-                                R.string.player_source_stream
-                            },
+                if (!state.explicitBlocked) {
+                    MonoText(
+                        text = stringResource(
+                            R.string.player_error_diagnostic,
+                            stringResource(
+                                if (state.isOfflineSource) {
+                                    R.string.player_source_offline
+                                } else {
+                                    R.string.player_source_stream
+                                },
+                            ),
+                            error,
                         ),
-                        error,
-                    ),
-                    color = colors.ink4,
-                    style = KoalaTheme.type.monoSmall,
-                )
+                        color = colors.ink4,
+                        style = KoalaTheme.type.monoSmall,
+                    )
+                }
                 OutlineButton(
-                    text = stringResource(R.string.player_retry),
-                    onClick = onRetry,
+                    text = stringResource(
+                        if (state.explicitBlocked) R.string.player_open_settings
+                        else R.string.player_retry,
+                    ),
+                    onClick = if (state.explicitBlocked) onOpenSettings else onRetry,
                 )
             }
         }

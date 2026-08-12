@@ -192,6 +192,7 @@ class LibraryRepository @Inject constructor(
                 enclosureUrl = track.enclosureUrl,
                 durationMs = track.durationMs,
                 categories = track.categories,
+                explicit = track.explicit,
             ),
         )
         tombstones.delete(TombstoneEntity.idFor(TombstoneEntity.TYPE_FAVORITE, track.episodeId))

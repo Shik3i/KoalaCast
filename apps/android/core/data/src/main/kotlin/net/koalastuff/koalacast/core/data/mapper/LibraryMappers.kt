@@ -63,6 +63,7 @@ fun Episode.toTrack(podcastTitle: String, fallbackArtworkUrl: String = ""): Trac
     artworkUrl = artworkUrl.ifBlank { fallbackArtworkUrl },
     enclosureUrl = enclosureUrl,
     durationMs = durationMs,
+    explicit = explicit,
 )
 
 fun PlaybackStateEntity.toModel() = PlaybackProgress(
@@ -82,6 +83,7 @@ fun PlaybackStateEntity.toModel() = PlaybackProgress(
             enclosureUrl = it,
             durationMs = durationMs ?: 0L,
             categories = categories,
+            explicit = explicit,
         )
     },
 )
@@ -99,6 +101,7 @@ fun QueueItemEntity.toModel() = QueueEntry(
         enclosureUrl = enclosureUrl,
         durationMs = durationMs,
         categories = categories,
+        explicit = explicit,
     ),
 )
 
@@ -115,6 +118,7 @@ fun FavoriteEntity.toModel() = Favorite(
             enclosureUrl = it,
             durationMs = durationMs ?: 0L,
             categories = categories,
+            explicit = explicit,
         )
     },
 )

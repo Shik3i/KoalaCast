@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="podcast_explicit_blocked">Dieser Podcast ist als explizit gekennzeichnet. Aktiviere explizite Inhalte in den Einstellungen, um ihn anzuzeigen.</string>
+    <string name="podcast_open_settings">Einstellungen öffnen</string>
     <string name="podcast_episodes">Folgen</string>
     <string name="podcast_episode_number">Folge %1$d</string>
     <string name="podcast_explicit">Explizit</string>

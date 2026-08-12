@@ -19,6 +19,7 @@ fun PodcastSummaryDto.toModel() = PodcastSummary(
     categories = categories,
     description = description,
     language = language,
+    explicit = explicit,
 )
 
 fun PodcastDto.toModel() = Podcast(

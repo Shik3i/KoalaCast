@@ -23,6 +23,7 @@ object TrackMediaItem {
     private const val KEY_CATEGORIES = "koalacast.categories"
     private const val KEY_ENCLOSURE_URL = "koalacast.enclosureUrl"
     private const val KEY_OFFLINE_SOURCE = "koalacast.offlineSource"
+    private const val KEY_EXPLICIT = "koalacast.explicit"
 
     fun from(track: Track, artworkUri: String? = null, mediaUri: String? = null): MediaItem {
         val extras = Bundle().apply {
@@ -33,6 +34,7 @@ object TrackMediaItem {
             putStringArray(KEY_CATEGORIES, track.categories.toTypedArray())
             putString(KEY_ENCLOSURE_URL, track.enclosureUrl)
             putBoolean(KEY_OFFLINE_SOURCE, mediaUri != null)
+            putInt(KEY_EXPLICIT, when (track.explicit) { true -> 1; false -> 0; null -> -1 })
         }
 
         val metadata = MediaMetadata.Builder()
@@ -66,6 +68,7 @@ object TrackMediaItem {
                 ?: item.localConfiguration?.uri?.toString().orEmpty(),
             durationMs = extras.getLong(KEY_DURATION_MS),
             categories = extras.getStringArray(KEY_CATEGORIES)?.toList().orEmpty(),
+            explicit = when (extras.getInt(KEY_EXPLICIT, -1)) { 1 -> true; 0 -> false; else -> null },
         )
     }
 

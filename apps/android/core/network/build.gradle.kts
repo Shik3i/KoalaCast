@@ -6,6 +6,15 @@ plugins {
 
 android {
     namespace = "net.koalastuff.koalacast.core.network"
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        (variant as com.android.build.api.variant.HasUnitTestBuilder).enableUnitTest = true
+    }
 }
 
 dependencies {

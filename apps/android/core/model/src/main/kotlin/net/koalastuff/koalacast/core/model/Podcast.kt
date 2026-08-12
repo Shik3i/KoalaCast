@@ -13,7 +13,7 @@ data class Podcast(
     val artworkUrl: String,
     val link: String,
     val language: String,
-    val explicit: Boolean,
+    val explicit: Boolean?,
     val copyright: String,
     val lastSuccessfulFetchAtMs: Long,
     val episodeCount: Int,
@@ -34,6 +34,7 @@ data class PodcastSummary(
     val categories: List<String>,
     val description: String,
     val language: String,
+    val explicit: Boolean? = null,
 )
 
 fun PodcastSummary.isHiddenBy(hiddenGenres: Set<String>): Boolean {

@@ -4,6 +4,7 @@
 		getAllLocalPlaybackStates,
 		getLocalListeningSessions,
 		getLocalSubscriptions,
+		getCachedContent,
 		type LocalListeningSession,
 		type LocalPlaybackState
 	} from '$lib/idb/db';
@@ -11,6 +12,8 @@
 	import { sync } from '$lib/stores/sync.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { t } from '$lib/i18n';
+	import { waitForAccountContext } from '$lib/stores/account-context';
+	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
 
 	type Range = 'year' | '90days' | 'all';
 
@@ -20,6 +23,7 @@
 	let sessions = $state<LocalListeningSession[]>([]);
 	let history = $state<LocalPlaybackState[]>([]);
 	let subscriptionCount = $state(0);
+	let showArtwork = $state<Record<string, string>>({});
 	let loadedSyncAt = 0;
 
 	const rangeFloor = $derived.by(() => {
@@ -61,11 +65,29 @@
 	const peakHour = $derived(stats.hourTotals.indexOf(maxHourMs));
 
 	async function loadListeningData() {
-		[sessions, history, subscriptionCount] = await Promise.all([
+		await waitForAccountContext();
+		const [nextSessions, nextHistory, subscriptions] = await Promise.all([
 			getLocalListeningSessions(),
 			getAllLocalPlaybackStates(),
-			getLocalSubscriptions().then((items) => items.length)
+			getLocalSubscriptions()
 		]);
+		const artwork = new Map<string, string>();
+		for (const state of nextHistory) {
+			if (state.podcast_id && state.artwork_url) artwork.set(state.podcast_id, state.artwork_url);
+		}
+		for (const subscription of subscriptions) {
+			if (subscription.artwork_url) artwork.set(subscription.podcast_id, subscription.artwork_url);
+		}
+		const topShows = summarizeListening(nextSessions, nextHistory).showTotals;
+		await Promise.all(topShows.map(async (show) => {
+			if (artwork.has(show.id)) return;
+			const cached = await getCachedContent<{ artwork_url?: string }>(`podcast:id:${show.id}`);
+			if (cached?.value.artwork_url) artwork.set(show.id, cached.value.artwork_url);
+		}));
+		sessions = nextSessions;
+		history = nextHistory;
+		subscriptionCount = subscriptions.length;
+		showArtwork = Object.fromEntries(artwork);
 	}
 
 	onMount(async () => {
@@ -182,7 +204,14 @@
 				{#each stats.showTotals as show, index}
 					<a href={`/podcast/${show.id}`}>
 						<span>{String(index + 1).padStart(2, '0')}</span>
-						<i class="cover-placeholder"></i>
+						<img
+							class="ranking-cover"
+							src={optimizeArtwork(showArtwork[show.id], SUBSCRIPTION_ARTWORK_SIZE)}
+							alt=""
+							loading="lazy"
+							decoding="async"
+							onerror={(event) => ((event.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')}
+						/>
 						<div><strong>{show.title}</strong><span><i style:width={`${show.ms / maxShowMs * 100}%`}></i></span></div>
 						<time>{duration(show.ms)}</time>
 						<em>{t('profileStats.episodesShort', { count: show.episodes })}</em>
@@ -296,7 +325,7 @@
 	.ranking-list { border-top: 1px solid var(--border-row); }
 	.ranking-list a { display: grid; grid-template-columns: 22px 36px minmax(0,1fr) 96px 58px; gap: 8px; align-items: center; min-height: 52px; border-bottom: 1px solid var(--border-row); }
 	.ranking-list > a > span, .ranking-list time, .ranking-list em { color: var(--ink-4); font: 600 10px/1 var(--font-mono); font-style: normal; font-variant-numeric: tabular-nums; }
-	.cover-placeholder { width: 36px; height: 36px; border-radius: 4px; background: var(--bg-tile); }
+	.ranking-cover { width: 36px; height: 36px; border-radius: 4px; background: var(--bg-tile); object-fit: cover; }
 	.ranking-list a > div { min-width: 0; }.ranking-list a > div strong { display: block; overflow: hidden; font: 700 13px/1.4 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
 	.ranking-list a > div > span { display: block; height: 3px; margin-top: 5px; background: var(--track); border-radius: 20px; }.ranking-list a > div > span i { display: block; height: 100%; background: var(--accent-fill); border-radius: inherit; }
 	.empty { padding: 20px 0; color: var(--ink-4); font-size: 12px; }

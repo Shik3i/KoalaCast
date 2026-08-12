@@ -47,7 +47,10 @@ export async function setBrowserNotificationsEnabled(enabled: boolean): Promise<
 export async function disableBrowserNotifications(): Promise<void> {
 	if (!('serviceWorker' in navigator)) return;
 	try {
-		const registration = await navigator.serviceWorker.ready;
+		// `ready` never resolves when no service worker has been registered. A data
+		// reset must not hang forever in that common browser state.
+		const registration = await navigator.serviceWorker.getRegistration();
+		if (!registration) return;
 		const subscription = await registration.pushManager?.getSubscription();
 		if (!subscription) return;
 		await fetch('/api/v1/push/subscriptions', {

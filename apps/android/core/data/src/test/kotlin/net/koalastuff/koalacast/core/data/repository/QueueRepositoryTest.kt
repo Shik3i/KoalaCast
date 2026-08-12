@@ -10,6 +10,7 @@ import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.Track
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -77,6 +78,14 @@ class QueueRepositoryTest {
         repository.addToEnd(track("a"))
 
         assertEquals(listOf("a"), queuedIds())
+    }
+
+    @Test
+    fun `explicit episodes are rejected while unknown episodes remain queueable by default`() = runTest {
+        assertFalse(repository.addToEnd(track("explicit").copy(explicit = true)))
+        assertTrue(repository.addToEnd(track("unknown").copy(explicit = null)))
+
+        assertEquals(listOf("unknown"), queuedIds())
     }
 
     @Test

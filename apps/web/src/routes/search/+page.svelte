@@ -9,6 +9,7 @@
 	import { reveal } from '$lib/actions/reveal';
 	import { optimizeArtwork } from '$lib/artwork';
 	import Skeleton from '$lib/components/Skeleton.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 	import { slide, fade } from 'svelte/transition';
 	import { SUPPORTED_LANGUAGES, regionForLanguage } from '$lib/data/languages';
 	import { GENRES, genreLabel } from '$lib/genres';
@@ -106,6 +107,7 @@
 	const HISTORY_KEY = 'koalacast_search_history';
 
 	onMount(async () => {
+		await waitForAccountContext();
 		const subs = await getLocalSubscriptions();
 		subscribedIds = subs.map((s) => s.podcast_id);
 		subscribedFeeds = subs.map((s) => s.feed_url).filter(Boolean);

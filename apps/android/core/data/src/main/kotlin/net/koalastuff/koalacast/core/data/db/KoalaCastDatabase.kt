@@ -43,7 +43,7 @@ class Converters {
         AccountNamespaceStateEntity::class,
         ContentCacheEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

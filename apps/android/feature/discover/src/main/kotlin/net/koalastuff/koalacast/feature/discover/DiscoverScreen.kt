@@ -223,6 +223,9 @@ private fun SpotlightCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AccentBadge(label = stringResource(R.string.discover_cover_story))
+            if (spotlight.show.explicit == true || episode?.explicit == true) {
+                AccentBadge(label = stringResource(R.string.discover_explicit))
+            }
             MonoText(
                 text = buildString {
                     append(spotlight.show.author.ifBlank { spotlight.show.title })
@@ -363,13 +366,22 @@ private fun ChartRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
         ) {
-            Text(
-                text = show.title,
-                style = KoalaTheme.type.listTitle,
-                color = colors.ink2,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = show.title,
+                    style = KoalaTheme.type.listTitle,
+                    color = colors.ink2,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (show.explicit == true) {
+                    AccentBadge(label = stringResource(R.string.discover_explicit))
+                }
+            }
             MonoText(
                 text = listOf(show.author, show.category)
                     .filter { it.isNotBlank() }

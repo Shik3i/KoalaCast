@@ -52,6 +52,7 @@ import net.koalastuff.koalacast.core.ui.R as CoreR
 @Composable
 fun EpisodeScreen(
     onBack: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: EpisodeViewModel = hiltViewModel(),
@@ -64,6 +65,7 @@ fun EpisodeScreen(
         state = state,
         onBack = onBack,
         onRetry = viewModel::retry,
+        onOpenSettings = onOpenSettings,
         onPlay = viewModel::play,
         onToggleFavorite = viewModel::toggleFavorite,
         onToggleQueue = viewModel::toggleQueue,
@@ -100,6 +102,7 @@ internal fun EpisodeContent(
     state: EpisodeUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     onToggleQueue: () -> Unit,
@@ -149,6 +152,21 @@ internal fun EpisodeContent(
                 count = 6,
                 modifier = Modifier.padding(KoalaSpacing.screenH),
             )
+
+            state.explicitBlocked -> Column(
+                modifier = Modifier.padding(KoalaSpacing.screenH),
+                verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+            ) {
+                Text(
+                    text = stringResource(R.string.episode_explicit_blocked),
+                    style = KoalaTheme.type.body,
+                    color = colors.ink2,
+                )
+                OutlineButton(
+                    text = stringResource(R.string.episode_open_settings),
+                    onClick = onOpenSettings,
+                )
+            }
 
             else -> {
                 val episode = state.episode

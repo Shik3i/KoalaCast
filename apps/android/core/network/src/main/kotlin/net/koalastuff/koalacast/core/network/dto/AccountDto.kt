@@ -49,6 +49,11 @@ data class DeleteAccountRequest(
 )
 
 @Serializable
+data class DeleteSynchronizedDataResponse(
+    @SerialName("data_generation") val dataGeneration: Long = -1,
+)
+
+@Serializable
 data class AuthMessageResponse(
     val message: String = "",
     val error: String = "",

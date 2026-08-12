@@ -135,11 +135,7 @@ class AccountRepository @Inject constructor(
         // A recovery code is the way back in when the password is what got lost,
         // so it has to work here too. They are told apart the same way the web
         // client does it: recovery codes are grouped with dashes, passwords are not.
-        val request = if (trimmed.contains('-')) {
-            DeleteAccountRequest(recoveryCode = trimmed)
-        } else {
-            DeleteAccountRequest(password = trimmed)
-        }
+        val request = DeleteAccountRequest(password = trimmed, recoveryCode = trimmed)
         when (val result = apiCall { api.deleteAccount(request) }) {
             is DataResult.Failure -> result
             is DataResult.Success -> {

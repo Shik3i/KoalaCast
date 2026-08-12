@@ -9,8 +9,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
@@ -35,6 +39,7 @@ data class EpisodeUiState(
     val error: DataError? = null,
     val serverUrl: String = "",
     val episode: Episode? = null,
+    val explicitBlocked: Boolean = false,
     /** Loaded after the episode, purely for the artwork and show name in the header. */
     val podcast: Podcast? = null,
     val isFavorite: Boolean = false,
@@ -81,11 +86,19 @@ class EpisodeViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(EpisodeUiState())
     val state: StateFlow<EpisodeUiState> = _state.asStateFlow()
+    private var loadJob: Job? = null
 
     init {
         load(force = false)
         observeLocalState()
         observeBookmarks()
+        viewModelScope.launch {
+            preferences.preferences
+                .map { it.allowExplicitContent }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { load(force = false) }
+        }
     }
 
     private fun observeBookmarks() {
@@ -153,9 +166,11 @@ class EpisodeViewModel @Inject constructor(
     fun retry() = load(force = true)
 
     private fun load(force: Boolean) {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val cachedEpisode = podcasts.cachedEpisode(episodeId)
             if (cachedEpisode != null) {
+                val explicitBlocked = isExplicitBlocked(cachedEpisode.value)
                 val cachedPodcast = cachedEpisode.value.podcastId
                     .takeIf(String::isNotBlank)
                     ?.let { podcasts.cachedPodcast(it) }
@@ -165,6 +180,7 @@ class EpisodeViewModel @Inject constructor(
                         error = null,
                         serverUrl = preferences.serverUrl.first(),
                         episode = cachedEpisode.value,
+                        explicitBlocked = explicitBlocked,
                         podcast = cachedPodcast?.value,
                     )
                 }
@@ -186,7 +202,13 @@ class EpisodeViewModel @Inject constructor(
 
             when (val result = podcasts.episode(episodeId)) {
                 is DataResult.Success -> {
-                    _state.update { it.copy(loading = false, episode = result.data) }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            episode = result.data,
+                            explicitBlocked = isExplicitBlocked(result.data),
+                        )
+                    }
                     loadShow(result.data.podcastId)
                 }
 
@@ -200,6 +222,9 @@ class EpisodeViewModel @Inject constructor(
             }
         }
     }
+
+    private suspend fun isExplicitBlocked(episode: Episode): Boolean =
+        episode.explicit == true && !preferences.preferences.first().allowExplicitContent
 
     /** Best-effort: the episode reads fine without its show's artwork. */
     private fun loadShow(podcastId: String) {

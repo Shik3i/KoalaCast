@@ -14,6 +14,7 @@ import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.repository.NamedQueueRepository
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.Favorite
 import net.koalastuff.koalacast.core.model.PlaybackProgress
@@ -21,6 +22,7 @@ import net.koalastuff.koalacast.core.model.QueueEntry
 import net.koalastuff.koalacast.core.model.Subscription
 import net.koalastuff.koalacast.core.model.Track
 import net.koalastuff.koalacast.core.model.NamedQueue
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 import javax.inject.Inject
 
 enum class LibraryTab { SUBSCRIPTIONS, IN_PROGRESS, QUEUE, FAVORITES }
@@ -49,6 +51,7 @@ class LibraryViewModel @Inject constructor(
     private val namedQueues: NamedQueueRepository,
     private val progress: ProgressRepository,
     private val player: PlayerConnection,
+    private val preferences: PreferencesRepository,
 ) : ViewModel() {
 
     init {
@@ -58,7 +61,7 @@ class LibraryViewModel @Inject constructor(
     private val _tab = MutableStateFlow(LibraryTab.SUBSCRIPTIONS)
     val tab: StateFlow<LibraryTab> = _tab
 
-    val state: StateFlow<LibraryUiState> = combine(
+    private val storedState = combine(
         library.allSubscriptions,
         progress.inProgress,
         queue.entries,
@@ -71,6 +74,23 @@ class LibraryViewModel @Inject constructor(
             queue = queueEntries,
             favorites = favorites,
             namedQueues = savedQueues,
+        )
+    }
+
+    val state: StateFlow<LibraryUiState> = combine(
+        storedState,
+        preferences.preferences,
+    ) { stored, prefs ->
+        stored.copy(
+            inProgress = stored.inProgress.filter {
+                it.track?.explicit.isAllowedByExplicitPreference(prefs.allowExplicitContent)
+            },
+            queue = stored.queue.filter {
+                it.track.explicit.isAllowedByExplicitPreference(prefs.allowExplicitContent)
+            },
+            favorites = stored.favorites.filter {
+                it.track?.explicit.isAllowedByExplicitPreference(prefs.allowExplicitContent)
+            },
         )
     }.stateIn(
         scope = viewModelScope,

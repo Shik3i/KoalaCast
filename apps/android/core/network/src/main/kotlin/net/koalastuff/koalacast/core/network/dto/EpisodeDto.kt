@@ -28,7 +28,7 @@ data class EpisodeDto(
     @SerialName("episode_number") val episodeNumber: Int = 0,
     @SerialName("season_number") val seasonNumber: Int = 0,
     @SerialName("episode_type") val episodeType: String = "",
-    val explicit: Boolean = false,
+    val explicit: Boolean? = null,
     val link: String = "",
     val transcripts: List<TranscriptDto> = emptyList(),
 )

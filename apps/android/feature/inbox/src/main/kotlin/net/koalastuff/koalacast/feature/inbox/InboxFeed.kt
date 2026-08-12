@@ -36,6 +36,7 @@ data class InboxEpisode(
         artworkUrl = episode.artworkUrl.ifBlank { subscription.artworkUrl },
         enclosureUrl = episode.enclosureUrl,
         durationMs = episode.durationMs,
+        explicit = episode.explicit,
     )
 }
 

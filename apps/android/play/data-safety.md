@@ -9,8 +9,9 @@ that makes it true.
 | Question | Answer |
 | :--- | :--- |
 | Does the app collect or share any user data? | **Yes**, but only if the listener creates an account |
-| Is all data encrypted in transit? | **Yes** (HTTPS; a self-hosted plain-HTTP instance is warned about in-app) |
+| Is all data encrypted in transit? | **Yes** — the release app accepts HTTPS only; cleartext is disabled in its manifest and network-security config |
 | Can users request deletion? | **Yes** — in-app and via a URL, see `declarations.md` |
+| Can users delete synchronized data without deleting the account? | **Yes** — in-app and via public `/account`; execution requires sign-in plus password or recovery-code confirmation |
 | Is any data collected required? | **No.** Everything works without an account |
 
 ## Data types to declare
@@ -52,6 +53,14 @@ reflex.
 
 ## Where this is enforced in code
 
+- Release transport encryption: `app/src/main/AndroidManifest.xml` sets
+  `android:usesCleartextTraffic="false"`, and
+  `app/src/main/res/xml/network_security_config.xml` sets
+  `cleartextTrafficPermitted="false"`. The debug-only resource override permits
+  HTTP solely for `localhost`, `127.0.0.1`, and `10.0.2.2`; it is absent from the
+  release APK/AAB. `ServerUrl` rejects disallowed origins before validation and the
+  central OkHttp `TransportSecurityInterceptor` rejects a disallowed final URL,
+  including redirects.
 - No account required: `apps/android/.../onboarding`, and the local-first Room
   database in `core:data`.
 - Artwork proxying: `core/data/.../server/ArtworkUrls.kt`.
@@ -61,5 +70,15 @@ reflex.
   `apps/android/core/data/src/main/kotlin/net/koalastuff/koalacast/core/data/auth/SecureAccountStore.kt`;
   sent during device login by `AccountRepository.kt`, and stored by
   `services/api/internal/server/handlers/auth.go`.
-- Deletion removes every row: `services/api/internal/server/handlers/account.go`
-  with `account_test.go` asserting each user-scoped table empties.
+- Account deletion removes every user-scoped row:
+  `services/api/internal/server/handlers/account.go`, with `account_test.go`
+  asserting each user-scoped table empties.
+- Independent synchronized-data deletion is implemented by authenticated
+  `DELETE /api/v1/auth/data`. It keeps the user row, identity fields, sessions,
+  and device credentials; disables Global Stats; deletes all synchronized
+  content, usage, sync-metadata, and Web Push rows in one transaction; and
+  advances `data_generation`. Stale pushes receive
+  `409 DATA_GENERATION_MISMATCH`. `account_test.go`, Android
+  `SyncRepositoryTest`, and web `sync-data-generation.spec.ts` verify the
+  server and both clients. Technical access/security logs may remain for no
+  more than seven days under the privacy policy.

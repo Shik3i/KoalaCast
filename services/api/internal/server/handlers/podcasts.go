@@ -98,6 +98,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	// listener's settings languages but can clear them to search everything.
 	languages := lang.ParseList(r.URL.Query().Get("languages"))
 	category := r.URL.Query().Get("category")
+	includeExplicit := includeExplicitContent(r)
 
 	var results []itunes.PodcastResult
 	var err error
@@ -106,7 +107,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if h.PodcastIndex != nil && h.PodcastIndex.IsConfigured() {
 		provider = "podcastindex"
 		var piResults []podcastindex.SearchResult
-		piResults, err = h.PodcastIndex.Search(q)
+		piResults, err = h.PodcastIndex.SearchWithExplicit(q, includeExplicit)
 		if err == nil {
 			results = make([]itunes.PodcastResult, 0, len(piResults))
 			for _, p := range piResults {
@@ -133,6 +134,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 					Categories:  cats,
 					Description: p.Description,
 					Language:    language,
+					Explicit:    p.Explicit.Value,
 				})
 			}
 		}
@@ -148,7 +150,7 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		if h.ITunes == nil {
 			h.ITunes = itunes.NewITunesClient()
 		}
-		results, err = h.ITunes.SearchPodcastsWithCountry(q, region, 50)
+		results, err = h.ITunes.SearchPodcastsWithCountryExplicit(q, region, 50, includeExplicit)
 	}
 
 	if err != nil {
@@ -163,6 +165,9 @@ func (h *PodcastHandler) Search(w http.ResponseWriter, r *http.Request) {
 		results = filterByLanguage(results, languages)
 	}
 	results = filterByCategory(results, category)
+	if !includeExplicit {
+		results = filterExplicitPodcasts(results)
+	}
 	if results == nil {
 		results = []itunes.PodcastResult{}
 	}
@@ -187,6 +192,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	// storefront carries plenty of English shows, so region alone never yields
 	// a German-only chart.
 	languages := lang.ParseList(r.URL.Query().Get("languages"))
+	includeExplicit := includeExplicitContent(r)
 	// Older clients sent a single content language without its matching
 	// storefront. Falling back to the US chart and then filtering it could
 	// legitimately produce zero results (notably for German). Infer the chart
@@ -206,7 +212,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	// Pull extra rows upstream when filtering, so a mixed-language chart still
 	// fills a page after the non-matching entries are dropped.
 	fetchLimit := limit
-	if len(languages) > 0 {
+	if len(languages) > 0 || !includeExplicit {
 		fetchLimit = limit * languageFilterOverfetch
 		if fetchLimit > 200 {
 			fetchLimit = 200
@@ -258,6 +264,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 					Categories:  cats,
 					Description: p.Description,
 					Language:    language,
+					Explicit:    p.Explicit.Value,
 				})
 			}
 		}
@@ -290,6 +297,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, p := range dbPods {
+			explicit := p.Explicit
 			topPodcasts = append(topPodcasts, itunes.PodcastResult{
 				ID:          p.ID,
 				Title:       p.Title,
@@ -298,6 +306,7 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 				ArtworkURL:  p.ArtworkURL,
 				Description: p.Description,
 				Language:    lang.Normalize(p.Language),
+				Explicit:    &explicit,
 			})
 		}
 	}
@@ -307,6 +316,9 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 	if len(languages) > 0 {
 		h.resolveLanguages(r.Context(), topPodcasts)
 		topPodcasts = filterByLanguage(topPodcasts, languages)
+	}
+	if !includeExplicit {
+		topPodcasts = filterExplicitPodcasts(topPodcasts)
 	}
 	if len(topPodcasts) > limit {
 		topPodcasts = topPodcasts[:limit]
@@ -321,6 +333,28 @@ func (h *PodcastHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		"results": topPodcasts,
 		"total":   len(topPodcasts),
 	}, "public, max-age=14400, stale-while-revalidate=18000")
+}
+
+// include_explicit defaults to true for backward compatibility with older
+// clients and the web app. Android always sends it explicitly.
+func includeExplicitContent(r *http.Request) bool {
+	raw := strings.TrimSpace(r.URL.Query().Get("include_explicit"))
+	if raw == "" {
+		return true
+	}
+	value, err := strconv.ParseBool(raw)
+	return err != nil || value
+}
+
+func filterExplicitPodcasts(results []itunes.PodcastResult) []itunes.PodcastResult {
+	filtered := results[:0]
+	for _, result := range results {
+		if result.Explicit != nil && *result.Explicit {
+			continue
+		}
+		filtered = append(filtered, result)
+	}
+	return filtered
 }
 
 // ingestError carries an HTTP status code alongside a message so callers can

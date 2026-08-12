@@ -4,12 +4,14 @@
 	import { reorderLocalQueue } from '$lib/idb/db';
 	import { t } from '$lib/i18n';
 	import { listeningSession } from '$lib/stores/session.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 	import { calculateQueueTiming } from '$lib/player/queue-timing';
 
 	let now = $state(Date.now());
 	let dragIndex = $state<number | null>(null);
 
-	onMount(() => {
+	onMount(async () => {
+		await waitForAccountContext();
 		player.loadQueue();
 		listeningSession.load();
 	});

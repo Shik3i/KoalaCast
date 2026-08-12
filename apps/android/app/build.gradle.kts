@@ -26,8 +26,8 @@ android {
 
     defaultConfig {
         applicationId = "net.koalastuff.koalacast"
-        versionCode = 38
-        versionName = "0.10.3"
+        versionCode = 39
+        versionName = "0.10.4"
     }
 
     signingConfigs {
@@ -81,7 +81,7 @@ val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
 
 // Fail before compilation/minification, while retaining direct-task protection.
 tasks.configureEach {
-    if (name in setOf("preReleaseBuild", "assembleRelease", "bundleRelease", "packageRelease")) {
+    if (name in setOf("assembleRelease", "bundleRelease", "packageRelease")) {
         dependsOn(verifyReleaseSigning)
     }
 }

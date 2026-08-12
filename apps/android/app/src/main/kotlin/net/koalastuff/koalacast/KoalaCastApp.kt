@@ -33,6 +33,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -78,11 +81,26 @@ import net.koalastuff.koalacast.navigation.TopLevelDestination
 fun KoalaCastApp(
     onboardingComplete: Boolean?,
     startScreen: StartScreen = StartScreen.DEFAULT,
+    insecureServerResetPending: Boolean = false,
+    onInsecureServerResetAcknowledged: () -> Unit = {},
     requestedEpisodeId: String? = null,
     onEpisodeRequestConsumed: () -> Unit = {},
     navController: NavHostController = rememberNavController(),
 ) {
     val colors = KoalaTheme.colors
+
+    if (insecureServerResetPending) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.insecure_server_reset_title)) },
+            text = { Text(stringResource(R.string.insecure_server_reset_body)) },
+            confirmButton = {
+                TextButton(onClick = onInsecureServerResetAcknowledged) {
+                    Text(stringResource(R.string.insecure_server_reset_confirm))
+                }
+            },
+        )
+    }
 
     if (onboardingComplete == null) {
         Box(modifier = Modifier.fillMaxSize().background(colors.bgApp))
@@ -266,6 +284,7 @@ fun KoalaCastApp(
                     PodcastScreen(
                         onBack = { navController.popBackStack() },
                         onOpenEpisode = { navController.navigate(Routes.episode(it)) },
+                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         contentPadding = statusBarPadding(),
                     )
                 }
@@ -278,6 +297,7 @@ fun KoalaCastApp(
                 ) {
                     EpisodeScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         contentPadding = statusBarPadding(),
                     )
                 }
@@ -287,6 +307,7 @@ fun KoalaCastApp(
         if (currentRoute != Routes.ONBOARDING) {
             MiniPlayer(
                 onExpand = { nowPlayingExpanded = true },
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 modifier = if (showBottomBar) Modifier else Modifier.safeGesturesPadding(),
             )
         }
@@ -355,6 +376,10 @@ fun KoalaCastApp(
                 onOpenEpisode = { episodeId ->
                     nowPlayingExpanded = false
                     navController.navigate(Routes.episode(episodeId))
+                },
+                onOpenSettings = {
+                    nowPlayingExpanded = false
+                    navController.navigate(Routes.SETTINGS)
                 },
             )
         }

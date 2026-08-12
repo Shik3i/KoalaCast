@@ -19,4 +19,5 @@
     <string name="search_empty_body">Try fewer words, or widen the language and category filters.</string>
     <string name="search_hide_podcast">Hide podcast</string>
     <string name="search_hidden_notice">Hidden: %1$s</string>
+    <string name="search_explicit">Explicit</string>
 </resources>

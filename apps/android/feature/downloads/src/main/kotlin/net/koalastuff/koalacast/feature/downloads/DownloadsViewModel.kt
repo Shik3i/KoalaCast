@@ -8,11 +8,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.EpisodeDownload
 import net.koalastuff.koalacast.core.player.PlayerConnection
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
@@ -20,7 +22,9 @@ class DownloadsViewModel @Inject constructor(
     private val preferences: PreferencesRepository,
     private val player: PlayerConnection,
 ) : ViewModel() {
-    val items = downloads.downloads.stateIn(
+    val items = combine(downloads.downloads, preferences.preferences) { items, prefs ->
+        items.filter { it.track.explicit.isAllowedByExplicitPreference(prefs.allowExplicitContent) }
+    }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),

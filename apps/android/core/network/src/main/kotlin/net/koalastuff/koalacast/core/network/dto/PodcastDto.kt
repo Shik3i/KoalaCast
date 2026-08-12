@@ -15,6 +15,7 @@ data class PodcastSummaryDto(
     val categories: List<String> = emptyList(),
     val description: String = "",
     val language: String = "",
+    val explicit: Boolean? = null,
 )
 
 @Serializable
@@ -42,7 +43,7 @@ data class PodcastDto(
     @SerialName("artwork_url") val artworkUrl: String = "",
     val link: String = "",
     val language: String = "",
-    val explicit: Boolean = false,
+    val explicit: Boolean? = null,
     val copyright: String = "",
     @SerialName("last_successful_fetch_at") val lastSuccessfulFetchAt: Long = 0,
     @SerialName("episode_count") val episodeCount: Int = 0,

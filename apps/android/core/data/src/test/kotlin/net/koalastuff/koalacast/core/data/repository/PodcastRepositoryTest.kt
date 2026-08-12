@@ -3,6 +3,10 @@ package net.koalastuff.koalacast.core.data.repository
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.first
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.test.core.app.ApplicationProvider
+import java.io.File
 import kotlinx.serialization.json.Json
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -12,19 +16,27 @@ import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.data.db.ContentCacheDao
 import net.koalastuff.koalacast.core.data.db.ContentCacheEntity
 import net.koalastuff.koalacast.core.data.util.Clock
+import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import okhttp3.MediaType.Companion.toMediaType
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 import retrofit2.Retrofit
 
+@RunWith(RobolectricTestRunner::class)
 class PodcastRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var repository: PodcastRepository
     private lateinit var cacheDao: InMemoryContentCacheDao
+    private lateinit var preferences: PreferencesRepository
+    private lateinit var preferencesFile: File
 
     @Before
     fun setUp() {
@@ -48,12 +60,24 @@ class PodcastRepositoryTest {
                 override fun nowMs() = 1_800_000L
             },
         )
-        repository = PodcastRepository(api, Dispatchers.IO, cache)
+        preferencesFile = File.createTempFile("koalacast-podcast-repository", ".preferences_pb")
+            .also { it.delete() }
+        preferences = PreferencesRepository(
+            PreferenceDataStoreFactory.create { preferencesFile },
+            SecureAccountStore(ApplicationProvider.getApplicationContext()),
+        )
+        repository = PodcastRepository(api, Dispatchers.IO, cache, preferences)
     }
 
     @After
     fun tearDown() {
         server.close()
+        preferencesFile.delete()
+    }
+
+    @Test
+    fun `explicit content preference defaults to false`() = runTest {
+        assertFalse(preferences.preferences.first().allowExplicitContent)
     }
 
     @Test
@@ -89,6 +113,54 @@ class PodcastRepositoryTest {
         assertEquals(setOf("en", "de"), request.url.queryParameter("languages")!!.split(",").toSet())
         assertEquals("de", request.url.queryParameter("region"))
         assertEquals(null, request.url.queryParameter("category"))
+        assertEquals("false", request.url.queryParameter("include_explicit"))
+    }
+
+    @Test
+    fun `discover filters explicit locally and separates cache by preference`() = runTest {
+        val payload =
+            """{"status":"ok","total":2,"results":[
+              {"id":"explicit","title":"Marked","explicit":true},
+              {"id":"unknown","title":"Unknown","explicit":null}
+            ]}""".trimIndent()
+        server.enqueue(MockResponse.Builder().code(200).body(payload).build())
+
+        val filtered = repository.discover()
+
+        assertEquals(
+            listOf("unknown"),
+            (filtered as DataResult.Success).data.map { it.id },
+        )
+        assertEquals("false", server.takeRequest().url.queryParameter("include_explicit"))
+        assertEquals(null, repository.cachedDiscover()?.value?.single()?.id?.takeIf { it == "explicit" })
+
+        preferences.setAllowExplicitContent(true)
+        assertEquals(null, repository.cachedDiscover())
+        server.enqueue(MockResponse.Builder().code(200).body(payload).build())
+
+        val unfiltered = repository.discover()
+
+        assertEquals(
+            listOf("explicit", "unknown"),
+            (unfiltered as DataResult.Success).data.map { it.id },
+        )
+        assertEquals("true", server.takeRequest().url.queryParameter("include_explicit"))
+    }
+
+    @Test
+    fun `episode lists block explicit but retain unknown`() = runTest {
+        server.enqueue(
+            MockResponse.Builder().code(200).body(
+                """{"episodes":[
+                  {"id":"explicit","podcast_id":"p1","explicit":true},
+                  {"id":"unknown","podcast_id":"p1"}
+                ]}""",
+            ).build(),
+        )
+
+        val result = repository.episodes("p1")
+
+        assertEquals(listOf("unknown"), (result as DataResult.Success).data.map { it.id })
     }
 
     @Test

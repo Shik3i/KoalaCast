@@ -3,6 +3,7 @@ package net.koalastuff.koalacast.core.player
 import net.koalastuff.koalacast.core.model.Track
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,6 +27,18 @@ class TrackMediaItemTest {
             TrackMediaItem.isOffline(
                 TrackMediaItem.from(track, mediaUri = "file:///data/episode.mp3"),
             ),
+        )
+    }
+
+    @Test
+    fun `preserves explicit tri-state through media session extras`() {
+        assertEquals(
+            true,
+            TrackMediaItem.toTrack(TrackMediaItem.from(track.copy(explicit = true)))?.explicit,
+        )
+        assertEquals(
+            null,
+            TrackMediaItem.toTrack(TrackMediaItem.from(track.copy(explicit = null)))?.explicit,
         )
     }
 }

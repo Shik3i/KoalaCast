@@ -23,6 +23,7 @@
 	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
 	import { isAudioDownloaded } from '$lib/downloads/offline-audio';
 	import { audioDownloads } from '$lib/downloads/manager.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);
@@ -57,6 +58,7 @@
 	let loadReqId = 0;
 
 	async function loadEpisodeDetails(id: string) {
+		await waitForAccountContext();
 		await audioDownloads.load();
 		const reqId = ++loadReqId;
 		chaptersController?.abort();

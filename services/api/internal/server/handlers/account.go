@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -10,6 +11,115 @@ import (
 	"github.com/Shik3i/KoalaCast/services/api/internal/auth"
 	customMiddleware "github.com/Shik3i/KoalaCast/services/api/internal/server/middleware"
 )
+
+type freshCredentialRequest struct {
+	Password     string `json:"password"`
+	RecoveryCode string `json:"recovery_code"`
+}
+
+func (h *AuthHandler) verifyFreshCredential(ctx context.Context, userID string, req freshCredentialRequest) (bool, error) {
+	var passwordHash, recoveryHash string
+	if err := h.DB.SQL.QueryRowContext(ctx, `
+		SELECT password_hash, recovery_code_hash FROM users WHERE id = ?
+	`, userID).Scan(&passwordHash, &recoveryHash); err != nil {
+		return false, err
+	}
+	verified := false
+	if req.Password != "" {
+		match, err := auth.VerifyPassword(req.Password, passwordHash)
+		verified = err == nil && match
+	}
+	if !verified && req.RecoveryCode != "" {
+		verified = auth.VerifyRecoveryCode(req.RecoveryCode, recoveryHash)
+	}
+	if !verified && req.Password == "" {
+		auth.DummyVerify(req.RecoveryCode)
+	}
+	return verified, nil
+}
+
+// DeleteSynchronizedData permanently removes every user-owned content and usage
+// record while retaining the identity and all login credentials. BEGIN IMMEDIATE
+// is configured on every DB transaction, so this reset and SyncHandler.Push are
+// serialized by SQLite's write lock. The generation changes in the same commit as
+// the deletes; a client can observe neither half without the other.
+func (h *AuthHandler) DeleteSynchronizedData(w http.ResponseWriter, r *http.Request) {
+	authUser := customMiddleware.GetAuthUser(r.Context())
+	if authUser == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req freshCredentialRequest
+	if err := decodeLimitedJSON(w, r, 16*1024, &req); err != nil {
+		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Password == "" && req.RecoveryCode == "" {
+		http.Error(w, `{"error":"password or recovery code required"}`, http.StatusBadRequest)
+		return
+	}
+	verified, err := h.verifyFreshCredential(r.Context(), authUser.ID, req)
+	if err == sql.ErrNoRows {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+	if err != nil {
+		http.Error(w, `{"error":"failed to load account"}`, http.StatusInternalServerError)
+		return
+	}
+	if !verified {
+		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
+		return
+	}
+
+	tx, err := h.DB.SQL.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, `{"error":"transaction error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	var generation int64
+	if err := tx.QueryRowContext(r.Context(), `
+		UPDATE users
+		SET data_generation = data_generation + 1,
+		    global_stats_opt_in = 0,
+		    global_stats_opt_in_at = 0,
+		    updated_at = ?
+		WHERE id = ?
+		RETURNING data_generation
+	`, time.Now().UnixMilli(), authUser.ID).Scan(&generation); err != nil {
+		http.Error(w, `{"error":"failed to advance data generation"}`, http.StatusInternalServerError)
+		return
+	}
+
+	for _, table := range []string{
+		"subscriptions",
+		"favorites",
+		"playback_states",
+		"listening_sessions",
+		"queue_items",
+		"per_podcast_settings",
+		"history_entries",
+		"sync_log",
+		"user_sync_cursors",
+		"processed_sync_operations",
+		"web_push_subscriptions",
+	} {
+		if _, err := tx.ExecContext(r.Context(), "DELETE FROM "+table+" WHERE user_id = ?", authUser.ID); err != nil {
+			http.Error(w, `{"error":"failed to delete synchronized data"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, `{"error":"failed to delete synchronized data"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"data_generation": generation})
+}
 
 // Account deletion and data export.
 //
@@ -33,10 +143,7 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Password     string `json:"password"`
-		RecoveryCode string `json:"recovery_code"`
-	}
+	var req freshCredentialRequest
 	if err := decodeLimitedJSON(w, r, 16*1024, &req); err != nil {
 		http.Error(w, `{"error":"invalid payload"}`, http.StatusBadRequest)
 		return
@@ -46,10 +153,7 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var pwdHash, recoveryHash string
-	err := h.DB.SQL.QueryRowContext(r.Context(), `
-		SELECT password_hash, recovery_code_hash FROM users WHERE id = ?
-	`, authUser.ID).Scan(&pwdHash, &recoveryHash)
+	verified, err := h.verifyFreshCredential(r.Context(), authUser.ID, req)
 	if err == sql.ErrNoRows {
 		// Already gone. Deleting a deleted account is not an error to the caller.
 		clearSessionCookie(w, h.Config.SecureCookies)
@@ -60,23 +164,7 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A valid session is not enough. Deletion is irreversible, so it asks for the
-	// credential again — which also means a borrowed unlocked device cannot wipe
-	// somebody's account in two taps.
-	verified := false
-	if req.Password != "" {
-		match, verifyErr := auth.VerifyPassword(req.Password, pwdHash)
-		verified = verifyErr == nil && match
-	}
-	if !verified && req.RecoveryCode != "" {
-		verified = auth.VerifyRecoveryCode(req.RecoveryCode, recoveryHash)
-	}
 	if !verified {
-		// Spend comparable CPU either way so a wrong password and a wrong recovery
-		// code are not distinguishable by response time.
-		if req.Password == "" {
-			auth.DummyVerify(req.RecoveryCode)
-		}
 		http.Error(w, `{"error":"invalid credentials"}`, http.StatusUnauthorized)
 		return
 	}

@@ -18,6 +18,7 @@ import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -49,8 +50,22 @@ class ServerRepositoryTest {
             explicitNulls = false
             coerceInputValues = true
         }
+        // Keep the candidate origin HTTPS in every variant. The interceptor only
+        // transports the test request to MockWebServer; production validation and
+        // URL construction still see the TLS origin.
+        val mockTransport = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                chain.proceed(
+                    request.newBuilder()
+                        .url(server.url(request.url.encodedPath))
+                        .build(),
+                )
+            }
+            .build()
         val api = Retrofit.Builder()
             .baseUrl(server.url("/"))
+            .client(mockTransport)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(KoalaCastApi::class.java)
@@ -89,7 +104,7 @@ class ServerRepositoryTest {
                 .build(),
         )
 
-        val origin = server.url("/").toString().trimEnd('/')
+        val origin = "https://test.koalacast.invalid"
         val result = repository.validate(origin)
 
         assertTrue(result is DataResult.Success)

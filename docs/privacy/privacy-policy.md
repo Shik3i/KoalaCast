@@ -57,6 +57,27 @@ deployment's legal obligations.
   the device, and it requests the same public episode endpoint the app uses in
   the foreground. No additional data reaches the server.
 
+## Data deletion choices
+
+`/account` publicly documents both deletion paths; signing in is required only
+to execute them. Both require the account password or recovery code again.
+
+- **Delete synchronized data, keep the account:** permanently deletes
+  subscriptions, favorites, playback state, listening sessions and history,
+  queues, per-podcast and synchronized settings, statistics, Global Stats
+  consent, sync logs/cursors/processed operations, Web Push registrations and
+  the corresponding local client data and downloads. The account, username,
+  password and recovery hashes, role, sessions and device credentials remain.
+- **Delete account:** permanently deletes the account identity, credentials,
+  sessions and all synchronized data. Clients also delete their local account
+  copy and downloads.
+
+Server-side synchronized-data deletion is one database transaction. It advances
+a reset generation in that same transaction; stale or concurrent clients cannot
+upload a pre-deletion copy afterward. Technical access and security logs are not
+part of the synchronized account store and may remain for a maximum of seven
+days, as stated above, before automatic deletion.
+
 The live policy shown in the application is maintained in
 [`apps/web/src/lib/data/privacy.ts`](../../apps/web/src/lib/data/privacy.ts).
 That file is authoritative for the official hosted UI; self-hosters must adapt

@@ -144,6 +144,19 @@ class AccountDataNamespace @Inject constructor(
     companion object {
         const val GUEST_OWNER = "guest"
     }
+
+    /** Permanently clears the active owner's working set and archived copy. */
+    suspend fun resetCurrent(ownerId: String) = mutex.withLock {
+        database.withTransaction {
+            val archives = database.accountDataArchiveDao()
+            val state = archives.state()
+                ?: AccountNamespaceStateEntity(activeOwnerKey = ownerId)
+            require(state.activeOwnerKey == ownerId) { "account changed during local data reset" }
+            clearActive()
+            archives.delete(ownerId)
+            archives.setState(state.copy(activeOwnerKey = ownerId))
+        }
+    }
 }
 
 @Serializable

@@ -22,6 +22,8 @@ data class OnboardingUiState(
     val error: DataError? = null,
     /** True while the typed URL would send traffic unencrypted. */
     val cleartext: Boolean = false,
+    val cleartextRejected: Boolean = false,
+    val showEmulatorOption: Boolean = ServerUrl.supportsEmulatorLoopback,
     val finished: Boolean = false,
 )
 
@@ -35,8 +37,18 @@ class OnboardingViewModel @Inject constructor(
     val state: StateFlow<OnboardingUiState> = _state.asStateFlow()
 
     fun onUrlChange(value: String) {
+        val rejected = ServerUrl.rejectsCleartext(value)
         _state.update {
-            it.copy(url = value, error = null, cleartext = ServerUrl.isCleartext(value))
+            it.copy(
+                url = value,
+                error = if (rejected) {
+                    DataError.Malformed(ServerUrl.CLEARTEXT_REJECTED)
+                } else {
+                    null
+                },
+                cleartext = ServerUrl.isCleartext(value) && !rejected,
+                cleartextRejected = rejected,
+            )
         }
     }
 
@@ -50,6 +62,7 @@ class OnboardingViewModel @Inject constructor(
      */
     fun confirm() {
         if (_state.value.checking) return
+        if (_state.value.cleartextRejected) return
         _state.update { it.copy(checking = true, error = null) }
 
         viewModelScope.launch {

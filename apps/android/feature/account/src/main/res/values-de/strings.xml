@@ -50,8 +50,10 @@
         <item quantity="other">%d gefunden</item>
     </plurals>
     <string name="account_error_http">Der Server hat die Anfrage abgelehnt (HTTP %d).</string>
+    <string name="account_error_credentials">Das Passwort oder der Wiederherstellungscode ist falsch.</string>
     <string name="account_error_network">Der Server ist nicht erreichbar.</string>
     <string name="account_error_data">Der Server hat ungültige oder unvollständige Daten geliefert.</string>
+    <string name="account_error_local_reset">Die Serverdaten wurden gelöscht, aber dieses Gerät konnte die lokale Bereinigung nicht abschließen. Lass die App online und starte den Sync erneut, bevor du sie weiter nutzt.</string>
     <string name="account_error_opml">Die ausgewählte Datei enthält keine gültigen OPML-Abonnements.</string>
     <string name="account_error_server">Wähle zuerst einen Server in den Einstellungen.</string>
     <string name="account_notice_created">Konto erstellt, angemeldet und Sync aktiv.</string>
@@ -60,6 +62,13 @@
     <string name="account_notice_password">Passwort geändert. Du kannst dich jetzt anmelden.</string>
     <string name="account_notice_revoked">Sitzung widerrufen.</string>
     <string name="account_notice_done">Erledigt.</string>
+    <string name="account_delete_data_section">Synchronisierte Daten löschen</string>
+    <string name="account_delete_data">Synchronisierte Daten löschen</string>
+    <string name="account_delete_data_title">Synchronisierte Daten löschen?</string>
+    <string name="account_delete_data_body">Konto, Benutzername, Zugangsdaten, Rolle und aktueller Login bleiben erhalten. Bibliothek, Favoriten, Verlauf, Wiedergabefortschritt, Warteschlangen, Statistiken, synchronisierte Einstellungen, Global-Stats-Einwilligung, Push-Registrierungen und Downloads werden jetzt auf diesem Gerät und beim nächsten Kontakt auf anderen Clients dauerhaft gelöscht.</string>
+    <string name="account_delete_data_retention">Technische Zugriffs- und Sicherheitslogs können gemäß Datenschutzerklärung höchstens sieben Tage verbleiben.</string>
+    <string name="account_delete_data_confirm">Synchronisierte Daten löschen</string>
+    <string name="account_notice_data_deleted">Synchronisierte Daten gelöscht. Konto und Login bleiben aktiv.</string>
     <string name="account_delete_section">Konto löschen</string>
     <string name="account_delete">Konto löschen</string>
     <string name="account_delete_title">Dieses Konto löschen?</string>

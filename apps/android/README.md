@@ -53,8 +53,8 @@ sops updatekeys --input-type dotenv -y android-signing.env.enc
 
 The debug build installs alongside a release build (`applicationId` suffix `.debug`).
 On first run the app asks which KoalaCast server to talk to and defaults to
-`https://cast.koalastuff.net`; the emulator shortcut fills in `http://10.0.2.2:3000`
-for a server running on the host.
+`https://cast.koalastuff.net`. Only the debug build shows the emulator shortcut,
+which fills in `http://10.0.2.2:3000` for a server running on the host.
 
 ### What is built
 
@@ -162,7 +162,8 @@ Self-hosters run their own server. The app must let the user choose the server:
 - Validate by calling `GET {base}/api/v1/healthz` (and `/readyz`) before saving.
 - Store in **DataStore**; all Retrofit calls use it as the base URL.
 - Support switching servers (warn that account/sync state is per-server).
-- Handle plain-HTTP self-host instances (allow user opt-in to cleartext for LAN).
+- Require HTTPS for every release server. Debug permits HTTP only for `localhost`,
+  `127.0.0.1`, and Android-emulator host `10.0.2.2`.
 
 ### 2.2 Endpoints (from `routes.go`)
 | Method | Path | Auth | Purpose |
@@ -363,8 +364,9 @@ per-subscription request fan-out entirely. See
 1. **Default server URL** — `https://cast.koalastuff.net`, as
    `KoalaCastDefaults.SERVER_URL` in `core:data`. It is only a *default*: onboarding
    and Settings both let a listener point the app anywhere, and the URL is validated
-   against `/api/v1/healthz` before it is stored. A plain-HTTP address is allowed
-   (LAN self-hosting) but always warned about.
+   against `/api/v1/healthz` before it is stored. Release builds reject every
+   plain-HTTP address before a request; debug builds allow only the three explicit
+   loopback hosts documented above.
 2. **"New episodes" data source** — client-side fan-out is implemented, with an
    incremental `?since=` refresh per podcast; a batched multi-podcast endpoint
    remains open.

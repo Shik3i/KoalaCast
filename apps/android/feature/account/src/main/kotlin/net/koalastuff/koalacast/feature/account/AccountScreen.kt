@@ -118,6 +118,8 @@ fun AccountScreen(
         onRecoverySaved = viewModel::confirmRecoveryCodeSaved,
         onLogout = viewModel::logout,
         onDeleteCredential = viewModel::setDeleteCredential,
+        onShowDeleteData = viewModel::showDeleteData,
+        onDeleteData = viewModel::deleteSynchronizedData,
         onShowDelete = viewModel::showDeleteAccount,
         onDeleteAccount = viewModel::deleteAccount,
         onSync = viewModel::syncNow,
@@ -151,6 +153,8 @@ internal fun AccountContent(
     onRevoke: (String) -> Unit,
     onGlobalStats: (Boolean) -> Unit,
     onDeleteCredential: (String) -> Unit,
+    onShowDeleteData: (Boolean) -> Unit,
+    onDeleteData: () -> Unit,
     onShowDelete: (Boolean) -> Unit,
     onDeleteAccount: () -> Unit,
     onImport: () -> Unit,
@@ -220,6 +224,8 @@ internal fun AccountContent(
                 onRevoke = onRevoke,
                 onGlobalStats = onGlobalStats,
                 onDeleteCredential = onDeleteCredential,
+                onShowDeleteData = onShowDeleteData,
+                onDeleteData = onDeleteData,
                 onShowDelete = onShowDelete,
                 onDeleteAccount = onDeleteAccount,
             )
@@ -426,6 +432,8 @@ private fun SignedInContent(
     onRevoke: (String) -> Unit,
     onGlobalStats: (Boolean) -> Unit,
     onDeleteCredential: (String) -> Unit,
+    onShowDeleteData: (Boolean) -> Unit,
+    onDeleteData: () -> Unit,
     onShowDelete: (Boolean) -> Unit,
     onDeleteAccount: () -> Unit,
 ) {
@@ -524,7 +532,75 @@ private fun SignedInContent(
     }
 
     Hairline()
+    DeleteSynchronizedDataSection(state, onDeleteCredential, onShowDeleteData, onDeleteData)
+
+    Hairline()
     DeleteAccountSection(state, onDeleteCredential, onShowDelete, onDeleteAccount)
+}
+
+@Composable
+private fun DeleteSynchronizedDataSection(
+    state: AccountUiState,
+    onDeleteCredential: (String) -> Unit,
+    onShowDelete: (Boolean) -> Unit,
+    onDeleteData: () -> Unit,
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = stringResource(R.string.account_delete_data_title),
+            body = stringResource(R.string.account_delete_data_body),
+            confirmLabel = stringResource(R.string.account_delete_data_confirm),
+            onConfirm = {
+                confirmDelete = false
+                onDeleteData()
+            },
+            onDismiss = { confirmDelete = false },
+        )
+    }
+
+    Section(stringResource(R.string.account_delete_data_section)) {
+        Text(
+            text = stringResource(R.string.account_delete_data_body),
+            style = KoalaTheme.type.bodySmall,
+            color = KoalaTheme.colors.ink3,
+        )
+        Text(
+            text = stringResource(R.string.account_delete_data_retention),
+            style = KoalaTheme.type.bodySmall,
+            color = KoalaTheme.colors.ink4,
+        )
+        if (!state.showDeleteData) {
+            OutlineButton(
+                text = stringResource(R.string.account_delete_data),
+                onClick = { onShowDelete(true) },
+                enabled = !state.busy,
+            )
+        } else {
+            KoalaTextField(
+                value = state.deleteCredential,
+                onValueChange = onDeleteCredential,
+                placeholder = stringResource(R.string.account_delete_credential),
+                leadingIcon = null,
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+                AccentButton(
+                    text = stringResource(R.string.account_delete_data_confirm),
+                    onClick = { confirmDelete = true },
+                    enabled = state.deleteCredential.isNotBlank() && !state.busy,
+                )
+                OutlineButton(
+                    text = stringResource(R.string.account_delete_cancel),
+                    onClick = { onShowDelete(false) },
+                    enabled = !state.busy,
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -659,11 +735,17 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 
 @Composable
 private fun errorMessage(error: DataError): String = when (error) {
-    is DataError.Http -> stringResource(R.string.account_error_http, error.code)
+    is DataError.Http -> if (error.code == 401) {
+        stringResource(R.string.account_error_credentials)
+    } else {
+        stringResource(R.string.account_error_http, error.code)
+    }
     is DataError.Network -> stringResource(R.string.account_error_network)
     is DataError.Malformed -> stringResource(
         if (error.cause.startsWith("OPML:")) {
             R.string.account_error_opml
+        } else if (error.cause.startsWith("LOCAL_RESET:")) {
+            R.string.account_error_local_reset
         } else {
             R.string.account_error_data
         },
@@ -683,6 +765,7 @@ private fun noticeMessage(notice: String): String = stringResource(
         "password_changed" -> R.string.account_notice_password
         "session_revoked" -> R.string.account_notice_revoked
         "account_deleted" -> R.string.account_notice_deleted
+        "data_deleted" -> R.string.account_notice_data_deleted
         else -> R.string.account_notice_done
     },
 )

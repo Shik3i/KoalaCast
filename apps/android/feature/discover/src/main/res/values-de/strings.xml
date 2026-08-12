@@ -2,6 +2,7 @@
 <resources>
     <string name="discover_search_placeholder">Sendungen, Menschen, Themen suchen</string>
     <string name="discover_cover_story">Titelgeschichte</string>
+    <string name="discover_explicit">Explizit</string>
     <string name="discover_open_show">Sendung öffnen</string>
     <string name="discover_open_episode">Neueste Folge</string>
     <string name="discover_hide_podcast">Podcast ausblenden</string>

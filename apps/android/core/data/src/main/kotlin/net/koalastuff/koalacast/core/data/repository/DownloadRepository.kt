@@ -14,6 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadDao
 import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
@@ -22,6 +23,8 @@ import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.model.EpisodeDownload
 import net.koalastuff.koalacast.core.model.Track
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 
 @Singleton
 class DownloadRepository @Inject constructor(
@@ -29,6 +32,7 @@ class DownloadRepository @Inject constructor(
     private val dao: EpisodeDownloadDao,
     private val clock: Clock,
     private val accountStore: SecureAccountStore,
+    private val preferences: PreferencesRepository? = null,
 ) {
     val downloads: Flow<List<EpisodeDownload>> = dao.observeAll().map { rows -> rows.map { it.toModel() } }
 
@@ -42,7 +46,9 @@ class DownloadRepository @Inject constructor(
         storage: DownloadStorage = DownloadStorage.INTERNAL,
         treeUri: String = "",
         budgetBytes: Long = DEFAULT_BUDGET_BYTES,
-    ) {
+    ): Boolean {
+        val includeExplicit = preferences?.preferences?.first()?.allowExplicitContent ?: false
+        if (!track.explicit.isAllowedByExplicitPreference(includeExplicit)) return false
         val now = clock.nowMs()
         val ownerId = accountStore.activeOwnerId()
         val accountGeneration = accountStore.accountGeneration()
@@ -57,6 +63,7 @@ class DownloadRepository @Inject constructor(
                 enclosureUrl = track.enclosureUrl,
                 durationMs = track.durationMs,
                 categories = track.categories,
+                explicit = track.explicit,
                 state = DownloadState.QUEUED.name,
                 bytesDownloaded = old?.bytesDownloaded ?: 0,
                 totalBytes = old?.totalBytes ?: 0,
@@ -89,6 +96,7 @@ class DownloadRepository @Inject constructor(
             ExistingWorkPolicy.REPLACE,
             request,
         )
+        return true
     }
 
     suspend fun pause(episodeId: String) {
@@ -117,6 +125,29 @@ class DownloadRepository @Inject constructor(
         }
         partialFile(context, ownerId, episodeId).takeIf(File::exists)?.delete()
         dao.delete(episodeId)
+    }
+
+    suspend fun clearAll() {
+        val ownerId = accountStore.activeOwnerId()
+        val rows = dao.getAllOldestFirst()
+        rows.forEach { item ->
+            // Deletion must not depend on WorkManager being initialized (for
+            // example during early account recovery). The generation gate makes
+            // an already-running worker stale; file and DB cleanup still proceed.
+            runCatching {
+                WorkManager.getInstance(context).cancelAllWorkByTag(workName(ownerId, item.episodeId))
+            }
+            item.localPath?.let { location ->
+                if (location.startsWith("content://")) {
+                    runCatching { context.contentResolver.delete(android.net.Uri.parse(location), null, null) }
+                } else {
+                    File(location).takeIf(File::exists)?.delete()
+                }
+            }
+            partialFile(context, ownerId, item.episodeId).takeIf(File::exists)?.delete()
+            completedFile(context, ownerId, item.episodeId).takeIf(File::exists)?.delete()
+        }
+        dao.clear()
     }
 
     suspend fun completedPath(episodeId: String): String? =
@@ -172,6 +203,7 @@ class DownloadRepository @Inject constructor(
             enclosureUrl = enclosureUrl,
             durationMs = durationMs,
             categories = categories,
+            explicit = explicit,
         ),
         state = runCatching { DownloadState.valueOf(state) }.getOrDefault(DownloadState.FAILED),
         bytesDownloaded = bytesDownloaded,

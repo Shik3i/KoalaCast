@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -95,6 +96,14 @@ class SearchViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .debounce(DEBOUNCE_MS)
                 .collectLatest { runSearch(it, force = false) }
+        }
+
+        viewModelScope.launch {
+            preferences.preferences
+                .map { it.allowExplicitContent }
+                .distinctUntilChanged()
+                .drop(1)
+                .collectLatest { rerun() }
         }
     }
 

@@ -10,4 +10,7 @@
     <string name="profile_scope_community">Community</string>
     <string name="widget_ready">Ready to listen</string>
     <string name="widget_play_pause">Play or pause</string>
+    <string name="insecure_server_reset_title">Secure server restored</string>
+    <string name="insecure_server_reset_body">The saved server used unencrypted HTTP and was reset to https://cast.koalastuff.net before any account or sync traffic was sent. Sign in again if you use an account.</string>
+    <string name="insecure_server_reset_confirm">OK</string>
 </resources>

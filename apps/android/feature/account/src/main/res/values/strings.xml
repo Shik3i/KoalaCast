@@ -50,8 +50,10 @@
         <item quantity="other">%d found</item>
     </plurals>
     <string name="account_error_http">The server rejected the request (HTTP %d).</string>
+    <string name="account_error_credentials">The password or recovery code is incorrect.</string>
     <string name="account_error_network">The server could not be reached.</string>
     <string name="account_error_data">The server returned invalid or incomplete data.</string>
+    <string name="account_error_local_reset">The server data was deleted, but this device could not finish its local cleanup. Keep the app online and try sync again before using it.</string>
     <string name="account_error_opml">The selected file contains no valid OPML subscriptions.</string>
     <string name="account_error_server">Choose a server in Settings first.</string>
     <string name="account_notice_created">Account created, signed in and syncing.</string>
@@ -60,6 +62,13 @@
     <string name="account_notice_password">Password changed. You can sign in now.</string>
     <string name="account_notice_revoked">Session revoked.</string>
     <string name="account_notice_done">Done.</string>
+    <string name="account_delete_data_section">Delete synchronized data</string>
+    <string name="account_delete_data">Delete synchronized data</string>
+    <string name="account_delete_data_title">Delete synchronized data?</string>
+    <string name="account_delete_data_body">Your account, username, credentials, role, and current login remain. Library, favorites, history, playback progress, queues, statistics, synchronized settings, Global Stats consent, push registrations, and downloads are permanently deleted on this device now and on other clients at their next contact.</string>
+    <string name="account_delete_data_retention">Technical access and security logs may remain for a maximum of seven days as described in the privacy policy.</string>
+    <string name="account_delete_data_confirm">Delete synchronized data</string>
+    <string name="account_notice_data_deleted">Synchronized data deleted. Your account and login remain active.</string>
     <string name="account_delete_section">Delete account</string>
     <string name="account_delete">Delete account</string>
     <string name="account_delete_title">Delete this account?</string>

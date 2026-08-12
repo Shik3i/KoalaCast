@@ -64,6 +64,7 @@ data class PlaybackStateEntity(
     val enclosureUrl: String? = null,
     val durationMs: Long? = null,
     val categories: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = "NULL") val explicit: Boolean? = null,
     val eventType: String = "PROGRESS_TICK",
     val playbackSessionId: String = "",
     val perSessionSeq: Long = 0,
@@ -83,6 +84,7 @@ data class QueueItemEntity(
     val positionOrder: Long,
     val addedAt: Long,
     val categories: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = "NULL") val explicit: Boolean? = null,
 )
 
 @Entity(tableName = "favorites", indices = [Index("addedAt")])
@@ -97,6 +99,7 @@ data class FavoriteEntity(
     val enclosureUrl: String? = null,
     val durationMs: Long? = null,
     val categories: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = "NULL") val explicit: Boolean? = null,
 )
 
 @Entity(
@@ -215,6 +218,7 @@ data class EpisodeDownloadEntity(
     val enclosureUrl: String,
     val durationMs: Long,
     val categories: List<String>,
+    @ColumnInfo(defaultValue = "NULL") val explicit: Boolean? = null,
     val state: String,
     val bytesDownloaded: Long = 0,
     val totalBytes: Long = 0,

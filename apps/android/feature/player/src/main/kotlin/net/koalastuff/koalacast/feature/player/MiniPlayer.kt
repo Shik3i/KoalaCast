@@ -53,6 +53,7 @@ import net.koalastuff.koalacast.core.ui.util.Format
 @Composable
 fun MiniPlayer(
     onExpand: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
@@ -64,6 +65,7 @@ fun MiniPlayer(
         onExpand = onExpand,
         onTogglePlayPause = viewModel::togglePlayPause,
         onRetry = viewModel::retry,
+        onOpenSettings = onOpenSettings,
         onSeekForward = viewModel::seekForward,
         modifier = modifier,
     )
@@ -75,6 +77,7 @@ internal fun MiniPlayerContent(
     onExpand: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onRetry: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onSeekForward: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -156,17 +159,22 @@ internal fun MiniPlayerContent(
                     .fillMaxWidth()
                     .background(colors.bgPanel)
                     .defaultMinSize(minHeight = KoalaSpacing.minTouchTarget)
-                    .clickable(onClick = onRetry)
+                    .clickable(onClick = if (state.explicitBlocked) onOpenSettings else onRetry)
                     .padding(horizontal = KoalaSpacing.gap, vertical = KoalaSpacing.gapTiny),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 MonoText(
-                    text = stringResource(R.string.player_error_short, error),
+                    text = if (state.explicitBlocked) error else {
+                        stringResource(R.string.player_error_short, error)
+                    },
                     color = colors.ink3,
                     style = KoalaTheme.type.monoSmall,
                 )
                 MonoText(
-                    text = stringResource(R.string.player_retry),
+                    text = stringResource(
+                        if (state.explicitBlocked) R.string.player_open_settings
+                        else R.string.player_retry,
+                    ),
                     color = colors.accentInk,
                     style = KoalaTheme.type.monoStrong,
                 )

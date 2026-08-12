@@ -2,10 +2,12 @@ package net.koalastuff.koalacast.core.data.repository
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import net.koalastuff.koalacast.core.data.di.IoDispatcher
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.mapper.toModel
 import net.koalastuff.koalacast.core.model.Chapter
 import net.koalastuff.koalacast.core.model.DataResult
@@ -13,6 +15,7 @@ import net.koalastuff.koalacast.core.model.Episode
 import net.koalastuff.koalacast.core.model.Podcast
 import net.koalastuff.koalacast.core.model.PodcastSummary
 import net.koalastuff.koalacast.core.model.map
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.apiCall
 import net.koalastuff.koalacast.core.network.dto.AddFeedRequest
@@ -35,6 +38,7 @@ class PodcastRepository @Inject constructor(
     private val api: KoalaCastApi,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
     private val cache: ContentCache? = null,
+    private val preferences: PreferencesRepository? = null,
 ) {
     private val refreshLocks = ConcurrentHashMap<String, Mutex>()
     private val refreshedAt = ConcurrentHashMap<String, Long>()
@@ -45,18 +49,27 @@ class PodcastRepository @Inject constructor(
         languages: Set<String> = emptySet(),
         limit: Int? = null,
     ): DataResult<List<PodcastSummary>> = withContext(dispatcher) {
+        val includeExplicit = includeExplicit()
         val result = apiCall {
             api.discover(
                 category = category?.takeIf { it.isNotBlank() },
                 region = region?.takeIf { it.isNotBlank() },
                 languages = languages.joinToString(",").takeIf { it.isNotBlank() },
                 limit = limit,
+                includeExplicit = includeExplicit,
             )
         }
         if (result is DataResult.Success) {
-            cache?.put(discoverKey(category, region, languages, limit), result.data, DiscoverResponse.serializer())
+            cache?.put(
+                discoverKey(category, region, languages, limit, includeExplicit),
+                result.data,
+                DiscoverResponse.serializer(),
+            )
         }
-        result.map { response -> response.results.map { it.toModel() } }
+        result.map { response ->
+            response.results.map { it.toModel() }
+                .filter { it.explicit.isAllowedByExplicitPreference(includeExplicit) }
+        }
     }
 
     suspend fun cachedDiscover(
@@ -65,10 +78,14 @@ class PodcastRepository @Inject constructor(
         languages: Set<String> = emptySet(),
         limit: Int? = null,
     ): CachedContent<List<PodcastSummary>>? = withContext(dispatcher) {
+        val includeExplicit = includeExplicit()
         cache?.get(
-            discoverKey(category, region, languages, limit),
+            discoverKey(category, region, languages, limit, includeExplicit),
             DiscoverResponse.serializer(),
-        )?.mapValue { it.results.map { summary -> summary.toModel() } }
+        )?.mapValue {
+            it.results.map { summary -> summary.toModel() }
+                .filter { summary -> summary.explicit.isAllowedByExplicitPreference(includeExplicit) }
+        }
     }
 
     suspend fun search(
@@ -76,17 +93,26 @@ class PodcastRepository @Inject constructor(
         languages: Set<String> = emptySet(),
         category: String? = null,
     ): DataResult<List<PodcastSummary>> = withContext(dispatcher) {
+        val includeExplicit = includeExplicit()
         val result = apiCall {
             api.search(
                 query = query,
                 languages = languages.joinToString(",").takeIf { it.isNotBlank() },
                 category = category?.takeIf { it.isNotBlank() },
+                includeExplicit = includeExplicit,
             )
         }
         if (result is DataResult.Success) {
-            cache?.put(searchKey(query, languages, category), result.data, SearchResponse.serializer())
+            cache?.put(
+                searchKey(query, languages, category, includeExplicit),
+                result.data,
+                SearchResponse.serializer(),
+            )
         }
-        result.map { response -> response.results.map { it.toModel() } }
+        result.map { response ->
+            response.results.map { it.toModel() }
+                .filter { it.explicit.isAllowedByExplicitPreference(includeExplicit) }
+        }
     }
 
     suspend fun cachedSearch(
@@ -94,8 +120,14 @@ class PodcastRepository @Inject constructor(
         languages: Set<String> = emptySet(),
         category: String? = null,
     ): CachedContent<List<PodcastSummary>>? = withContext(dispatcher) {
-        cache?.get(searchKey(query, languages, category), SearchResponse.serializer())
-            ?.mapValue { it.results.map { summary -> summary.toModel() } }
+        val includeExplicit = includeExplicit()
+        cache?.get(
+            searchKey(query, languages, category, includeExplicit),
+            SearchResponse.serializer(),
+        )?.mapValue {
+            it.results.map { summary -> summary.toModel() }
+                .filter { summary -> summary.explicit.isAllowedByExplicitPreference(includeExplicit) }
+        }
     }
 
     /**
@@ -134,6 +166,7 @@ class PodcastRepository @Inject constructor(
         limit: Int = PAGE_SIZE,
         offset: Int = 0,
     ): DataResult<List<Episode>> = withContext(dispatcher) {
+        val includeExplicit = includeExplicit()
         val result = apiCall { api.episodes(podcastId, limit, offset) }
         if (result is DataResult.Success) {
             cache?.put(episodesKey(podcastId, limit, offset), result.data, EpisodesResponse.serializer())
@@ -141,7 +174,10 @@ class PodcastRepository @Inject constructor(
                 cache?.put(episodeKey(episode.id), episode, EpisodeDto.serializer())
             }
         }
-        result.map { response -> response.episodes.map { it.toModel() } }
+        result.map { response ->
+            response.episodes.map { it.toModel() }
+                .filter { it.explicit.isAllowedByExplicitPreference(includeExplicit) }
+        }
     }
 
     suspend fun cachedEpisodes(
@@ -149,10 +185,14 @@ class PodcastRepository @Inject constructor(
         limit: Int = PAGE_SIZE,
         offset: Int = 0,
     ): CachedContent<List<Episode>>? = withContext(dispatcher) {
+        val includeExplicit = includeExplicit()
         cache?.get(
             episodesKey(podcastId, limit, offset),
             EpisodesResponse.serializer(),
-        )?.mapValue { it.episodes.map { episode -> episode.toModel() } }
+        )?.mapValue {
+            it.episodes.map { episode -> episode.toModel() }
+                .filter { episode -> episode.explicit.isAllowedByExplicitPreference(includeExplicit) }
+        }
     }
 
     /**
@@ -163,6 +203,7 @@ class PodcastRepository @Inject constructor(
         podcastId: String,
         limit: Int = PAGE_SIZE,
     ): DataResult<List<Episode>> = withContext(dispatcher) {
+        val includeExplicit = includeExplicit()
         val key = episodesKey(podcastId, limit, 0)
         refreshLocks.getOrPut(key) { Mutex() }.withLock {
             val now = System.currentTimeMillis()
@@ -170,7 +211,8 @@ class PodcastRepository @Inject constructor(
                 val existing = cache?.get(key, EpisodesResponse.serializer())
                 if (existing != null) {
                     return@withLock DataResult.Success(
-                        existing.value.episodes.map { it.toModel() },
+                        existing.value.episodes.map { it.toModel() }
+                            .filter { it.explicit.isAllowedByExplicitPreference(includeExplicit) },
                     )
                 }
             }
@@ -198,7 +240,10 @@ class PodcastRepository @Inject constructor(
                     cache?.put(episodeKey(episode.id), episode, EpisodeDto.serializer())
                 }
                 refreshedAt[key] = now
-                DataResult.Success(merged.map { it.toModel() })
+                DataResult.Success(
+                    merged.map { it.toModel() }
+                        .filter { it.explicit.isAllowedByExplicitPreference(includeExplicit) },
+                )
             }
         }
         }
@@ -218,6 +263,9 @@ class PodcastRepository @Inject constructor(
 
     fun isFresh(content: CachedContent<*>, ttlMs: Long): Boolean =
         content.isFresh(cache?.now() ?: System.currentTimeMillis(), ttlMs)
+
+    private suspend fun includeExplicit(): Boolean =
+        preferences?.preferences?.first()?.allowExplicitContent ?: false
 
     suspend fun chapters(chaptersUrl: String): DataResult<List<Chapter>> =
         withContext(dispatcher) {
@@ -263,10 +311,15 @@ class PodcastRepository @Inject constructor(
             region: String?,
             languages: Set<String>,
             limit: Int?,
-        ) = "discover:${category.orEmpty()}:${region.orEmpty()}:${normalizedLanguages(languages)}:${limit ?: 0}"
+            includeExplicit: Boolean,
+        ) = "discover:${category.orEmpty()}:${region.orEmpty()}:${normalizedLanguages(languages)}:${limit ?: 0}:explicit=$includeExplicit"
 
-        private fun searchKey(query: String, languages: Set<String>, category: String?) =
-            "search:${query.trim().lowercase()}:${normalizedLanguages(languages)}:${category.orEmpty()}"
+        private fun searchKey(
+            query: String,
+            languages: Set<String>,
+            category: String?,
+            includeExplicit: Boolean,
+        ) = "search:${query.trim().lowercase()}:${normalizedLanguages(languages)}:${category.orEmpty()}:explicit=$includeExplicit"
 
         private fun feedKey(feedUrl: String) = "podcast:feed:$feedUrl"
         private fun podcastKey(id: String) = "podcast:id:$id"

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="podcast_explicit_blocked">This podcast is marked explicit. Enable explicit content in Settings to view it.</string>
+    <string name="podcast_open_settings">Open Settings</string>
     <string name="podcast_episodes">Episodes</string>
     <string name="podcast_episode_number">Ep %1$d</string>
     <string name="podcast_explicit">Explicit</string>

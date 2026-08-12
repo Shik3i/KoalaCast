@@ -1,23 +1,30 @@
 package net.koalastuff.koalacast.core.data.repository
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.room.Room
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.db.KoalaCastDatabase
+import net.koalastuff.koalacast.core.data.db.EpisodeDownloadEntity
 import net.koalastuff.koalacast.core.data.db.ListeningSessionEntity
 import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.network.KoalaCastApi
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
 import net.koalastuff.koalacast.core.model.Account
+import net.koalastuff.koalacast.core.model.DownloadState
 import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
 import net.koalastuff.koalacast.core.network.dto.SyncPushResponse
 import net.koalastuff.koalacast.core.network.dto.SyncPullResponse
@@ -41,6 +48,7 @@ class SyncRepositoryTest {
     private lateinit var database: KoalaCastDatabase
     private lateinit var repository: SyncRepository
     private lateinit var store: SecureAccountStore
+    private lateinit var preferences: PreferencesRepository
     private var apiHandler: (Method, Array<out Any?>?) -> Any? = { method, _ ->
         error("unexpected API call: ${method.name}")
     }
@@ -57,7 +65,18 @@ class SyncRepositoryTest {
             arrayOf(KoalaCastApi::class.java),
         ) { _, method, args -> apiHandler(method, args) } as KoalaCastApi
         store = SecureAccountStore(context)
-        val preferencesFile = File(context.cacheDir, "sync-test-${System.nanoTime()}.preferences_pb")
+        val preferenceValues = MutableStateFlow<Preferences>(emptyPreferences())
+        val preferenceDataStore = object : DataStore<Preferences> {
+            override val data = preferenceValues
+
+            override suspend fun updateData(
+                transform: suspend (t: Preferences) -> Preferences,
+            ): Preferences = transform(preferenceValues.value).also { preferenceValues.value = it }
+        }
+        preferences = PreferencesRepository(
+            preferenceDataStore,
+            store,
+        )
         repository = SyncRepository(
             api = api,
             store = store,
@@ -70,9 +89,13 @@ class SyncRepositoryTest {
             tombstones = database.tombstoneDao(),
             queue = database.queueDao(),
             podcastSettings = database.podcastSettingsDao(),
-            preferences = PreferencesRepository(
-                PreferenceDataStoreFactory.create { preferencesFile },
-                store,
+            preferences = preferences,
+            downloads = DownloadRepository(
+                context = context,
+                dao = database.episodeDownloadDao(),
+                clock = object : Clock { override fun nowMs() = 1L },
+                accountStore = store,
+                preferences = preferences,
             ),
         )
     }
@@ -203,6 +226,73 @@ class SyncRepositoryTest {
         assertEquals(listOf(0L, 20L), requestedCursors)
         assertEquals(30L, store.cursor(USER_ID))
         assertEquals(setOf("first", "second"), database.subscriptionDao().getAll().map { it.podcastId }.toSet())
+    }
+
+    @Test
+    fun `newer server data generation clears old local copy before changes are applied`() = runTest {
+        val downloadedFile = File.createTempFile("stale-download-", ".mp3")
+        database.subscriptionDao().upsert(
+            SubscriptionEntity(
+                podcastId = "stale",
+                feedUrl = "https://old.example/feed.xml",
+                title = "Stale",
+                artworkUrl = "",
+                addedAt = 1,
+            ),
+        )
+        database.episodeDownloadDao().upsert(
+            EpisodeDownloadEntity(
+                episodeId = "stale-episode",
+                podcastId = "stale",
+                title = "Stale episode",
+                podcastTitle = "Stale",
+                artworkUrl = "",
+                enclosureUrl = "https://old.example/episode.mp3",
+                durationMs = 1,
+                categories = emptyList(),
+                state = DownloadState.DONE.name,
+                bytesDownloaded = downloadedFile.length(),
+                totalBytes = downloadedFile.length(),
+                localPath = downloadedFile.absolutePath,
+                createdAt = 1,
+                updatedAt = 1,
+            ),
+        )
+        store.setCursor(USER_ID, 44)
+        store.setPushWatermark(USER_ID, 55)
+        preferences.setAllowExplicitContent(true)
+        preferences.setThemeMode(net.koalastuff.koalacast.core.model.ThemeMode.LIGHT)
+        preferences.setSettingsFieldTimestamps(mapOf("theme_mode" to 123))
+        apiHandler = { method, _ ->
+            when (method.name) {
+                "pullSync" -> Response.success(
+                    SyncPullResponse(
+                        sinceCursor = 44,
+                        nextCursor = 45,
+                        currentCursor = 45,
+                        dataGeneration = 1,
+                        changesets = listOf(subscriptionChange("must-not-apply", 45)),
+                    ),
+                )
+                else -> error("old client attempted ${method.name} after reset")
+            }
+        }
+
+        val stopped = runCatching { repository.pull(USER_ID) }.exceptionOrNull()
+
+        assertTrue(stopped != null)
+        assertTrue(database.subscriptionDao().getAll().isEmpty())
+        assertTrue(database.episodeDownloadDao().getAllOldestFirst().isEmpty())
+        assertTrue(!downloadedFile.exists())
+        assertEquals(1L, store.dataGeneration(USER_ID))
+        assertEquals(0L, store.cursor(USER_ID))
+        assertEquals(0L, store.pushWatermark(USER_ID))
+        assertTrue(!preferences.preferences.first().allowExplicitContent)
+        assertEquals(
+            net.koalastuff.koalacast.core.model.ThemeMode.SYSTEM,
+            preferences.preferences.first().themeMode,
+        )
+        assertTrue(preferences.settingsFieldTimestamps().isEmpty())
     }
 
     @Test
@@ -378,6 +468,7 @@ class SyncRepositoryTest {
             when (method.name) {
                 "pushSync" -> {
                     val body = args!![0] as SyncPushRequest
+                    assertEquals(store.dataGeneration(USER_ID), body.dataGeneration)
                     val poisoned = body.operations.any { it.entityId == "session-3" }
                     if (poisoned && body.operations.size == 1) {
                         Response.error<SyncPushResponse>(

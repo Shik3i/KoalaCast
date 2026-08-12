@@ -16,8 +16,29 @@ end-to-end encrypted.
 ### Idempotent client operations
 
 - Pushes include a client-generated `client_op_id` and `device_id`.
+- Every pull, snapshot, push, and push response carries the account's
+  `data_generation` reset epoch.
 - The server deduplicates on `(user_id, device_id, client_op_id)`.
 - A retry therefore succeeds without applying the same operation twice.
+
+### Data-reset barrier
+
+- `DELETE /api/v1/auth/data` increments `users.data_generation` in the same
+  `BEGIN IMMEDIATE` transaction that deletes all synchronized rows.
+- Every push must send the generation observed by the client. A mismatch is
+  rejected with `409 DATA_GENERATION_MISMATCH` before any operation is applied.
+- Web and Android pull before pushing. When either observes a newer generation,
+  it increments its process/account epoch, deletes its local account database,
+  queue, settings, statistics, sync metadata, push registration, and downloads,
+  persists the new generation, and aborts that sync run before push.
+- A push that began concurrently with the reset is serialized by SQLite's write
+  transaction. If it commits first, the reset deletes it; if the reset commits
+  first, its stale generation is rejected. Deleted data therefore cannot be
+  restored by another device.
+- An authenticated OPML import captures the generation before feed ingestion
+  and rechecks it inside each subscription transaction. An import that crossed
+  a reset can return resolved public podcast metadata, but cannot recreate the
+  account's deleted subscription rows or sync metadata.
 
 ### Materialized entity types
 

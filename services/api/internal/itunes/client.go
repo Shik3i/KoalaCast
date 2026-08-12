@@ -81,6 +81,7 @@ type PodcastResult struct {
 	Category          string   `json:"category"`
 	Categories        []string `json:"categories,omitempty"`
 	Description       string   `json:"description"`
+	Explicit          *bool    `json:"explicit"`
 	LatestDurationMS  int64    `json:"latest_duration_ms,omitempty"`
 	LatestPublishedAt int64    `json:"latest_published_at,omitempty"`
 	// Language is a bare language code ("de", "en") or "" when unknown. iTunes
@@ -94,6 +95,7 @@ type cachedLatestEpisode struct {
 	feedURL     string
 	durationMS  int64
 	publishedAt int64
+	explicit    *bool
 	expiresAt   time.Time
 }
 
@@ -187,12 +189,15 @@ func (c *ITunesClient) EnrichLatestEpisodes(results []PodcastResult) error {
 
 	var lookupResp struct {
 		Results []struct {
-			WrapperType  string `json:"wrapperType"`
-			Kind         string `json:"kind"`
-			CollectionID int64  `json:"collectionId"`
-			TrackTimeMS  int64  `json:"trackTimeMillis"`
-			ReleaseDate  string `json:"releaseDate"`
-			FeedURL      string `json:"feedUrl"`
+			WrapperType            string `json:"wrapperType"`
+			Kind                   string `json:"kind"`
+			CollectionID           int64  `json:"collectionId"`
+			TrackTimeMS            int64  `json:"trackTimeMillis"`
+			ReleaseDate            string `json:"releaseDate"`
+			FeedURL                string `json:"feedUrl"`
+			CollectionExplicitness string `json:"collectionExplicitness"`
+			TrackExplicitness      string `json:"trackExplicitness"`
+			ContentAdvisoryRating  string `json:"contentAdvisoryRating"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&lookupResp); err != nil {
@@ -203,6 +208,13 @@ func (c *ITunesClient) EnrichLatestEpisodes(results []PodcastResult) error {
 	for _, item := range lookupResp.Results {
 		id := strconv.FormatInt(item.CollectionID, 10)
 		meta := resolved[id]
+		if rating := parseExplicitness(
+			item.CollectionExplicitness,
+			item.TrackExplicitness,
+			item.ContentAdvisoryRating,
+		); rating != nil {
+			meta.explicit = rating
+		}
 		if item.FeedURL != "" {
 			meta.feedURL = item.FeedURL
 		}
@@ -238,6 +250,27 @@ func applyLatestEpisode(result *PodcastResult, meta cachedLatestEpisode) {
 	}
 	result.LatestDurationMS = meta.durationMS
 	result.LatestPublishedAt = meta.publishedAt
+	if result.Explicit == nil {
+		result.Explicit = meta.explicit
+	}
+}
+
+func parseExplicitness(values ...string) *bool {
+	knownClean := false
+	for _, value := range values {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "explicit":
+			result := true
+			return &result
+		case "clean", "cleaned", "notexplicit", "not_explicit":
+			knownClean = true
+		}
+	}
+	if knownClean {
+		result := false
+		return &result
+	}
+	return nil
 }
 
 // FetchTopPodcasts returns the current overall top trending podcasts (US chart).
@@ -366,16 +399,27 @@ func (c *ITunesClient) LookupFeedURL(id string) (string, error) {
 
 // SearchPodcasts queries iTunes Search API for podcasts matching query term using default "us" country storefront
 func (c *ITunesClient) SearchPodcasts(query string, limit int) ([]PodcastResult, error) {
-	return c.SearchPodcastsWithCountry(query, "us", limit)
+	return c.SearchPodcastsWithCountryExplicit(query, "us", limit, true)
 }
 
 // SearchPodcastsWithCountry queries iTunes Search API for podcasts matching query term in a specific country storefront
 func (c *ITunesClient) SearchPodcastsWithCountry(query, country string, limit int) ([]PodcastResult, error) {
+	return c.SearchPodcastsWithCountryExplicit(query, country, limit, true)
+}
+
+func (c *ITunesClient) SearchPodcastsWithCountryExplicit(
+	query, country string,
+	limit int,
+	includeExplicit bool,
+) ([]PodcastResult, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
 	country = sanitizeRegion(country)
 	reqURL := fmt.Sprintf("https://itunes.apple.com/search?media=podcast&entity=podcast&term=%s&country=%s&limit=%d", url.QueryEscape(query), country, limit)
+	if !includeExplicit {
+		reqURL += "&explicit=No"
+	}
 
 	resp, err := c.httpClient.Get(reqURL)
 	if err != nil {
@@ -390,13 +434,16 @@ func (c *ITunesClient) SearchPodcastsWithCountry(query, country string, limit in
 	var searchResp struct {
 		ResultCount int `json:"resultCount"`
 		Results     []struct {
-			TrackID       int64  `json:"trackId"`
-			TrackName     string `json:"trackName"`
-			ArtistName    string `json:"artistName"`
-			FeedURL       string `json:"feedUrl"`
-			ArtworkUrl600 string `json:"artworkUrl600"`
-			ArtworkUrl100 string `json:"artworkUrl100"`
-			PrimaryGenre  string `json:"primaryGenreName"`
+			TrackID                int64  `json:"trackId"`
+			TrackName              string `json:"trackName"`
+			ArtistName             string `json:"artistName"`
+			FeedURL                string `json:"feedUrl"`
+			ArtworkUrl600          string `json:"artworkUrl600"`
+			ArtworkUrl100          string `json:"artworkUrl100"`
+			PrimaryGenre           string `json:"primaryGenreName"`
+			CollectionExplicitness string `json:"collectionExplicitness"`
+			TrackExplicitness      string `json:"trackExplicitness"`
+			ContentAdvisoryRating  string `json:"contentAdvisoryRating"`
 		} `json:"results"`
 	}
 
@@ -427,8 +474,27 @@ func (c *ITunesClient) SearchPodcastsWithCountry(query, country string, limit in
 			Category:   item.PrimaryGenre,
 			Categories: cats,
 			Language:   lang.Detect(item.TrackName + " " + item.ArtistName),
+			Explicit: parseExplicitness(
+				item.CollectionExplicitness,
+				item.TrackExplicitness,
+				item.ContentAdvisoryRating,
+			),
 		})
+	}
+	if !includeExplicit {
+		results = filterExplicit(results)
 	}
 
 	return results, nil
+}
+
+func filterExplicit(results []PodcastResult) []PodcastResult {
+	filtered := results[:0]
+	for _, result := range results {
+		if result.Explicit != nil && *result.Explicit {
+			continue
+		}
+		filtered = append(filtered, result)
+	}
+	return filtered
 }

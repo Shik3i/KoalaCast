@@ -441,3 +441,120 @@ func TestPodcastHandler_Discover_WithPodcastIndexCategories(t *testing.T) {
 		t.Errorf("expected category Science in discover result, got %v", resp.Results[0].Categories)
 	}
 }
+
+func TestIncludeExplicitContentDefaultsToTrue(t *testing.T) {
+	if !includeExplicitContent(httptest.NewRequest(http.MethodGet, "/discover", nil)) {
+		t.Fatal("request without include_explicit must retain the legacy true default")
+	}
+	if includeExplicitContent(httptest.NewRequest(http.MethodGet, "/discover?include_explicit=false", nil)) {
+		t.Fatal("include_explicit=false was ignored")
+	}
+}
+
+func TestPodcastHandlerDiscoverFiltersOnlyExplicitAndFillsLimit(t *testing.T) {
+	mockResp := `{
+		"status":"true",
+		"feeds":[
+			{"id":1,"title":"Explicit","url":"https://example.com/1","explicit":1},
+			{"id":2,"title":"Unknown","url":"https://example.com/2"},
+			{"id":3,"title":"Clean","url":"https://example.com/3","explicit":0}
+		]
+	}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("max"); got != "6" {
+			t.Errorf("trending max = %q, want overfetched 6", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(mockResp))
+	}))
+	defer ts.Close()
+
+	idxClient := podcastindex.NewClient("key", "secret")
+	idxClient.SetBaseURL(ts.URL)
+	idxClient.SetHTTPClient(rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true}))
+	handler := &PodcastHandler{PodcastIndex: idxClient}
+	rec := httptest.NewRecorder()
+	handler.Discover(
+		rec,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/v1/podcasts/discover?include_explicit=false&limit=2",
+			nil,
+		),
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Results []itunes.PodcastResult `json:"results"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 2 || resp.Results[0].Title != "Unknown" || resp.Results[1].Title != "Clean" {
+		t.Fatalf("filtered results = %#v", resp.Results)
+	}
+	if resp.Results[0].Explicit != nil {
+		t.Fatalf("missing explicit metadata became clean: %#v", resp.Results[0].Explicit)
+	}
+}
+
+func TestPodcastHandlerDiscoverFiltersExplicitDatabaseFallback(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	database, err := db.OpenDB(filepath.Join(t.TempDir(), "explicit-fallback.db"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	for _, podcast := range []struct {
+		id       string
+		title    string
+		explicit int
+	}{
+		{"explicit", "Explicit database show", 1},
+		{"clean", "Clean database show", 0},
+	} {
+		if _, err := database.SQL.Exec(`
+			INSERT INTO podcasts (id, feed_url, title, explicit, created_at, updated_at)
+			VALUES (?, ?, ?, ?, 1, 1)
+		`, podcast.id, "https://example.com/"+podcast.id+".xml", podcast.title, podcast.explicit); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	unavailableApple := itunes.NewITunesClientWithHTTPClient(&http.Client{
+		Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("unavailable")),
+			}, nil
+		}),
+	})
+	handler := &PodcastHandler{DB: database, ITunes: unavailableApple}
+	rec := httptest.NewRecorder()
+	handler.Discover(
+		rec,
+		httptest.NewRequest(
+			http.MethodGet,
+			"/api/v1/podcasts/discover?include_explicit=false&limit=10",
+			nil,
+		),
+	)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Results []itunes.PodcastResult `json:"results"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].ID != "clean" {
+		t.Fatalf("database fallback leaked explicit content: %#v", resp.Results)
+	}
+}

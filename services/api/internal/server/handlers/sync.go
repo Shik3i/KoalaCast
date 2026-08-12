@@ -32,6 +32,7 @@ type SyncPushOperation struct {
 type SyncPushRequest struct {
 	Operations          []SyncPushOperation `json:"operations"`
 	ClientSchemaVersion int                 `json:"client_schema_version"`
+	DataGeneration      int64               `json:"data_generation"`
 }
 
 type PlaybackStatePayload struct {
@@ -111,7 +112,11 @@ func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if client cursor is older than min_retained_cursor
-	var currentCursor, minRetainedCursor int64
+	var currentCursor, minRetainedCursor, dataGeneration int64
+	if err := h.DB.SQL.QueryRowContext(r.Context(), `SELECT data_generation FROM users WHERE id = ?`, authUser.ID).Scan(&dataGeneration); err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 	err := h.DB.SQL.QueryRowContext(r.Context(), `
 		SELECT current_cursor, min_retained_cursor FROM user_sync_cursors WHERE user_id = ?
 	`, authUser.ID).Scan(&currentCursor, &minRetainedCursor)
@@ -135,6 +140,7 @@ func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 			"message":           "Requested sync cursor is older than server retained mutation log history. Full state snapshot required.",
 			"min_server_cursor": minRetainedCursor,
 			"current_cursor":    currentCursor,
+			"data_generation":   dataGeneration,
 		})
 		return
 	}
@@ -174,11 +180,12 @@ func (h *SyncHandler) Pull(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"since_cursor":   sinceCursor,
-		"next_cursor":    nextCursor,
-		"current_cursor": currentCursor,
-		"has_more":       nextCursor < currentCursor,
-		"changesets":     changesets,
+		"since_cursor":    sinceCursor,
+		"next_cursor":     nextCursor,
+		"current_cursor":  currentCursor,
+		"has_more":        nextCursor < currentCursor,
+		"changesets":      changesets,
+		"data_generation": dataGeneration,
 	})
 }
 
@@ -196,7 +203,12 @@ func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	var cursor int64
+	var cursor, dataGeneration int64
+	err = tx.QueryRowContext(r.Context(), `SELECT data_generation FROM users WHERE id = ?`, authUser.ID).Scan(&dataGeneration)
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 	err = tx.QueryRowContext(r.Context(), `SELECT current_cursor FROM user_sync_cursors WHERE user_id = ?`, authUser.ID).Scan(&cursor)
 	if err != nil && err != sql.ErrNoRows {
 		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
@@ -433,6 +445,7 @@ func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 		"cursor": cursor, "subscriptions": subscriptions, "favorites": favorites,
 		"playback_states": playbackStates, "listening_sessions": listeningSessions,
 		"queue": queueItems, "podcast_settings": podcastSettings, "settings": settings,
+		"data_generation": dataGeneration,
 	})
 }
 
@@ -562,6 +575,21 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var dataGeneration int64
+	if err := tx.QueryRowContext(ctx, `SELECT data_generation FROM users WHERE id = ?`, authUser.ID).Scan(&dataGeneration); err != nil {
+		http.Error(w, `{"error":"failed to read data generation"}`, http.StatusInternalServerError)
+		return
+	}
+	if req.DataGeneration != dataGeneration {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code":            "DATA_GENERATION_MISMATCH",
+			"data_generation": dataGeneration,
+		})
+		return
+	}
+
 	// Ensure the cursor row exists before reading it. Without this a push that
 	// happens before the user's first pull would read/update a non-existent row,
 	// leaving user_sync_cursors.current_cursor at 0 while sync_log advances — which
@@ -649,8 +677,9 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"applied_ops":    appliedOps,
-		"current_cursor": currentCursor,
+		"applied_ops":     appliedOps,
+		"current_cursor":  currentCursor,
+		"data_generation": dataGeneration,
 	})
 }
 

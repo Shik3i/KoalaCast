@@ -8,4 +8,7 @@
     <string name="profile_scope_community">Community</string>
     <string name="widget_ready">Bereit zum Hören</string>
     <string name="widget_play_pause">Abspielen oder pausieren</string>
+    <string name="insecure_server_reset_title">Sicherer Server wiederhergestellt</string>
+    <string name="insecure_server_reset_body">Der gespeicherte Server nutzte unverschlüsseltes HTTP und wurde auf https://cast.koalastuff.net zurückgesetzt, bevor Konto- oder Sync-Daten gesendet wurden. Falls du ein Konto nutzt, melde dich erneut an.</string>
+    <string name="insecure_server_reset_confirm">OK</string>
 </resources>

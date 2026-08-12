@@ -1,0 +1,107 @@
+locale,language,is_source,field,character_limit,text,translation_context
+en-US,English,true,app_name,30,"KoalaCast: Podcast Player","Keep the KoalaCast brand unchanged. Podcast Player is the single primary search descriptor. Do not add promotional claims or more keywords."
+en-US,English,true,short_description,80,"Open-source podcast player with offline listening, no ads or analytics tracking.","Natural US English. Preserve the precise distinction: no advertising or analytics tracking. Do not broaden this into a claim that optional sync never transmits data."
+en-US,English,true,full_description,4000,"KoalaCast is a private, open-source podcast player for Android. Discover,
+subscribe to, stream and download podcasts without ads, advertising trackers or
+analytics SDKs.
+
+No account is required. Your subscriptions, downloads, queue and private
+listening statistics are stored on your device by default. An optional account
+adds cross-device sync; all core listening features remain available without
+one.
+
+LISTEN YOUR WAY
+• Fine-grained playback speed, silence trimming and volume boost
+• A sleep timer that counts listening time, so pauses do not use it up
+• Chapters and transcripts when publishers provide them
+• Manual or automatic downloads per show, with resumable transfers, a Wi-Fi-only
+  option, storage budget and automatic cleanup rules
+• Android Auto, Wear OS browsing, Chromecast and a home-screen widget
+• Audio streams directly from each podcast publisher and never passes through a
+  KoalaCast server
+
+FIND PODCASTS
+• Browse charts and search multiple podcast catalogs
+• Filter discovery by the language spoken in a show, not only by country
+• Mark genres as preferred or hidden, and hide individual shows
+• Add any compatible podcast using its RSS feed address
+• Import and export subscriptions using OPML
+• Explicit content is hidden by default and can be enabled in Settings
+
+STAY ORGANIZED
+• A New tab collects episodes from your subscriptions
+• Choose per show whether the New tab includes every episode or only the latest
+• Manage a queue, reusable named queues, folders, favorites and timestamp
+  bookmarks
+• View private listening statistics including listening time, streaks and time
+  saved through faster playback and silence trimming
+
+OPTIONAL ACCOUNT
+Synchronize subscriptions, favorites, playback positions, queues and settings
+between your devices and the KoalaCast web app. Global aggregate statistics and
+the listener leaderboard require a separate opt-in and are disabled by default.
+Export your account data, delete synchronized data while keeping your account,
+or delete your account and its associated data from inside the app.
+
+CHOOSE OR HOST YOUR SERVER
+The official KoalaCast server is optional. Connect the app to any KoalaCast
+instance or host your own. A self-hosted instance provides the same capabilities
+as the official service. The lightweight server uses Go and SQLite.
+
+KoalaCast is MIT-licensed and fully open source. Source code:
+https://github.com/Shik3i/KoalaCast","Translate naturally rather than literally. Preserve KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite and the GitHub URL. Keep the account optional and the official server optional. Preserve no advertising or analytics tracking without claiming no functional data transfer. Do not add rankings, awards, prices, calls to action, competitor names, end-to-end encryption or unsupported features."
+de-DE,German,false,app_name,30,"KoalaCast: Podcast-Player","Markenname KoalaCast unverändert lassen. Podcast-Player ist der einzige primäre Suchbegriff. Keine Werbeaussagen oder weiteren Keywords ergänzen."
+de-DE,German,false,short_description,80,"Open-Source-Podcast-Player mit Downloads, ohne Werbung und Analyse-Tracking.","Natürliches Deutsch. Die präzise Abgrenzung bewahren: kein Werbe- oder Analyse-Tracking. Nicht zu der Aussage erweitern, optionale Synchronisierung übertrage niemals Daten."
+de-DE,German,false,full_description,4000,"KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
+abonniere, streame und lade Podcasts herunter – ohne Werbung, Werbe-Tracker oder
+Analyse-SDKs.
+
+Du brauchst kein Konto. Abos, Downloads, Warteschlange und private Hörstatistiken
+werden standardmäßig auf deinem Gerät gespeichert. Ein optionales Konto ergänzt
+die geräteübergreifende Synchronisierung; alle grundlegenden Hörfunktionen bleiben
+auch ohne Konto verfügbar.
+
+HÖREN, WIE DU WILLST
+• Feinstufige Wiedergabegeschwindigkeit, Stille-Kürzung und Lautstärke-Anhebung
+• Ein Sleep-Timer, der Hörzeit zählt, sodass Pausen ihn nicht verbrauchen
+• Kapitel und Transkripte, wenn sie vom Publisher bereitgestellt werden
+• Manuelle oder automatische Downloads pro Podcast mit fortsetzbaren Transfers,
+  Nur-WLAN-Option, Speicherbudget und automatischen Löschregeln
+• Android Auto, Navigation über Wear OS, Chromecast und ein Homescreen-Widget
+• Audio kommt direkt vom jeweiligen Podcast-Publisher und läuft nie über einen
+  KoalaCast-Server
+
+PODCASTS FINDEN
+• Charts durchsuchen und in mehreren Podcast-Katalogen suchen
+• Entdeckungen nach der tatsächlich gesprochenen Sprache statt nur nach Land
+  filtern
+• Genres bevorzugen oder ausblenden und einzelne Podcasts verbergen
+• Jeden kompatiblen Podcast über seine RSS-Feed-Adresse hinzufügen
+• Abonnements per OPML importieren und exportieren
+• Explizite Inhalte sind standardmäßig ausgeblendet und können in den
+  Einstellungen aktiviert werden
+
+ORGANISIERT BLEIBEN
+• Ein „Neu“-Tab sammelt Folgen aus deinen Abonnements
+• Pro Podcast festlegen, ob dort jede Folge oder nur die neueste erscheint
+• Warteschlange, wiederverwendbare benannte Warteschlangen, Ordner, Favoriten und
+  Zeitmarken verwalten
+• Private Hörstatistiken mit Hörzeit, Serien und gesparter Zeit durch schnellere
+  Wiedergabe und Stille-Kürzung ansehen
+
+OPTIONALES KONTO
+Synchronisiere Abos, Favoriten, Hörpositionen, Warteschlangen und Einstellungen
+zwischen deinen Geräten und der KoalaCast-Web-App. Globale zusammengefasste
+Statistiken und die Hörer-Rangliste erfordern eine getrennte Zustimmung und sind
+standardmäßig deaktiviert. Exportiere deine Kontodaten, lösche synchronisierte
+Daten unter Beibehaltung des Kontos oder lösche dein Konto samt zugehörigen Daten
+direkt in der App.
+
+SERVER AUSWÄHLEN ODER SELBST HOSTEN
+Der offizielle KoalaCast-Server ist optional. Verbinde die App mit einer
+beliebigen KoalaCast-Instanz oder hoste deinen eigenen Server. Eine selbst
+gehostete Instanz bietet dieselben Funktionen wie der offizielle Dienst. Der
+leichtgewichtige Server verwendet Go und SQLite.
+
+KoalaCast steht unter der MIT-Lizenz und ist vollständig Open Source. Quellcode:
+https://github.com/Shik3i/KoalaCast","Bereits redaktionell geprüfte deutsche Fassung. KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite und GitHub unverändert lassen. Konto und offizieller Server bleiben optional. Kein Werbe- oder Analyse-Tracking bewahren, ohne jegliche funktionale Datenübertragung auszuschließen. Keine Rankings, Auszeichnungen, Preise, Handlungsaufforderungen, Mitbewerbernamen, Ende-zu-Ende-Verschlüsselung oder nicht vorhandenen Funktionen ergänzen."

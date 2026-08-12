@@ -31,6 +31,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.PodcastSummary
 import net.koalastuff.koalacast.core.ui.component.AccentButton
+import net.koalastuff.koalacast.core.ui.component.AccentBadge
 import net.koalastuff.koalacast.core.ui.component.CoverArt
 import net.koalastuff.koalacast.core.ui.component.DataErrorState
 import net.koalastuff.koalacast.core.ui.component.EmptyState
@@ -407,13 +408,22 @@ private fun ResultRow(show: PodcastSummary, onClick: () -> Unit, onHide: () -> U
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapTiny),
         ) {
-            Text(
-                text = show.title,
-                style = KoalaTheme.type.listTitle,
-                color = colors.ink2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = show.title,
+                    style = KoalaTheme.type.listTitle,
+                    color = colors.ink2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (show.explicit == true) {
+                    AccentBadge(label = stringResource(R.string.search_explicit))
+                }
+            }
             MonoText(
                 text = listOf(show.author, show.category, show.language.uppercase())
                     .filter { it.isNotBlank() }

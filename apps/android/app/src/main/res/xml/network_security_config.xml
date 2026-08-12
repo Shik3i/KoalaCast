@@ -1,17 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  KoalaCast is self-hostable, and a self-hosted instance frequently lives on a LAN
-  address with no certificate. Blocking cleartext outright would make that setup
-  impossible, so it is permitted — and the app says so plainly wherever a listener
-  types an http:// address (onboarding and Settings both warn).
-
-  Only system CAs are trusted. Adding user-installed anchors would let any profile
-  or MITM proxy on the device read HTTPS traffic, which is a worse trade than asking
-  the handful of private-CA self-hosters to use a public certificate or plain HTTP
-  on their LAN.
--->
-<network-security-config xmlns:tools="http://schemas.android.com/tools">
-    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
+<!-- Release/default policy: HTTPS only, using system trust anchors. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

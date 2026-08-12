@@ -214,6 +214,88 @@ func TestOPMLHandler_Import_UsesCompleteFeedIngestionAndReturnsResolvedMetadata(
 	}
 }
 
+func TestOPMLHandler_ImportStartedBeforeDataResetCannotRestoreSubscriptions(t *testing.T) {
+	tempDir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	database, err := db.OpenDB(filepath.Join(tempDir, "test.db"), logger)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer database.Close()
+
+	now := time.Now().UnixMilli()
+	if _, err := database.SQL.Exec(`
+		INSERT INTO users
+			(id, username, normalized_username, password_hash, recovery_code_hash, created_at, updated_at)
+		VALUES ('u-opml-reset', 'opml-user', 'opml-user', 'hash', 'recovery', ?, ?)
+	`, now, now); err != nil {
+		t.Fatalf("insert auth user: %v", err)
+	}
+
+	ingestionStarted := make(chan struct{})
+	continueIngestion := make(chan struct{})
+	handler := &OPMLHandler{
+		DB: database,
+		IngestFeed: func(ctx context.Context, feedURL string) (string, error) {
+			close(ingestionStarted)
+			<-continueIngestion
+			_, err := database.SQL.ExecContext(ctx, `
+				INSERT INTO podcasts (id, feed_url, title, created_at, updated_at)
+				VALUES ('reset-race-podcast', ?, 'Reset race', ?, ?)
+			`, feedURL, now, now)
+			return "reset-race-podcast", err
+		},
+	}
+
+	payload := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0"><body>
+	<outline type="rss" text="Podcast" xmlUrl="https://example.org/reset-race.xml"/>
+</body></opml>`)
+	authCtx := context.WithValue(
+		context.Background(),
+		customMiddleware.UserContextKey,
+		&customMiddleware.AuthUser{ID: "u-opml-reset"},
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/opml/import", bytes.NewBuffer(payload)).
+		WithContext(authCtx)
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.Import(rec, req)
+	}()
+
+	<-ingestionStarted
+	if _, err := database.SQL.Exec(`
+		UPDATE users SET data_generation = data_generation + 1 WHERE id='u-opml-reset';
+		DELETE FROM subscriptions WHERE user_id='u-opml-reset';
+	`); err != nil {
+		t.Fatalf("reset account data: %v", err)
+	}
+	close(continueIngestion)
+	<-done
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var report OPMLImportReport
+	if err := json.NewDecoder(rec.Body).Decode(&report); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if report.Imported != 0 || report.Skipped != 1 {
+		t.Fatalf("stale import was not rejected: %+v", report)
+	}
+	var subscriptions int
+	if err := database.SQL.QueryRow(
+		"SELECT COUNT(*) FROM subscriptions WHERE user_id='u-opml-reset'",
+	).Scan(&subscriptions); err != nil {
+		t.Fatal(err)
+	}
+	if subscriptions != 0 {
+		t.Fatalf("stale OPML import restored %d subscription(s)", subscriptions)
+	}
+}
+
 func TestUniqueFeedURLs_PreservesOrderAndRemovesDuplicates(t *testing.T) {
 	got := uniqueFeedURLs([]string{
 		" https://example.org/first.xml ",

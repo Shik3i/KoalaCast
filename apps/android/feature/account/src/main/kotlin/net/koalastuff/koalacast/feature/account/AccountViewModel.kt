@@ -42,6 +42,7 @@ data class AccountUiState(
     /** The delete flow is behind its own confirmation and its own credential field. */
     val deleteCredential: String = "",
     val showDeleteAccount: Boolean = false,
+    val showDeleteData: Boolean = false,
 )
 
 @HiltViewModel
@@ -131,7 +132,42 @@ class AccountViewModel @Inject constructor(
     fun setDeleteCredential(value: String) = form.update { it.copy(deleteCredential = value) }
 
     fun showDeleteAccount(show: Boolean) =
-        form.update { it.copy(showDeleteAccount = show, deleteCredential = "", error = null) }
+        form.update {
+            it.copy(
+                showDeleteAccount = show,
+                showDeleteData = false,
+                deleteCredential = "",
+                error = null,
+            )
+        }
+
+    fun showDeleteData(show: Boolean) =
+        form.update {
+            it.copy(
+                showDeleteData = show,
+                showDeleteAccount = false,
+                deleteCredential = "",
+                error = null,
+            )
+        }
+
+    fun deleteSynchronizedData() = launchAction {
+        val credential = state.value.deleteCredential
+        if (credential.isBlank()) return@launchAction
+        when (val result = sync.deleteSynchronizedData(credential)) {
+            is DataResult.Failure -> fail(result.error)
+            is DataResult.Success -> {
+                form.update {
+                    it.copy(
+                        showDeleteData = false,
+                        deleteCredential = "",
+                        globalStatsOptIn = false,
+                    )
+                }
+                notice("data_deleted")
+            }
+        }
+    }
 
     /**
      * Deletes the account on the server and every trace of it on this device.

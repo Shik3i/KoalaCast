@@ -35,6 +35,7 @@ data class SettingsUiState(
     val serverError: DataError? = null,
     val serverSaved: Boolean = false,
     val cleartext: Boolean = false,
+    val cleartextRejected: Boolean = false,
 )
 
 @HiltViewModel
@@ -73,12 +74,18 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onServerDraftChange(value: String) {
+        val rejected = ServerUrl.rejectsCleartext(value)
         _state.update {
             it.copy(
                 serverDraft = value,
-                serverError = null,
+                serverError = if (rejected) {
+                    DataError.Malformed(ServerUrl.CLEARTEXT_REJECTED)
+                } else {
+                    null
+                },
                 serverSaved = false,
-                cleartext = ServerUrl.isCleartext(value),
+                cleartext = ServerUrl.isCleartext(value) && !rejected,
+                cleartextRejected = rejected,
             )
         }
     }
@@ -90,6 +97,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun saveServer() {
         if (_state.value.checkingServer) return
+        if (_state.value.cleartextRejected) return
         _state.update { it.copy(checkingServer = true, serverError = null, serverSaved = false) }
 
         viewModelScope.launch {
@@ -107,6 +115,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setSkipSilence(enabled: Boolean) {
         viewModelScope.launch { preferences.setSkipSilence(enabled) }
+    }
+
+    fun setAllowExplicitContent(enabled: Boolean) {
+        viewModelScope.launch { preferences.setAllowExplicitContent(enabled) }
     }
 
     fun setVolumeBoost(enabled: Boolean) {

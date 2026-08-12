@@ -25,13 +25,14 @@
     <string name="settings_server_title">KoalaCast-Server</string>
     <string name="settings_server_placeholder">cast.example.org</string>
     <string name="settings_server_note">Ein Serverwechsel ändert, was ein Konto bedeutet: Abos, Warteschlange und Fortschritt liegen pro Server, und eine Anmeldung auf einer Instanz gilt nicht auf einer anderen.</string>
-    <string name="settings_server_cleartext">Diese Adresse nutzt einfaches HTTP. Im eigenen Netz in Ordnung, über das Internet unsicher.</string>
+    <string name="settings_server_cleartext">Dieser Release-Build akzeptiert ausschließlich HTTPS-Server.</string>
     <string name="settings_server_save">Server speichern</string>
     <string name="settings_server_checking">Prüfe …</string>
     <string name="settings_server_saved">Gespeichert</string>
     <string name="settings_server_error_unreachable">Adresse nicht erreichbar.</string>
     <string name="settings_server_error_http">Der Server hat mit Status %1$d geantwortet.</string>
     <string name="settings_server_error_shape">Die Adresse antwortet, aber nicht wie ein KoalaCast-Server.</string>
+    <string name="settings_server_error_cleartext">HTTPS ist erforderlich. HTTP wird blockiert, bevor eine Anfrage gesendet wird.</string>
 
     <string name="settings_appearance_title">Darstellung</string>
     <string name="settings_theme_system">System</string>
@@ -41,6 +42,14 @@
 
     <string name="settings_languages_title">Gesprochene Sprachen</string>
     <string name="settings_languages_note">Filtert Entdecken und Suche nach der Sprache, in der eine Sendung tatsächlich läuft – nicht nach Store-Region. Keine Auswahl heißt: alles.</string>
+
+    <string name="settings_content_title">Inhalte</string>
+    <string name="settings_explicit_title">Explizite Inhalte anzeigen</string>
+    <string name="settings_explicit_note">Zeigt Sendungen und Episoden an, die von ihren Herausgebern als explizit gekennzeichnet wurden.</string>
+    <string name="settings_explicit_dialog_title">Explizite Inhalte aktivieren?</string>
+    <string name="settings_explicit_dialog_text">Explizite Kennzeichnungen stammen von den jeweiligen Podcast-Herausgebern und können unvollständig sein.</string>
+    <string name="settings_explicit_enable">Aktivieren</string>
+    <string name="settings_explicit_cancel">Abbrechen</string>
 
     <string name="settings_interests_title">Themen</string>
     <string name="settings_interests_note">Einmal tippen: bevorzugen. Erneut tippen: in Discover und Suche ausblenden. Ein drittes Mal setzt das Thema zurück.</string>

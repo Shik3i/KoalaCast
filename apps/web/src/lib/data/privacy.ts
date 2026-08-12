@@ -146,6 +146,9 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
 		items: [
 			{ label: 'OPML Export', text: 'Export or import your subscriptions at any time in Settings.' },
 			{ label: 'Local Data Wipe', text: 'Clear all client-side stored IndexedDB/LocalStorage data in Settings.' },
+			{ label: 'Delete synchronized data, keep the account', text: 'From /account, confirm with your password or recovery code to permanently delete subscriptions, favorites, playback and listening history, queues, synchronized settings, statistics, Global Stats consent, sync metadata, Web Push registrations, local client data and downloads. Your account, username, credential hashes, role and login credentials remain.' },
+			{ label: 'Delete account', text: 'From /account, confirm with your password or recovery code to permanently delete the account, credentials, sessions and all synchronized and local account data.' },
+			{ label: 'Deletion retention', text: 'Technical access and security logs may remain for a maximum of seven days for service security and abuse defense, then are automatically deleted. Stale clients cannot restore deleted data because every reset atomically advances the account data generation.' },
 			{ label: 'Session Management', text: 'Review and revoke active account sessions at any time in Settings.' },
 			{ label: 'Global statistics consent', text: 'Join or leave public aggregates and the listener leaderboard at any time in Settings. Participation is off by default.' }
 		],

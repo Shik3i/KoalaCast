@@ -93,6 +93,65 @@ func TestEnrichLatestEpisodesBatchesAndCachesLookup(t *testing.T) {
 	}
 }
 
+func TestParseExplicitness(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   *bool
+	}{
+		{"explicit", []string{"Explicit"}, boolPointer(true)},
+		{"cleaned", []string{"cleaned"}, boolPointer(false)},
+		{"not explicit", []string{"notExplicit"}, boolPointer(false)},
+		{"clean advisory", []string{"", "Clean"}, boolPointer(false)},
+		{"unknown", []string{"", "unrated"}, nil},
+		{"explicit wins", []string{"Clean", "explicit"}, boolPointer(true)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseExplicitness(tt.values...)
+			if tt.want == nil {
+				if got != nil {
+					t.Fatalf("got %v, want unknown", *got)
+				}
+				return
+			}
+			if got == nil || *got != *tt.want {
+				t.Fatalf("got %v, want %v", got, *tt.want)
+			}
+		})
+	}
+}
+
+func TestSearchPodcastsCleanRequestAndDefensiveFilter(t *testing.T) {
+	client := NewITunesClientWithHTTPClient(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Query().Get("explicit") != "No" {
+				t.Fatalf("explicit query = %q, want No", req.URL.Query().Get("explicit"))
+			}
+			body := `{"results":[
+				{"trackId":1,"trackName":"Explicit","feedUrl":"https://example.com/e","collectionExplicitness":"explicit"},
+				{"trackId":2,"trackName":"Clean","feedUrl":"https://example.com/c","trackExplicitness":"notExplicit"},
+				{"trackId":3,"trackName":"Unknown","feedUrl":"https://example.com/u"}
+			]}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Request:    req,
+			}, nil
+		}),
+	})
+	results, err := client.SearchPodcastsWithCountryExplicit("test", "us", 10, false)
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) != 2 || results[0].Title != "Clean" || results[1].Title != "Unknown" {
+		t.Fatalf("unexpected filtered results: %+v", results)
+	}
+}
+
+func boolPointer(value bool) *bool { return &value }
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {

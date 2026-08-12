@@ -163,6 +163,19 @@ class SecureAccountStore @Inject constructor(
         }
     }
 
+    fun dataGeneration(userId: String): Long = scopedLong("data_generation", userId)
+
+    fun resetSyncState(userId: String, dataGeneration: Long) {
+        prefs.edit(commit = true) {
+            remove(scopedKey("cursor", userId))
+            remove(scopedKey("push_watermark", userId))
+            GENERAL_SYNC_ENTITIES.forEach { remove(scopedKey("push_watermark_v2_$it", userId)) }
+            remove(scopedKey("listening_session_push_watermark", userId))
+            remove("${KEY_QUEUE_UPDATED_AT}_${ownerIdFor(userId)}")
+            putLong(scopedKey("data_generation", userId), dataGeneration.coerceAtLeast(0))
+        }
+    }
+
     fun queueUpdatedAt(): Long = prefs.getLong(queueUpdatedAtKey(), 0)
 
     fun markQueueUpdated(timestamp: Long = System.currentTimeMillis()) {
@@ -258,6 +271,14 @@ class SecureAccountStore @Inject constructor(
         const val KEY_QUEUE_UPDATED_AT = "queue_updated_at"
         const val KEY_ACCOUNT_GENERATION = "account_generation"
         const val GUEST_OWNER = "guest"
+        val GENERAL_SYNC_ENTITIES = listOf(
+            "subscription",
+            "favorite",
+            "playback_state",
+            "queue",
+            "podcast_settings",
+            "settings",
+        )
 
         fun accountOwnerId(serverOrigin: String, userId: String): String {
             val serverHash = MessageDigest.getInstance("SHA-256")

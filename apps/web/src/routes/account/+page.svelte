@@ -1,18 +1,21 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { activateAccountContext, resetAllLocalData } from '$lib/stores/account-context';
 	import { confirmDialog } from '$lib/stores/confirm.svelte';
+	import { sync } from '$lib/stores/sync.svelte';
 
 	interface UserSession {
 		id: string;
-		client_type: string;
-		ip_network: string;
-		user_agent: string;
+		kind: 'session' | 'device';
+		device_name: string;
+		device_type: string;
+		truncated_ip: string;
+		sanitized_user_agent: string;
 		created_at: number;
-		last_active_at: number;
+		last_used_at: number;
 		is_current?: boolean;
 	}
 
@@ -29,19 +32,14 @@
 	onMount(async () => {
 		try {
 			const res = await fetch('/api/v1/auth/status');
-			if (!res.ok) {
-				goto('/login');
-				return;
-			}
+			if (!res.ok) return;
 			const status = await res.json();
-			if (!status.authenticated || !status.user_id) {
-				goto('/login');
-				return;
-			}
+			if (!status.authenticated || !status.user_id) return;
 			user = status;
 			await loadSessions();
-		} catch (err) {
-			goto('/login');
+		} catch (_) {
+			// The deletion explanation is deliberately public and remains useful when
+			// authentication status cannot be loaded.
 		} finally {
 			isLoading = false;
 		}
@@ -87,6 +85,84 @@
 	let isDeleting = $state(false);
 	let deleteError = $state('');
 	let showDeleteForm = $state(false);
+	let deleteAccountButton = $state<HTMLButtonElement>();
+	let deleteCredentialInput = $state<HTMLInputElement>();
+	let dataCredential = $state('');
+	let isDeletingData = $state(false);
+	let dataDeleteError = $state('');
+	let showDataDeleteForm = $state(false);
+	let deleteDataButton = $state<HTMLButtonElement>();
+	let dataCredentialInput = $state<HTMLInputElement>();
+
+	async function openDeleteForm() {
+		showDeleteForm = true;
+		await tick();
+		deleteCredentialInput?.focus();
+	}
+
+	async function closeDeleteForm() {
+		showDeleteForm = false;
+		deleteCredential = '';
+		deleteError = '';
+		await tick();
+		deleteAccountButton?.focus();
+	}
+
+	async function openDataDeleteForm() {
+		showDataDeleteForm = true;
+		await tick();
+		dataCredentialInput?.focus();
+	}
+
+	async function closeDataDeleteForm() {
+		showDataDeleteForm = false;
+		dataCredential = '';
+		dataDeleteError = '';
+		await tick();
+		deleteDataButton?.focus();
+	}
+
+	async function deleteSynchronizedData(event: Event) {
+		event.preventDefault();
+		if (!user || !dataCredential.trim() || isDeletingData) return;
+		if (!(await confirmDialog.ask(t('account.deleteDataConfirm')))) return;
+
+		isDeletingData = true;
+		dataDeleteError = '';
+		let serverDeleted = false;
+		try {
+			const credential = dataCredential.trim();
+			const res = await fetch('/api/v1/auth/data', {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				// Passwords may contain dashes, so the server tries the same opaque
+				// credential against both verifiers.
+				body: JSON.stringify({ password: credential, recovery_code: credential })
+			});
+			if (res.status === 401) {
+				dataDeleteError = t('account.deleteInvalidCredential');
+				return;
+			}
+			if (!res.ok) {
+				dataDeleteError = t('account.deleteDataFailed');
+				return;
+			}
+			serverDeleted = true;
+			const result = await res.json();
+			if (!Number.isSafeInteger(result.data_generation) || result.data_generation < 0) {
+				dataDeleteError = t('account.deleteDataFailed');
+				return;
+			}
+			await sync.acceptDataReset(user.user_id, result.data_generation);
+			showDataDeleteForm = false;
+			toast.success(t('account.deleteDataDone'));
+		} catch (_) {
+			dataDeleteError = t(serverDeleted ? 'account.deleteDataLocalFailed' : 'account.deleteDataOffline');
+		} finally {
+			isDeletingData = false;
+			dataCredential = '';
+		}
+	}
 
 	function exportAccountData() {
 		// A plain navigation, not fetch + blob: the response already carries a
@@ -108,11 +184,10 @@
 				headers: { 'Content-Type': 'application/json' },
 				// The same field serves both: a recovery code is the way back in when
 				// the password is what got lost, so it has to work here too.
-				body: JSON.stringify(
-					deleteCredential.includes('-')
-						? { recovery_code: deleteCredential.trim() }
-						: { password: deleteCredential }
-				)
+				body: JSON.stringify({
+					password: deleteCredential.trim(),
+					recovery_code: deleteCredential.trim()
+				})
 			});
 			if (res.status === 401) {
 				deleteError = t('account.deleteInvalidCredential');
@@ -150,6 +225,47 @@
 		<h1><i class="ph ph-user-gear" aria-hidden="true"></i> {t('account.title')}</h1>
 		<p class="subtitle">{t('account.subtitle')}</p>
 	</header>
+
+	<section class="card public-data-card" aria-labelledby="data-deletion-title">
+		<header class="public-data-header">
+			<h2 id="data-deletion-title"><i class="ph ph-shield-check" aria-hidden="true"></i> {t('account.publicDeletionTitle')}</h2>
+			<p class="subtitle">{t('account.publicDeletionIntro')}</p>
+		</header>
+		<div class="deletion-options">
+			<article>
+				<h3>{t('account.deleteData')}</h3>
+				<p>{t('account.deleteDataPublicSummary')}</p>
+				<h4>{t('account.stepsTitle')}</h4>
+				<ol>
+					<li>{t('account.deleteDataStep1')}</li>
+					<li>{t('account.deleteDataStep2')}</li>
+					<li>{t('account.deleteDataStep3')}</li>
+				</ol>
+				<h4>{t('account.deletedTitle')}</h4>
+				<p>{t('account.deleteDataDeleted')}</p>
+				<h4>{t('account.keptTitle')}</h4>
+				<p>{t('account.deleteDataKept')}</p>
+			</article>
+			<article>
+				<h3>{t('account.deleteAccount')}</h3>
+				<p>{t('account.deleteAccountPublicSummary')}</p>
+				<h4>{t('account.stepsTitle')}</h4>
+				<ol>
+					<li>{t('account.deleteAccountStep1')}</li>
+					<li>{t('account.deleteAccountStep2')}</li>
+					<li>{t('account.deleteAccountStep3')}</li>
+				</ol>
+				<h4>{t('account.deletedTitle')}</h4>
+				<p>{t('account.deleteAccountDeleted')}</p>
+				<h4>{t('account.keptTitle')}</h4>
+				<p>{t('account.deleteAccountKept')}</p>
+			</article>
+		</div>
+		<p class="retention-note"><i class="ph ph-clock" aria-hidden="true"></i> {t('account.securityLogRetention')}</p>
+		{#if !isLoading && !user}
+			<a class="btn btn-secondary public-sign-in" href="/login">{t('account.signInToExecute')}</a>
+		{/if}
+	</section>
 
 	{#if isLoading}
 		<div class="loading-state">
@@ -208,19 +324,24 @@
 						{#each sessions as session (session.id)}
 							<div class="session-row">
 								<div class="session-icon">
-									<i class="ph ph-desktop-tower" aria-hidden="true"></i>
+									<i
+										class="ph"
+										class:ph-desktop-tower={session.kind !== 'device'}
+										class:ph-device-mobile={session.kind === 'device'}
+										aria-hidden="true"
+									></i>
 								</div>
 								<div class="session-info">
 									<div class="session-title">
-										<span class="client-type">{session.client_type || t('account.browser')}</span>
+										<span class="client-type">{session.device_name || session.device_type || t('account.browser')}</span>
 										{#if session.is_current}
 											<span class="current-badge">{t('account.currentDevice')}</span>
 										{/if}
 									</div>
 									<div class="session-meta">
-										<span>{t('account.ipSubnet')}: {session.ip_network || t('account.direct')}</span>
+										<span>{t('account.ipSubnet')}: {session.truncated_ip || t('account.direct')}</span>
 										<span>•</span>
-										<span>{t('account.lastActive')}: {formatDate(session.last_active_at)}</span>
+										<span>{t('account.lastActive')}: {formatDate(session.last_used_at || session.created_at)}</span>
 									</div>
 								</div>
 								{#if !session.is_current}
@@ -245,7 +366,7 @@
 				right half of the promise the privacy policy makes.
 			-->
 			<section class="card danger-card">
-				<header class="section-header">
+				<header class="data-control-header">
 					<h3><i class="ph ph-warning-octagon" aria-hidden="true"></i> {t('account.dataControl')}</h3>
 					<p class="subtitle">{t('account.dataControlHint')}</p>
 				</header>
@@ -254,18 +375,59 @@
 					<button type="button" class="btn btn-secondary" onclick={exportAccountData}>
 						<i class="ph ph-download-simple" aria-hidden="true"></i> {t('account.exportData')}
 					</button>
+					{#if !showDataDeleteForm}
+						<button
+							bind:this={deleteDataButton}
+							type="button"
+							class="btn btn-danger-soft"
+							onclick={openDataDeleteForm}
+						>
+							<i class="ph ph-eraser" aria-hidden="true"></i> {t('account.deleteData')}
+						</button>
+					{/if}
 					{#if !showDeleteForm}
-						<button type="button" class="btn btn-danger" onclick={() => (showDeleteForm = true)}>
+						<button
+							bind:this={deleteAccountButton}
+							type="button"
+							class="btn btn-danger"
+							onclick={openDeleteForm}
+						>
 							<i class="ph ph-trash" aria-hidden="true"></i> {t('account.deleteAccount')}
 						</button>
 					{/if}
 				</div>
+
+				{#if showDataDeleteForm}
+					<form class="delete-form" onsubmit={deleteSynchronizedData}>
+						<p class="delete-warning">{t('account.deleteDataWarning')}</p>
+						<label for="data-delete-credential">{t('account.deleteCredentialLabel')}</label>
+						<input
+							bind:this={dataCredentialInput}
+							id="data-delete-credential"
+							type="password"
+							bind:value={dataCredential}
+							placeholder={t('account.deleteCredentialPlaceholder')}
+							autocomplete="current-password"
+							required
+						/>
+						{#if dataDeleteError}<p class="delete-error" role="alert">{dataDeleteError}</p>{/if}
+						<div class="card-actions">
+							<button type="submit" class="btn btn-danger" disabled={!dataCredential.trim() || isDeletingData}>
+								{isDeletingData ? t('account.deletingData') : t('account.deleteDataConfirmButton')}
+							</button>
+							<button type="button" class="btn btn-secondary" onclick={closeDataDeleteForm}>
+								{t('common.cancel')}
+							</button>
+						</div>
+					</form>
+				{/if}
 
 				{#if showDeleteForm}
 					<form class="delete-form" onsubmit={deleteAccount}>
 						<p class="delete-warning">{t('account.deleteWarning')}</p>
 						<label for="delete-credential">{t('account.deleteCredentialLabel')}</label>
 						<input
+							bind:this={deleteCredentialInput}
 							id="delete-credential"
 							type="password"
 							bind:value={deleteCredential}
@@ -281,7 +443,7 @@
 							<button
 								type="button"
 								class="btn btn-secondary"
-								onclick={() => { showDeleteForm = false; deleteCredential = ''; deleteError = ''; }}
+								onclick={closeDeleteForm}
 							>
 								{t('common.cancel')}
 							</button>
@@ -295,8 +457,11 @@
 
 <style>
 	.account-page {
-		max-width: 900px;
+		width: 100%;
+		max-width: 1080px;
 		margin: 0 auto;
+		padding-inline: clamp(1rem, 4vw, 2rem);
+		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		gap: 2rem;
@@ -328,12 +493,9 @@
 
 	.account-grid {
 		display: grid;
-		grid-template-columns: 1fr 1.5fr;
+		grid-template-columns: minmax(19rem, 0.9fr) minmax(0, 1.35fr);
 		gap: 1.5rem;
-
-		@media (max-width: 768px) {
-			grid-template-columns: 1fr;
-		}
+		align-items: start;
 	}
 
 	.card {
@@ -353,6 +515,59 @@
 		gap: 1rem;
 	}
 
+	.public-data-card { border-color: color-mix(in srgb, var(--accent-green) 35%, var(--border-subtle)); }
+	.public-data-header {
+		display: grid;
+		gap: 0.45rem;
+		max-width: 48rem;
+	}
+	.public-data-header .subtitle { margin: 0; line-height: 1.55; }
+	.public-data-header h2 {
+		font-size: 1.35rem;
+		font-weight: 800;
+		color: var(--text-primary);
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		margin: 0;
+	}
+	.deletion-options {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.deletion-options article {
+		padding: 1.25rem;
+		border: 1px solid var(--border-subtle);
+		border-radius: 14px;
+		background: var(--bg-elevated);
+		min-width: 0;
+	}
+	.deletion-options h3, .deletion-options h4 { color: var(--text-primary); margin: 0 0 0.5rem; }
+	.deletion-options h4 {
+		font-size: 0.82rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin-top: 1rem;
+	}
+	.deletion-options p, .deletion-options ol {
+		color: var(--text-secondary);
+		font-size: 0.9rem;
+		line-height: 1.55;
+		margin: 0;
+	}
+	.deletion-options ol { padding-left: 1.25rem; }
+	.retention-note {
+		margin: 0;
+		padding: 0.9rem 1rem;
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--accent-green) 10%, transparent);
+		color: var(--text-secondary);
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+	.public-sign-in { align-self: flex-start; }
+
 	.user-avatar {
 		width: 3.5rem;
 		height: 3.5rem;
@@ -370,6 +585,12 @@
 		font-weight: 800;
 		color: var(--text-primary);
 		margin: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.user-meta,
+	.session-info {
+		min-width: 0;
 	}
 
 	.role-badge {
@@ -401,9 +622,10 @@
 	}
 
 	.detail-item {
-		display: flex;
+		display: grid;
+		grid-template-columns: max-content minmax(0, 1fr);
 		align-items: center;
-		justify-content: space-between;
+		gap: 1rem;
 		font-size: 0.92rem;
 	}
 
@@ -417,6 +639,8 @@
 	.detail-value {
 		font-weight: 600;
 		color: var(--text-primary);
+		min-width: 0;
+		text-align: right;
 	}
 
 	.detail-value.active {
@@ -430,10 +654,43 @@
 		font-family: monospace;
 		font-size: 0.8rem;
 		color: var(--text-muted);
+		overflow-wrap: anywhere;
 	}
 
 	.danger-card {
+		grid-column: 1 / -1;
 		border-color: color-mix(in srgb, var(--danger, #d75b5b) 40%, var(--border-ui));
+	}
+
+	.data-control-header {
+		display: grid;
+		gap: 0.45rem;
+		max-width: 48rem;
+	}
+
+	.data-control-header h3 {
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.data-control-header .subtitle {
+		margin: 0;
+		line-height: 1.55;
+	}
+
+	.danger-card > .card-actions {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.btn-danger-soft {
+		border-color: color-mix(in srgb, var(--danger, #d75b5b) 55%, var(--border-ui));
+		color: var(--danger, #d75b5b);
+		background: color-mix(in srgb, var(--danger, #d75b5b) 8%, transparent);
 	}
 	.delete-form {
 		display: grid;
@@ -463,6 +720,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 1rem;
 	}
 
 	.section-header h3 {
@@ -481,6 +739,7 @@
 		background: var(--bg-elevated);
 		padding: 0.2rem 0.6rem;
 		border-radius: 20px;
+		flex: 0 0 auto;
 	}
 
 	.empty-text {
@@ -507,6 +766,7 @@
 	.session-icon {
 		font-size: 1.4rem;
 		color: var(--accent-green);
+		flex: 0 0 auto;
 	}
 
 	.session-info {
@@ -523,6 +783,7 @@
 		font-weight: 700;
 		font-size: 0.92rem;
 		color: var(--text-primary);
+		flex-wrap: wrap;
 	}
 
 	.current-badge {
@@ -540,6 +801,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+		flex-wrap: wrap;
+		line-height: 1.45;
 	}
 
 	.btn-revoke {
@@ -552,6 +815,7 @@
 		font-weight: 600;
 		cursor: pointer;
 		transition: all 0.2s ease;
+		flex: 0 0 auto;
 	}
 
 	.btn-revoke:hover {
@@ -567,6 +831,54 @@
 	@keyframes spin {
 		100% {
 			transform: rotate(360deg);
+		}
+	}
+
+	@media (max-width: 900px) {
+		.account-grid {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.deletion-options { grid-template-columns: 1fr; }
+
+		.danger-card {
+			grid-column: auto;
+		}
+	}
+
+	@media (max-width: 540px) {
+		.account-page {
+			gap: 1.4rem;
+		}
+
+		.page-header h1 {
+			font-size: clamp(1.55rem, 8vw, 2rem);
+			align-items: flex-start;
+		}
+
+		.card {
+			padding: 1.25rem;
+			border-radius: 16px;
+			gap: 1.2rem;
+		}
+
+		.section-header {
+			align-items: flex-start;
+			flex-wrap: wrap;
+		}
+
+		.session-row {
+			display: grid;
+			grid-template-columns: auto minmax(0, 1fr);
+			align-items: start;
+		}
+
+		.btn-revoke {
+			grid-column: 2;
+			justify-self: start;
+		}
+
+		.danger-card > .card-actions {
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 </style>

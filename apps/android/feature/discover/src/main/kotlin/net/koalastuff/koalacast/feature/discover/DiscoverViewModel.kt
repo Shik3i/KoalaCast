@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
@@ -63,6 +66,13 @@ class DiscoverViewModel @Inject constructor(
 
     init {
         load(force = false)
+        viewModelScope.launch {
+            preferences.preferences
+                .map { it.allowExplicitContent }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { load(force = false) }
+        }
     }
 
     fun selectCategory(wireName: String) {

@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -106,6 +109,13 @@ class InboxViewModel @Inject constructor(
     private val pendingInboxModes = mutableMapOf<String, InboxMode>()
 
     init {
+        viewModelScope.launch {
+            preferences.preferences
+                .map { it.allowExplicitContent }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { refreshFromCache() }
+        }
         viewModelScope.launch {
             downloads.downloads.collect { items ->
                 _state.update {

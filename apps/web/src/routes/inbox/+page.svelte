@@ -12,6 +12,7 @@
 		type InboxMode
 	} from '$lib/idb/db';
 	import { player } from '$lib/stores/player.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { prefs } from '$lib/stores/prefs.svelte';
 	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
@@ -82,6 +83,7 @@
 
 	onMount(async () => {
 		listeningSession.load();
+		await waitForAccountContext();
 		const subs = await getLocalSubscriptions();
 		subscriptions = subs;
 		modes = Object.fromEntries(subs.map((s) => [s.podcast_id, s.inbox_mode ?? 'all']));

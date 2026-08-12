@@ -23,7 +23,7 @@ data class Episode(
     val episodeNumber: Int,
     val seasonNumber: Int,
     val episodeType: String,
-    val explicit: Boolean,
+    val explicit: Boolean?,
     val link: String,
     val transcripts: List<Transcript>,
 ) {

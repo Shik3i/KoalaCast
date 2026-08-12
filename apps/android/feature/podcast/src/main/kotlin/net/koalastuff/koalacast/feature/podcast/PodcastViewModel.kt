@@ -9,8 +9,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import net.koalastuff.koalacast.core.data.mapper.toTrack
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
@@ -34,6 +38,7 @@ data class PodcastUiState(
     val error: DataError? = null,
     val serverUrl: String = "",
     val podcast: Podcast? = null,
+    val explicitBlocked: Boolean = false,
     val episodes: List<Episode> = emptyList(),
     val loadingMore: Boolean = false,
     val endReached: Boolean = false,
@@ -73,22 +78,32 @@ class PodcastViewModel @Inject constructor(
     val state: StateFlow<PodcastUiState> = _state.asStateFlow()
     private var observedPodcastId: String? = null
     private var progressObserved = false
+    private var loadJob: Job? = null
 
     init {
         load(force = false)
         observeDownloads()
+        viewModelScope.launch {
+            preferences.preferences
+                .map { it.allowExplicitContent }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { load(force = false) }
+        }
     }
 
     fun retry() = load(force = true)
 
     private fun load(force: Boolean) {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val cachedPodcast = when {
                 feedUrl.isNotBlank() -> podcasts.cachedResolvedFeed(feedUrl)
                 podcastId.isNotBlank() -> podcasts.cachedPodcast(podcastId)
                 else -> null
             }
             if (cachedPodcast != null) {
+                val explicitBlocked = isExplicitBlocked(cachedPodcast.value)
                 val cachedEpisodes = podcasts.cachedEpisodes(
                     cachedPodcast.value.id,
                     limit = PAGE_SIZE,
@@ -99,12 +114,14 @@ class PodcastViewModel @Inject constructor(
                         error = null,
                         serverUrl = preferences.serverUrl.first(),
                         podcast = cachedPodcast.value,
-                        episodes = cachedEpisodes?.value.orEmpty(),
+                        explicitBlocked = explicitBlocked,
+                        episodes = if (explicitBlocked) emptyList() else cachedEpisodes?.value.orEmpty(),
                         endReached = (cachedEpisodes?.value?.size ?: 0) < PAGE_SIZE,
                     )
                 }
                 observeLocalState(cachedPodcast.value.id)
                 observeProgress()
+                if (explicitBlocked) return@launch
                 if (
                     !force &&
                     podcasts.isFresh(cachedPodcast, ContentTtl.PODCAST) &&
@@ -155,9 +172,17 @@ class PodcastViewModel @Inject constructor(
                         sourceFeedUrl = feedUrl.ifBlank { resolved.data.feedUrl },
                         podcast = resolved.data,
                     )
-                    _state.update { it.copy(podcast = resolved.data) }
+                    val explicitBlocked = isExplicitBlocked(resolved.data)
+                    _state.update {
+                        it.copy(
+                            podcast = resolved.data,
+                            explicitBlocked = explicitBlocked,
+                            episodes = if (explicitBlocked) emptyList() else it.episodes,
+                        )
+                    }
                     observeLocalState(resolved.data.id)
                     observeProgress()
+                    if (explicitBlocked) return@launch
                     refreshFirstPage(resolved.data.id)
                 }
             }
@@ -380,6 +405,9 @@ class PodcastViewModel @Inject constructor(
     private fun saveSettings(settings: PodcastSettings) {
         viewModelScope.launch { library.savePodcastSettings(settings) }
     }
+
+    private suspend fun isExplicitBlocked(podcast: Podcast): Boolean =
+        podcast.explicit == true && !preferences.preferences.first().allowExplicitContent
 
     /** Denormalises the show's title and artwork onto the episode, once. */
     private fun trackFor(episode: Episode): Track? {

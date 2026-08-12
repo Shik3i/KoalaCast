@@ -43,6 +43,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 import net.koalastuff.koalacast.core.data.repository.DownloadRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
@@ -336,9 +337,11 @@ class PlaybackService : MediaLibraryService() {
                     )
                     CONTINUE_ID -> progress.inProgress.first()
                         .mapNotNull { it.track }
+                        .filter { isAllowed(it) }
                         .map { playableItem(it) }
                     DOWNLOADS_ID -> downloads.downloads.first()
                         .filter { it.state == DownloadState.DONE }
+                        .filter { isAllowed(it.track) }
                         .map { playableItem(it.track) }
                     else -> emptyList()
                 }
@@ -363,6 +366,8 @@ class PlaybackService : MediaLibraryService() {
                 future.set(
                     if (track == null) {
                         LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                    } else if (!isAllowed(track)) {
+                        LibraryResult.ofError(SessionError.ERROR_NOT_SUPPORTED)
                     } else {
                         LibraryResult.ofItem(playableItem(track), null)
                     },
@@ -386,6 +391,9 @@ class PlaybackService : MediaLibraryService() {
             scope.launch {
                 val resolved = mediaItems.mapNotNull { item ->
                     resolveSessionMediaItem(item, ::storedTrack, ::playableItem)
+                        ?.takeIf { resolvedItem ->
+                            TrackMediaItem.toTrack(resolvedItem)?.let { isAllowed(it) } == true
+                        }
                 }
                 if (resolved.isEmpty()) {
                     future.setException(UnsupportedOperationException("unknown media id"))
@@ -444,6 +452,11 @@ class PlaybackService : MediaLibraryService() {
         )
     }
 
+    private suspend fun isAllowed(track: Track): Boolean =
+        track.explicit.isAllowedByExplicitPreference(
+            preferences.preferences.first().allowExplicitContent,
+        )
+
     private inner class ResumptionCallback : MediaSession.Callback {
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
@@ -452,7 +465,7 @@ class PlaybackService : MediaLibraryService() {
             val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             scope.launch {
                 val resumable = progress.mostRecentResumable()
-                if (resumable == null) {
+                if (resumable == null || !isAllowed(resumable.first)) {
                     future.setException(UnsupportedOperationException("nothing to resume"))
                 } else {
                     val (track, positionMs) = resumable
@@ -767,7 +780,11 @@ class PlaybackService : MediaLibraryService() {
             }
             session?.let { progress.recordListeningSession(it) }
 
-            val next = queue.head().takeIf { advanceQueue }
+            var next = queue.head().takeIf { advanceQueue }
+            while (next != null && !isAllowed(next.track)) {
+                queue.remove(next.track.episodeId)
+                next = queue.head()
+            }
             if (next == null) {
                 // Nothing more to play — either the queue is empty or a sleep timer
                 // asked to stop here. Rewinding to zero left the transport sitting
@@ -793,6 +810,14 @@ class PlaybackService : MediaLibraryService() {
      * and offline-file rules itself.
      */
     private suspend fun startQueuedTrack(player: Player, track: Track) {
+        if (!isAllowed(track)) {
+            player.pause()
+            player.clearMediaItems()
+            activeTrack = null
+            activePlaybackOwnerId = null
+            activePlaybackGeneration = null
+            return
+        }
         val settings = library.podcastSettingsSnapshot(track.podcastId)
         val savedPosition = progress.progressSnapshot(track.episodeId)
             ?.takeIf { !it.completed }

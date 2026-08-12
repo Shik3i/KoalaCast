@@ -1,6 +1,7 @@
 package net.koalastuff.koalacast.core.data.repository
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -16,6 +17,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
@@ -36,6 +38,8 @@ import net.koalastuff.koalacast.core.data.db.SubscriptionEntity
 import net.koalastuff.koalacast.core.data.db.TombstoneDao
 import net.koalastuff.koalacast.core.data.db.TombstoneEntity
 import net.koalastuff.koalacast.core.model.SyncStatus
+import net.koalastuff.koalacast.core.model.DataError
+import net.koalastuff.koalacast.core.model.DataResult
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.HiddenPodcast
 import net.koalastuff.koalacast.core.model.InboxMode
@@ -46,6 +50,8 @@ import net.koalastuff.koalacast.core.model.VisualizerStyle
 import net.koalastuff.koalacast.core.model.UserPreferences
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.network.KoalaCastApi
+import net.koalastuff.koalacast.core.network.apiCall
+import net.koalastuff.koalacast.core.network.dto.DeleteAccountRequest
 import net.koalastuff.koalacast.core.network.dto.SyncChangesetDto
 import net.koalastuff.koalacast.core.network.dto.SyncOperationDto
 import net.koalastuff.koalacast.core.network.dto.SyncPushRequest
@@ -68,6 +74,7 @@ class SyncRepository @Inject constructor(
     private val queue: QueueDao,
     private val podcastSettings: PodcastSettingsDao,
     private val preferences: PreferencesRepository,
+    private val downloads: DownloadRepository,
 ) {
     private val mutex = Mutex()
     private val _status = MutableStateFlow(if (store.account.value == null) SyncStatus.OFF else SyncStatus.IDLE)
@@ -139,6 +146,43 @@ class SyncRepository @Inject constructor(
         _status.value = SyncStatus.OFF
     }
 
+    suspend fun deleteSynchronizedData(credential: String): DataResult<Unit> = mutex.withLock {
+        val account = store.account.value
+            ?: return@withLock DataResult.Failure(DataError.Http(401, "unauthorized"))
+        val trimmed = credential.trim()
+        if (trimmed.isBlank()) {
+            return@withLock DataResult.Failure(DataError.Malformed("credential required"))
+        }
+        val request = DeleteAccountRequest(password = trimmed, recoveryCode = trimmed)
+        when (val result = apiCall { api.deleteSynchronizedData(request) }) {
+            is DataResult.Failure -> result
+            is DataResult.Success -> {
+                if (result.data.dataGeneration <= store.dataGeneration(account.userId)) {
+                    DataResult.Failure(DataError.Malformed("server data generation did not advance"))
+                } else {
+                    try {
+                        resetLocalData(account.userId, result.data.dataGeneration)
+                        _lastSyncedAt.value = System.currentTimeMillis()
+                        _lastSyncError.value = null
+                        _status.value = SyncStatus.IDLE
+                        DataResult.Success(Unit)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        // The server reset has committed. Keeping the old local
+                        // generation guarantees that the next contact retries the
+                        // wipe before any push instead of treating this copy as new.
+                        DataResult.Failure(
+                            DataError.Malformed(
+                                "LOCAL_RESET:${error.message ?: error.javaClass.simpleName}",
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     internal suspend fun pull(
         userId: String,
         generation: Long = store.accountGeneration(),
@@ -162,6 +206,7 @@ class SyncRepository @Inject constructor(
                     }
                     val snapshot = snapshotResponse.body()
                         ?: throw IOException("sync snapshot returned no body")
+                    verifyServerGeneration(userId, snapshot.dataGeneration)
                     applySnapshot(snapshot, userId, generation)
                     cursor = snapshot.cursor.coerceAtLeast(0)
                     store.setCursor(userId, cursor)
@@ -171,6 +216,7 @@ class SyncRepository @Inject constructor(
             }
             if (!response.isSuccessful) throw IOException("sync pull failed: ${response.code()}")
             val body = response.body() ?: throw IOException("sync pull returned no body")
+            verifyServerGeneration(userId, body.dataGeneration)
             body.changesets.forEach { apply(it, generation) }
             val nextCursor = body.nextCursor
                 ?: body.changesets.lastOrNull()?.serverCursor
@@ -262,6 +308,7 @@ class SyncRepository @Inject constructor(
                         enclosureUrl = payload.string("enclosure_url").ifBlank { null },
                         durationMs = payload.longOrNull("duration_ms"),
                         categories = payload.strings("categories"),
+                        explicit = payload.booleanOrNull("explicit"),
                     ),
                 )
             }
@@ -330,7 +377,7 @@ class SyncRepository @Inject constructor(
         ensureGeneration(generation)
         val rejected = mutableListOf<String>()
         operations.chunked(PUSH_BATCH).forEach { batch ->
-            pushBatch(batch, generation, rejected)
+            pushBatch(userId, batch, generation, rejected)
         }
 
         val nextWatermarks = previousWatermarks.toMutableMap()
@@ -361,18 +408,32 @@ class SyncRepository @Inject constructor(
      * away the one sentence that says which operation was wrong and why.
      */
     private suspend fun pushBatch(
+        userId: String,
         batch: List<SyncOperationDto>,
         generation: Long,
         rejected: MutableList<String>,
     ) {
         if (batch.isEmpty()) return
         ensureGeneration(generation)
-        val response = api.pushSync(SyncPushRequest(batch))
+        val response = api.pushSync(
+            SyncPushRequest(
+                operations = batch,
+                dataGeneration = store.dataGeneration(userId),
+            ),
+        )
         ensureGeneration(generation)
         if (response.code() == 401) throw AuthExpired()
         if (response.isSuccessful) return
 
         val detail = runCatching { response.errorBody()?.string() }.getOrNull().orEmpty().take(300)
+        if (response.code() == 409) {
+            val conflictGeneration = runCatching {
+                Json.parseToJsonElement(detail).jsonObject["data_generation"]
+                    ?.jsonPrimitive?.longOrNull
+            }.getOrNull() ?: throw IOException("sync generation conflict omitted generation")
+            verifyServerGeneration(userId, conflictGeneration)
+            throw IOException("sync generation conflict was not newer")
+        }
         // Only a rejection of the *content* is worth isolating. A 500 or a 429 is
         // about the request as a whole and must still fail the sync so it retries.
         if (response.code() != 400) {
@@ -385,8 +446,8 @@ class SyncRepository @Inject constructor(
             return
         }
         val half = batch.size / 2
-        pushBatch(batch.subList(0, half), generation, rejected)
-        pushBatch(batch.subList(half, batch.size), generation, rejected)
+        pushBatch(userId, batch.subList(0, half), generation, rejected)
+        pushBatch(userId, batch.subList(half, batch.size), generation, rejected)
     }
 
     internal suspend fun buildOperations(
@@ -560,6 +621,7 @@ class SyncRepository @Inject constructor(
                 enclosureUrl = payload.string("enclosure_url").ifBlank { null },
                 durationMs = payload.longOrNull("duration_ms"),
                 categories = payload.strings("categories"),
+                explicit = payload.booleanOrNull("explicit"),
             ),
         )
         tombstones.delete("favorite:${change.entityId}")
@@ -608,6 +670,7 @@ class SyncRepository @Inject constructor(
                     positionOrder = item.longOrNull("position_order") ?: index.toLong(),
                     addedAt = item.long("added_at").takeIf { it > 0 } ?: updatedAt,
                     categories = item.strings("categories"),
+                    explicit = item.booleanOrNull("explicit"),
                 ),
             )
         }
@@ -766,6 +829,7 @@ class SyncRepository @Inject constructor(
         enclosureUrl = payload.string("enclosure_url").ifBlank { null },
         durationMs = payload.longOrNull("duration_ms"),
         categories = payload.strings("categories"),
+        explicit = payload.booleanOrNull("explicit"),
         eventType = payload.string("event_type").ifBlank { "PROGRESS_TICK" },
         playbackSessionId = payload.string("playback_session_id"),
         perSessionSeq = payload.long("per_session_seq"),
@@ -824,6 +888,7 @@ class SyncRepository @Inject constructor(
         nullable("enclosure_url", item.enclosureUrl)
         item.durationMs?.let { put("duration_ms", it) }
         put("categories", JsonArray(item.categories.map(::JsonPrimitive)))
+        item.explicit?.let { put("explicit", it) }
     }
 
     private fun playbackPayload(item: PlaybackStateEntity, deviceId: String) = buildJsonObject {
@@ -839,6 +904,7 @@ class SyncRepository @Inject constructor(
         nullable("enclosure_url", item.enclosureUrl)
         item.durationMs?.let { put("duration_ms", it) }
         put("categories", JsonArray(item.categories.map(::JsonPrimitive)))
+        item.explicit?.let { put("explicit", it) }
         put("event_type", item.eventType)
         put("playback_session_id", item.playbackSessionId.ifBlank { "sync:$deviceId:${item.episodeId}" })
         put("device_id", deviceId)
@@ -880,6 +946,7 @@ class SyncRepository @Inject constructor(
                     put("position_order", item.positionOrder)
                     put("added_at", item.addedAt)
                     put("categories", JsonArray(item.categories.map(::JsonPrimitive)))
+                    item.explicit?.let { put("explicit", it) }
                 }
             }),
         )
@@ -957,6 +1024,8 @@ class SyncRepository @Inject constructor(
             ?: 0
     private fun JsonObject.boolean(key: String) =
         get(key)?.jsonPrimitive?.booleanOrNull ?: false
+    private fun JsonObject.booleanOrNull(key: String) =
+        get(key)?.jsonPrimitive?.booleanOrNull
     private fun JsonObject.booleanEither(first: String, second: String) =
         get(first)?.jsonPrimitive?.booleanOrNull
             ?: get(second)?.jsonPrimitive?.booleanOrNull
@@ -992,6 +1061,25 @@ class SyncRepository @Inject constructor(
 
     private fun ensureGeneration(expected: Long) {
         if (store.accountGeneration() != expected) throw AccountChanged()
+    }
+
+    private suspend fun verifyServerGeneration(userId: String, serverGeneration: Long) {
+        val localGeneration = store.dataGeneration(userId)
+        if (serverGeneration < localGeneration) throw IOException("server data generation regressed")
+        if (serverGeneration == localGeneration) return
+        resetLocalData(userId, serverGeneration)
+        // The process generation changed before any pre-reset response can be
+        // applied or any locally queued operation can be pushed.
+        throw AccountChanged()
+    }
+
+    private suspend fun resetLocalData(userId: String, serverGeneration: Long) {
+        val ownerId = store.ownerIdFor(userId)
+        store.beginAccountTransition()
+        downloads.clearAll()
+        accountData.resetCurrent(ownerId)
+        preferences.resetSynced()
+        store.resetSyncState(userId, serverGeneration)
     }
 
     private class AuthExpired : Exception()

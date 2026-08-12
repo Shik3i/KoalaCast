@@ -22,4 +22,5 @@
     <string name="player_source_offline">offline download</string>
     <string name="player_source_stream">publisher stream</string>
     <string name="player_retry">Retry</string>
+    <string name="player_open_settings">Open Settings</string>
 </resources>

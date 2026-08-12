@@ -246,10 +246,6 @@
 		}
 	}
 
-	async function handleInstall() {
-		if (await install.promptInstall()) toast.success(t('settings.installAppDone'));
-	}
-
 	async function handleResetLocalData() {
 		if (await confirmDialog.ask(t('settings.confirmReset'))) {
 			await resetAllLocalData();
@@ -543,18 +539,12 @@
 					<i class="ph ph-sparkle" aria-hidden="true"></i> {t('settings.latestEpisode')}
 				</button>
 			</div>
-			<!-- Only rendered once the browser has actually offered an install, so this
-			     never promises something the current browser cannot do. -->
-			{#if install.available || install.installed}
+			<!-- Installation itself stays browser-owned so Android's native install
+			     promotion is never suppressed by beforeinstallprompt.preventDefault(). -->
+			{#if install.installed}
 				<h4 class="date-heading preference-heading">{t('settings.installApp')}</h4>
 				<p class="subtitle">{t('settings.installAppHint')}</p>
-				{#if install.installed}
-					<p class="subtitle"><i class="ph ph-check-circle" aria-hidden="true"></i> {t('settings.installAppDone')}</p>
-				{:else}
-					<button type="button" class="btn-secondary" onclick={handleInstall}>
-						<i class="ph ph-download-simple" aria-hidden="true"></i> {t('settings.installApp')}
-					</button>
-				{/if}
+				<p class="subtitle"><i class="ph ph-check-circle" aria-hidden="true"></i> {t('settings.installAppDone')}</p>
 			{/if}
 			<h4 class="date-heading preference-heading">{t('settings.startScreen')}</h4>
 			<p class="subtitle">{t('settings.startScreenHint')}</p>

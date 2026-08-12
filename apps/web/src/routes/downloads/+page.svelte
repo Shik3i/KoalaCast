@@ -4,8 +4,12 @@
 	import { audioDownloads, DOWNLOAD_ERROR, type AudioDownload } from '$lib/downloads/manager.svelte';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { prefs } from '$lib/stores/prefs.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 
-	onMount(() => audioDownloads.load());
+	onMount(async () => {
+		await waitForAccountContext();
+		await audioDownloads.load();
+	});
 
 	const downloadedBytes = $derived(
 		audioDownloads.items

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_server_cleartext">Debug-Build: HTTP ist nur für localhost, 127.0.0.1 und 10.0.2.2 erlaubt.</string>
+</resources>

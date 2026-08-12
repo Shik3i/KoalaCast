@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="episode_explicit_blocked">This episode is marked explicit. Enable explicit content in Settings to view or play it.</string>
+    <string name="episode_open_settings">Open Settings</string>
     <string name="episode_show_notes">Show notes</string>
     <string name="episode_no_notes">This episode has no show notes.</string>
 

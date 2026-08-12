@@ -12,6 +12,7 @@
 	import { detectBrowserLanguages, regionForLanguage } from '$lib/data/languages';
 	import { t } from '$lib/i18n';
 	import { listeningSession, type SessionMinutes } from '$lib/stores/session.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
 	import {
 		arrangeDiscover,
@@ -137,6 +138,7 @@
 	onMount(async () => {
 		mounted = true;
 		listeningSession.load();
+		await waitForAccountContext();
 		const subscriptions = await getLocalSubscriptions();
 		subscribedIds = subscriptions.map((sub) => sub.podcast_id);
 		subscribedFeeds = subscriptions.map((sub) => sub.feed_url).filter(Boolean);

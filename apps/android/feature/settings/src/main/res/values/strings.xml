@@ -25,13 +25,14 @@
     <string name="settings_server_title">KoalaCast server</string>
     <string name="settings_server_placeholder">cast.example.org</string>
     <string name="settings_server_note">Switching servers changes what an account means: subscriptions, queue and progress are stored per server, and a sign-in on one instance does not carry to another.</string>
-    <string name="settings_server_cleartext">This address uses plain HTTP. Fine on your own network, unsafe over the internet.</string>
+    <string name="settings_server_cleartext">This release build accepts HTTPS servers only.</string>
     <string name="settings_server_save">Save server</string>
     <string name="settings_server_checking">Checking…</string>
     <string name="settings_server_saved">Saved</string>
     <string name="settings_server_error_unreachable">Could not reach that address.</string>
     <string name="settings_server_error_http">The server answered with status %1$d.</string>
     <string name="settings_server_error_shape">That address answered, but not like a KoalaCast server.</string>
+    <string name="settings_server_error_cleartext">HTTPS is required. HTTP is blocked before any request is sent.</string>
 
     <string name="settings_appearance_title">Appearance</string>
     <string name="settings_theme_system">System</string>
@@ -41,6 +42,14 @@
 
     <string name="settings_languages_title">Spoken languages</string>
     <string name="settings_languages_note">Filters Discover and Search by the language a show is actually in, not by store region. Pick none to see everything.</string>
+
+    <string name="settings_content_title">Content</string>
+    <string name="settings_explicit_title">Show explicit content</string>
+    <string name="settings_explicit_note">Shows podcasts and episodes that their publishers have marked as explicit.</string>
+    <string name="settings_explicit_dialog_title">Enable explicit content?</string>
+    <string name="settings_explicit_dialog_text">Explicit labels are provided by podcast publishers and may be incomplete.</string>
+    <string name="settings_explicit_enable">Enable</string>
+    <string name="settings_explicit_cancel">Cancel</string>
 
     <string name="settings_interests_title">Topics</string>
     <string name="settings_interests_note">Tap once to prefer a genre, again to hide it from Discover and Search, and a third time to reset it.</string>

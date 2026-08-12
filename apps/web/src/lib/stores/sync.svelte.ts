@@ -191,6 +191,75 @@ class SyncStore {
 			/* ignore */
 		}
 	}
+	#dataGenerationKey(userId: string): string {
+		return `koalacast_data_generation_${userId}`;
+	}
+	#getDataGeneration(userId: string): number {
+		try {
+			return Math.max(0, Number(localStorage.getItem(this.#dataGenerationKey(userId))) || 0);
+		} catch {
+			return 0;
+		}
+	}
+	#setDataGeneration(userId: string, value: number) {
+		try {
+			localStorage.setItem(this.#dataGenerationKey(userId), String(Math.max(0, value)));
+		} catch {
+			/* ignore */
+		}
+	}
+	#clearSyncMetadata(userId: string) {
+		try {
+			for (const key of [
+				this.#cursorKey(userId),
+				this.#pushWatermarkKey(userId),
+				this.#pushWatermarksKey(userId),
+				this.#sessionWatermarkKey(userId)
+			]) localStorage.removeItem(key);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	async #adoptDataGeneration(
+		userId: string,
+		serverGeneration: unknown,
+		runGeneration?: number,
+		signal?: AbortSignal
+	): Promise<boolean> {
+		const incoming = Number(serverGeneration);
+		if (!Number.isSafeInteger(incoming) || incoming < 0) {
+			throw new Error('sync response missing data generation');
+		}
+		const local = this.#getDataGeneration(userId);
+		if (incoming < local) throw new Error('server data generation regressed');
+		if (incoming === local) return false;
+		if (runGeneration !== undefined && signal) this.#assertRun(userId, runGeneration, signal);
+		// Import lazily: account-context owns the complete browser wipe and imports
+		// this store to stop sync during account switches. A static import here would
+		// create a module cycle during application startup.
+		const { resetAllLocalData } = await import('$lib/stores/account-context');
+		await resetAllLocalData();
+		if (runGeneration !== undefined && signal) this.#assertRun(userId, runGeneration, signal);
+		this.#clearSyncMetadata(userId);
+		this.#setDataGeneration(userId, incoming);
+		return true;
+	}
+
+	/** Apply the generation returned by DELETE /auth/data without signing out. */
+	async acceptDataReset(userId: string, serverGeneration: number): Promise<void> {
+		if (this.userId !== null && this.userId !== userId) {
+			throw new Error('account changed during data reset');
+		}
+		this.#generation++;
+		this.#controller?.abort();
+		this.#controller = null;
+		this.#inFlight = false;
+		await this.#adoptDataGeneration(userId, serverGeneration);
+		this.status = 'idle';
+		this.lastSyncedAt = Date.now();
+		this.lastError = null;
+	}
 
 	// Begin syncing for a signed-in user. Idempotent.
 	enable(userId: string) {
@@ -297,6 +366,11 @@ class SyncStore {
 			}
 			if (!res.ok) throw new Error(`sync pull failed: ${res.status}`);
 			const data = await res.json();
+			if (await this.#adoptDataGeneration(userId, data.data_generation, generation, signal)) {
+				since = 0;
+				recoveredSnapshot = false;
+				continue;
+			}
 			const changesets: Changeset[] = data.changesets || [];
 			for (const cs of changesets) {
 				this.#assertRun(userId, generation, signal);
@@ -340,6 +414,9 @@ class SyncStore {
 		if (!res.ok) throw new Error(`sync snapshot failed: ${res.status}`);
 		const snapshot = await res.json();
 		this.#assertRun(userId, generation, signal);
+		if (await this.#adoptDataGeneration(userId, snapshot.data_generation, generation, signal)) {
+			return 0;
+		}
 		if (!Number.isFinite(snapshot.cursor)) throw new Error('sync snapshot missing cursor');
 		await replaceLocalSyncSnapshot(snapshot, this.#getPushWatermarks(userId));
 		const queuePayloads = Array.isArray(snapshot.queue) ? snapshot.queue : [];
@@ -506,10 +583,27 @@ class SyncStore {
 			const res = await fetch('/api/v1/sync', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ operations: batch, client_schema_version: 2 }),
+				body: JSON.stringify({
+					operations: batch,
+					client_schema_version: 2,
+					data_generation: this.#getDataGeneration(userId)
+				}),
 				signal
 			});
 			if (res.status === 401) throw new SyncAuthError();
+			if (res.status === 409) {
+				const conflict = await res.json().catch(() => null);
+				if (conflict?.code !== 'DATA_GENERATION_MISMATCH') {
+					throw new Error('sync push conflict without generation');
+				}
+				await this.#adoptDataGeneration(
+					userId,
+					conflict.data_generation,
+					generation,
+					signal
+				);
+				return;
+			}
 			if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
 			for (const op of batch) {
 				if (op.entity_type === 'listening_session') sessionWatermarks[op.entity_id] = op.client_timestamp;

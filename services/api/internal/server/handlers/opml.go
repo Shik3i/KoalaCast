@@ -67,6 +67,17 @@ type OPMLImportedPodcast struct {
 
 func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 	authUser := customMiddleware.GetAuthUser(r.Context())
+	expectedDataGeneration := int64(0)
+	if authUser != nil {
+		if err := h.DB.SQL.QueryRowContext(
+			r.Context(),
+			"SELECT data_generation FROM users WHERE id = ?",
+			authUser.ID,
+		).Scan(&expectedDataGeneration); err != nil {
+			http.Error(w, `{"error":"failed to read data generation"}`, http.StatusInternalServerError)
+			return
+		}
+	}
 
 	// Read OPML XML payload
 	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1024*1024))
@@ -164,6 +175,7 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 			if err := h.persistImportedSubscription(
 				r.Context(),
 				authUser.ID,
+				expectedDataGeneration,
 				item.podcast,
 				nowMs,
 				index,
@@ -188,6 +200,7 @@ func (h *OPMLHandler) Import(w http.ResponseWriter, r *http.Request) {
 func (h *OPMLHandler) persistImportedSubscription(
 	ctx context.Context,
 	userID string,
+	expectedDataGeneration int64,
 	podcast OPMLImportedPodcast,
 	nowMs int64,
 	index int,
@@ -197,6 +210,17 @@ func (h *OPMLHandler) persistImportedSubscription(
 		return err
 	}
 	defer tx.Rollback()
+
+	var currentDataGeneration int64
+	if err := tx.QueryRowContext(ctx,
+		"SELECT data_generation FROM users WHERE id = ?",
+		userID,
+	).Scan(&currentDataGeneration); err != nil {
+		return err
+	}
+	if currentDataGeneration != expectedDataGeneration {
+		return fmt.Errorf("account data was reset while the OPML import was running")
+	}
 
 	if _, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO user_sync_cursors

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="episode_explicit_blocked">Diese Episode ist als explizit gekennzeichnet. Aktiviere explizite Inhalte in den Einstellungen, um sie anzuzeigen oder abzuspielen.</string>
+    <string name="episode_open_settings">Einstellungen öffnen</string>
     <string name="episode_show_notes">Shownotes</string>
     <string name="episode_no_notes">Zu dieser Folge gibt es keine Shownotes.</string>
 

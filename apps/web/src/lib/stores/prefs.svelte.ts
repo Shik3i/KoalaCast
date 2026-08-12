@@ -25,6 +25,7 @@ import {
 import {
 	getStoredPalette,
 	getStoredTheme,
+	DEFAULT_PALETTE,
 	isPaletteId,
 	setPalette,
 	setTheme,
@@ -661,6 +662,8 @@ class Prefs {
 		this.downloadConcurrency = 2;
 		this.downloadBudgetBytes = 2_048 * 1024 * 1024;
 		this.updatedAt = 0;
+		setTheme('system');
+		setPalette(DEFAULT_PALETTE);
 		try {
 			for (const baseKey of ACCOUNT_SCOPED_KEYS) {
 				localStorage.removeItem(scopedKey(baseKey));

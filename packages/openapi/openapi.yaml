@@ -305,6 +305,12 @@ paths:
             minimum: 1
             maximum: 100
             default: 60
+        - name: include_explicit
+          in: query
+          description: Include podcasts explicitly marked by their publisher. Defaults to true for older clients.
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: Discovery results
@@ -348,6 +354,12 @@ paths:
           description: Legacy alias for region.
           schema:
             type: string
+        - name: include_explicit
+          in: query
+          description: Include podcasts explicitly marked by their publisher. Defaults to true for older clients.
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: Search results
@@ -803,7 +815,7 @@ paths:
           application/json:
             schema:
               type: object
-              description: Exactly one of the two is required.
+              description: At least one credential is required; clients may populate both fields.
               properties:
                 password:
                   type: string
@@ -840,6 +852,55 @@ paths:
             application/json:
               schema:
                 type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/auth/data:
+    delete:
+      tags: [Authentication]
+      operationId: deleteSynchronizedData
+      summary: Delete synchronized data while retaining the account and logins
+      description: >-
+        Requires the account password or recovery code again. In one transaction,
+        advances the account data generation, disables Global Stats consent and
+        deletes subscriptions, favorites, playback, listening, history, queues,
+        synchronized settings, sync metadata and Web Push subscriptions. Identity,
+        role, sessions and device credentials remain. Stale sync pushes carrying an
+        older generation are rejected.
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: At least one credential is required; clients may populate both fields.
+              properties:
+                password:
+                  type: string
+                recovery_code:
+                  type: string
+      responses:
+        '200':
+          description: Synchronized data deleted; account retained
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data_generation]
+                properties:
+                  data_generation:
+                    type: integer
+                    format: int64
+                    minimum: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -913,6 +974,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Client data generation is stale; local data must be reset before retrying
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -1515,6 +1578,10 @@ components:
           description: Latest episode publication as Unix milliseconds.
         language:
           type: string
+        explicit:
+          type: boolean
+          nullable: true
+          description: True when explicitly marked, false when explicitly clean, null when unknown.
 
     DiscoverResponse:
       type: object
@@ -1969,7 +2036,7 @@ components:
 
     SyncPushRequest:
       type: object
-      required: [operations, client_schema_version]
+      required: [operations, client_schema_version, data_generation]
       additionalProperties: true
       properties:
         operations:
@@ -1979,16 +2046,24 @@ components:
             $ref: '#/components/schemas/SyncOperation'
         client_schema_version:
           type: integer
+        data_generation:
+          type: integer
+          format: int64
+          minimum: 0
 
     SyncPushResponse:
       type: object
-      required: [applied_ops, current_cursor]
+      required: [applied_ops, current_cursor, data_generation]
       additionalProperties: false
       properties:
         applied_ops:
           type: integer
           minimum: 0
         current_cursor:
+          type: integer
+          format: int64
+          minimum: 0
+        data_generation:
           type: integer
           format: int64
           minimum: 0
@@ -2039,7 +2114,7 @@ components:
 
     SyncPullResponse:
       type: object
-      required: [since_cursor, next_cursor, current_cursor, has_more, changesets]
+      required: [since_cursor, next_cursor, current_cursor, has_more, changesets, data_generation]
       additionalProperties: false
       properties:
         since_cursor:
@@ -2060,10 +2135,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SyncChangeset'
+        data_generation:
+          type: integer
+          format: int64
+          minimum: 0
 
     FullResyncRequired:
       type: object
-      required: [code, message, min_server_cursor, current_cursor]
+      required: [code, message, min_server_cursor, current_cursor, data_generation]
       additionalProperties: false
       properties:
         code:
@@ -2077,6 +2156,10 @@ components:
         current_cursor:
           type: integer
           format: int64
+        data_generation:
+          type: integer
+          format: int64
+          minimum: 0
 
     SubscriptionSyncPayload:
       type: object
@@ -2304,10 +2387,14 @@ components:
 
     SyncSnapshot:
       type: object
-      required: [cursor, subscriptions, favorites, playback_states, listening_sessions, queue, podcast_settings, settings]
+      required: [cursor, subscriptions, favorites, playback_states, listening_sessions, queue, podcast_settings, settings, data_generation]
       additionalProperties: false
       properties:
         cursor:
+          type: integer
+          format: int64
+          minimum: 0
+        data_generation:
           type: integer
           format: int64
           minimum: 0

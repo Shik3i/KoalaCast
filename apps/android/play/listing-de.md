@@ -3,69 +3,81 @@
 ## App-Name (max. 30 Zeichen)
 
 ```
-KoalaCast — Podcast-Player
+KoalaCast: Podcast-Player
 ```
 
 ## Kurzbeschreibung (max. 80 Zeichen)
 
 ```
-Ruhiger, freier Podcast-Player. Ohne Werbung, ohne Tracking, ohne Konto.
+Open-Source-Podcast-Player mit Downloads, ohne Werbung und Analyse-Tracking.
 ```
 
 ## Vollständige Beschreibung (max. 4000 Zeichen)
 
 ```
-KoalaCast ist ein Podcast-Player mit einer einzigen Grundhaltung: Was du hörst,
-geht niemanden etwas an.
+KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
+abonniere, streame und lade Podcasts herunter – ohne Werbung, Werbe-Tracker oder
+Analyse-SDKs.
 
-Keine Werbung, keine Tracker, keine Analyse-SDKs, keine Bezahlstufe. Für nichts
-davon brauchst du ein Konto — Abos, Downloads, Warteschlange und deine
-Hörstatistik liegen auf deinem Gerät. Wenn du dieselbe Bibliothek auf dem Handy
-und im Browser willst, kannst du ein Konto anlegen; wenn nicht, fehlt dir nichts.
+Du brauchst kein Konto. Abos, Downloads, Warteschlange und private Hörstatistiken
+werden standardmäßig auf deinem Gerät gespeichert. Ein optionales Konto ergänzt
+die geräteübergreifende Synchronisierung; alle grundlegenden Hörfunktionen bleiben
+auch ohne Konto verfügbar.
 
-HÖREN
-• Feinstufige Geschwindigkeit, Stille-Kürzung und Lautstärke-Anhebung
-• Ein Sleep-Timer, der Hörzeit zählt — eine Pause verbraucht ihn nicht
-• Kapitel und Transkripte, wo der Anbieter sie mitliefert
-• Fortsetzbare Downloads mit einem Speicherbudget, das du festlegst
-• Android Auto, Wear OS, Chromecast und ein Homescreen-Widget
+HÖREN, WIE DU WILLST
+• Feinstufige Wiedergabegeschwindigkeit, Stille-Kürzung und Lautstärke-Anhebung
+• Ein Sleep-Timer, der Hörzeit zählt, sodass Pausen ihn nicht verbrauchen
+• Kapitel und Transkripte, wenn sie vom Publisher bereitgestellt werden
+• Manuelle oder automatische Downloads pro Podcast mit fortsetzbaren Transfers,
+  Nur-WLAN-Option, Speicherbudget und automatischen Löschregeln
+• Android Auto, Navigation über Wear OS, Chromecast und ein Homescreen-Widget
+• Audio kommt direkt vom jeweiligen Podcast-Publisher und läuft nie über einen
+  KoalaCast-Server
 
-FINDEN
-• Charts und Suche über Storefronts hinweg, gefiltert nach der Sprache, die in
-  der Sendung tatsächlich gesprochen wird — nicht nur nach Land
-• Genres als interessant oder ausgeblendet markieren, einzelne Sendungen
-  ausblenden
-• Jeden Podcast über seine RSS-Adresse hinzufügen
-• OPML importieren und exportieren
+PODCASTS FINDEN
+• Charts durchsuchen und in mehreren Podcast-Katalogen suchen
+• Entdeckungen nach der tatsächlich gesprochenen Sprache statt nur nach Land
+  filtern
+• Genres bevorzugen oder ausblenden und einzelne Podcasts verbergen
+• Jeden kompatiblen Podcast über seine RSS-Feed-Adresse hinzufügen
+• Abonnements per OPML importieren und exportieren
+• Explizite Inhalte sind standardmäßig ausgeblendet und können in den
+  Einstellungen aktiviert werden
 
-ÜBERBLICK BEHALTEN
-• Ein „Neu“-Tab mit allem, was deine Abos veröffentlicht haben — pro Sendung
-  wahlweise jede Folge oder nur die neueste, damit eine stündliche
-  Nachrichtensendung nicht alles andere zuschüttet
-• Warteschlange, benannte Warteschlangen, Ordner und Zeitmarken
-• Private Hörstatistik: Stunden, Serien, gesparte Zeit durch schnelleres Hören
-  und durch Stille-Kürzung
+ORGANISIERT BLEIBEN
+• Ein „Neu“-Tab sammelt Folgen aus deinen Abonnements
+• Pro Podcast festlegen, ob dort jede Folge oder nur die neueste erscheint
+• Warteschlange, wiederverwendbare benannte Warteschlangen, Ordner, Favoriten und
+  Zeitmarken verwalten
+• Private Hörstatistiken mit Hörzeit, Serien und gesparter Zeit durch schnellere
+  Wiedergabe und Stille-Kürzung ansehen
 
 OPTIONALES KONTO
-Ein Konto synchronisiert Abos, Favoriten, Hörpositionen, Warteschlange und
-Einstellungen zwischen deinen Geräten. Globale Statistiken und die Hörer-Rangliste
-sind eine getrennte, standardmäßig ausgeschaltete Zustimmung. Du kannst alles
-exportieren, was zum Konto gespeichert ist, und das Konto samt aller Daten direkt
-in der App löschen.
+Synchronisiere Abos, Favoriten, Hörpositionen, Warteschlangen und Einstellungen
+zwischen deinen Geräten und der KoalaCast-Web-App. Globale zusammengefasste
+Statistiken und die Hörer-Rangliste erfordern eine getrennte Zustimmung und sind
+standardmäßig deaktiviert. Exportiere deine Kontodaten, lösche synchronisierte
+Daten unter Beibehaltung des Kontos oder lösche dein Konto samt zugehörigen Daten
+direkt in der App.
 
-SELBST HOSTEN
-KoalaCast steht unter der MIT-Lizenz, der Server ist eine einzelne Go-Binary mit
-SQLite. Eine selbst gehostete Instanz kann genau dasselbe wie die offizielle, und
-die App lässt sich auf jede Instanz zeigen.
+SERVER AUSWÄHLEN ODER SELBST HOSTEN
+Der offizielle KoalaCast-Server ist optional. Verbinde die App mit einer
+beliebigen KoalaCast-Instanz oder hoste deinen eigenen Server. Eine selbst
+gehostete Instanz bietet dieselben Funktionen wie der offizielle Dienst. Der
+leichtgewichtige Server verwendet Go und SQLite.
 
-Quellcode: https://github.com/Shik3i/KoalaCast
+KoalaCast steht unter der MIT-Lizenz und ist vollständig Open Source. Quellcode:
+https://github.com/Shik3i/KoalaCast
 ```
 
-## Hinweise
+## Prüfhinweise
 
-- Der Name muss unter 30 Zeichen bleiben; „KoalaCast — Podcast-Player" hat 25.
-- Die Kurzbeschreibung erscheint in der Suche und nennt die drei Punkte, die
-  diese App in einer vollen Kategorie überhaupt unterscheiden.
-- Nirgends „verschlüsselt" behaupten: Sync-Daten sind auf dem Transportweg
-  geschützt, aber nicht Ende-zu-Ende verschlüsselt — genau so steht es in der
-  Datenschutzerklärung, die Google ebenfalls liest.
+- App-Name: 25/30 Zeichen.
+- Kurzbeschreibung: 76/80 Zeichen.
+- „Ohne Analyse-Tracking“ bedeutet: kein Werbe- oder Analyse-SDK-Tracking. Es
+  behauptet nicht, dass optionale Kontosynchronisierung oder vom Nutzer
+  ausgelöste Netzwerkzugriffe niemals Daten übertragen.
+- Keine Ende-zu-Ende-Verschlüsselung behaupten. Die Übertragung erfolgt per
+  HTTPS, synchronisierte Kontodaten sind jedoch nicht Ende-zu-Ende verschlüsselt.
+- Keine Rankings, Auszeichnungen, Preisangaben, werblichen Handlungsaufforderungen,
+  Mitbewerbernamen oder nicht vorhandenen Funktionen ergänzen.

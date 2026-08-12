@@ -30,6 +30,11 @@ class ServerRepository @Inject constructor(
 
     /** Probes `{url}/api/v1/healthz` without touching the stored configuration. */
     suspend fun validate(rawUrl: String): DataResult<String> = withContext(dispatcher) {
+        if (ServerUrl.rejectsCleartext(rawUrl)) {
+            return@withContext DataResult.Failure(
+                DataError.Malformed(ServerUrl.CLEARTEXT_REJECTED),
+            )
+        }
         val normalised = ServerUrl.normalise(rawUrl)
             ?: return@withContext DataResult.Failure(DataError.Malformed("not a URL"))
 

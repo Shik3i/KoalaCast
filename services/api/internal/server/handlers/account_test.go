@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/auth"
@@ -21,6 +23,20 @@ const deletionTestPassword = "CorrectHorseBattery1!"
 var userScopedTables = []string{
 	"sessions",
 	"device_credentials",
+	"subscriptions",
+	"favorites",
+	"playback_states",
+	"listening_sessions",
+	"queue_items",
+	"per_podcast_settings",
+	"history_entries",
+	"sync_log",
+	"user_sync_cursors",
+	"processed_sync_operations",
+	"web_push_subscriptions",
+}
+
+var synchronizedDataTables = []string{
 	"subscriptions",
 	"favorites",
 	"playback_states",
@@ -71,6 +87,217 @@ func deleteRequest(body string) *http.Request {
 		customMiddleware.UserContextKey,
 		&customMiddleware.AuthUser{ID: "u1", Username: "User", Role: "user"},
 	))
+}
+
+func dataDeleteRequest(body string) *http.Request {
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/data", bytes.NewBufferString(body))
+	return req.WithContext(context.WithValue(
+		req.Context(),
+		customMiddleware.UserContextKey,
+		&customMiddleware.AuthUser{ID: "u1", Username: "User", Role: "user"},
+	))
+}
+
+func seedAllSynchronizedData(t *testing.T, database *db.DB) string {
+	t.Helper()
+	recoveryCode := seedDeletableAccount(t, database)
+	if _, err := database.SQL.Exec(`
+		UPDATE users SET global_stats_opt_in=1, global_stats_opt_in_at=123 WHERE id='u1';
+		INSERT INTO episodes (id,podcast_id,stable_identity_key,title,enclosure_url,created_at)
+		VALUES ('e1','p1','episode-1','Episode','https://example.org/e1.mp3',0);
+		INSERT INTO favorites (user_id,episode_id,created_at) VALUES ('u1','e1',1);
+		INSERT INTO playback_states (user_id,episode_id,position_ms) VALUES ('u1','e1',42);
+		INSERT INTO listening_sessions (id,user_id,episode_id,podcast_id,started_at,ended_at)
+		VALUES ('l1','u1','e1','p1',1,2);
+		INSERT INTO queue_items (id,user_id,episode_id,added_at) VALUES ('q1','u1','e1',1);
+		INSERT INTO per_podcast_settings (user_id,podcast_id) VALUES ('u1','p1');
+		INSERT INTO history_entries (id,user_id,episode_id,played_at) VALUES ('h1','u1','e1',1);
+		INSERT INTO processed_sync_operations (user_id,device_id,client_op_id,server_cursor,processed_at)
+		VALUES ('u1','device-1','processed-1',1,1);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	return recoveryCode
+}
+
+func TestDeleteSynchronizedDataIsAtomicAndKeepsAccountAndLogins(t *testing.T) {
+	handler, database := newAuthTestHandler(t)
+	seedAllSynchronizedData(t, database)
+
+	rec := httptest.NewRecorder()
+	handler.DeleteSynchronizedData(rec, dataDeleteRequest(`{"password":"`+deletionTestPassword+`"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete data: %d %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		DataGeneration int64 `json:"data_generation"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || response.DataGeneration != 1 {
+		t.Fatalf("unexpected generation response: %s (%v)", rec.Body.String(), err)
+	}
+
+	for _, table := range synchronizedDataTables {
+		var count int
+		if err := database.SQL.QueryRow("SELECT COUNT(*) FROM " + table + " WHERE user_id='u1'").Scan(&count); err != nil {
+			t.Fatalf("%s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("%s still holds %d row(s)", table, count)
+		}
+	}
+	var users, sessions, devices, optIn int
+	var generation int64
+	var username, passwordHash, recoveryHash, role string
+	if err := database.SQL.QueryRow(`
+		SELECT COUNT(*), data_generation, global_stats_opt_in, username,
+		       password_hash, recovery_code_hash, role
+		FROM users WHERE id='u1'
+	`).Scan(&users, &generation, &optIn, &username, &passwordHash, &recoveryHash, &role); err != nil {
+		t.Fatal(err)
+	}
+	_ = database.SQL.QueryRow("SELECT COUNT(*) FROM sessions WHERE user_id='u1'").Scan(&sessions)
+	_ = database.SQL.QueryRow("SELECT COUNT(*) FROM device_credentials WHERE user_id='u1'").Scan(&devices)
+	if users != 1 || sessions != 1 || devices != 1 || generation != 1 || optIn != 0 {
+		t.Fatalf("identity/login changed: users=%d sessions=%d devices=%d generation=%d optIn=%d", users, sessions, devices, generation, optIn)
+	}
+	if username != "User" || passwordHash == "" || recoveryHash == "" || role != "user" {
+		t.Fatalf("identity fields changed: username=%q password=%q recovery=%q role=%q", username, passwordHash, recoveryHash, role)
+	}
+}
+
+func TestDeleteSynchronizedDataAcceptsRecoveryCode(t *testing.T) {
+	handler, database := newAuthTestHandler(t)
+	recoveryCode := seedAllSynchronizedData(t, database)
+	rec := httptest.NewRecorder()
+	handler.DeleteSynchronizedData(rec, dataDeleteRequest(`{"recovery_code":"`+recoveryCode+`"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete with recovery: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeleteSynchronizedDataInvalidCredentialChangesNothing(t *testing.T) {
+	for name, body := range map[string]string{
+		"password": `{"password":"wrong"}`,
+		"recovery": `{"recovery_code":"WRONG-WRONG"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			handler, database := newAuthTestHandler(t)
+			seedAllSynchronizedData(t, database)
+			rec := httptest.NewRecorder()
+			handler.DeleteSynchronizedData(rec, dataDeleteRequest(body))
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			var subscriptions, generation, optIn int
+			_ = database.SQL.QueryRow("SELECT COUNT(*) FROM subscriptions WHERE user_id='u1'").Scan(&subscriptions)
+			_ = database.SQL.QueryRow("SELECT data_generation, global_stats_opt_in FROM users WHERE id='u1'").Scan(&generation, &optIn)
+			if subscriptions != 1 || generation != 0 || optIn != 1 {
+				t.Fatalf("data changed after invalid credential: subscriptions=%d generation=%d optIn=%d", subscriptions, generation, optIn)
+			}
+		})
+	}
+}
+
+func TestDeleteSynchronizedDataRollsBackEveryChangeOnFailure(t *testing.T) {
+	handler, database := newAuthTestHandler(t)
+	seedAllSynchronizedData(t, database)
+	if _, err := database.SQL.Exec(`
+		CREATE TRIGGER fail_history_delete BEFORE DELETE ON history_entries
+		BEGIN SELECT RAISE(ABORT, 'injected reset failure'); END;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	handler.DeleteSynchronizedData(rec, dataDeleteRequest(`{"password":"`+deletionTestPassword+`"}`))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, table := range synchronizedDataTables {
+		var count int
+		if err := database.SQL.QueryRow("SELECT COUNT(*) FROM " + table + " WHERE user_id='u1'").Scan(&count); err != nil || count == 0 {
+			t.Fatalf("%s was partially deleted: count=%d err=%v", table, count, err)
+		}
+	}
+	var generation, optIn int
+	_ = database.SQL.QueryRow("SELECT data_generation, global_stats_opt_in FROM users WHERE id='u1'").Scan(&generation, &optIn)
+	if generation != 0 || optIn != 1 {
+		t.Fatalf("user update escaped rollback: generation=%d optIn=%d", generation, optIn)
+	}
+}
+
+func staleSubscriptionHTTPRequest(dataGeneration int64) *http.Request {
+	body := bytes.NewBufferString(`{
+		"client_schema_version":2,
+		"data_generation":` + fmt.Sprint(dataGeneration) + `,
+		"operations":[{
+			"client_op_id":"parallel-op","device_id":"device-1",
+			"entity_type":"subscription","action":"upsert","entity_id":"p1",
+			"payload":{"podcast_id":"p1","added_at":100,"updated_at":100},
+			"client_timestamp":100
+		}]
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sync", body)
+	return req.WithContext(context.WithValue(
+		req.Context(),
+		customMiddleware.UserContextKey,
+		&customMiddleware.AuthUser{ID: "u1", Username: "User", Role: "user"},
+	))
+}
+
+func TestStaleSyncCannotRestoreDeletedData(t *testing.T) {
+	authHandler, database := newAuthTestHandler(t)
+	seedAllSynchronizedData(t, database)
+	recDelete := httptest.NewRecorder()
+	authHandler.DeleteSynchronizedData(recDelete, dataDeleteRequest(`{"password":"`+deletionTestPassword+`"}`))
+	if recDelete.Code != http.StatusOK {
+		t.Fatalf("reset: %d %s", recDelete.Code, recDelete.Body.String())
+	}
+
+	recPush := httptest.NewRecorder()
+	(&SyncHandler{DB: database}).Push(recPush, staleSubscriptionHTTPRequest(0))
+	if recPush.Code != http.StatusConflict || !bytes.Contains(recPush.Body.Bytes(), []byte("DATA_GENERATION_MISMATCH")) {
+		t.Fatalf("stale push accepted: %d %s", recPush.Code, recPush.Body.String())
+	}
+	var count int
+	_ = database.SQL.QueryRow("SELECT COUNT(*) FROM subscriptions WHERE user_id='u1'").Scan(&count)
+	if count != 0 {
+		t.Fatalf("stale push restored %d subscription(s)", count)
+	}
+}
+
+func TestParallelSyncAndDataResetCannotLeaveRestoredData(t *testing.T) {
+	authHandler, database := newAuthTestHandler(t)
+	seedAllSynchronizedData(t, database)
+	syncHandler := &SyncHandler{DB: database}
+	start := make(chan struct{})
+	var wait sync.WaitGroup
+	wait.Add(2)
+	var deleteCode, pushCode int
+	go func() {
+		defer wait.Done()
+		<-start
+		rec := httptest.NewRecorder()
+		authHandler.DeleteSynchronizedData(rec, dataDeleteRequest(`{"password":"`+deletionTestPassword+`"}`))
+		deleteCode = rec.Code
+	}()
+	go func() {
+		defer wait.Done()
+		<-start
+		rec := httptest.NewRecorder()
+		syncHandler.Push(rec, staleSubscriptionHTTPRequest(0))
+		pushCode = rec.Code
+	}()
+	close(start)
+	wait.Wait()
+	if deleteCode != http.StatusOK || (pushCode != http.StatusOK && pushCode != http.StatusConflict) {
+		t.Fatalf("unexpected statuses: delete=%d push=%d", deleteCode, pushCode)
+	}
+	var count, generation int
+	_ = database.SQL.QueryRow("SELECT COUNT(*) FROM subscriptions WHERE user_id='u1'").Scan(&count)
+	_ = database.SQL.QueryRow("SELECT data_generation FROM users WHERE id='u1'").Scan(&generation)
+	if count != 0 || generation != 1 {
+		t.Fatalf("parallel push survived reset: count=%d generation=%d", count, generation)
+	}
 }
 
 func TestDeleteAccountRemovesEveryUserScopedRow(t *testing.T) {

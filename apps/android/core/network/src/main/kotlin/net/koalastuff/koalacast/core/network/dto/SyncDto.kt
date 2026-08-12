@@ -22,12 +22,14 @@ data class SyncPushRequest(
     val operations: List<SyncOperationDto>,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("client_schema_version") val clientSchemaVersion: Int = 2,
+    @SerialName("data_generation") val dataGeneration: Long,
 )
 
 @Serializable
 data class SyncPushResponse(
     @SerialName("applied_ops") val appliedOps: Int = 0,
     @SerialName("current_cursor") val currentCursor: Long = 0,
+    @SerialName("data_generation") val dataGeneration: Long = 0,
 )
 
 @Serializable
@@ -47,6 +49,7 @@ data class SyncPullResponse(
     @SerialName("current_cursor") val currentCursor: Long = 0,
     @SerialName("has_more") val hasMore: Boolean? = null,
     val changesets: List<SyncChangesetDto> = emptyList(),
+    @SerialName("data_generation") val dataGeneration: Long = 0,
 )
 
 @Serializable
@@ -59,4 +62,5 @@ data class SyncSnapshotResponse(
     val queue: List<JsonObject> = emptyList(),
     @SerialName("podcast_settings") val podcastSettings: List<JsonObject> = emptyList(),
     val settings: List<JsonObject> = emptyList(),
+    @SerialName("data_generation") val dataGeneration: Long = 0,
 )

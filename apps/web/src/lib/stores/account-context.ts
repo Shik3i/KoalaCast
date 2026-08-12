@@ -8,11 +8,34 @@ import {
 } from '$lib/stores/podcast-settings';
 import { audioDownloads } from '$lib/downloads/manager.svelte';
 import { clearWatchedFeeds } from '$lib/background/feed-mirror';
+import { disableBrowserNotifications } from '$lib/notifications/browser';
 
 let transition: Promise<void> = Promise.resolve();
 let requestedUserId: string | null | undefined;
 let activeUserId: string | null | undefined;
+let resolveInitialContext!: () => void;
+const initialContext = new Promise<void>((resolve) => {
+	resolveInitialContext = resolve;
+});
+let initialContextResolved = false;
 const LAST_ACCOUNT_KEY = 'koalacast_last_account_id';
+
+/**
+ * Wait until the root layout has verified the HttpOnly session (or selected the
+ * offline fallback) and switched IndexedDB to that listener. Route onMount
+ * callbacks otherwise race the auth request and permanently render the guest DB
+ * until the component is remounted.
+ */
+export async function waitForAccountContext(): Promise<void> {
+	await initialContext;
+	await transition;
+}
+
+function markInitialContextReady(): void {
+	if (initialContextResolved) return;
+	initialContextResolved = true;
+	resolveInitialContext();
+}
 
 export function getLastAccountContext(): string | null {
 	if (typeof localStorage === 'undefined') return null;
@@ -51,6 +74,7 @@ export function activateAccountContext(
 		} catch (_) {}
 		activeUserId = userId;
 		if (userId) sync.enable(userId);
+		markInitialContextReady();
 	});
 	// Without this the chain stays rejected for the rest of the session: every later
 	// `.then()` is skipped, so signing in or out silently stops working until the
@@ -78,6 +102,7 @@ export function activateLoggedInAccount(userId: string): Promise<void> {
  */
 export async function resetAllLocalData(): Promise<void> {
 	if (player.isActive || player.isPlaying) await player.stop();
+	await disableBrowserNotifications();
 	await clearAllLocalData();
 	await audioDownloads.clearAll();
 	await clearWatchedFeeds();

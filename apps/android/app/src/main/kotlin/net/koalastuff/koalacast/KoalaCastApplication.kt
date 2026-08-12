@@ -89,6 +89,12 @@ class KoalaCastApplication : Application(), SingletonImageLoader.Factory, Config
         // non-fatal on devices without Google Play services.
         runCatching { Cast.getSingletonInstance(this).initialize() }
         applicationScope.launch {
+            // Must run before account origin selection, sync startup, workers, or any
+            // repository request. A token created for an HTTP origin is never moved
+            // to the official server.
+            if (preferences.resetInsecureServerUrlIfNeeded()) {
+                accountStore.clear()
+            }
             accountStore.setServerOrigin(preferences.serverUrl.first())
             val account = accountStore.account.value
             val ownerId = accountStore.activeOwnerId()

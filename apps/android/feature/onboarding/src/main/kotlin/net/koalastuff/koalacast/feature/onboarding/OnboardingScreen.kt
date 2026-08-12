@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DataError
+import net.koalastuff.koalacast.core.data.server.ServerUrl
 import net.koalastuff.koalacast.core.ui.component.AccentButton
 import net.koalastuff.koalacast.core.ui.component.KoalaChip
 import net.koalastuff.koalacast.core.ui.component.KoalaTextField
@@ -139,10 +140,12 @@ internal fun OnboardingContent(
                 label = stringResource(R.string.onboarding_use_official),
                 onClick = onUseOfficial,
             )
-            QuickChoice(
-                label = stringResource(R.string.onboarding_use_emulator),
-                onClick = onUseEmulator,
-            )
+            if (state.showEmulatorOption) {
+                QuickChoice(
+                    label = stringResource(R.string.onboarding_use_emulator),
+                    onClick = onUseEmulator,
+                )
+            }
         }
 
         if (state.cleartext) {
@@ -157,7 +160,11 @@ internal fun OnboardingContent(
                 text = when (error) {
                     is DataError.Network -> stringResource(R.string.onboarding_error_unreachable)
                     is DataError.Http -> stringResource(R.string.onboarding_error_http, error.code)
-                    is DataError.Malformed -> stringResource(R.string.onboarding_error_not_koalacast)
+                    is DataError.Malformed -> if (error.cause == ServerUrl.CLEARTEXT_REJECTED) {
+                        stringResource(R.string.onboarding_error_cleartext)
+                    } else {
+                        stringResource(R.string.onboarding_error_not_koalacast)
+                    }
                     DataError.NoServerConfigured -> stringResource(R.string.onboarding_error_empty)
                 },
                 icon = PhosphorIcons.WarningCircle,
@@ -185,14 +192,14 @@ internal fun OnboardingContent(
                 stringResource(R.string.onboarding_account_continue)
             },
             onClick = { onConfirm(true) },
-            enabled = !state.checking && state.url.isNotBlank(),
+            enabled = !state.checking && state.url.isNotBlank() && !state.cleartextRejected,
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = PhosphorIcons.UserCircle,
         )
         OutlineButton(
             text = stringResource(R.string.onboarding_continue),
             onClick = { onConfirm(false) },
-            enabled = !state.checking && state.url.isNotBlank(),
+            enabled = !state.checking && state.url.isNotBlank() && !state.cleartextRejected,
             modifier = Modifier.fillMaxWidth(),
         )
 

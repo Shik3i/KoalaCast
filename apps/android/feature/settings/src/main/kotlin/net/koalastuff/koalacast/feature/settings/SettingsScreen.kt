@@ -28,9 +28,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import net.koalastuff.koalacast.core.model.DataError
+import net.koalastuff.koalacast.core.data.server.ServerUrl
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.InboxMode
@@ -68,6 +74,11 @@ import net.koalastuff.koalacast.core.ui.theme.KoalaSpacing
 import net.koalastuff.koalacast.core.ui.theme.KoalaTheme
 import net.koalastuff.koalacast.core.ui.theme.koalaColors
 import net.koalastuff.koalacast.core.ui.R as CoreUiR
+
+internal enum class ExplicitSettingAction { REQUEST_CONFIRMATION, DISABLE }
+
+internal fun explicitSettingAction(requested: Boolean): ExplicitSettingAction =
+    if (requested) ExplicitSettingAction.REQUEST_CONFIRMATION else ExplicitSettingAction.DISABLE
 
 @Composable
 fun SettingsScreen(
@@ -105,6 +116,7 @@ fun SettingsScreen(
         onStartScreenChange = viewModel::setStartScreen,
         onVisualizerChange = viewModel::setVisualizer,
         onProxyImagesChange = viewModel::setProxyImages,
+        onAllowExplicitContentChange = viewModel::setAllowExplicitContent,
         onBack = onBack,
         onOpenAccount = onOpenAccount,
         onOpenPrivacy = onOpenPrivacy,
@@ -141,6 +153,7 @@ internal fun SettingsContent(
     onStartScreenChange: (StartScreen) -> Unit,
     onVisualizerChange: (VisualizerStyle) -> Unit,
     onProxyImagesChange: (Boolean) -> Unit,
+    onAllowExplicitContentChange: (Boolean) -> Unit = {},
     onOpenAccount: () -> Unit,
     onOpenPrivacy: () -> Unit,
     onDownloadWifiOnlyChange: (Boolean) -> Unit,
@@ -157,6 +170,28 @@ internal fun SettingsContent(
 ) {
     val colors = KoalaTheme.colors
     val prefs = state.preferences
+    var showExplicitConfirmation by remember { mutableStateOf(false) }
+
+    if (showExplicitConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showExplicitConfirmation = false },
+            title = { Text(stringResource(R.string.settings_explicit_dialog_title)) },
+            text = { Text(stringResource(R.string.settings_explicit_dialog_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExplicitConfirmation = false
+                        onAllowExplicitContentChange(true)
+                    },
+                ) { Text(stringResource(R.string.settings_explicit_enable)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExplicitConfirmation = false }) {
+                    Text(stringResource(R.string.settings_explicit_cancel))
+                }
+            },
+        )
+    }
 
     Column(
         modifier = modifier
@@ -240,7 +275,11 @@ internal fun SettingsContent(
                 Text(
                     text = when (error) {
                         is DataError.Http -> stringResource(R.string.settings_server_error_http, error.code)
-                        is DataError.Malformed -> stringResource(R.string.settings_server_error_shape)
+                        is DataError.Malformed -> if (error.cause == ServerUrl.CLEARTEXT_REJECTED) {
+                            stringResource(R.string.settings_server_error_cleartext)
+                        } else {
+                            stringResource(R.string.settings_server_error_shape)
+                        }
                         else -> stringResource(R.string.settings_server_error_unreachable)
                     },
                     style = KoalaTheme.type.bodySmall,
@@ -261,7 +300,7 @@ internal fun SettingsContent(
                     stringResource(R.string.settings_server_save)
                 },
                 onClick = onSaveServer,
-                enabled = !state.checkingServer && state.serverDraft.isNotBlank(),
+                enabled = !state.checkingServer && state.serverDraft.isNotBlank() && !state.cleartextRejected,
             )
         }
 
@@ -358,6 +397,24 @@ internal fun SettingsContent(
                     )
                 }
             }
+        }
+
+        Hairline()
+
+        Section(title = stringResource(R.string.settings_content_title)) {
+            SwitchRow(
+                title = stringResource(R.string.settings_explicit_title),
+                note = stringResource(R.string.settings_explicit_note),
+                checked = prefs?.allowExplicitContent ?: false,
+                onCheckedChange = { enabled ->
+                    when (explicitSettingAction(enabled)) {
+                        ExplicitSettingAction.REQUEST_CONFIRMATION ->
+                            showExplicitConfirmation = true
+                        ExplicitSettingAction.DISABLE ->
+                            onAllowExplicitContentChange(false)
+                    }
+                },
+            )
         }
 
         Hairline()

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
+import net.koalastuff.koalacast.core.data.server.ServerUrl
 import net.koalastuff.koalacast.core.model.DownloadRetention
 import net.koalastuff.koalacast.core.model.DownloadStorage
 import net.koalastuff.koalacast.core.model.HiddenPodcast
@@ -44,9 +45,35 @@ class PreferencesRepository @Inject constructor(
     }
 
     val serverUrl: Flow<String> = preferences.map { it.serverUrl }
+    val insecureServerResetPending: Flow<Boolean> = dataStore.data.map {
+        it[Keys.INSECURE_SERVER_RESET_PENDING] ?: false
+    }
 
     suspend fun setServerUrl(url: String) {
-        dataStore.edit { it[Keys.SERVER_URL] = url }
+        val safeUrl = requireNotNull(ServerUrl.normalise(url)) { "Server URL violates transport policy" }
+        dataStore.edit { it[Keys.SERVER_URL] = safeUrl }
+    }
+
+    /**
+     * Runs before Auth/Sync startup. Invalid stored HTTP origins are replaced atomically,
+     * and a durable UI notice remains until the listener acknowledges it.
+     */
+    suspend fun resetInsecureServerUrlIfNeeded(): Boolean {
+        var reset = false
+        dataStore.edit { values ->
+            val stored = values[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL
+            val sanitized = ServerUrl.sanitizeStored(stored, KoalaCastDefaults.SERVER_URL)
+            if (sanitized.resetFromCleartext) {
+                values[Keys.SERVER_URL] = sanitized.value
+                values[Keys.INSECURE_SERVER_RESET_PENDING] = true
+                reset = true
+            }
+        }
+        return reset
+    }
+
+    suspend fun acknowledgeInsecureServerReset() {
+        dataStore.edit { it[Keys.INSECURE_SERVER_RESET_PENDING] = false }
     }
 
     suspend fun setOnboardingComplete(complete: Boolean) {
@@ -72,6 +99,10 @@ class PreferencesRepository @Inject constructor(
             it[Keys.hiddenGenres(owner)] = hiddenGenres - interests
             it.touch(owner, "interests", "hidden_genres")
         }
+    }
+
+    suspend fun setAllowExplicitContent(enabled: Boolean) {
+        dataStore.edit { it[Keys.allowExplicitContent(owner())] = enabled }
     }
 
     suspend fun hidePodcast(podcast: HiddenPodcast) {
@@ -230,6 +261,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.interests(owner))
             it.remove(Keys.hiddenGenres(owner))
             it.remove(Keys.hiddenPodcasts(owner))
+            it.remove(Keys.allowExplicitContent(owner))
             it.remove(Keys.defaultInboxMode(owner))
             it.remove(Keys.startScreen(owner))
             it.remove(Keys.visualizer(owner))
@@ -243,6 +275,7 @@ class PreferencesRepository @Inject constructor(
             it.remove(Keys.downloadConcurrency(owner))
             it.remove(Keys.downloadBudgetMb(owner))
             it.remove(Keys.settingsUpdatedAt(owner))
+            it.remove(Keys.settingsFieldUpdatedAt(owner))
             it.remove(Keys.foreignSettings(owner))
         }
     }
@@ -289,6 +322,11 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(
                 Keys.hiddenPodcasts(ownerId),
                 Keys.hiddenPodcasts(null),
+                removeSource = false,
+            )
+            it.copyIfAbsent(
+                Keys.allowExplicitContent(ownerId),
+                Keys.allowExplicitContent(null),
                 removeSource = false,
             )
             it.copyIfAbsent(
@@ -350,6 +388,7 @@ class PreferencesRepository @Inject constructor(
             it.copyIfAbsent(Keys.interests(ownerId), Keys.interests(userId))
             it.copyIfAbsent(Keys.hiddenGenres(ownerId), Keys.hiddenGenres(userId))
             it.copyIfAbsent(Keys.hiddenPodcasts(ownerId), Keys.hiddenPodcasts(userId))
+            it.copyIfAbsent(Keys.allowExplicitContent(ownerId), Keys.allowExplicitContent(userId))
             it.copyIfAbsent(Keys.defaultInboxMode(ownerId), Keys.defaultInboxMode(userId))
             it.copyIfAbsent(Keys.startScreen(ownerId), Keys.startScreen(userId))
             it.copyIfAbsent(Keys.visualizer(ownerId), Keys.visualizer(userId))
@@ -371,7 +410,10 @@ class PreferencesRepository @Inject constructor(
         accountStore.account.value?.let { accountStore.activeOwnerId() }
 
     private fun Preferences.toUserPreferences(owner: String?) = UserPreferences(
-        serverUrl = this[Keys.SERVER_URL] ?: KoalaCastDefaults.SERVER_URL,
+        serverUrl = ServerUrl.sanitizeStored(
+            this[Keys.SERVER_URL].orEmpty(),
+            KoalaCastDefaults.SERVER_URL,
+        ).value,
         onboardingComplete = this[Keys.ONBOARDING_COMPLETE] ?: false,
         themeMode = this[Keys.themeMode(owner)]
             ?.let { name -> runCatching { ThemeMode.valueOf(name) }.getOrNull() }
@@ -382,6 +424,7 @@ class PreferencesRepository @Inject constructor(
         hiddenGenres = this[Keys.hiddenGenres(owner)] ?: emptySet(),
         hiddenPodcasts = this[Keys.hiddenPodcasts(owner)].orEmpty()
             .mapNotNullTo(mutableSetOf(), ::decodeHiddenPodcast),
+        allowExplicitContent = this[Keys.allowExplicitContent(owner)] ?: false,
         defaultInboxMode = when (this[Keys.defaultInboxMode(owner)]) {
             InboxMode.LATEST.name.lowercase() -> InboxMode.LATEST
             else -> InboxMode.ALL
@@ -403,6 +446,8 @@ class PreferencesRepository @Inject constructor(
 
     private object Keys {
         val SERVER_URL = stringPreferencesKey("server_url")
+        val INSECURE_SERVER_RESET_PENDING =
+            booleanPreferencesKey("insecure_server_reset_pending")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         private fun scoped(base: String, owner: String?) = "$base:${owner ?: "guest"}"
         fun themeMode(owner: String?) = stringPreferencesKey(scoped("theme_mode", owner))
@@ -411,6 +456,8 @@ class PreferencesRepository @Inject constructor(
         fun interests(owner: String?) = stringSetPreferencesKey(scoped("interests", owner))
         fun hiddenGenres(owner: String?) = stringSetPreferencesKey(scoped("hidden_genres", owner))
         fun hiddenPodcasts(owner: String?) = stringSetPreferencesKey(scoped("hidden_podcasts", owner))
+        fun allowExplicitContent(owner: String?) =
+            booleanPreferencesKey(scoped("allow_explicit_content", owner))
         fun defaultInboxMode(owner: String?) = stringPreferencesKey(scoped("default_inbox_mode", owner))
         fun startScreen(owner: String?) = stringPreferencesKey(scoped("start_screen", owner))
         fun visualizer(owner: String?) = stringPreferencesKey(scoped("visualizer", owner))
@@ -511,6 +558,7 @@ object KoalaCastDefaults {
      */
     const val SERVER_URL = "https://cast.koalastuff.net"
 
-    /** Reaches the host machine's server from the Android emulator. */
-    const val EMULATOR_LOOPBACK_URL = "http://10.0.2.2:3000"
+    /** Debug builds expose an emulator-loopback shortcut; release resolves to HTTPS. */
+    val EMULATOR_LOOPBACK_URL: String
+        get() = BuildVariantServerDefaults.emulatorLoopbackUrl
 }

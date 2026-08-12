@@ -63,6 +63,49 @@ func TestPodcastIndexClient_Search(t *testing.T) {
 	}
 }
 
+func TestPodcastIndexClient_ExplicitValuesAndCleanSearch(t *testing.T) {
+	mockResponse := `{"feeds":[
+		{"id":1,"title":"number one","url":"https://example.com/1","explicit":1},
+		{"id":2,"title":"number zero","url":"https://example.com/2","explicit":0},
+		{"id":3,"title":"boolean","url":"https://example.com/3","explicit":true},
+		{"id":4,"title":"string","url":"https://example.com/4","explicit":"false"},
+		{"id":5,"title":"missing","url":"https://example.com/5"},
+		{"id":6,"title":"invalid","url":"https://example.com/6","explicit":"sometimes"}
+	]}`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := r.URL.Query()["clean"]; !ok {
+			t.Error("clean-only search did not send the Podcast Index clean parameter")
+		}
+		_, _ = w.Write([]byte(mockResponse))
+	}))
+	defer ts.Close()
+
+	client := NewClient("test-key", "test-secret")
+	client.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	client.baseURL = ts.URL
+	results, err := client.SearchWithExplicit("test", false)
+	if err != nil {
+		t.Fatalf("SearchWithExplicit failed: %v", err)
+	}
+	if len(results) != 6 {
+		t.Fatalf("got %d results, want 6", len(results))
+	}
+	want := []*bool{boolPtr(true), boolPtr(false), boolPtr(true), boolPtr(false), nil, nil}
+	for i := range want {
+		got := results[i].Explicit.Value
+		if want[i] == nil {
+			if got != nil {
+				t.Errorf("result %d explicit = %v, want unknown", i, *got)
+			}
+		} else if got == nil || *got != *want[i] {
+			t.Errorf("result %d explicit = %v, want %v", i, got, *want[i])
+		}
+	}
+}
+
+func boolPtr(value bool) *bool { return &value }
+
 func TestSearchResult_CategoryList(t *testing.T) {
 	tests := []struct {
 		name       string

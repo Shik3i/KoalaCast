@@ -3,6 +3,7 @@ package net.koalastuff.koalacast.core.network
 import net.koalastuff.koalacast.core.network.dto.AddFeedRequest
 import net.koalastuff.koalacast.core.network.dto.ChaptersResponse
 import net.koalastuff.koalacast.core.network.dto.DeleteAccountRequest
+import net.koalastuff.koalacast.core.network.dto.DeleteSynchronizedDataResponse
 import net.koalastuff.koalacast.core.network.dto.DiscoverResponse
 import net.koalastuff.koalacast.core.network.dto.EpisodeDto
 import net.koalastuff.koalacast.core.network.dto.EpisodesResponse
@@ -69,6 +70,7 @@ interface KoalaCastApi {
         @Query("region") region: String? = null,
         @Query("languages") languages: String? = null,
         @Query("limit") limit: Int? = null,
+        @Query("include_explicit") includeExplicit: Boolean,
     ): Response<DiscoverResponse>
 
     @Headers("Cache-Control: no-cache")
@@ -78,6 +80,7 @@ interface KoalaCastApi {
         @Query("languages") languages: String? = null,
         @Query("category") category: String? = null,
         @Query("region") region: String? = null,
+        @Query("include_explicit") includeExplicit: Boolean,
     ): Response<SearchResponse>
 
     /** Resolves (and, if new, ingests) a feed URL into a canonical KoalaCast podcast. */
@@ -146,6 +149,11 @@ interface KoalaCastApi {
      */
     @HTTP(method = "DELETE", path = "api/v1/auth/account", hasBody = true)
     suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<Unit>
+
+    @HTTP(method = "DELETE", path = "api/v1/auth/data", hasBody = true)
+    suspend fun deleteSynchronizedData(
+        @Body body: DeleteAccountRequest,
+    ): Response<DeleteSynchronizedDataResponse>
 
     @GET("api/v1/sync")
     suspend fun pullSync(

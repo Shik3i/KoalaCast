@@ -9,6 +9,8 @@ so the next submission does not have to reconstruct it from memory.
 | :--- | :--- |
 | [`listing-en.md`](listing-en.md) | Store listing, English |
 | [`listing-de.md`](listing-de.md) | Store listing, German |
+| [`play-store-source-en-US.txt`](play-store-source-en-US.txt) | Upload-ready English source for the Play Console AI localization import |
+| [`store-listing-import.csv`](store-listing-import.csv) | Structured EN/DE reference and translation context |
 | [`data-safety.md`](data-safety.md) | Answers for the Data safety form |
 | [`declarations.md`](declarations.md) | App access, foreground service, permissions, account deletion |
 | [`feature-graphic.png`](feature-graphic.png) | 1024×500 feature graphic |

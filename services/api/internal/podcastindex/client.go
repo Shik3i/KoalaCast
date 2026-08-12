@@ -1,6 +1,7 @@
 package podcastindex
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -10,10 +11,36 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/rss"
 )
+
+// OptionalBool preserves the distinction between explicitly clean, explicitly
+// marked, and missing/invalid publisher metadata. Podcast Index has emitted
+// this field as booleans, numbers, and strings over time.
+type OptionalBool struct {
+	Value *bool
+}
+
+func (v *OptionalBool) UnmarshalJSON(data []byte) error {
+	v.Value = nil
+	raw := strings.ToLower(strings.TrimSpace(string(bytes.Trim(data, `"`))))
+	switch raw {
+	case "1", "true", "yes", "explicit":
+		value := true
+		v.Value = &value
+	case "0", "false", "no", "clean", "cleaned", "notexplicit", "not_explicit":
+		value := false
+		v.Value = &value
+	case "", "null":
+		// Unknown stays unknown.
+	default:
+		// Provider drift must not fail the entire response.
+	}
+	return nil
+}
 
 type Client struct {
 	apiKey     string
@@ -32,7 +59,7 @@ type SearchResult struct {
 	Artwork     string            `json:"artwork"`
 	Image       string            `json:"image"`
 	Categories  map[string]string `json:"categories"`
-	Explicit    bool              `json:"explicit"`
+	Explicit    OptionalBool      `json:"explicit"`
 	// Language as reported by Podcast Index (an RSS <language> tag such as
 	// "en", "de-DE"). Authoritative — unlike iTunes, no guessing required.
 	Language string `json:"language"`
@@ -127,10 +154,20 @@ func (c *Client) IsConfigured() bool {
 }
 
 func (c *Client) Search(query string) ([]SearchResult, error) {
+	return c.SearchWithExplicit(query, true)
+}
+
+// SearchWithExplicit asks Podcast Index for clean-only results when explicit
+// content is disabled, then leaves callers to apply the returned metadata as a
+// second defensive check.
+func (c *Client) SearchWithExplicit(query string, includeExplicit bool) ([]SearchResult, error) {
 	if !c.IsConfigured() {
 		return nil, fmt.Errorf("podcast index API credentials not configured")
 	}
 	endpoint := fmt.Sprintf("%s/search/byterm?q=%s", c.baseURL, url.QueryEscape(query))
+	if !includeExplicit {
+		endpoint += "&clean"
+	}
 	body, err := c.doAuthed(endpoint)
 	if err != nil {
 		return nil, err

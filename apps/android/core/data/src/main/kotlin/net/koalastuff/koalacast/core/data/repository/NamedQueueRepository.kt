@@ -5,6 +5,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
@@ -14,6 +15,8 @@ import net.koalastuff.koalacast.core.data.db.QueueDao
 import net.koalastuff.koalacast.core.data.db.QueueItemEntity
 import net.koalastuff.koalacast.core.data.util.Clock
 import net.koalastuff.koalacast.core.model.NamedQueue
+import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 
 @Singleton
 class NamedQueueRepository @Inject constructor(
@@ -22,6 +25,7 @@ class NamedQueueRepository @Inject constructor(
     private val json: Json,
     private val clock: Clock,
     private val syncMetadata: SecureAccountStore,
+    private val preferences: PreferencesRepository? = null,
 ) {
     val all: Flow<List<NamedQueue>> = namedQueues.observeAll().map { items ->
         items.map { NamedQueue(it.id, it.name, it.itemCount, it.updatedAt) }
@@ -50,8 +54,10 @@ class NamedQueueRepository @Inject constructor(
             ListSerializer(QueueItemEntity.serializer()),
             saved.itemsJson,
         )
+        val includeExplicit = preferences?.preferences?.first()?.allowExplicitContent ?: false
         queue.clear()
-        items.take(MAX_QUEUE_ITEMS).forEachIndexed { index, item ->
+        items.filter { it.explicit.isAllowedByExplicitPreference(includeExplicit) }
+            .take(MAX_QUEUE_ITEMS).forEachIndexed { index, item ->
             queue.insert(
                 item.copy(
                     id = UUID.randomUUID().toString(),

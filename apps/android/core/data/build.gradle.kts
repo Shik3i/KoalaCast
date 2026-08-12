@@ -9,6 +9,12 @@ android {
     namespace = "net.koalastuff.koalacast.core.data"
 }
 
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        (variant as com.android.build.api.variant.HasUnitTestBuilder).enableUnitTest = true
+    }
+}
+
 // Room schemas are checked in: a migration can only be reviewed against the
 // schema it migrates from.
 ksp {

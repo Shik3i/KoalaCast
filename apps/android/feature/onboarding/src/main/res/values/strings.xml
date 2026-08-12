@@ -15,7 +15,8 @@
     <string name="onboarding_account_continue">Sign in or create account</string>
     <string name="onboarding_checking">Checking…</string>
 
-    <string name="onboarding_cleartext_warning">This address uses plain HTTP. Traffic to it is unencrypted, which is fine on your own network and unsafe over the internet.</string>
+    <string name="onboarding_cleartext_warning">This release build accepts HTTPS servers only.</string>
+    <string name="onboarding_error_cleartext">This build requires HTTPS. HTTP is blocked before any request is sent.</string>
     <string name="onboarding_error_unreachable">Could not reach that address. Check the spelling, and that the server is running and reachable from this device.</string>
     <!-- %1$d is an HTTP status, not a count. -->
     <string name="onboarding_error_http" tools:ignore="PluralsCandidate">The server answered with status %1$d instead of a health check.</string>

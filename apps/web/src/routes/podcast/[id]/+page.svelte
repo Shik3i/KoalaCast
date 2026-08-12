@@ -19,6 +19,7 @@
 	import { dominantColor } from '$lib/color';
 	import Skeleton from '$lib/components/Skeleton.svelte';
 	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 	import { slide } from 'svelte/transition';
 	import { optimizeArtwork } from '$lib/artwork';
 	import {
@@ -126,6 +127,7 @@
 	let loadReqId = 0;
 
 	async function loadPodcastData(id: string) {
+		await waitForAccountContext();
 		const reqId = ++loadReqId;
 		isLoading = true;
 		loadError = '';

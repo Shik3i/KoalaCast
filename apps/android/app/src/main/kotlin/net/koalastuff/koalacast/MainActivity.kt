@@ -16,6 +16,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
@@ -50,6 +52,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val prefs by preferences.preferences.collectAsStateWithLifecycle(initialValue = null)
+            val insecureServerResetPending by preferences.insecureServerResetPending
+                .collectAsStateWithLifecycle(initialValue = false)
             val appReady by appReadiness.ready.collectAsStateWithLifecycle()
 
             LaunchedEffect(Unit) {
@@ -74,6 +78,12 @@ class MainActivity : ComponentActivity() {
                     KoalaCastApp(
                         onboardingComplete = prefs?.onboardingComplete,
                         startScreen = prefs?.startScreen ?: StartScreen.DEFAULT,
+                        insecureServerResetPending = insecureServerResetPending,
+                        onInsecureServerResetAcknowledged = {
+                            lifecycleScope.launch {
+                                preferences.acknowledgeInsecureServerReset()
+                            }
+                        },
                         requestedEpisodeId = requestedEpisodeId,
                         onEpisodeRequestConsumed = { requestedEpisodeId = null },
                     )

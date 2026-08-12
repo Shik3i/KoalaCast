@@ -21,6 +21,8 @@ data class UserPreferences(
     val hiddenGenres: Set<String>,
     /** Individual shows removed from recommendation and search surfaces. */
     val hiddenPodcasts: Set<HiddenPodcast>,
+    /** Whether content positively marked explicit may be shown or started. */
+    val allowExplicitContent: Boolean = false,
     /** Inbox mode assigned to subscriptions created from now on. */
     val defaultInboxMode: InboxMode,
     /** The tab the app opens on. */

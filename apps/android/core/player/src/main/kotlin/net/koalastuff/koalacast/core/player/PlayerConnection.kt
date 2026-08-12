@@ -32,6 +32,7 @@ import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.server.ArtworkUrls
 import net.koalastuff.koalacast.core.model.Track
+import net.koalastuff.koalacast.core.model.isAllowedByExplicitPreference
 import javax.inject.Inject
 import javax.inject.Singleton
 import java.util.concurrent.atomic.AtomicLong
@@ -52,6 +53,7 @@ data class PlaybackUiState(
     val sleepAtChapterEnd: Boolean = false,
     val upNextCount: Int = 0,
     val playbackError: String? = null,
+    val explicitBlocked: Boolean = false,
     val isOfflineSource: Boolean = false,
 ) {
     val isActive: Boolean get() = track != null
@@ -158,17 +160,31 @@ class PlayerConnection @Inject constructor(
         explicitPositionMs: Long?,
     ) {
         val generation = playGeneration.incrementAndGet()
-        // Render the selected episode immediately. MediaController can briefly
-        // report an empty timeline while it hands the item to the service; that
-        // transition must not make the mini player flash and disappear.
-        _state.update {
-            it.copy(
-                track = track,
-                isBuffering = true,
-                playbackError = null,
-            )
-        }
         scope.launch {
+            val prefs = preferences.preferences.first()
+            if (!track.explicit.isAllowedByExplicitPreference(prefs.allowExplicitContent)) {
+                if (generation == playGeneration.get()) {
+                    _state.update {
+                        it.copy(
+                            track = track,
+                            isBuffering = false,
+                            playbackError = context.getString(R.string.playback_explicit_blocked),
+                            explicitBlocked = true,
+                        )
+                    }
+                }
+                return@launch
+            }
+            // Render only after the policy check. MediaController can briefly report
+            // an empty timeline while it hands the item to the service.
+            _state.update {
+                it.copy(
+                    track = track,
+                    isBuffering = true,
+                    playbackError = null,
+                    explicitBlocked = false,
+                )
+            }
             val controller = controller()
             val savedPosition = if (resume) {
                 progress.progressSnapshot(track.episodeId)
@@ -179,7 +195,7 @@ class PlayerConnection @Inject constructor(
                 0L
             }
             val showSettings = library.podcastSettingsSnapshot(track.podcastId)
-            val speed = showSettings.speed ?: preferences.preferences.first().playbackSpeed
+            val speed = showSettings.speed ?: prefs.playbackSpeed
             val startPosition = explicitPositionMs ?: if (savedPosition == 0L) {
                     showSettings.skipIntroSeconds * 1_000L
                 } else {
@@ -214,8 +230,15 @@ class PlayerConnection @Inject constructor(
     /** Plays the head of the queue, if there is one. */
     fun playNextFromQueue() {
         scope.launch {
-            val next = queue.head() ?: return@launch
-            play(next.track)
+            val includeExplicit = preferences.preferences.first().allowExplicitContent
+            while (true) {
+                val next = queue.head() ?: return@launch
+                if (next.track.explicit.isAllowedByExplicitPreference(includeExplicit)) {
+                    play(next.track)
+                    return@launch
+                }
+                queue.remove(next.track.episodeId)
+            }
         }
     }
 
@@ -361,6 +384,7 @@ class PlayerConnection @Inject constructor(
                     isPlaying = false,
                     isBuffering = false,
                     playbackError = error.errorCodeName,
+                    explicitBlocked = false,
                 )
             }
         }

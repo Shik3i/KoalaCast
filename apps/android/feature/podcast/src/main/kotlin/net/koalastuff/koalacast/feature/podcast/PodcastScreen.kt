@@ -74,6 +74,7 @@ import net.koalastuff.koalacast.core.ui.R as CoreR
 fun PodcastScreen(
     onBack: () -> Unit,
     onOpenEpisode: (episodeId: String) -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     viewModel: PodcastViewModel = hiltViewModel(),
@@ -122,6 +123,7 @@ fun PodcastScreen(
         onBack = onBack,
         onOpenEpisode = onOpenEpisode,
         onRetry = viewModel::retry,
+        onOpenSettings = onOpenSettings,
         onPlay = viewModel::play,
         onToggleSubscribe = viewModel::toggleSubscribe,
         onToggleFavorite = viewModel::toggleFavorite,
@@ -151,6 +153,7 @@ internal fun PodcastContent(
     onBack: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onRetry: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onPlay: (Episode) -> Unit,
     onToggleSubscribe: () -> Unit,
     onToggleFavorite: (Episode) -> Unit,
@@ -219,6 +222,24 @@ internal fun PodcastContent(
                     SkeletonRows(count = 5, modifier = Modifier.padding(KoalaSpacing.screenH))
                 }
 
+                state.explicitBlocked -> Column {
+                    BackRow(onBack = onBack)
+                    Column(
+                        modifier = Modifier.padding(KoalaSpacing.screenH),
+                        verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.podcast_explicit_blocked),
+                            style = KoalaTheme.type.body,
+                            color = colors.ink2,
+                        )
+                        OutlineButton(
+                            text = stringResource(R.string.podcast_open_settings),
+                            onClick = onOpenSettings,
+                        )
+                    }
+                }
+
                 else -> PodcastHeader(
                     podcast = state.podcast,
                     subscribed = state.subscribed,
@@ -237,7 +258,7 @@ internal fun PodcastContent(
             }
         }
 
-        if (state.podcast != null) {
+        if (state.podcast != null && !state.explicitBlocked) {
             item(key = "episodes-header") {
                 Column(
                     modifier = Modifier
@@ -421,7 +442,7 @@ private fun PodcastHeader(
                         text = listOf(
                             podcast.author,
                             podcast.language.uppercase(),
-                            if (podcast.explicit) stringResource(R.string.podcast_explicit) else "",
+                            if (podcast.explicit == true) stringResource(R.string.podcast_explicit) else "",
                         ).filter { it.isNotBlank() }.joinToString(" · "),
                         color = colors.ink4,
                         style = KoalaTheme.type.monoSmall,

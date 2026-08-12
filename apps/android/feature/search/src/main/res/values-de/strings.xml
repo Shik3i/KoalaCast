@@ -19,4 +19,5 @@
     <string name="search_empty_body">Versuche weniger Wörter oder lockere die Sprach- und Kategoriefilter.</string>
     <string name="search_hide_podcast">Podcast ausblenden</string>
     <string name="search_hidden_notice">Ausgeblendet: %1$s</string>
+    <string name="search_explicit">Explizit</string>
 </resources>

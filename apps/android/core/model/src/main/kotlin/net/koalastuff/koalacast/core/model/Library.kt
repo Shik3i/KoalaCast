@@ -27,6 +27,7 @@ data class Track(
     val enclosureUrl: String,
     val durationMs: Long,
     val categories: List<String> = emptyList(),
+    val explicit: Boolean? = null,
 )
 
 data class PlaybackProgress(

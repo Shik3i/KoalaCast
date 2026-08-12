@@ -44,7 +44,10 @@ object NetworkModule {
      */
     @Provides
     @Singleton
-    fun provideOkHttpClient(@ApplicationContext context: Context): OkHttpClient =
+    fun provideOkHttpClient(
+        @ApplicationContext context: Context,
+        transportSecurity: TransportSecurityInterceptor,
+    ): OkHttpClient =
         OkHttpClient.Builder()
             // Public GETs carry ETags. Keep their bodies on disk so a
             // Cache-Control: no-cache request becomes a tiny conditional probe
@@ -54,6 +57,11 @@ object NetworkModule {
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(45, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            // Reject direct artwork/download requests before cache lookup.
+            .addInterceptor(transportSecurity)
+            // A network interceptor observes the final URL after API host rewriting
+            // and every redirect.
+            .addNetworkInterceptor(transportSecurity)
             .build()
 
     /** Shares the base client's pool and dispatcher, adds the host rewriting. */
@@ -65,11 +73,20 @@ object NetworkModule {
         hostSelection: HostSelectionInterceptor,
         auth: AuthInterceptor,
         requestTimeout: RequestTimeoutInterceptor,
-    ): OkHttpClient = base.newBuilder()
-        .addInterceptor(hostSelection)
-        .addInterceptor(auth)
-        .addInterceptor(requestTimeout)
-        .build()
+        transportSecurity: TransportSecurityInterceptor,
+    ): OkHttpClient {
+        val builder = base.newBuilder()
+        // The base client's direct-request guard would see Retrofit's dummy URL.
+        // Reinsert it immediately after the dummy origin has been replaced and
+        // before any credential-bearing interceptor runs.
+        builder.interceptors().removeAll { it is TransportSecurityInterceptor }
+        return builder
+            .addInterceptor(hostSelection)
+            .addInterceptor(transportSecurity)
+            .addInterceptor(auth)
+            .addInterceptor(requestTimeout)
+            .build()
+    }
 
     @Provides
     @Singleton

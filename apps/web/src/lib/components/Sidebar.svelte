@@ -9,6 +9,7 @@
 	import { t } from '$lib/i18n';
 	import { podcastHref } from '$lib/podcast-link';
 	import { sync } from '$lib/stores/sync.svelte';
+	import { waitForAccountContext } from '$lib/stores/account-context';
 
 	let { isAdmin = false }: { isAdmin?: boolean } = $props();
 	let subscriptions = $state<LocalSubscription[]>([]);
@@ -28,6 +29,7 @@
 	]);
 
 	async function loadSidebarData() {
+		await waitForAccountContext();
 		subscriptions = await getLocalSubscriptions();
 		recentCount = (await getRecentPlaybackStates(100)).length;
 	}
