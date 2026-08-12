@@ -112,15 +112,9 @@ jobs:
             exit 1
           fi
           # Slashes are legal in a branch name and this workflow advertises manual
-          # runs, but neither a file path nor an upload-artifact name may contain
-          # one. A dispatch from `feat/x` used to build the APK and then die on
-          # both. Tags carry no slash, which is why only the documented manual
-          # path was affected. Derived once here and reused, so the two cannot
-          # drift apart again.
+          # runs, but an upload-artifact name may not contain one. A dispatch from
+          # `feat/x` used to build the APK and then fail during artifact upload.
           slug="${GITHUB_REF_NAME//\//-}"
-          zip_name="koalacast-android-${slug}.zip"
-          (cd dist && zip -r "../$zip_name" .)
-          echo "zip=$zip_name" >> "$GITHUB_OUTPUT"
           echo "slug=$slug" >> "$GITHUB_OUTPUT"
 
       - name: Verify package signatures
@@ -150,15 +144,12 @@ jobs:
         with:
           subject-path: |
             dist/*
-            ${{ steps.artifacts.outputs.zip }}
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: koalacast-android-${{ steps.artifacts.outputs.slug }}
-          path: |
-            dist/*
-            ${{ steps.artifacts.outputs.zip }}
+          path: dist/*
           if-no-files-found: error
           retention-days: 30
 
@@ -171,4 +162,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "KoalaCast Android $GITHUB_REF_NAME" \
             --generate-notes \
-            "${{ steps.artifacts.outputs.zip }}" $assets
+            $assets

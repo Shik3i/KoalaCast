@@ -61,6 +61,9 @@ if (!releaseCreation.test(androidSource)) {
 if (!/dist\/\*\.apk|dist\/\*\.aab/.test(androidSource)) {
 	errors.push(`${androidRelease}: Android Release must include an APK or AAB asset`);
 }
+if (/\bzip_name\b|\bzip\s+-r\b|outputs\.zip/.test(androidSource)) {
+	errors.push(`${androidRelease}: do not wrap APK/AAB assets in a redundant Android ZIP`);
+}
 
 if (errors.length > 0) {
 	console.error(errors.map((error) => `- ${error}`).join('\n'));
