@@ -8,7 +8,7 @@
 # Cross-compilation helpers (sets CC/GOARCH/sysroot per target platform).
 # Pinned by digest: this image runs during the build, so it is part of the
 # supply chain and must not float.
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.6.1@sha256:923441d7c25f1e2eb5789f82d987693c47b8ed987c4ab3b075d6ed2b5d6779a3 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0@sha256:c64defb9ed5a91eacb37f96ccc3d4cd72521c4bd18d5442905b95e2226b0e707 AS xx
 
 # Stage 1: Build the SvelteKit web app (static SPA)
 #
