@@ -103,24 +103,38 @@ func TestSyncPullPaginatesWithoutSkippingCursor(t *testing.T) {
 	}
 }
 
-func TestSyncPushRollsBackWholeBatchOnMaterializationError(t *testing.T) {
+func TestSyncPushSkipsStaleMaterializedReferencesWithoutRollingBackBatch(t *testing.T) {
 	handler, database, authCtx := newSyncTestHandler(t)
 	body := `{"operations":[
-		{"client_op_id":"valid","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{}},
-		{"client_op_id":"invalid","device_id":"dev","entity_type":"favorite","action":"upsert","entity_id":"missing-episode","payload":{}}
+		{"client_op_id":"stale-sub-upsert","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"missing-podcast","payload":{},"client_timestamp":1},
+		{"client_op_id":"stale-sub-delete","device_id":"dev","entity_type":"subscription","action":"delete","entity_id":"missing-podcast-2","payload":{},"client_timestamp":2},
+		{"client_op_id":"stale-fav-upsert","device_id":"dev","entity_type":"favorite","action":"upsert","entity_id":"missing-episode","payload":{},"client_timestamp":3},
+		{"client_op_id":"stale-fav-delete","device_id":"dev","entity_type":"favorite","action":"delete","entity_id":"missing-episode-2","payload":{},"client_timestamp":4},
+		{"client_op_id":"stale-playback","device_id":"dev","entity_type":"playback_state","action":"upsert","entity_id":"missing-episode-3","payload":{"episode_id":"missing-episode-3","position_ms":1,"progress_percent":1,"event_type":"PROGRESS_TICK","playback_session_id":"session","device_id":"dev","per_session_seq":1,"client_timestamp":5},"client_timestamp":5},
+		{"client_op_id":"valid","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{},"client_timestamp":6}
 	]}`
 	rec := pushSync(t, handler, authCtx, body)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	for _, query := range []string{
-		`SELECT COUNT(*) FROM subscriptions`,
-		`SELECT COUNT(*) FROM sync_log`,
-		`SELECT COUNT(*) FROM processed_sync_operations`,
+	var result struct {
+		AppliedOps    int   `json:"applied_ops"`
+		CurrentCursor int64 `json:"current_cursor"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.AppliedOps != 1 || result.CurrentCursor != 1 {
+		t.Fatalf("unexpected push result: %+v", result)
+	}
+	for query, expected := range map[string]int{
+		`SELECT COUNT(*) FROM subscriptions`:             1,
+		`SELECT COUNT(*) FROM sync_log`:                  1,
+		`SELECT COUNT(*) FROM processed_sync_operations`: 6,
 	} {
 		var count int
-		if err := database.SQL.QueryRow(query).Scan(&count); err != nil || count != 0 {
-			t.Fatalf("%s: count=%d err=%v", query, count, err)
+		if err := database.SQL.QueryRow(query).Scan(&count); err != nil || count != expected {
+			t.Fatalf("%s: count=%d expected=%d err=%v", query, count, expected, err)
 		}
 	}
 }

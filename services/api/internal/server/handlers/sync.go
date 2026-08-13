@@ -612,7 +612,7 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	appliedOps := 0
 	nowMs := time.Now().UnixMilli()
 
-	for _, op := range req.Operations {
+	for operationIndex, op := range req.Operations {
 		var existingCursor int64
 		err := tx.QueryRowContext(ctx, `
 			SELECT server_cursor FROM processed_sync_operations
@@ -629,7 +629,14 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 		nextCursor := currentCursor + 1
 		applied, err := h.applyOperation(ctx, tx, authUser.ID, op, nextCursor, nowMs)
 		if err != nil {
-			http.Error(w, `{"error":"failed to apply sync operation"}`, http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":           "failed to apply sync operation",
+				"operation_index": operationIndex,
+				"entity_type":     op.EntityType,
+				"action":          op.Action,
+			})
 			return
 		}
 		if !applied {
@@ -938,11 +945,19 @@ func (h *SyncHandler) applyListeningSession(ctx context.Context, tx *sql.Tx, use
 }
 
 func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID string, p PlaybackStatePayload, syncVer, nowMs int64) (bool, error) {
+	// A device can retain playback state after the server has evicted the
+	// episode. Do not let that stale local record roll back an otherwise valid
+	// sync batch; the operation is still recorded as processed by Push.
+	exists, err := syncReferenceExists(ctx, tx, `SELECT 1 FROM episodes WHERE id = ? LIMIT 1`, p.EpisodeID)
+	if err != nil || !exists {
+		return false, err
+	}
+
 	// Conflict resolution rules
 	var existingPos, existingSeq, existingTimestamp int64
 	var existingCompleted int
 	var existingSessionID, existingDeviceID string
-	err := tx.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		SELECT position_ms, completed, playback_session_id, per_session_seq, client_timestamp, device_id
 		FROM playback_states
 		WHERE user_id = ? AND episode_id = ?
@@ -1002,6 +1017,14 @@ func (h *SyncHandler) applyPlaybackState(ctx context.Context, tx *sql.Tx, userID
 }
 
 func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer int64) (bool, error) {
+	// Subscription tombstones can outlive a podcast removed from the server.
+	// The FK-backed materialized row cannot represent that tombstone, so skip
+	// it while allowing the rest of the batch to commit.
+	exists, err := syncReferenceExists(ctx, tx, `SELECT 1 FROM podcasts WHERE id = ? LIMIT 1`, op.EntityID)
+	if err != nil || !exists {
+		return false, err
+	}
+
 	newest, err := isNewestSyncOperation(ctx, tx, userID, op)
 	if err != nil || !newest {
 		return false, err
@@ -1028,6 +1051,13 @@ func (h *SyncHandler) applySubscription(ctx context.Context, tx *sql.Tx, userID 
 }
 
 func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation, syncVer int64) (bool, error) {
+	// Favorite tombstones can outlive an evicted episode. See the subscription
+	// case above for why this is a successful no-op instead of a batch failure.
+	exists, err := syncReferenceExists(ctx, tx, `SELECT 1 FROM episodes WHERE id = ? LIMIT 1`, op.EntityID)
+	if err != nil || !exists {
+		return false, err
+	}
+
 	newest, err := isNewestSyncOperation(ctx, tx, userID, op)
 	if err != nil || !newest {
 		return false, err
@@ -1049,6 +1079,15 @@ func (h *SyncHandler) applyFavorite(ctx context.Context, tx *sql.Tx, userID stri
 	}
 	rows, err := result.RowsAffected()
 	return rows > 0, err
+}
+
+func syncReferenceExists(ctx context.Context, tx *sql.Tx, query, id string) (bool, error) {
+	var marker int
+	err := tx.QueryRowContext(ctx, query, id).Scan(&marker)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func isNewestSyncOperation(ctx context.Context, tx *sql.Tx, userID string, op SyncPushOperation) (bool, error) {

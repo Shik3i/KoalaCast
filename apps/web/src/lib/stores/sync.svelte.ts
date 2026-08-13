@@ -607,7 +607,18 @@ class SyncStore {
 				);
 				return;
 			}
-			if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
+			if (!res.ok) {
+				const failure = await res.json().catch(() => null) as {
+					error?: unknown;
+					operation_index?: unknown;
+					entity_type?: unknown;
+				} | null;
+				const detail = typeof failure?.error === 'string' ? `: ${failure.error}` : '';
+				const operation = Number.isInteger(failure?.operation_index) && typeof failure?.entity_type === 'string'
+					? ` (operation ${failure.operation_index}: ${failure.entity_type})`
+					: '';
+				throw new Error(`sync push failed: ${res.status}${detail}${operation}`);
+			}
 			for (const op of batch) {
 				if (op.entity_type === 'listening_session') sessionWatermarks[op.entity_id] = op.client_timestamp;
 			}
