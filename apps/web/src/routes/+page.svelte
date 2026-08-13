@@ -20,7 +20,7 @@
 		type DiscoverMood,
 		type DiscoverSort
 	} from '$lib/discover/home';
-	import { cacheContent, CONTENT_TTL, contentCacheKey, readCachedContent } from '$lib/cache/content';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, contentCacheKey, readCachedContent } from '$lib/cache/content';
 
 	interface PodcastItem {
 		id: string;
@@ -166,7 +166,7 @@
 					request,
 					entry: await readCachedContent<{ results?: any[] }>(
 						request.key,
-						CONTENT_TTL.discover
+						CONTENT_REVALIDATION_INTERVAL.discover
 					)
 				}))
 			);

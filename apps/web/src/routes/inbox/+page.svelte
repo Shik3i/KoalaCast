@@ -25,7 +25,7 @@
 	import { listeningSession } from '$lib/stores/session.svelte';
 	import {
 		cacheContent,
-		CONTENT_TTL,
+		CONTENT_REVALIDATION_INTERVAL,
 		readCachedContent,
 		revalidateOnce
 	} from '$lib/cache/content';
@@ -100,7 +100,7 @@
 					sub,
 					entry: await readCachedContent<InboxEpisode[]>(
 						`inbox:${sub.podcast_id}`,
-						CONTENT_TTL.inbox
+						CONTENT_REVALIDATION_INTERVAL.inbox
 					)
 				}))
 			);
@@ -514,7 +514,7 @@
 					<span>{t('inbox.episodeCount', { count: group.episodes.length })} · {formatDuration(group.episodes.reduce((sum, episode) => sum + (episode.duration_ms || 0), 0))}</span>
 				</header>
 				{#each group.episodes as ep, i (ep.id)}
-					<div class="ep-row" use:reveal={{ delay: Math.min(i * 25, 250) }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)} class:menu-open={openMenuId === ep.id}>
+					<div class="ep-row" use:reveal={{ delay: Math.min(i * 24, 180), duration: 220, immediate: true }} out:slide={{ duration: 220 }} animate:flip={{ duration: 220 }} class:current={player.current?.episode_id === ep.id} class:played={completed.has(ep.id)} class:menu-open={openMenuId === ep.id}>
 					<a class="ep-art" href={`/episode/${ep.id}`} aria-label={ep.title} title={ep.title}>
 						<img src={optimizeArtwork(ep.artwork_url, SUBSCRIPTION_ARTWORK_SIZE)} alt="" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 					</a>

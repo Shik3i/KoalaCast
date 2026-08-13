@@ -14,7 +14,7 @@
 	import { SUPPORTED_LANGUAGES, regionForLanguage } from '$lib/data/languages';
 	import { GENRES, genreLabel } from '$lib/genres';
 	import { t } from '$lib/i18n';
-	import { cacheContent, CONTENT_TTL, contentCacheKey, readCachedContent } from '$lib/cache/content';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, contentCacheKey, readCachedContent } from '$lib/cache/content';
 
 	let searchQuery = $state('');
 	let rssUrlInput = $state('');
@@ -198,7 +198,7 @@
 		const cacheKey = contentCacheKey(path);
 		const cached = await readCachedContent<{ results?: any[]; provider?: string }>(
 			cacheKey,
-			CONTENT_TTL.search
+			CONTENT_REVALIDATION_INTERVAL.search
 		);
 		if (reqId !== searchReqId) return;
 		if (cached) {

@@ -5,13 +5,18 @@ interface RevealParams {
 	delay?: number;
 	/** Vertical offset the element rises from. */
 	y?: number;
+	/** Start the animation immediately instead of waiting for viewport intersection. */
+	immediate?: boolean;
+	/** Transition duration in ms. */
+	duration?: number;
 }
 
 // Scroll-reveal: fades + rises an element into view the first time it intersects
 // the viewport. Honors prefers-reduced-motion and degrades to visible when
 // IntersectionObserver is unavailable (SSR / old browsers).
 export const reveal: Action<HTMLElement, RevealParams | undefined> = (node, params) => {
-	if (typeof IntersectionObserver === 'undefined') return;
+	const immediate = params?.immediate ?? false;
+	if (typeof IntersectionObserver === 'undefined' && !immediate) return;
 
 	const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	if (reduce) {
@@ -21,18 +26,28 @@ export const reveal: Action<HTMLElement, RevealParams | undefined> = (node, para
 
 	const delay = params?.delay ?? 0;
 	const y = params?.y ?? 16;
+	const duration = params?.duration ?? 550;
 
 	node.style.opacity = '0';
 	node.style.transform = `translateY(${y}px)`;
 	node.style.willChange = 'opacity, transform';
 	node.style.transition =
-		'opacity 0.55s var(--ease-out, ease), transform 0.55s var(--ease-out, ease)';
+		`opacity ${duration}ms var(--ease-out, ease), transform ${duration}ms var(--ease-out, ease)`;
 	node.style.transitionDelay = `${delay}ms`;
 
 	const show = () => {
 		node.style.opacity = '1';
 		node.style.transform = 'none';
 	};
+
+	if (immediate) {
+		const frame = requestAnimationFrame(show);
+		return {
+			destroy() {
+				cancelAnimationFrame(frame);
+			}
+		};
+	}
 
 	const io = new IntersectionObserver(
 		(entries) => {

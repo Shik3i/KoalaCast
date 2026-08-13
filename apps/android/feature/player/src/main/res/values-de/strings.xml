@@ -16,6 +16,9 @@
     <string name="player_previous_chapter">Vorheriges Kapitel</string>
     <string name="player_next_chapter">Nächstes Kapitel</string>
     <string name="player_before_first_chapter">Vor dem ersten Kapitel</string>
+    <string name="player_show_chapter_list">Kapitelliste anzeigen</string>
+    <string name="player_hide_chapter_list">Kapitelliste ausblenden</string>
+    <string name="player_playing_chapter">Aktuelles Kapitel</string>
     <string name="player_error">Audiowiedergabe fehlgeschlagen</string>
     <string name="player_error_short">Player-Fehler · %1$s</string>
     <string name="player_error_diagnostic">Quelle: %1$s · %2$s</string>

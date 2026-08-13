@@ -1,6 +1,12 @@
 import { getCachedContent, putCachedContent } from '$lib/idb/db';
 
-export const CONTENT_TTL = {
+/**
+ * How long cached content can be used without a network revalidation.
+ *
+ * This is not an expiry policy: readCachedContent always returns the last
+ * stored value, even when it is older than the revalidation interval.
+ */
+export const CONTENT_REVALIDATION_INTERVAL = {
 	discover: 4 * 60 * 60_000,
 	search: 30 * 60_000,
 	inbox: 5 * 60_000,
@@ -47,7 +53,7 @@ export async function revalidateOnce<T>(
 
 export async function readCachedContent<T>(
 	key: string,
-	ttlMs: number
+	revalidateAfterMs: number
 ): Promise<CachedContent<T> | null> {
 	try {
 		const entry = await getCachedContent<T>(key);
@@ -55,7 +61,7 @@ export async function readCachedContent<T>(
 		return {
 			value: entry.value,
 			storedAt: entry.stored_at,
-			fresh: Date.now() - entry.stored_at < ttlMs
+			fresh: Date.now() - entry.stored_at < revalidateAfterMs
 		};
 	} catch {
 		return null;

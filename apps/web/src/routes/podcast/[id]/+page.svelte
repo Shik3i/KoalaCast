@@ -28,7 +28,7 @@
 		savePodcastPlaybackSettings,
 		type PodcastPlaybackSettings
 	} from '$lib/stores/podcast-settings';
-	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, readCachedContent } from '$lib/cache/content';
 	import {
 		disableBrowserNotifications,
 		setBrowserNotificationsEnabled
@@ -153,7 +153,7 @@
 				: `podcast:id:${targetId}`;
 			const cachedPodcast = await readCachedContent<any>(
 				podcastCacheKey,
-				CONTENT_TTL.podcast
+				CONTENT_REVALIDATION_INTERVAL.podcast
 			);
 			if (reqId !== loadReqId) return;
 			if (cachedPodcast) {
@@ -161,7 +161,7 @@
 				targetId = podcast.id || targetId;
 				const cachedEpisodes = await readCachedContent<any[]>(
 					`episodes:${targetId}:all`,
-					CONTENT_TTL.episodeList
+					CONTENT_REVALIDATION_INTERVAL.episodeList
 				);
 				if (reqId !== loadReqId) return;
 				episodes = cachedEpisodes?.value ?? [];

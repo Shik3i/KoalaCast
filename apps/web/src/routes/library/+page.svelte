@@ -511,7 +511,7 @@
 		{:else}
 			<div class="podcast-grid">
 				{#each visibleSubscriptions as sub, i (sub.podcast_id)}
-					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 40, 320) }} use:longPress={sub.podcast_id}>
+					<article class="podcast-card quiet-cover-card" class:long-pressed={activeCover === sub.podcast_id} use:reveal={{ delay: Math.min(i * 24, 180), duration: 220, immediate: true }} use:longPress={sub.podcast_id}>
 						<a class="cover-link" href={podcastHref(sub)} aria-label={t('library.openShow', { title: sub.title })} title={sub.title}>
 							<img src={optimizeArtwork(sub.artwork_url, SUBSCRIPTION_ARTWORK_SIZE)} alt="" class="artwork" onerror={(e) => ((e.currentTarget as HTMLImageElement).src = '/cover-placeholder.webp')} />
 						</a>

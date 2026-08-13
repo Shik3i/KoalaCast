@@ -3,6 +3,7 @@ package net.koalastuff.koalacast.feature.player
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,10 +13,12 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -532,38 +536,115 @@ private fun ChapterRow(
 ) {
     val colors = KoalaTheme.colors
     val current = ChapterState.current(chapters, positionMs)
+    val currentIndex = ChapterState.currentIndex(chapters, positionMs)
     val previous = ChapterState.previousStartMs(chapters, positionMs)
     val next = ChapterState.nextStartMs(chapters, positionMs)
+    var chaptersExpanded by remember(chapters) { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButtonSquare(
-            icon = PhosphorIcons.Rewind,
-            contentDescription = stringResource(R.string.player_previous_chapter),
-            onClick = { previous?.let(onSeekTo) },
-            enabled = previous != null,
-            boxSize = KoalaIconButton.rowBox,
-            iconSize = KoalaIconButton.rowIcon,
-        )
-        Text(
-            text = current?.title ?: stringResource(R.string.player_before_first_chapter),
-            style = KoalaTheme.type.bodySmall,
-            color = if (current != null) colors.ink2 else colors.ink4,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        IconButtonSquare(
-            icon = PhosphorIcons.FastForward,
-            contentDescription = stringResource(R.string.player_next_chapter),
-            onClick = { next?.let(onSeekTo) },
-            enabled = next != null,
-            boxSize = KoalaIconButton.rowBox,
-            iconSize = KoalaIconButton.rowIcon,
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButtonSquare(
+                icon = PhosphorIcons.Rewind,
+                contentDescription = stringResource(R.string.player_previous_chapter),
+                onClick = { previous?.let(onSeekTo) },
+                enabled = previous != null,
+                boxSize = KoalaIconButton.rowBox,
+                iconSize = KoalaIconButton.rowIcon,
+            )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(KoalaShapes.chip)
+                    .clickable(
+                        role = Role.Button,
+                        onClick = { chaptersExpanded = !chaptersExpanded },
+                    )
+                    .padding(horizontal = KoalaSpacing.gapSmall),
+                horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gapSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = current?.title ?: stringResource(R.string.player_before_first_chapter),
+                    style = KoalaTheme.type.bodySmall,
+                    color = if (current != null) colors.ink2 else colors.ink4,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                PhosphorIcon(
+                    icon = if (chaptersExpanded) PhosphorIcons.CaretUp else PhosphorIcons.CaretDown,
+                    contentDescription = stringResource(
+                        if (chaptersExpanded) R.string.player_hide_chapter_list
+                        else R.string.player_show_chapter_list,
+                    ),
+                    tint = colors.ink4,
+                    size = KoalaIconButton.rowIcon,
+                )
+            }
+            IconButtonSquare(
+                icon = PhosphorIcons.FastForward,
+                contentDescription = stringResource(R.string.player_next_chapter),
+                onClick = { next?.let(onSeekTo) },
+                enabled = next != null,
+                boxSize = KoalaIconButton.rowBox,
+                iconSize = KoalaIconButton.rowIcon,
+            )
+        }
+
+        if (chaptersExpanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp)
+                    .clip(KoalaShapes.card)
+                    .background(colors.bgSunken)
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = KoalaSpacing.gapTiny),
+            ) {
+                chapters.forEachIndexed { index, chapter ->
+                    val active = index == currentIndex
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(KoalaShapes.chip)
+                            .background(if (active) colors.accentWash else colors.bgSunken)
+                            .clickable(role = Role.Button) {
+                                chaptersExpanded = false
+                                onSeekTo(chapter.startMs)
+                            }
+                            .padding(horizontal = KoalaSpacing.gap, vertical = KoalaSpacing.gapSmall),
+                        horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MonoText(
+                            text = Format.timeCode(chapter.startMs),
+                            color = if (active) colors.accentInk else colors.ink4,
+                            style = KoalaTheme.type.monoSmall,
+                        )
+                        Text(
+                            text = chapter.title,
+                            style = KoalaTheme.type.bodySmall,
+                            color = if (active) colors.inkStrong else colors.ink2,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (active) {
+                            PhosphorIcon(
+                                icon = PhosphorIcons.PlayFill,
+                                contentDescription = stringResource(R.string.player_playing_chapter),
+                                tint = colors.accentInk,
+                                size = 15.dp,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

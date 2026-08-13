@@ -20,7 +20,7 @@
 	import { dominantColor } from '$lib/color';
 	import { optimizeArtwork } from '$lib/artwork';
 	import { slide } from 'svelte/transition';
-	import { cacheContent, CONTENT_TTL, readCachedContent } from '$lib/cache/content';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, readCachedContent } from '$lib/cache/content';
 	import { isAudioDownloaded } from '$lib/downloads/offline-audio';
 	import { audioDownloads } from '$lib/downloads/manager.svelte';
 	import { waitForAccountContext } from '$lib/stores/account-context';
@@ -86,7 +86,7 @@
 		try {
 			const cachedEpisode = await readCachedContent<any>(
 				`episode:${id}`,
-				CONTENT_TTL.episode
+				CONTENT_REVALIDATION_INTERVAL.episode
 			);
 			if (reqId !== loadReqId) return;
 			if (cachedEpisode) {
@@ -94,7 +94,7 @@
 				const cachedPodcast = episode.podcast_id
 					? await readCachedContent<any>(
 							`podcast:id:${episode.podcast_id}`,
-							CONTENT_TTL.podcast
+							CONTENT_REVALIDATION_INTERVAL.podcast
 						)
 					: null;
 				if (reqId !== loadReqId) return;
