@@ -229,6 +229,7 @@
 		"emptyNoSubscriptions": "Subscribe to some shows and their newest episodes land here.",
 		"emptyCaughtUp": "You're all caught up — nothing unplayed.",
 		"emptyNoRecent": "No recent episodes found.",
+		"loadFailed": "The New feed could not be loaded.",
 		"playEpisode": "Play episode",
 		"queueFits": "Queue all that fit",
 		"queuedForSession": "Queued {count} episodes for your {minutes}-minute session.",

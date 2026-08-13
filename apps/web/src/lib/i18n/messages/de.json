@@ -229,6 +229,7 @@
 		"emptyNoSubscriptions": "Abonniere ein paar Sendungen und ihre neuesten Folgen landen hier.",
 		"emptyCaughtUp": "Du bist auf dem neuesten Stand — nichts Ungehörtes.",
 		"emptyNoRecent": "Keine aktuellen Folgen gefunden.",
+		"loadFailed": "Der Neu-Feed konnte nicht geladen werden.",
 		"playEpisode": "Folge abspielen",
 		"queueFits": "Passende Folgen einreihen",
 		"queuedForSession": "{count} Folgen für deine {minutes}-Minuten-Session eingereiht.",

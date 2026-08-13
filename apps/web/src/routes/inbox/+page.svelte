@@ -33,6 +33,7 @@
 	import { notifyNewPodcastEpisodes } from '$lib/notifications/browser';
 	import { audioDownloads } from '$lib/downloads/manager.svelte';
 	import { replaceWatchedFeeds, type WatchedFeed } from '$lib/background/feed-mirror';
+	import { dedupeInboxEpisodes } from '$lib/inbox';
 
 	interface InboxEpisode {
 		id: string;
@@ -60,6 +61,7 @@
 	let unplayedOnly = $state(true);
 	let showSettings = $state(false);
 	let isLoading = $state(true);
+	let loadError = $state(false);
 	let openMenuId = $state<string | null>(null);
 
 	// Run an async mapper over items with a bounded number of in-flight tasks, so a
@@ -82,113 +84,119 @@
 	}
 
 	onMount(async () => {
-		listeningSession.load();
-		await waitForAccountContext();
-		const subs = await getLocalSubscriptions();
-		subscriptions = subs;
-		modes = Object.fromEntries(subs.map((s) => [s.podcast_id, s.inbox_mode ?? 'all']));
-		const states = await getAllLocalPlaybackStates();
-		playbackStates = Object.fromEntries(states.map((state) => [state.episode_id, state]));
-		completed = new Set(states.filter((state) => state.completed).map((state) => state.episode_id));
+		try {
+			loadError = false;
+			listeningSession.load();
+			await waitForAccountContext();
+			const subs = await getLocalSubscriptions();
+			subscriptions = subs;
+			modes = Object.fromEntries(subs.map((s) => [s.podcast_id, s.inbox_mode ?? 'all']));
+			const states = await getAllLocalPlaybackStates();
+			playbackStates = Object.fromEntries(states.map((state) => [state.episode_id, state]));
+			completed = new Set(states.filter((state) => state.completed).map((state) => state.episode_id));
 
-		const cached = await Promise.all(
-			subs.map(async (sub) => ({
-				sub,
-				entry: await readCachedContent<InboxEpisode[]>(
-					`inbox:${sub.podcast_id}`,
-					CONTENT_TTL.inbox
-				)
-			}))
-		);
-		const cachedEpisodes = cached.flatMap(({ entry }) => entry?.value ?? []);
-		if (cached.some(({ entry }) => entry !== null) || subs.length === 0) {
-			rawEpisodes = cachedEpisodes;
+			const cached = await Promise.all(
+				subs.map(async (sub) => ({
+					sub,
+					entry: await readCachedContent<InboxEpisode[]>(
+						`inbox:${sub.podcast_id}`,
+						CONTENT_TTL.inbox
+					)
+				}))
+			);
+			const cachedEpisodes = dedupeInboxEpisodes(cached.flatMap(({ entry }) => entry?.value ?? []));
+			if (cached.some(({ entry }) => entry !== null) || subs.length === 0) {
+				rawEpisodes = cachedEpisodes;
+				isLoading = false;
+			}
+
+			const results = await mapWithConcurrency(cached, 6, async ({ sub, entry }) => {
+				if (entry?.fresh) return entry.value;
+				const refreshed = await revalidateOnce(`inbox:${sub.podcast_id}`, async () => {
+					const newestKnown = Math.max(0, ...(entry?.value ?? []).map((episode) => episode.pub_date ?? 0));
+					const params = new URLSearchParams();
+					if (newestKnown > 0) params.set('since', String(newestKnown));
+					const suffix = params.size ? `?${params}` : '';
+					const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes${suffix}`, {
+						cache: 'no-cache'
+					});
+					if (!res.ok) throw new Error(`Inbox refresh failed: ${res.status}`);
+					const data = await res.json();
+					const episodes = ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
+						id: ep.id,
+						podcast_id: sub.podcast_id,
+						podcast_title: sub.title,
+						title: ep.title,
+						description: ep.description,
+						pub_date: ep.pub_date,
+						duration_ms: ep.duration_ms,
+						enclosure_url: ep.enclosure_url,
+						artwork_url: ep.artwork_url || sub.artwork_url
+					})) as InboxEpisode[];
+					const podcastSettings = getPodcastPlaybackSettings(sub.podcast_id);
+					if (entry && podcastSettings.notifyNewEpisodes) {
+						const knownIds = new Set(entry.value.map((episode) => episode.id));
+						const newEpisodes = episodes.filter((episode) => !knownIds.has(episode.id));
+						await notifyNewPodcastEpisodes(sub.podcast_id, sub.title, newEpisodes);
+					}
+					if (entry && podcastSettings.autoDownload) {
+						const knownIds = new Set(entry.value.map((episode) => episode.id));
+						// Episodes arrive newest-first, so the slice is the newest N — the
+						// count the listener chose in Settings, which used to be ignored in
+						// favour of a hardcoded single episode.
+						const fresh = episodes
+							.filter((episode) => !knownIds.has(episode.id) && episode.enclosure_url)
+							.slice(0, prefs.autoDownloadCount);
+						for (const episode of fresh) {
+							await audioDownloads.startAuto({
+								episode_id: episode.id,
+								podcast_id: episode.podcast_id,
+								title: episode.title,
+								podcast_title: episode.podcast_title,
+								artwork_url: episode.artwork_url,
+								enclosure_url: episode.enclosure_url
+							}).catch(() => false);
+						}
+					}
+					const merged = mergeInboxEpisodes(episodes, entry?.value ?? []);
+					await cacheContent(`inbox:${sub.podcast_id}`, merged);
+					return merged;
+				});
+				return refreshed ?? entry?.value ?? [];
+			});
+			const refreshedEpisodes = dedupeInboxEpisodes(results.flat());
+			rawEpisodes = refreshedEpisodes;
+			// Hand the service worker what it needs to keep checking these shows once
+			// this screen is closed: the ids already seen, and nothing else.
+			void replaceWatchedFeeds(
+				subs
+					.filter((sub) => getPodcastPlaybackSettings(sub.podcast_id).notifyNewEpisodes)
+					.map((sub) => ({
+						podcast_id: sub.podcast_id,
+						title: sub.title,
+						known_episode_ids: refreshedEpisodes
+							.filter((episode) => episode.podcast_id === sub.podcast_id)
+							.map((episode) => episode.id),
+						checked_at: Date.now()
+					})) satisfies WatchedFeed[],
+				// Handed over as a template rather than a finished sentence: the worker
+				// does not know the count until it runs.
+				t('inbox.newEpisodesTemplate')
+			);
+		} catch (error) {
+			console.error('inbox: failed to load', error);
+			loadError = rawEpisodes.length === 0;
+			if (loadError) toast.error(t('inbox.loadFailed'));
+		} finally {
 			isLoading = false;
 		}
-
-		const results = await mapWithConcurrency(cached, 6, async ({ sub, entry }) => {
-			if (entry?.fresh) return entry.value;
-			const refreshed = await revalidateOnce(`inbox:${sub.podcast_id}`, async () => {
-				const newestKnown = Math.max(0, ...(entry?.value ?? []).map((episode) => episode.pub_date ?? 0));
-				const params = new URLSearchParams();
-				if (newestKnown > 0) params.set('since', String(newestKnown));
-				const suffix = params.size ? `?${params}` : '';
-				const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes${suffix}`, {
-					cache: 'no-cache'
-				});
-				if (!res.ok) throw new Error(`Inbox refresh failed: ${res.status}`);
-				const data = await res.json();
-				const episodes = ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
-					id: ep.id,
-					podcast_id: sub.podcast_id,
-					podcast_title: sub.title,
-					title: ep.title,
-					description: ep.description,
-					pub_date: ep.pub_date,
-					duration_ms: ep.duration_ms,
-					enclosure_url: ep.enclosure_url,
-					artwork_url: ep.artwork_url || sub.artwork_url
-				})) as InboxEpisode[];
-				const podcastSettings = getPodcastPlaybackSettings(sub.podcast_id);
-				if (entry && podcastSettings.notifyNewEpisodes) {
-					const knownIds = new Set(entry.value.map((episode) => episode.id));
-					const newEpisodes = episodes.filter((episode) => !knownIds.has(episode.id));
-					await notifyNewPodcastEpisodes(sub.podcast_id, sub.title, newEpisodes);
-				}
-				if (entry && podcastSettings.autoDownload) {
-					const knownIds = new Set(entry.value.map((episode) => episode.id));
-					// Episodes arrive newest-first, so the slice is the newest N — the
-					// count the listener chose in Settings, which used to be ignored in
-					// favour of a hardcoded single episode.
-					const fresh = episodes
-						.filter((episode) => !knownIds.has(episode.id) && episode.enclosure_url)
-						.slice(0, prefs.autoDownloadCount);
-					for (const episode of fresh) {
-						await audioDownloads.startAuto({
-							episode_id: episode.id,
-							podcast_id: episode.podcast_id,
-							title: episode.title,
-							podcast_title: episode.podcast_title,
-							artwork_url: episode.artwork_url,
-							enclosure_url: episode.enclosure_url
-						}).catch(() => false);
-					}
-				}
-				const merged = mergeInboxEpisodes(episodes, entry?.value ?? []);
-				await cacheContent(`inbox:${sub.podcast_id}`, merged);
-				return merged;
-			});
-			return refreshed ?? entry?.value ?? [];
-		});
-		rawEpisodes = results.flat();
-		isLoading = false;
-		// Hand the service worker what it needs to keep checking these shows once
-		// this screen is closed: the ids already seen, and nothing else.
-		void replaceWatchedFeeds(
-			subs
-				.filter((sub) => getPodcastPlaybackSettings(sub.podcast_id).notifyNewEpisodes)
-				.map((sub) => ({
-					podcast_id: sub.podcast_id,
-					title: sub.title,
-					known_episode_ids: results
-						.flat()
-						.filter((episode) => episode.podcast_id === sub.podcast_id)
-						.map((episode) => episode.id),
-					checked_at: Date.now()
-				})) satisfies WatchedFeed[],
-			// Handed over as a template rather than a finished sentence: the worker
-			// does not know the count until it runs.
-			t('inbox.newEpisodesTemplate')
-		);
 	});
 
 	function mergeInboxEpisodes(
 		newEpisodes: InboxEpisode[],
 		knownEpisodes: InboxEpisode[]
 	): InboxEpisode[] {
-		const byId = new Map(knownEpisodes.map((episode) => [episode.id, episode]));
-		for (const episode of newEpisodes) byId.set(episode.id, episode);
-		return [...byId.values()]
+		return dedupeInboxEpisodes([...knownEpisodes, ...newEpisodes])
 			.sort((a, b) => (b.pub_date ?? 0) - (a.pub_date ?? 0))
 			.slice(0, PER_FEED);
 	}
@@ -477,6 +485,12 @@
 					</div>
 				</div>
 			{/each}
+		</div>
+	{:else if loadError}
+		<div class="empty-state">
+			<i class="ph ph-warning-circle" aria-hidden="true"></i>
+			<p>{t('inbox.loadFailed')}</p>
+			<button class="btn" onclick={() => location.reload()}>{t('common.retry')}</button>
 		</div>
 	{:else if subscriptions.length === 0}
 		<div class="empty-state">

@@ -125,6 +125,27 @@ func TestSyncPushRollsBackWholeBatchOnMaterializationError(t *testing.T) {
 	}
 }
 
+func TestSyncRejectsPayloadIdentityMismatch(t *testing.T) {
+	handler, _, authCtx := newSyncTestHandler(t)
+	for _, body := range []string{
+		`{"operations":[{"client_op_id":"sub-mismatch","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{"podcast_id":"pod-2"},"client_timestamp":1}]}`,
+		`{"operations":[{"client_op_id":"fav-mismatch","device_id":"dev","entity_type":"favorite","action":"upsert","entity_id":"ep-1","payload":{"episode_id":"ep-2"},"client_timestamp":1}]}`,
+	} {
+		rec := pushSync(t, handler, authCtx, body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected identity mismatch to return 400, got %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestSyncRejectsIncompleteListeningSession(t *testing.T) {
+	handler, _, authCtx := newSyncTestHandler(t)
+	rec := pushSync(t, handler, authCtx, `{"operations":[{"client_op_id":"listen-incomplete","device_id":"dev","entity_type":"listening_session","action":"upsert","entity_id":"listen-1","payload":{"id":"listen-1","started_at":1000,"ended_at":2000}}]}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected incomplete listening session to return 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestSyncLedgerSurvivesCompactionAndPreventsReplay(t *testing.T) {
 	handler, database, authCtx := newSyncTestHandler(t)
 	upsert := `{"operations":[{"client_op_id":"sub-upsert","device_id":"dev","entity_type":"subscription","action":"upsert","entity_id":"pod-1","payload":{},"client_timestamp":1}]}`

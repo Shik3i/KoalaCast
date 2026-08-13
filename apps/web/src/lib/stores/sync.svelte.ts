@@ -38,10 +38,12 @@ import {
 	applySyncedPodcastPlaybackSettings,
 	clearPodcastPlaybackSettingsContext,
 	getAllPodcastPlaybackSettings,
+	removePodcastPlaybackSettings,
 	type PodcastPlaybackSettings
 } from '$lib/stores/podcast-settings';
 import { prefs } from '$lib/stores/prefs.svelte';
 import { shouldUploadListeningSession } from '$lib/stores/sync-selection';
+import { normalizeListeningSessionForSync } from '$lib/sync-payload';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
 
@@ -508,14 +510,15 @@ class SyncStore {
 			// per-session watermark must decide whether an older local session was
 			// uploaded; otherwise upgraded clients can never backfill their history.
 			if (!shouldUploadListeningSession(session.ended_at, sessionWatermarks[session.id])) continue;
+			const syncSession = normalizeListeningSessionForSync(session);
 			ops.push({
-				client_op_id: `l:${session.id}:${session.ended_at}`,
+				client_op_id: `l:${syncSession.id}:${syncSession.ended_at}`,
 				device_id: dev,
 				entity_type: 'listening_session',
 				action: 'upsert',
-				entity_id: session.id,
-				payload: session satisfies LocalListeningSession,
-				client_timestamp: session.ended_at
+				entity_id: syncSession.id,
+				payload: syncSession satisfies LocalListeningSession,
+				client_timestamp: syncSession.ended_at
 			});
 		}
 
@@ -630,8 +633,10 @@ class SyncAuthError extends Error {}
 async function applyChangeset(cs: Changeset): Promise<void> {
 	if (
 		!cs ||
-		!Number.isFinite(cs.server_cursor) ||
-		!cs.entity_id ||
+		!Number.isSafeInteger(cs.server_cursor) ||
+		cs.server_cursor < 1 ||
+		typeof cs.entity_id !== 'string' ||
+		!cs.entity_id.trim() ||
 		!['upsert', 'delete'].includes(cs.action) ||
 		![
 			'subscription',
@@ -655,6 +660,9 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 			// operation has reached the server and comes back through the log.
 			if (await getTombstone('subscription', cs.entity_id)) return;
 			const p = cs.payload as Partial<LocalSubscription>;
+			if (p.podcast_id !== undefined && p.podcast_id !== cs.entity_id) {
+				throw new Error('subscription changeset identity mismatch');
+			}
 			await saveLocalSubscription({
 				podcast_id: p.podcast_id || cs.entity_id,
 				feed_url: p.feed_url || '',
@@ -673,6 +681,9 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 		} else if (cs.payload && typeof cs.payload === 'object') {
 			if (await getTombstone('favorite', cs.entity_id)) return;
 			const p = cs.payload as Partial<LocalFavorite>;
+			if (p.episode_id !== undefined && p.episode_id !== cs.entity_id) {
+				throw new Error('favorite changeset identity mismatch');
+			}
 			await addLocalFavorite({
 				episode_id: p.episode_id || cs.entity_id,
 				added_at: p.added_at || cs.client_timestamp || Date.now(),
@@ -744,7 +755,8 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 	} else if (cs.entity_type === 'queue') {
 		if (!isDelete) await applyQueuePayload(cs.payload);
 	} else if (cs.entity_type === 'podcast_settings') {
-		if (!isDelete) applyPodcastSettingsPayload(cs.payload, cs.entity_id);
+		if (isDelete) removePodcastPlaybackSettings(cs.entity_id);
+		else applyPodcastSettingsPayload(cs.payload, cs.entity_id);
 	} else if (cs.entity_type === 'settings') {
 		if (!isDelete) applySettingsPayload(cs.payload);
 	}

@@ -125,6 +125,13 @@ export function applySyncedPodcastPlaybackSettings(
 	} catch (_) {}
 }
 
+export function removePodcastPlaybackSettings(podcastId: string) {
+	if (typeof localStorage === 'undefined' || !podcastId) return;
+	try {
+		localStorage.removeItem(key(podcastId));
+	} catch (_) {}
+}
+
 export function clearPodcastPlaybackSettingsContext() {
 	if (typeof localStorage === 'undefined') return;
 	const prefix = activePrefix();

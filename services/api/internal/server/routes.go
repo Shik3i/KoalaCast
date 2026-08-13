@@ -12,6 +12,7 @@ import (
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
+	"github.com/Shik3i/KoalaCast/services/api/internal/itunes"
 	"github.com/Shik3i/KoalaCast/services/api/internal/podcastindex"
 	pushservice "github.com/Shik3i/KoalaCast/services/api/internal/push"
 	"github.com/Shik3i/KoalaCast/services/api/internal/server/handlers"
@@ -40,6 +41,9 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	podcastHandler := &handlers.PodcastHandler{
 		DB:           database,
 		PodcastIndex: podcastIdxClient,
+		// Construct this once. Search, Discover and numeric-ID resolution can run
+		// concurrently; lazy assignment inside those handlers is a data race.
+		ITunes:       itunes.NewITunesClient(),
 		Worker:       feedWorker,
 		MaxResponseB: cfg.FeedMaxResponseBytes,
 		MaxEpisodes:  cfg.FeedMaxStoredEpisodes,

@@ -90,4 +90,11 @@ func TestCompactSyncLog(t *testing.T) {
 	if ledgerOps != "current" {
 		t.Errorf("expected only current operation retained, got %q", ledgerOps)
 	}
+	var minRetained int64
+	if err := database.SQL.QueryRow(`SELECT min_retained_cursor FROM user_sync_cursors WHERE user_id = 'u1'`).Scan(&minRetained); err != nil {
+		t.Fatalf("query min retained cursor: %v", err)
+	}
+	if minRetained != 3 {
+		t.Errorf("expected oldest retained cursor 3, got %d", minRetained)
+	}
 }

@@ -703,6 +703,15 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		if op.Action != "upsert" && op.Action != "delete" {
 			return fmt.Errorf("%s action must be upsert or delete", op.EntityType)
 		}
+		if op.Action == "upsert" {
+			field := "podcast_id"
+			if op.EntityType == "favorite" {
+				field = "episode_id"
+			}
+			if err := validateOptionalEntityPayload(op.Payload, field, op.EntityID); err != nil {
+				return fmt.Errorf("invalid %s payload", op.EntityType)
+			}
+		}
 	case "playback_state":
 		if op.Action != "upsert" {
 			return fmt.Errorf("playback_state action must be upsert")
@@ -815,8 +824,28 @@ func validateObjectPayload(payload json.RawMessage, timestamp int64) error {
 	return nil
 }
 
+// Older clients omitted the denormalized identity field, so it remains
+// optional. If present, it must agree with the operation key; otherwise a
+// malformed changeset could make another device write entity B while the
+// server materializes entity A.
+func validateOptionalEntityPayload(payload json.RawMessage, field, entityID string) error {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &object); err != nil || object == nil {
+		return fmt.Errorf("payload must be an object")
+	}
+	raw, ok := object[field]
+	if !ok || string(raw) == "null" {
+		return nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil || strings.TrimSpace(value) != entityID {
+		return fmt.Errorf("%s must match entity_id", field)
+	}
+	return nil
+}
+
 func validateListeningSession(p ListeningSessionPayload) error {
-	if p.ID == "" || p.StartedAt <= 0 || p.EndedAt < p.StartedAt {
+	if p.ID == "" || p.EpisodeID == "" || p.PodcastID == "" || p.StartedAt <= 0 || p.EndedAt < p.StartedAt {
 		return fmt.Errorf("invalid listening_session timestamps")
 	}
 	if p.EndedAt-p.StartedAt > maxListeningSessionSpanMS ||

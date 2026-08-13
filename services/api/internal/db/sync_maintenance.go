@@ -54,6 +54,30 @@ func (db *DB) CompactSyncLog(ctx context.Context) (int64, error) {
 	`, time.Now().Add(-syncOperationLedgerRetention).UnixMilli()); err != nil {
 		return 0, err
 	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO user_sync_cursors (
+			user_id, current_cursor, min_retained_cursor, protocol_version, client_schema_version
+		)
+		SELECT user_id, MAX(server_cursor), 0, 1, 1
+		FROM sync_log
+		GROUP BY user_id
+	`); err != nil {
+		return 0, err
+	}
+	// A client whose cursor points before the oldest retained mutation can no
+	// longer receive a complete incremental history. Mark that boundary so Pull
+	// returns 410 and the client uses the authoritative snapshot instead of
+	// silently advancing across deleted cursors.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE user_sync_cursors
+		SET min_retained_cursor = COALESCE((
+			SELECT MIN(server_cursor)
+			FROM sync_log
+			WHERE sync_log.user_id = user_sync_cursors.user_id
+		), current_cursor)
+	`); err != nil {
+		return 0, err
+	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
