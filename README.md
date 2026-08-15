@@ -56,7 +56,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 | :--- | :--- |
 | **Discovery & Search** | iTunes Top Charts discovery, iTunes/Podcast Index search, multi-select preferred/hidden genres, per-podcast hiding, add any feed by direct RSS URL |
 | **Languages** | Spoken-language filtering (not just storefront region) for Discover and Search, language + genre search filters, fully translated English/German interface (add a language with one JSON file) |
-| **Playback** | Web Audio player, Media Session and Remote Playback APIs, playback-speed control, per-podcast controls, live scrubbing with chapter markers, jump-back after a large seek, a sleep timer that counts listening time rather than wall-clock time, a transcript that follows the playhead, timestamp handoff links, listening-time tracking, keyboard shortcuts |
+| **Playback** | Web Audio player, Media Session and Remote Playback APIs, playback-speed control, per-podcast controls, live scrubbing with chapter markers, jump-back after a large seek, a sleep timer that counts listening time rather than wall-clock time, a transcript that follows the playhead, episode sharing with a timestamped link, listening-time tracking, keyboard shortcuts |
 | **Library** | Subscriptions with folders, queue plus reusable named queues, smart queues built from saved rules, favorites, timestamp bookmarks, OPML import/export plus an optional auto-updating OPML backup file |
 | **Accounts (optional)** | Argon2id hashing, Base32 recovery codes, HttpOnly session cookies, Bearer device tokens |
 | **Sync** | Subscriptions, favorites, playback state, listening sessions, queue, podcast settings, and global settings via monotonic cursor pull/push and idempotent writes; settings merge per field, so two devices editing different preferences do not revert each other |
@@ -206,6 +206,7 @@ The backend is configured entirely through environment variables. Copy [`.env.ex
 | `FEED_WORKER_CONCURRENCY` | `5` | Background feed-refresh workers |
 | `FEED_MAX_RESPONSE_BYTES` | `33554432` | Max RSS body size in bytes (32 MiB; SSRF/DoS guard) |
 | `FEED_MAX_STORED_EPISODES` | `200` | Recent metadata-cache rows retained per podcast; rows referenced by user state are preserved |
+| `FEED_REFRESH_INTERVAL_MS` | `3600000` | How long a healthy feed waits before the background worker rechecks it (15 min – 24 h). Governs how promptly new-episode notifications arrive |
 | `WEB_PUSH_VAPID_PUBLIC_KEY` / `_PRIVATE_KEY` | empty | Enables server-sent browser notifications; generate once with `cd services/api && go run ./cmd/vapid` |
 | `WEB_PUSH_VAPID_SUBJECT` | `PUBLIC_BASE_URL` | VAPID contact URI (`https:` or `mailto:`) |
 | `KC_AUDIO_EFFECTS_PROXY_ENABLED` | `true` | Relay fallback for CORS-blocked browser effects/downloads; set `false` to avoid relay bandwidth |

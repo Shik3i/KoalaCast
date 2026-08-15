@@ -22,8 +22,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -123,6 +125,7 @@ fun PodcastScreen(
         onBack = onBack,
         onOpenEpisode = onOpenEpisode,
         onRetry = viewModel::retry,
+        onRefresh = viewModel::refresh,
         onOpenSettings = onOpenSettings,
         onPlay = viewModel::play,
         onToggleSubscribe = viewModel::toggleSubscribe,
@@ -146,6 +149,7 @@ fun PodcastScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PodcastContent(
     state: PodcastUiState,
@@ -153,6 +157,7 @@ internal fun PodcastContent(
     onBack: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onRetry: () -> Unit,
+    onRefresh: () -> Unit = onRetry,
     onOpenSettings: () -> Unit = {},
     onPlay: (Episode) -> Unit,
     onToggleSubscribe: () -> Unit,
@@ -199,10 +204,13 @@ internal fun PodcastContent(
         )
     }
 
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize().background(colors.bgPanel),
+    ) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.bgPanel),
+        modifier = Modifier.fillMaxSize(),
         state = listState,
         contentPadding = contentPadding,
     ) {
@@ -358,6 +366,7 @@ internal fun PodcastContent(
                 }
             }
         }
+    }
     }
 }
 

@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -75,6 +77,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val export = rememberLauncherForActivityResult(
@@ -85,6 +88,8 @@ fun ProfileScreen(
 
     ProfileContent(
         state = state,
+        refreshing = refreshing,
+        onRefresh = viewModel::refresh,
         onSetRange = viewModel::setRange,
         onOpenPodcast = onOpenPodcast,
         onOpenSettings = onOpenSettings,
@@ -97,9 +102,12 @@ fun ProfileScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProfileContent(
     state: ProfileUiState,
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     onSetRange: (StatsRange) -> Unit,
     onOpenPodcast: (String) -> Unit,
     onOpenSettings: () -> Unit,
@@ -115,10 +123,14 @@ internal fun ProfileContent(
     val stats = state.stats
     var visibleHistory by remember { mutableIntStateOf(20) }
 
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize().background(colors.bgPanel),
+    ) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(colors.bgPanel)
             .verticalScroll(rememberScrollState())
             .padding(contentPadding)
             .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.sectionV),
@@ -389,6 +401,7 @@ internal fun ProfileContent(
                 )
             },
         )
+    }
     }
 }
 

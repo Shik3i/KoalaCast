@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,10 +63,13 @@ fun LibraryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tab by viewModel.tab.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     LibraryContent(
         state = state,
         tab = tab,
+        refreshing = refreshing,
+        onRefresh = viewModel::refresh,
         onSelectTab = viewModel::selectTab,
         onOpenPodcast = onOpenPodcast,
         onOpenEpisode = onOpenEpisode,
@@ -90,10 +95,13 @@ fun LibraryScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun LibraryContent(
     state: LibraryUiState,
     tab: LibraryTab,
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     onSelectTab: (LibraryTab) -> Unit,
     onOpenPodcast: (String, String?) -> Unit,
     onOpenEpisode: (String) -> Unit,
@@ -139,40 +147,46 @@ internal fun LibraryContent(
             )
         }
 
-        when (tab) {
-            LibraryTab.SUBSCRIPTIONS -> SubscriptionGrid(
-                subscriptions = state.subscriptions,
-                onOpen = onOpenPodcast,
-                onUnsubscribe = onUnsubscribe,
-                onSetFolder = onSetFolder,
-                onOpenDiscover = onOpenDiscover,
-            )
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.weight(1f),
+        ) {
+            when (tab) {
+                LibraryTab.SUBSCRIPTIONS -> SubscriptionGrid(
+                    subscriptions = state.subscriptions,
+                    onOpen = onOpenPodcast,
+                    onUnsubscribe = onUnsubscribe,
+                    onSetFolder = onSetFolder,
+                    onOpenDiscover = onOpenDiscover,
+                )
 
-            LibraryTab.IN_PROGRESS -> InProgressList(
-                items = state.inProgress,
-                onOpenEpisode = onOpenEpisode,
-                onPlay = onPlay,
-            )
+                LibraryTab.IN_PROGRESS -> InProgressList(
+                    items = state.inProgress,
+                    onOpenEpisode = onOpenEpisode,
+                    onPlay = onPlay,
+                )
 
-            LibraryTab.QUEUE -> QueueList(
-                items = state.queue,
-                onOpenEpisode = onOpenEpisode,
-                onPlay = onPlay,
-                onRemove = onRemoveFromQueue,
-                onMove = onMoveInQueue,
-                onClear = onClearQueue,
-                namedQueues = state.namedQueues,
-                onSaveNamedQueue = onSaveNamedQueue,
-                onRestoreNamedQueue = onRestoreNamedQueue,
-                onDeleteNamedQueue = onDeleteNamedQueue,
-            )
+                LibraryTab.QUEUE -> QueueList(
+                    items = state.queue,
+                    onOpenEpisode = onOpenEpisode,
+                    onPlay = onPlay,
+                    onRemove = onRemoveFromQueue,
+                    onMove = onMoveInQueue,
+                    onClear = onClearQueue,
+                    namedQueues = state.namedQueues,
+                    onSaveNamedQueue = onSaveNamedQueue,
+                    onRestoreNamedQueue = onRestoreNamedQueue,
+                    onDeleteNamedQueue = onDeleteNamedQueue,
+                )
 
-            LibraryTab.FAVORITES -> FavoritesList(
-                items = state.favorites,
-                onOpenEpisode = onOpenEpisode,
-                onPlay = onPlay,
-                onRemove = onRemoveFavorite,
-            )
+                LibraryTab.FAVORITES -> FavoritesList(
+                    items = state.favorites,
+                    onOpenEpisode = onOpenEpisode,
+                    onPlay = onPlay,
+                    onRemove = onRemoveFavorite,
+                )
+            }
         }
     }
 }

@@ -21,6 +21,8 @@ var blockedCIDRs = []string{
 	"192.168.0.0/16",  // Private Class C
 	"169.254.0.0/16",  // Link Local / Cloud Metadata
 	"100.64.0.0/10",   // Carrier-Grade NAT
+	"192.0.0.0/24",    // IETF Protocol Assignments (incl. NAT64 well-known prefix)
+	"198.18.0.0/15",   // Benchmarking (RFC 2544)
 	"192.0.2.0/24",    // TEST-NET-1
 	"198.51.100.0/24", // TEST-NET-2
 	"203.0.113.0/24",  // TEST-NET-3
@@ -32,6 +34,11 @@ var blockedCIDRs = []string{
 	"fe80::/10",       // IPv6 Link Local
 	"ff00::/8",        // IPv6 Multicast
 	"2001:db8::/32",   // IPv6 Documentation
+	// NAT64 maps an IPv4 address into IPv6, so on a network that runs one
+	// `64:ff9b::7f00:1` is a route to 127.0.0.1 that To4() does not unwrap and
+	// none of the IPv4 rules above can see.
+	"64:ff9b::/96",
+	"64:ff9b:1::/48",
 }
 
 var blockedNets []*net.IPNet

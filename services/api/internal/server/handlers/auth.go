@@ -37,6 +37,13 @@ type RecoveryVerifyRequest struct {
 	NewPassword  string `json:"new_password"`
 }
 
+// isUniqueConstraintError reports whether a write lost a race against a UNIQUE
+// index rather than failing for an operational reason. The driver is matched by
+// message because the SQLite driver in use does not export a typed error.
+func isUniqueConstraintError(err error) bool {
+	return err != nil && strings.Contains(strings.ToUpper(err.Error()), "UNIQUE CONSTRAINT FAILED")
+}
+
 func randomToken() (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -150,6 +157,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
 	`, userID, username, normalizedUsername, pwdHash, recoveryHash, role, nowMs, nowMs)
 	if err != nil {
+		// The availability check above runs outside this transaction, so two
+		// simultaneous sign-ups for the same name both pass it and the unique
+		// index decides. That is the same "name is taken" answer as before, not a
+		// server fault, and telling the loser otherwise sends them to a bug report
+		// instead of to a different username.
+		if isUniqueConstraintError(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "username is already taken"})
+			return
+		}
 		http.Error(w, `{"error":"failed to create user account"}`, http.StatusInternalServerError)
 		return
 	}
@@ -553,6 +571,10 @@ func (h *AuthHandler) VerifyRecoveryCode(w http.ResponseWriter, r *http.Request)
 	var userID, storedRecoveryHash string
 	err := h.DB.SQL.QueryRowContext(r.Context(), "SELECT id, recovery_code_hash FROM users WHERE normalized_username = ?", normalizedUsername).Scan(&userID, &storedRecoveryHash)
 	if err == sql.ErrNoRows {
+		// Spend the same work as a real verification, exactly as Login does, so
+		// this endpoint does not become the cheap way to learn which usernames
+		// exist on an instance.
+		auth.DummyVerify(req.RecoveryCode)
 		http.Error(w, `{"error":"invalid recovery code or username"}`, http.StatusUnauthorized)
 		return
 	} else if err != nil {

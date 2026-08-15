@@ -42,6 +42,7 @@ KoalaCast enforces strict configuration rules to ensure self-hosters and securit
 | Feed Timeout | `FEED_REQUEST_TIMEOUT_MS` | No | Outbound feed request deadline |
 | Feed Response Limit | `FEED_MAX_RESPONSE_BYTES` | No | Maximum RSS response body size |
 | Stored Episodes per Feed | `FEED_MAX_STORED_EPISODES` | No | Recent metadata rows retained per podcast; user-state references are preserved |
+| Feed Refresh Interval | `FEED_REFRESH_INTERVAL_MS` | No | Delay before a healthy notification-enabled feed is rechecked (clamped to 15 min – 24 h) |
 | Podcast Index Credentials | `PODCAST_INDEX_KEY`, `PODCAST_INDEX_SECRET` | No | Optional credentials for catalog search |
 | Initial Admin | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | No | Create/promote an administrator at startup; password is used only for first creation |
 | Web Push VAPID Keys | `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` | No | Enables authenticated server-to-browser push delivery |

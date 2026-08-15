@@ -110,6 +110,8 @@ class SyncStore {
 	lastError = $state<string | null>(null);
 	/** Records the server sent that this build could not read. */
 	skippedChangesets = $state(0);
+	/** Local records the server refused, isolated so the rest still goes up. */
+	rejectedOperations = $state(0);
 
 	#timer: ReturnType<typeof setInterval> | null = null;
 	#onVisible: (() => void) | null = null;
@@ -317,6 +319,7 @@ class SyncStore {
 		this.#inFlight = true;
 		this.status = 'syncing';
 		this.skippedChangesets = 0;
+		this.rejectedOperations = 0;
 		try {
 			await this.#pull(userId, generation, controller.signal);
 			this.#assertRun(userId, generation, controller.signal);
@@ -326,10 +329,14 @@ class SyncStore {
 			this.lastSyncedAt = Date.now();
 			// A skipped record is not a failed sync — the rest went through — but it
 			// must still be said out loud, or the data silently goes missing.
-			this.lastError =
-				this.skippedChangesets > 0
-					? `${this.skippedChangesets} unreadable record(s) skipped, rest synced`
-					: null;
+			const problems: string[] = [];
+			if (this.skippedChangesets > 0) {
+				problems.push(`${this.skippedChangesets} unreadable record(s) skipped`);
+			}
+			if (this.rejectedOperations > 0) {
+				problems.push(`${this.rejectedOperations} record(s) rejected by the server`);
+			}
+			this.lastError = problems.length > 0 ? `${problems.join(', ')}, rest synced` : null;
 		} catch (err) {
 			if (err instanceof DOMException && err.name === 'AbortError') return;
 			if (generation !== this.#generation || this.userId !== userId) return;
@@ -580,50 +587,26 @@ class SyncStore {
 			return;
 		}
 
-		for (let index = 0; index < ops.length; index += 250) {
-			this.#assertRun(userId, generation, signal);
-			const batch = ops.slice(index, index + 250);
-			const res = await fetch('/api/v1/sync', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					operations: batch,
-					client_schema_version: 2,
-					data_generation: this.#getDataGeneration(userId)
-				}),
-				signal
-			});
-			if (res.status === 401) throw new SyncAuthError();
-			if (res.status === 409) {
-				const conflict = await res.json().catch(() => null);
-				if (conflict?.code !== 'DATA_GENERATION_MISMATCH') {
-					throw new Error('sync push conflict without generation');
-				}
-				await this.#adoptDataGeneration(
-					userId,
-					conflict.data_generation,
-					generation,
-					signal
-				);
-				return;
+		try {
+			for (let index = 0; index < ops.length; index += 250) {
+				await this.#pushBatch(userId, ops.slice(index, index + 250), generation, signal);
 			}
-			if (!res.ok) {
-				const failure = await res.json().catch(() => null) as {
-					error?: unknown;
-					operation_index?: unknown;
-					entity_type?: unknown;
-				} | null;
-				const detail = typeof failure?.error === 'string' ? `: ${failure.error}` : '';
-				const operation = Number.isInteger(failure?.operation_index) && typeof failure?.entity_type === 'string'
-					? ` (operation ${failure.operation_index}: ${failure.entity_type})`
-					: '';
-				throw new Error(`sync push failed: ${res.status}${detail}${operation}`);
-			}
-			for (const op of batch) {
-				if (op.entity_type === 'listening_session') sessionWatermarks[op.entity_id] = op.client_timestamp;
-			}
-			this.#setSessionWatermarks(userId, sessionWatermarks);
+		} catch (err) {
+			// The account was wiped on another device. The local copy has already
+			// been reset by #adoptDataGeneration; nothing from before the reset may
+			// be marked as pushed.
+			if (err instanceof SyncDataResetError) return;
+			throw err;
 		}
+
+		// Every operation is now accounted for: accepted, deduplicated, or isolated
+		// and reported as rejected. Advancing past a rejected record is deliberate —
+		// re-sending it forever is what used to keep the whole account off the
+		// server.
+		for (const op of ops) {
+			if (op.entity_type === 'listening_session') sessionWatermarks[op.entity_id] = op.client_timestamp;
+		}
+		this.#setSessionWatermarks(userId, sessionWatermarks);
 		const nextWatermarks = { ...previousWatermarks };
 		for (const op of ops) {
 			if (op.entity_type === 'listening_session') continue;
@@ -637,9 +620,75 @@ class SyncStore {
 		// our own ops (idempotent) avoids skipping a concurrent device's ops that
 		// landed at a lower cursor.
 	}
+
+	/**
+	 * Sends one batch, and refuses to let a single bad record stop everything.
+	 *
+	 * A 400 used to abort the whole push, which meant the watermark never moved
+	 * and the next attempt sent the same rejected operation again — every 45
+	 * seconds, forever. One record the server will not accept (a listening
+	 * session spanning longer than the server's ceiling, an episode the server
+	 * evicted, a payload from a newer build) therefore kept an entire account's
+	 * subscriptions, progress and queue off the server permanently, while pull
+	 * kept working and made it look like sync was fine.
+	 *
+	 * On a rejection the batch is halved and retried until the offending
+	 * operation is alone; that one is counted and skipped, and everything else
+	 * goes through. This mirrors what the Android client already does.
+	 */
+	async #pushBatch(
+		userId: string,
+		batch: SyncOperation[],
+		generation: number,
+		signal: AbortSignal
+	): Promise<void> {
+		if (batch.length === 0) return;
+		this.#assertRun(userId, generation, signal);
+		const res = await fetch('/api/v1/sync', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				operations: batch,
+				client_schema_version: 2,
+				data_generation: this.#getDataGeneration(userId)
+			}),
+			signal
+		});
+		if (res.status === 401) throw new SyncAuthError();
+		if (res.status === 409) {
+			const conflict = await res.json().catch(() => null);
+			if (conflict?.code !== 'DATA_GENERATION_MISMATCH') {
+				throw new Error('sync push conflict without generation');
+			}
+			await this.#adoptDataGeneration(userId, conflict.data_generation, generation, signal);
+			throw new SyncDataResetError();
+		}
+		if (res.ok) return;
+
+		const failure = (await res.json().catch(() => null)) as {
+			error?: unknown;
+			operation_index?: unknown;
+			entity_type?: unknown;
+		} | null;
+		const detail = typeof failure?.error === 'string' ? `: ${failure.error}` : '';
+		// Only a rejection of the *content* is worth isolating. A 500 or a 429 is
+		// about the request as a whole and must still fail the sync so it retries.
+		if (res.status !== 400) throw new Error(`sync push failed: ${res.status}${detail}`);
+		if (batch.length === 1) {
+			const op = batch[0];
+			this.rejectedOperations++;
+			console.warn(`sync: dropping ${op.entity_type}/${op.entity_id}${detail}`);
+			return;
+		}
+		const half = Math.floor(batch.length / 2);
+		await this.#pushBatch(userId, batch.slice(0, half), generation, signal);
+		await this.#pushBatch(userId, batch.slice(half), generation, signal);
+	}
 }
 
 class SyncAuthError extends Error {}
+/** The account's data was reset elsewhere; this push run is void. */
+class SyncDataResetError extends Error {}
 
 async function applyChangeset(cs: Changeset): Promise<void> {
 	if (
@@ -682,7 +731,13 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 				added_at: p.added_at || cs.client_timestamp || Date.now(),
 				updated_at: p.updated_at || cs.client_timestamp || p.added_at || Date.now(),
 				inbox_mode: p.inbox_mode,
-				folder: p.folder
+				// An empty folder in the payload means "this device files it
+				// nowhere", not "remove the folder the other device put it in".
+				// Passing the blank straight through cleared the local folder every
+				// time a peer that never used folders pushed the same subscription;
+				// undefined lets saveLocalSubscription keep what is already stored,
+				// which is what the Android client has always done.
+				folder: p.folder || undefined
 			});
 		} else throw new Error('invalid subscription changeset payload');
 	} else if (cs.entity_type === 'favorite') {

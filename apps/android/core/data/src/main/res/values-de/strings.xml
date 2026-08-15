@@ -4,4 +4,11 @@
     <string name="download_notification_title">Podcast-Folge</string>
     <string name="download_notification_progress">Wird geladen …</string>
     <string name="download_notification_percent">%1$d %%</string>
+    <string name="new_episodes_channel_name">Neue Podcast-Folgen</string>
+    <string name="new_episodes_title">Neu in KoalaCast</string>
+    <string name="new_episodes_single">%1$s: %2$s</string>
+    <plurals name="new_episodes_shows">
+        <item quantity="one">%1$d neue Folgen von einem Podcast</item>
+        <item quantity="other">%1$d neue Folgen von %2$d Podcasts</item>
+    </plurals>
 </resources>

@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -81,6 +83,7 @@ fun DiscoverScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DiscoverContent(
     state: DiscoverUiState,
@@ -98,6 +101,11 @@ internal fun DiscoverContent(
     val colors = KoalaTheme.colors
 
     Box(modifier = modifier.fillMaxSize().background(colors.bgPanel)) {
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = onRetry,
+        modifier = Modifier.fillMaxSize(),
+    ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
@@ -184,6 +192,7 @@ internal fun DiscoverContent(
                 RowSeparator(modifier = Modifier.padding(horizontal = KoalaSpacing.screenH))
             }
         }
+    }
     }
 
         // Over the list rather than in it: the row that was hidden may be far from

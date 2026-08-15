@@ -8,9 +8,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.LibraryRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
+import net.koalastuff.koalacast.core.data.repository.SyncRepository
 import net.koalastuff.koalacast.core.model.ListeningSession
 import net.koalastuff.koalacast.core.model.PlaybackProgress
 import java.time.ZonedDateTime
@@ -35,9 +37,30 @@ class ProfileViewModel @Inject constructor(
     progress: ProgressRepository,
     library: LibraryRepository,
     accounts: AccountRepository,
+    private val sync: SyncRepository,
 ) : ViewModel() {
 
     private val range = MutableStateFlow(StatsRange.YEAR)
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing
+
+    /**
+     * Pull-to-refresh. Statistics are computed from local listening sessions, so
+     * the only thing that can be missing is what another device has not handed
+     * over yet.
+     */
+    fun refresh() {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.value = true
+            try {
+                sync.syncNow()
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
 
     val state: StateFlow<ProfileUiState> = combine(
         progress.listeningHistory,
