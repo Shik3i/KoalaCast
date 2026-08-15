@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -413,5 +414,41 @@ func TestProxyHandler_ImageRequestSendsNegotiatedAccept(t *testing.T) {
 	}
 	if seenAccept != acceptedImageFormats {
 		t.Fatalf("upstream saw Accept %q, want %q", seenAccept, acceptedImageFormats)
+	}
+}
+
+// Both proxy endpoints take a URL straight out of a publisher's feed. The
+// dialer resolves and vets every address, but it never looks at the userinfo
+// component, so credentials embedded in an artwork or enclosure URL would be
+// presented upstream by the instance itself.
+func TestProxyHandler_RejectsEmbeddedCredentials(t *testing.T) {
+	proxy := NewProxyHandler(true)
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	proxy.streamClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+
+	const hostile = "https://user:secret@cdn.example/cover.jpg"
+	for name, call := range map[string]func(http.ResponseWriter, *http.Request){
+		"image": proxy.GetImageProxy,
+		"audio": proxy.GetAudioProxy,
+	} {
+		rec := httptest.NewRecorder()
+		call(rec, httptest.NewRequest(http.MethodGet, "/p?url="+url.QueryEscape(hostile), nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s proxy accepted embedded credentials: got %d, want 400", name, rec.Code)
+		}
+	}
+}
+
+// The loopback targets the test transport is allowed to reach must keep working:
+// address policy belongs to the dialer, not to this check.
+func TestProxyTargetAllowedLeavesAddressPolicyToTheDialer(t *testing.T) {
+	if !proxyTargetAllowed("http://127.0.0.1:8080/cover.jpg") {
+		t.Error("a loopback target must not be rejected here")
+	}
+	if proxyTargetAllowed("https://user@host/x") {
+		t.Error("userinfo must be rejected")
+	}
+	if proxyTargetAllowed("https:///no-host") {
+		t.Error("a missing host must be rejected")
 	}
 }

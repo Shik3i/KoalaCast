@@ -453,6 +453,14 @@ class PlayerConnection @Inject constructor(
                 .takeIf { it != C.TIME_UNSET && it > 0 }
                 ?: track?.durationMs
                 ?: 0L
+            // "Stop at the end of this chapter/episode" is about the episode it
+            // was set on. The service clears its own target on a track change;
+            // without the same reset here the control kept showing an armed
+            // timer against an episode that had already been left behind.
+            val previous = _state.value.track
+            val episodeChanged =
+                track != null && previous != null && track.episodeId != previous.episodeId
+            if (episodeChanged) sleepTargetPositionMs = null
             _state.update {
                 it.copy(
                     track = track,
@@ -467,6 +475,8 @@ class PlayerConnection @Inject constructor(
                         controller.playerError?.errorCodeName
                     },
                     isOfflineSource = TrackMediaItem.isOffline(currentItem),
+                    sleepAtChapterEnd = !episodeChanged && it.sleepAtChapterEnd,
+                    sleepAtEpisodeEnd = !episodeChanged && it.sleepAtEpisodeEnd,
                 )
             }
         }

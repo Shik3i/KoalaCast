@@ -293,3 +293,70 @@ func TestParseFeedXML_Chapters(t *testing.T) {
 		t.Errorf("expected no chapters URL on the plain episode, got %q", got)
 	}
 }
+
+// itunes:episodeType is how a publisher marks a trailer or a bonus item, and it
+// is what the Inbox's "hide specials" filter keys on. The parser computed the
+// value and then left it out of the struct literal, so every episode ever
+// ingested stored an empty type and the filter was reduced to guessing from the
+// title.
+func TestParseRSS_KeepsEpisodeType(t *testing.T) {
+	feed := `<?xml version="1.0"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Show</title>
+    <item>
+      <title>Season one is coming</title>
+      <guid>ep-trailer</guid>
+      <itunes:episodeType>trailer</itunes:episodeType>
+    </item>
+    <item>
+      <title>Behind the scenes</title>
+      <guid>ep-bonus</guid>
+      <itunes:episodeType>Bonus</itunes:episodeType>
+    </item>
+    <item>
+      <title>Episode one</title>
+      <guid>ep-plain</guid>
+    </item>
+  </channel>
+</rss>`
+
+	parsed, err := ParseFeedXML(strings.NewReader(feed))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(parsed.Episodes) != 3 {
+		t.Fatalf("expected 3 episodes, got %d", len(parsed.Episodes))
+	}
+	want := []string{"trailer", "Bonus", "full"}
+	for i, expected := range want {
+		if got := parsed.Episodes[i].EpisodeType; got != expected {
+			t.Errorf("episode %d: EpisodeType = %q, want %q", i, got, expected)
+		}
+	}
+}
+
+// Atom has no equivalent tag, so an entry is a full episode rather than an
+// untyped one — consumers compare against trailer/bonus.
+func TestParseAtom_DefaultsEpisodeTypeToFull(t *testing.T) {
+	feed := `<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Show</title>
+  <entry>
+    <id>entry-1</id>
+    <title>Episode one</title>
+    <link rel="enclosure" href="https://cdn.example/a.mp3" type="audio/mpeg"/>
+  </entry>
+</feed>`
+
+	parsed, err := ParseFeedXML(strings.NewReader(feed))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(parsed.Episodes) != 1 {
+		t.Fatalf("expected 1 episode, got %d", len(parsed.Episodes))
+	}
+	if got := parsed.Episodes[0].EpisodeType; got != "full" {
+		t.Errorf("EpisodeType = %q, want \"full\"", got)
+	}
+}
