@@ -214,20 +214,60 @@
 		handlePlay();
 	}
 
-	async function shareHandoff() {
-		if (!episode || !browser) return;
+	// Sharing an episode used to be a single button labelled "continue on another
+	// device" that quietly wrote to the clipboard on every browser without a
+	// native share sheet — a name that described neither the thing shared nor
+	// what pressing it did. It is a share control now: it opens, it shows the
+	// exact link it is about to hand over, and every way of handing it over is
+	// named.
+	let shareOpen = $state(false);
+	let shareFromPosition = $state(true);
+
+	const shareUrl = $derived.by(() => {
+		if (!episode || !browser) return '';
 		const url = new URL(`/episode/${encodeURIComponent(episode.id)}`, location.origin);
-		url.searchParams.set('t', String(Math.floor(handoffPositionMs / 1000)));
-		const data = { title: episode.title, text: t('episode.handoffText'), url: url.toString() };
+		const seconds = Math.floor(handoffPositionMs / 1000);
+		if (shareFromPosition && seconds > 0) url.searchParams.set('t', String(seconds));
+		return url.toString();
+	});
+
+	/** True where the browser can hand the link to the operating system. */
+	const canShareNatively = $derived(browser && typeof navigator.share === 'function');
+
+	function toggleShare() {
+		shareOpen = !shareOpen;
+	}
+
+	async function shareNatively() {
+		if (!episode || !browser || !shareUrl) return;
+		const data = { title: episode.title, text: t('episode.shareText'), url: shareUrl };
 		try {
-			if (navigator.share) await navigator.share(data);
-			else {
-				await navigator.clipboard.writeText(url.toString());
-				toast.success(t('episode.handoffCopied'));
-			}
+			await navigator.share(data);
+			shareOpen = false;
 		} catch (error: any) {
-			if (error?.name !== 'AbortError') toast.error(t('episode.handoffFailed'));
+			if (error?.name !== 'AbortError') toast.error(t('episode.shareFailed'));
 		}
+	}
+
+	async function copyShareLink() {
+		if (!shareUrl) return;
+		try {
+			await navigator.clipboard.writeText(shareUrl);
+			toast.success(t('episode.shareCopied'));
+			shareOpen = false;
+		} catch {
+			// A denied clipboard is not a dead end: the field below holds the link
+			// and the listener can still select it by hand.
+			toast.error(t('episode.shareFailed'));
+		}
+	}
+
+	function shareByEmail() {
+		if (!episode || !shareUrl) return;
+		const subject = encodeURIComponent(episode.title);
+		const body = encodeURIComponent(`${t('episode.shareText')}\n\n${shareUrl}`);
+		window.location.href = `mailto:?subject=${subject}&body=${body}`;
+		shareOpen = false;
 	}
 
 	async function handleAddToQueue() {
@@ -530,9 +570,15 @@
 						<i class="ph ph-bookmark-simple" aria-hidden="true"></i>
 						{t('episode.addBookmarkAt', { time: formatTimecode(handoffPositionMs) })}
 					</button>
-					<button class="btn btn-secondary" onclick={shareHandoff}>
+					<button
+						class="btn btn-secondary"
+						class:active={shareOpen}
+						onclick={toggleShare}
+						aria-expanded={shareOpen}
+						aria-controls="episode-share"
+					>
 						<i class="ph ph-share-network" aria-hidden="true"></i>
-						{t('episode.handoff')}
+						{t('episode.share')}
 					</button>
 					{#if episode.chapters_url}
 						<button class="btn btn-secondary" class:active={showChapters} onclick={toggleChapters} aria-expanded={showChapters}>
@@ -545,6 +591,37 @@
 						</button>
 					{/if}
 				</div>
+
+				{#if shareOpen}
+					<div class="share-panel" id="episode-share">
+						{#if handoffPositionMs >= 1000}
+							<label class="share-position">
+								<input type="checkbox" bind:checked={shareFromPosition} />
+								{t('episode.shareFromPosition', { time: formatTimecode(handoffPositionMs) })}
+							</label>
+						{/if}
+						<label class="share-link">
+							<span class="share-link-label">{t('episode.shareLinkLabel')}</span>
+							<input type="text" readonly value={shareUrl} onfocus={(event) => event.currentTarget.select()} />
+						</label>
+						<div class="share-actions">
+							{#if canShareNatively}
+								<button class="btn btn-play" onclick={shareNatively}>
+									<i class="ph ph-share-network" aria-hidden="true"></i>
+									{t('episode.shareNative')}
+								</button>
+							{/if}
+							<button class="btn btn-secondary" onclick={copyShareLink}>
+								<i class="ph ph-copy" aria-hidden="true"></i>
+								{t('episode.shareCopy')}
+							</button>
+							<button class="btn btn-secondary" onclick={shareByEmail}>
+								<i class="ph ph-envelope-simple" aria-hidden="true"></i>
+								{t('episode.shareEmail')}
+							</button>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -716,6 +793,57 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.75rem;
+	}
+
+	/* The share control opens in place rather than in a dialog: it is a short
+	   list of ways to hand over one link, and a modal over the episode would be
+	   heavier than the decision it asks for. */
+	.share-panel {
+		margin-top: 0.9rem;
+		padding: 0.9rem;
+		border: 1px solid var(--border-ui);
+		border-radius: 12px;
+		background: var(--bg-elevated);
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.share-position {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--text-secondary);
+	}
+
+	.share-link {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.share-link-label {
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+	}
+
+	.share-link input {
+		width: 100%;
+		padding: 0.55rem 0.7rem;
+		border: 1px solid var(--border-ui);
+		border-radius: 8px;
+		background: var(--bg-primary);
+		color: var(--text-primary);
+		font-size: 0.85rem;
+	}
+
+	.share-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
 	}
 
 	/* Only what makes it the play button: the show's colour and its lift. The

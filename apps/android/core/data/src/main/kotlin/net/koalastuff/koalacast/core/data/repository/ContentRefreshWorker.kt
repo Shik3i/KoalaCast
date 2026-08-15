@@ -28,6 +28,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import net.koalastuff.koalacast.core.data.R
 import net.koalastuff.koalacast.core.data.db.PodcastSettingsDao
 import net.koalastuff.koalacast.core.data.db.SubscriptionDao
 import net.koalastuff.koalacast.core.data.auth.SecureAccountStore
@@ -125,7 +126,7 @@ class ContentRefreshWorker @AssistedInject constructor(
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "New podcast episodes",
+                applicationContext.getString(R.string.new_episodes_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ),
         )
@@ -139,15 +140,24 @@ class ContentRefreshWorker @AssistedInject constructor(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }
+        // Every one of these strings used to be an English literal, so the one
+        // part of the app a listener sees without opening it was the one part
+        // that ignored their language.
         val first = updates.first()
+        val shows = updates.map { it.first }.distinct().size
         val text = if (updates.size == 1) {
-            "${first.first}: ${first.second}"
+            applicationContext.getString(R.string.new_episodes_single, first.first, first.second)
         } else {
-            "${updates.size} new episodes from ${updates.map { it.first }.distinct().size} shows"
+            applicationContext.resources.getQuantityString(
+                R.plurals.new_episodes_shows,
+                shows,
+                updates.size,
+                shows,
+            )
         }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("New in KoalaCast")
+            .setContentTitle(applicationContext.getString(R.string.new_episodes_title))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)

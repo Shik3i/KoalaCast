@@ -23,6 +23,8 @@ enum class GlobalRange(val wireName: String) {
 data class GlobalStatsUiState(
     val range: GlobalRange = GlobalRange.YEAR,
     val loading: Boolean = true,
+    /** A pull-to-refresh in flight, as opposed to the first load's skeleton. */
+    val refreshing: Boolean = false,
     val error: DataError? = null,
     val stats: GlobalStats? = null,
 )
@@ -46,19 +48,35 @@ class GlobalStatsViewModel @Inject constructor(
 
     fun retry() = load()
 
-    private fun load() {
+    /**
+     * Pull-to-refresh: the same reload, but the numbers already on screen stay
+     * put behind the refresh indicator instead of collapsing into a skeleton.
+     */
+    fun refresh() = load(refreshing = true)
+
+    private fun load(refreshing: Boolean = false) {
         viewModelScope.launch {
             val requestedRange = _state.value.range
-            _state.update { it.copy(loading = true, error = null) }
+            _state.update {
+                it.copy(
+                    loading = !refreshing || it.stats == null,
+                    refreshing = refreshing,
+                    error = null,
+                )
+            }
             when (val result = repository.load(requestedRange.wireName)) {
                 is DataResult.Success -> {
                     if (_state.value.range == requestedRange) {
-                        _state.update { it.copy(loading = false, stats = result.data) }
+                        _state.update {
+                            it.copy(loading = false, refreshing = false, stats = result.data)
+                        }
                     }
                 }
                 is DataResult.Failure -> {
                     if (_state.value.range == requestedRange) {
-                        _state.update { it.copy(loading = false, error = result.error) }
+                        _state.update {
+                            it.copy(loading = false, refreshing = false, error = result.error)
+                        }
                     }
                 }
             }

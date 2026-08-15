@@ -59,7 +59,7 @@ fun EpisodeScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val handoffChooserTitle = stringResource(R.string.episode_handoff)
+    val shareChooserTitle = stringResource(R.string.episode_share_chooser)
 
     EpisodeContent(
         state = state,
@@ -88,7 +88,7 @@ fun EpisodeScreen(
                     putExtra(Intent.EXTRA_TEXT, url)
                 }
                 context.startActivity(
-                    Intent.createChooser(intent, handoffChooserTitle),
+                    Intent.createChooser(intent, shareChooserTitle),
                 )
             }
         },
@@ -326,7 +326,7 @@ internal fun EpisodeContent(
                             modifier = Modifier.weight(1f),
                         )
                         OutlineButton(
-                            text = stringResource(R.string.episode_handoff),
+                            text = stringResource(R.string.episode_share),
                             onClick = onShareHandoff,
                             leadingIcon = PhosphorIcons.ArrowSquareOut,
                             modifier = Modifier.weight(1f),

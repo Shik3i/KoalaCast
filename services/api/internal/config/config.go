@@ -31,6 +31,7 @@ type Config struct {
 	FeedRequestTimeoutMS     int
 	FeedMaxResponseBytes     int64
 	FeedMaxStoredEpisodes    int
+	FeedRefreshIntervalMS    int
 	WebPushVAPIDPublicKey    string
 	WebPushVAPIDPrivateKey   string
 	WebPushVAPIDSubject      string
@@ -65,6 +66,7 @@ func LoadConfig() (*Config, error) {
 		FeedRequestTimeoutMS:     getEnvInt("FEED_REQUEST_TIMEOUT_MS", 15000),
 		FeedMaxResponseBytes:     int64(getEnvInt("FEED_MAX_RESPONSE_BYTES", 33554432)),
 		FeedMaxStoredEpisodes:    getEnvInt("FEED_MAX_STORED_EPISODES", 200),
+		FeedRefreshIntervalMS:    getEnvInt("FEED_REFRESH_INTERVAL_MS", 3600000),
 		WebPushVAPIDPublicKey:    strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PUBLIC_KEY")),
 		WebPushVAPIDPrivateKey:   strings.TrimSpace(os.Getenv("WEB_PUSH_VAPID_PRIVATE_KEY")),
 		WebPushVAPIDSubject:      getEnv("WEB_PUSH_VAPID_SUBJECT", getEnv("PUBLIC_BASE_URL", "http://localhost:3000")),
@@ -155,6 +157,29 @@ func validVAPIDSubject(subject string) bool {
 	default:
 		return false
 	}
+}
+
+// EffectiveFeedRefreshIntervalMS bounds how long a successfully fetched feed
+// waits before the background worker looks at it again.
+//
+// This only governs subscriptions that asked to be notified about new episodes;
+// everything else refreshes on demand when a listener opens it. The old
+// hard-coded twenty-four hours meant a daily show could be announced most of a
+// day late, which is not a notification. Conditional requests make the shorter
+// cadence cheap: an unchanged feed answers 304 with no body.
+func EffectiveFeedRefreshIntervalMS(configured int) int {
+	const minimum = 15 * 60 * 1000
+	const maximum = 24 * 60 * 60 * 1000
+	if configured <= 0 {
+		return 60 * 60 * 1000
+	}
+	if configured < minimum {
+		return minimum
+	}
+	if configured > maximum {
+		return maximum
+	}
+	return configured
 }
 
 func EffectiveFeedMaxStoredEpisodes(configured int) int {

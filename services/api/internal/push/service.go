@@ -2,6 +2,8 @@ package push
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +35,19 @@ func NewService(database *db.DB, cfg *config.Config, logger *slog.Logger) *Servi
 
 func (s *Service) Configured() bool {
 	return s != nil && s.cfg.WebPushVAPIDPublicKey != "" && s.cfg.WebPushVAPIDPrivateKey != ""
+}
+
+// pushTopic derives the RFC 8030 Topic header for a podcast.
+//
+// The header is capped at 32 characters from the URL-safe base64 alphabet, and
+// push services reject the whole request when it is longer. "podcast-" plus a
+// 36-character UUID is 44, so every new-episode notification was answered with
+// a 400 and no browser ever received one. A hash keeps the collapsing behaviour
+// the topic is for — a second notification for the same show replaces the first
+// one still queued — inside the length the spec allows.
+func pushTopic(podcastID string) string {
+	sum := sha256.Sum256([]byte("podcast:" + podcastID))
+	return base64.RawURLEncoding.EncodeToString(sum[:])[:32]
 }
 
 func (s *Service) NotifyNewEpisodes(
@@ -73,13 +88,27 @@ func (s *Service) NotifyNewEpisodes(
 		s.logger.Warn("failed to select web push subscriptions", "podcast_id", podcastID, "error", err)
 		return
 	}
-	defer rows.Close()
 
+	// Drain the cursor before sending anything. Each delivery is a network round
+	// trip to a third-party push service, and the loop below also deletes expired
+	// registrations — holding a read cursor open across both, on the same SQLite
+	// database, is how a popular show's notification run blocks its own writes.
+	type target struct{ endpoint, p256dh, auth, locale string }
+	targets := make([]target, 0)
 	for rows.Next() {
-		var endpoint, p256dh, auth, locale string
-		if err := rows.Scan(&endpoint, &p256dh, &auth, &locale); err != nil {
+		var item target
+		if err := rows.Scan(&item.endpoint, &item.p256dh, &item.auth, &item.locale); err != nil {
 			continue
 		}
+		targets = append(targets, item)
+	}
+	if err := rows.Err(); err != nil {
+		s.logger.Warn("failed to read web push subscriptions", "podcast_id", podcastID, "error", err)
+	}
+	rows.Close()
+
+	for _, item := range targets {
+		endpoint, p256dh, auth, locale := item.endpoint, item.p256dh, item.auth, item.locale
 		body := episodes[0].Title
 		if len(episodes) > 1 {
 			if locale == "de" {
@@ -108,7 +137,7 @@ func (s *Service) NotifyNewEpisodes(
 			VAPIDPrivateKey: s.cfg.WebPushVAPIDPrivateKey,
 			TTL:             86400,
 			Urgency:         webpush.UrgencyNormal,
-			Topic:           "podcast-" + podcastID,
+			Topic:           pushTopic(podcastID),
 		})
 		if sendErr != nil {
 			s.logger.Warn("web push send failed", "podcast_id", podcastID, "error", sendErr)

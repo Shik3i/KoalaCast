@@ -14,6 +14,7 @@ import net.koalastuff.koalacast.core.data.repository.AccountRepository
 import net.koalastuff.koalacast.core.data.repository.ProgressRepository
 import net.koalastuff.koalacast.core.data.repository.QueueRepository
 import net.koalastuff.koalacast.core.data.repository.NamedQueueRepository
+import net.koalastuff.koalacast.core.data.repository.SyncRepository
 import net.koalastuff.koalacast.core.data.prefs.PreferencesRepository
 import net.koalastuff.koalacast.core.player.PlayerConnection
 import net.koalastuff.koalacast.core.model.Favorite
@@ -52,6 +53,7 @@ class LibraryViewModel @Inject constructor(
     private val progress: ProgressRepository,
     private val player: PlayerConnection,
     private val preferences: PreferencesRepository,
+    private val sync: SyncRepository,
 ) : ViewModel() {
 
     init {
@@ -60,6 +62,28 @@ class LibraryViewModel @Inject constructor(
 
     private val _tab = MutableStateFlow(LibraryTab.SUBSCRIPTIONS)
     val tab: StateFlow<LibraryTab> = _tab
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing
+
+    /**
+     * Pull-to-refresh. Every list here is fed from Room and updates itself, so
+     * the only thing a listener can actually be waiting for is the account
+     * catching up with another device — which is exactly what a pull means on
+     * this screen.
+     */
+    fun refresh() {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.value = true
+            try {
+                account.resolvePendingSubscriptions()
+                sync.syncNow()
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
 
     private val storedState = combine(
         library.allSubscriptions,

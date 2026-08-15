@@ -368,3 +368,50 @@ func TestGetAudioResolveRejectsNonHTTPURL(t *testing.T) {
 		t.Fatalf("expected 400 for a non-http scheme, got %d", rec.Code)
 	}
 }
+
+// A CDN that negotiates on Accept gives back exactly what was asked for. The
+// proxy used to send a browser's header, AVIF first, and then failed to decode
+// the AVIF it had requested — answering with its own placeholder, at 200, for
+// artwork that was perfectly fine. Every imgix/Cloudinary `auto=format` cover in
+// the app was a grey rectangle because of it.
+func TestProxyHandler_ImageAcceptOffersOnlyDecodableFormats(t *testing.T) {
+	for _, unsupported := range []string{"image/avif", "image/svg+xml", "image/heic", "image/jxl"} {
+		if strings.Contains(acceptedImageFormats, unsupported) {
+			t.Errorf("Accept advertises %s, which this build cannot decode: %q", unsupported, acceptedImageFormats)
+		}
+	}
+	for _, supported := range []string{"image/webp", "image/jpeg", "image/png"} {
+		if !strings.Contains(acceptedImageFormats, supported) {
+			t.Errorf("Accept omits %s, which this build can decode: %q", supported, acceptedImageFormats)
+		}
+	}
+}
+
+// The header has to survive the trip, not just be well-formed: an upstream that
+// varies on Accept must see it.
+func TestProxyHandler_ImageRequestSendsNegotiatedAccept(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	var seenAccept string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenAccept = r.Header.Get("Accept")
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.WriteHeader(http.StatusOK)
+		_ = jpeg.Encode(w, img, nil)
+	}))
+	defer ts.Close()
+
+	proxy := NewProxyHandler(false)
+	proxy.httpClient = rss.NewSafeHTTPClient(rss.SafeTransportConfig{AllowLoopback: true})
+	rec := httptest.NewRecorder()
+	proxy.GetImageProxy(rec, httptest.NewRequest(http.MethodGet, "/api/v1/proxy/image?url="+ts.URL+"&w=5", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if rec.Header().Get("X-KoalaCast-Image-Fallback") == "true" {
+		t.Fatal("a decodable upstream image was replaced by the placeholder")
+	}
+	if seenAccept != acceptedImageFormats {
+		t.Fatalf("upstream saw Accept %q, want %q", seenAccept, acceptedImageFormats)
+	}
+}

@@ -592,6 +592,13 @@ class SyncRepository @Inject constructor(
                 addedAt = payload.long("added_at").takeIf { it > 0 }
                     ?: change.clientTimestamp.takeIf { it > 0 }
                     ?: System.currentTimeMillis(),
+                // Without this the entity default silently rewrote updatedAt to
+                // addedAt, so a folder or inbox-mode edit made elsewhere landed
+                // here dated to the day the show was subscribed.
+                updatedAt = payload.long("updated_at").takeIf { it > 0 }
+                    ?: payload.long("added_at").takeIf { it > 0 }
+                    ?: change.clientTimestamp.takeIf { it > 0 }
+                    ?: System.currentTimeMillis(),
                 inboxMode = payload.string("inbox_mode")
                     .takeIf { it == SubscriptionEntity.INBOX_MODE_LATEST }
                     ?: SubscriptionEntity.INBOX_MODE_ALL,
@@ -912,22 +919,31 @@ class SyncRepository @Inject constructor(
         put("client_timestamp", item.lastPlayedAt)
     }
 
+    /**
+     * Clamped to the server's own ceilings for a listening session. Past them the
+     * push is rejected with a 400, so this is not cosmetic: an unclamped session
+     * is a record that can never be uploaded. A session paused and resumed across
+     * days reaches the span limit on its own.
+     */
     private fun listeningPayload(item: ListeningSessionEntity) = buildJsonObject {
+        val endedAt = maxOf(item.endedAt, item.startedAt)
         put("id", item.id)
         put("episode_id", item.episodeId)
         put("podcast_id", item.podcastId)
         put("title", item.title)
         put("podcast_title", item.podcastTitle)
         put("categories", JsonArray(item.categories.map(::JsonPrimitive)))
-        put("started_at", item.startedAt)
-        put("ended_at", item.endedAt)
-        put("wall_clock_ms", item.wallClockMs)
-        put("audio_listened_ms", item.audioListenedMs)
-        put("speed_saved_ms", item.speedSavedMs)
-        put("silence_saved_ms", item.silenceSavedMs)
-        put("manual_skipped_ms", item.manualSkippedMs)
-        put("intro_outro_skipped_ms", item.introOutroSkippedMs)
-        put("speed_weighted_ms", item.speedWeightedMs)
+        // Hold the span, not the end: the end is what every last-writer-wins
+        // comparison keys on.
+        put("started_at", maxOf(item.startedAt, endedAt - MAX_SESSION_SPAN_MS))
+        put("ended_at", endedAt)
+        put("wall_clock_ms", item.wallClockMs.coerceIn(0, MAX_SESSION_SPAN_MS))
+        put("audio_listened_ms", item.audioListenedMs.coerceIn(0, MAX_SESSION_METRIC_MS))
+        put("speed_saved_ms", item.speedSavedMs.coerceIn(0, MAX_SESSION_METRIC_MS))
+        put("silence_saved_ms", item.silenceSavedMs.coerceIn(0, MAX_SESSION_METRIC_MS))
+        put("manual_skipped_ms", item.manualSkippedMs.coerceIn(0, MAX_SESSION_METRIC_MS))
+        put("intro_outro_skipped_ms", item.introOutroSkippedMs.coerceIn(0, MAX_SESSION_METRIC_MS))
+        put("speed_weighted_ms", item.speedWeightedMs.coerceIn(0, MAX_SESSION_METRIC_MS))
     }
 
     private fun queuePayload(items: List<QueueItemEntity>, updatedAt: Long) = buildJsonObject {
@@ -1089,6 +1105,8 @@ class SyncRepository @Inject constructor(
         const val PAGE_LIMIT = 500
         const val PUSH_BATCH = 250
         const val MAX_SYNCED_DOWNLOAD_BUDGET_BYTES = 10L * 1024 * 1024 * 1024
+        const val MAX_SESSION_SPAN_MS = 7L * 24 * 60 * 60 * 1000
+        const val MAX_SESSION_METRIC_MS = MAX_SESSION_SPAN_MS * 4
         val GENERAL_SYNC_ENTITIES = setOf(
             "subscription",
             "favorite",

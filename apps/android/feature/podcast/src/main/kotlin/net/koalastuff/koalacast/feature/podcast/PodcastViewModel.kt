@@ -41,6 +41,8 @@ data class PodcastUiState(
     val explicitBlocked: Boolean = false,
     val episodes: List<Episode> = emptyList(),
     val loadingMore: Boolean = false,
+    /** A pull-to-refresh in flight, as opposed to the first load's skeleton. */
+    val refreshing: Boolean = false,
     val endReached: Boolean = false,
     val paginationError: Boolean = false,
     val subscribed: Boolean = false,
@@ -93,6 +95,22 @@ class PodcastViewModel @Inject constructor(
     }
 
     fun retry() = load(force = true)
+
+    /**
+     * Pull-to-refresh: the same forced reload as [retry], but it drives the
+     * refresh indicator instead of the first-load skeleton, so an already
+     * populated episode list stays on screen while the feed is re-read.
+     */
+    fun refresh() {
+        if (_state.value.refreshing) return
+        _state.update { it.copy(refreshing = true) }
+        load(force = true)
+        val running = loadJob
+        viewModelScope.launch {
+            running?.join()
+            _state.update { it.copy(refreshing = false) }
+        }
+    }
 
     private fun load(force: Boolean) {
         loadJob?.cancel()

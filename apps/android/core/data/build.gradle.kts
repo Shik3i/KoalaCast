@@ -7,6 +7,13 @@ plugins {
 
 android {
     namespace = "net.koalastuff.koalacast.core.data"
+
+    // This module owns the notification strings the background workers show, and
+    // those are the only user-facing text a listener sees without opening the
+    // app. Merged resources on the unit-test classpath are what lets a test
+    // assert the German ones are actually translated instead of silently
+    // falling back to English.
+    testOptions.unitTests.isIncludeAndroidResources = true
 }
 
 androidComponents {

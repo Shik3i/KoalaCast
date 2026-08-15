@@ -143,3 +143,24 @@ func TestConfig_WebPushRequiresCompleteValidVAPIDConfiguration(t *testing.T) {
 		t.Fatalf("expected HTTPS VAPID subject to succeed: %v", err)
 	}
 }
+
+// A healthy feed's next scheduled fetch decides how late a "new episode"
+// notification can be. Twenty-four hours was not a notification.
+func TestEffectiveFeedRefreshIntervalMS(t *testing.T) {
+	hour := 60 * 60 * 1000
+	cases := map[string]struct {
+		configured int
+		want       int
+	}{
+		"unset falls back to an hour": {0, hour},
+		"negative falls back":         {-5, hour},
+		"below the floor is raised":   {60_000, 15 * 60 * 1000},
+		"a sane value is kept":        {30 * 60 * 1000, 30 * 60 * 1000},
+		"above the ceiling is capped": {72 * 60 * 60 * 1000, 24 * 60 * 60 * 1000},
+	}
+	for name, tc := range cases {
+		if got := EffectiveFeedRefreshIntervalMS(tc.configured); got != tc.want {
+			t.Errorf("%s: EffectiveFeedRefreshIntervalMS(%d) = %d, want %d", name, tc.configured, got, tc.want)
+		}
+	}
+}

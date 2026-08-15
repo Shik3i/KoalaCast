@@ -39,5 +39,6 @@
     <string name="episode_bookmarks">Zeitmarken</string>
     <string name="episode_add_bookmark">Zeitmarke %1$s</string>
     <string name="episode_remove_bookmark">Zeitmarke bei %1$s entfernen</string>
-    <string name="episode_handoff">Auf anderem Gerät fortsetzen</string>
+    <string name="episode_share">Teilen</string>
+    <string name="episode_share_chooser">Folge teilen</string>
 </resources>

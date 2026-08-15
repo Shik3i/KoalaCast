@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -57,6 +59,7 @@ fun GlobalStatsScreen(
         state = state,
         onSetRange = viewModel::setRange,
         onRetry = viewModel::retry,
+        onRefresh = viewModel::refresh,
         onOpenPodcast = onOpenPodcast,
         onOpenSettings = onOpenSettings,
         scopeSelector = scopeSelector,
@@ -65,6 +68,7 @@ fun GlobalStatsScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GlobalStatsContent(
     state: GlobalStatsUiState,
@@ -73,14 +77,19 @@ internal fun GlobalStatsContent(
     onOpenPodcast: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    onRefresh: () -> Unit = onRetry,
     onOpenSettings: () -> Unit = {},
     scopeSelector: @Composable () -> Unit = {},
 ) {
     val colors = KoalaTheme.colors
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize().background(colors.bgPanel),
+    ) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(colors.bgPanel)
             .verticalScroll(rememberScrollState())
             .padding(contentPadding)
             .padding(horizontal = KoalaSpacing.screenH, vertical = KoalaSpacing.sectionV),
@@ -139,6 +148,7 @@ internal fun GlobalStatsContent(
             )
             state.stats != null -> Stats(state.stats, onOpenPodcast)
         }
+    }
     }
 }
 

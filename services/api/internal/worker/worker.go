@@ -139,6 +139,12 @@ func (w *FeedWorker) runLoop(ctx context.Context) {
 	}
 }
 
+// refreshIntervalMS is how long a healthy feed waits before the next scheduled
+// fetch. Errors use their own exponential backoff in updateFeedError.
+func (w *FeedWorker) refreshIntervalMS() int64 {
+	return int64(config.EffectiveFeedRefreshIntervalMS(w.cfg.FeedRefreshIntervalMS))
+}
+
 func (w *FeedWorker) compactSyncLog(ctx context.Context) {
 	if n, err := w.db.CompactSyncLog(ctx); err != nil {
 		w.logger.Warn("sync_log compaction failed", "error", err)
@@ -206,6 +212,11 @@ func (w *FeedWorker) RefreshScheduledFeeds(ctx context.Context) {
 		if err := rows.Scan(&item.id, &item.feedURL, &item.etag, &item.lastModified, &item.errorCount); err == nil {
 			toFetch = append(toFetch, item)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		// A truncated batch is not an empty one. Saying so keeps a partial refresh
+		// from reading as "nothing was due".
+		w.logger.Error("failed to read feeds for refresh", "error", err)
 	}
 
 	if len(toFetch) == 0 {
@@ -276,7 +287,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		// 304 Not Modified -> Schedule next fetch with exponential backoff
+		// 304 Not Modified -> nothing changed; wait out the ordinary interval.
 		if _, err := w.db.SQL.ExecContext(ctx, `
 			UPDATE podcasts
 			SET last_fetch_attempt_at = ?,
@@ -284,7 +295,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 				consecutive_error_count = 0,
 				last_error_category = ''
 			WHERE id = ?
-		`, nowMs, nowMs+86400000, podcastID); err != nil {
+		`, nowMs, nowMs+w.refreshIntervalMS(), podcastID); err != nil {
 			return fmt.Errorf("record not-modified feed refresh: %w", err)
 		}
 		return nil
@@ -346,7 +357,7 @@ func (w *FeedWorker) RefreshSingleFeed(ctx context.Context, podcastID, feedURL, 
 		WHERE id = ?
 	`, parsedFeed.Title, parsedFeed.Description, parsedFeed.Author, parsedFeed.ArtworkURL,
 		parsedFeed.Link, parsedFeed.Language, podcastExplicitInt, parsedFeed.Copyright,
-		nowMs, nowMs, nowMs+86400000, newETag, newLastModified, nowMs, podcastID)
+		nowMs, nowMs, nowMs+w.refreshIntervalMS(), newETag, newLastModified, nowMs, podcastID)
 	if err != nil {
 		return fmt.Errorf("failed to update podcast: %w", err)
 	}

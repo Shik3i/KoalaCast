@@ -757,7 +757,14 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		default:
 			return fmt.Errorf("invalid playback_state event_type")
 		}
-		encoded, err := json.Marshal(p)
+		// Re-encoding the parsed struct used to *replace* the payload, which
+		// silently dropped every key this server does not model — the episode
+		// title, artwork, podcast id, enclosure and duration that clients
+		// denormalize into the operation. The sync log stores what Pull hands
+		// back, so the other device reconstructed a progress row with no title
+		// and no artwork and overwrote a good local one with it. Only the
+		// normalized keys are written back; everything else round-trips.
+		encoded, err := mergeNormalizedPayload(op.Payload, p)
 		if err != nil {
 			return fmt.Errorf("invalid playback_state payload")
 		}
@@ -772,7 +779,10 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		}
 		if p.ID == "" {
 			p.ID = op.EntityID
-			encoded, _ := json.Marshal(p)
+			encoded, err := mergeNormalizedPayload(op.Payload, p)
+			if err != nil {
+				return fmt.Errorf("invalid listening_session payload")
+			}
 			op.Payload = encoded
 		}
 		if p.ID != op.EntityID {
@@ -818,6 +828,30 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		return fmt.Errorf("unsupported entity_type %q", op.EntityType)
 	}
 	return nil
+}
+
+// mergeNormalizedPayload writes the server-normalized fields of `normalized`
+// back into the client's original JSON object, keeping every key the server
+// does not model. Clients denormalize display metadata into sync payloads
+// precisely so a peer can render the record without a second fetch; the sync
+// log is the only place that metadata lives.
+func mergeNormalizedPayload(original json.RawMessage, normalized any) (json.RawMessage, error) {
+	merged := map[string]json.RawMessage{}
+	if err := json.Unmarshal(original, &merged); err != nil {
+		return nil, err
+	}
+	overrides := map[string]json.RawMessage{}
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(encoded, &overrides); err != nil {
+		return nil, err
+	}
+	for key, value := range overrides {
+		merged[key] = value
+	}
+	return json.Marshal(merged)
 }
 
 func validateObjectPayload(payload json.RawMessage, timestamp int64) error {

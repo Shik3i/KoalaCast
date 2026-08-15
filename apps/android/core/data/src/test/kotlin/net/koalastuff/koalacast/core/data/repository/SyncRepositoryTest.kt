@@ -187,6 +187,38 @@ class SyncRepositoryTest {
     }
 
     @Test
+    fun `listening sessions are clamped to what the server will accept`() = runTest {
+        val week = 7L * 24 * 60 * 60 * 1000
+        val endedAt = 1_800_000_000_000L
+        // A player paused and resumed over a holiday: the span alone is past the
+        // server's ceiling, and an unclamped payload is a permanent 400.
+        database.listeningSessionDao().upsert(
+            ListeningSessionEntity(
+                id = "long",
+                episodeId = "episode",
+                podcastId = "show",
+                title = "Episode",
+                podcastTitle = "Show",
+                startedAt = endedAt - week * 3,
+                endedAt = endedAt,
+                wallClockMs = week * 2,
+                audioListenedMs = week * 9,
+            ),
+        )
+
+        val payload = repository.buildOperations("device")
+            .first { it.entityType == "listening_session" }
+            .payload as JsonObject
+
+        val started = payload["started_at"]!!.toString().toLong()
+        val ended = payload["ended_at"]!!.toString().toLong()
+        assertEquals(endedAt, ended)
+        assertEquals(week, ended - started)
+        assertEquals(week, payload["wall_clock_ms"]!!.toString().toLong())
+        assertEquals(week * 4, payload["audio_listened_ms"]!!.toString().toLong())
+    }
+
+    @Test
     fun `pull follows next cursor while server says more pages exist`() = runTest {
         val requestedCursors = mutableListOf<Long>()
         apiHandler = { method, args ->

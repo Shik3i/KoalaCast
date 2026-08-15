@@ -40,6 +40,26 @@ end-to-end encrypted.
   a reset can return resolved public podcast metadata, but cannot recreate the
   account's deleted subscription rows or sync metadata.
 
+### Rejected operations are isolated, not retried forever
+
+A `400` is the server's verdict on one operation's *content*, and a client that
+treats it as a failure of the whole batch never moves its push watermark: the
+same unacceptable record goes back up on every tick and every other local
+change stays on the device behind it. Both clients therefore halve a rejected
+batch until the offending operation is alone, count and report that one, and
+let the rest through. A `409` (generation mismatch), `401`, `429` or `5xx` is
+about the request rather than its contents and still fails the run so it
+retries.
+
+### Payload fields the server does not model
+
+Both clients denormalize display metadata into the operation payload — an
+episode's title, artwork, podcast, enclosure and duration — so a peer can
+render the record without a second fetch. The sync log stores each payload as
+received and Pull returns it, which makes it the only place that metadata
+lives. Normalizing an operation therefore merges the server's own fields back
+into the client's object rather than replacing it; unknown keys round-trip.
+
 ### Materialized entity types
 
 - `subscription`
@@ -112,6 +132,15 @@ Playback events carry `event_type`, `episode_id`, `position_ms`,
   override position and completion state.
 - Within a playback session, a higher `per_session_seq` supersedes an older
   operation.
+
+### Listening-session bounds
+
+A session is rejected when it spans more than seven days, when a metric exceeds
+seven days (`wall_clock_ms`) or twenty-eight days (the rest), or when it names
+no episode or podcast. Both clients clamp to those bounds before pushing rather
+than discovering them as a rejection: a player left paused across a holiday
+produces exactly such a span, and the end timestamp — which every last-writer
+comparison keys on — is held while the start is moved forward.
 
 ### Retention and full-resync signal
 
