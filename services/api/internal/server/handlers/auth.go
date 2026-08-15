@@ -484,6 +484,7 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			sessions = append(sessions, item)
 		}
 	}
+	rowsErr := rows.Err()
 	rows.Close()
 
 	// Native device credentials (Bearer tokens).
@@ -508,7 +509,15 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			sessions = append(sessions, item)
 		}
 	}
+	dRowsErr := dRows.Err()
 	dRows.Close()
+	// This list is what a listener uses to spot a session they do not recognise.
+	// A truncated read must not quietly present a shorter list as the whole
+	// picture — the one session missing from it could be the one that matters.
+	if rowsErr != nil || dRowsErr != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

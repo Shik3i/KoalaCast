@@ -148,9 +148,15 @@ class AutoDownloadWorker @AssistedInject constructor(
         private const val MAX_CONCURRENT_FEEDS = 4
 
         /**
-         * Every six hours, on unmetered network. WorkManager will not run a periodic
+         * Every six hours, on any connection. WorkManager will not run a periodic
          * job more often than every 15 minutes anyway, and a podcast feed that
          * updates faster than six hours is not a thing worth burning battery on.
+         *
+         * Deliberately not UNMETERED: this pass only reads feed metadata to decide
+         * what is worth fetching. The audio itself is enqueued through
+         * [DownloadRepository.enqueue], which is where "download over Wi-Fi only"
+         * turns into an UNMETERED constraint on the transfer that actually spends
+         * the listener's data.
          */
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<AutoDownloadWorker>(6, TimeUnit.HOURS)
