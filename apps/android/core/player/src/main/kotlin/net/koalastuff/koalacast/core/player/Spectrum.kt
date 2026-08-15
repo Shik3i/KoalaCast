@@ -182,3 +182,55 @@ internal fun reduceToBands(
         out[band] = (normalised * tilt).coerceIn(0f, 1f)
     }
 }
+
+/**
+ * Where a loud passage should land, and how far the gain may reach for it.
+ *
+ * Normalising against full scale is why a quietly mastered episode drew a flat
+ * display while a loud one drew a lively one. A music player's spectrum looks
+ * alive at every volume because it is normalised against what it has been
+ * hearing. Podcast audio makes that more pronounced still: levelling between
+ * shows is far less consistent than in mastered music.
+ *
+ * Deliberately identical to the web client's `spectrum.ts`, so the two displays
+ * answer alike.
+ */
+private const val AGC_TARGET = 0.82f
+private const val AGC_MAX_GAIN = 3f
+
+/** Below this the frame is silence or room tone, and lifting it only draws noise. */
+internal const val AGC_SILENCE = 0.06f
+
+/** Rises quickly so a transient pulls the gain down at once; falls slowly. */
+private const val AGC_ATTACK = 0.35f
+private const val AGC_RELEASE = 0.015f
+
+/** The loudest band this display has been seeing, smoothed. */
+internal class AutoGain {
+    var reference: Float = 0f
+        private set
+
+    fun reset() {
+        reference = 0f
+    }
+
+    /**
+     * Scales [bands] in place so the display uses its height at any input level,
+     * and returns the gain applied.
+     *
+     * Silence is left alone on purpose: an empty display during a pause is
+     * correct, and amplifying room tone into a full-height wall is not.
+     */
+    fun apply(bands: FloatArray): Float {
+        var frontRunner = 0f
+        for (value in bands) if (value > frontRunner) frontRunner = value
+        val coefficient = if (frontRunner > reference) AGC_ATTACK else AGC_RELEASE
+        reference += (frontRunner - reference) * coefficient
+
+        if (reference < AGC_SILENCE) return 1f
+        val gain = (AGC_TARGET / reference).coerceIn(1f, AGC_MAX_GAIN)
+        if (gain == 1f) return 1f
+        for (index in bands.indices) bands[index] = (bands[index] * gain).coerceAtMost(1f)
+        return gain
+    }
+}

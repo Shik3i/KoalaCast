@@ -156,7 +156,7 @@ class ContentRefreshWorker @AssistedInject constructor(
             )
         }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(R.drawable.ic_notification_new_episodes)
             .setContentTitle(applicationContext.getString(R.string.new_episodes_title))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

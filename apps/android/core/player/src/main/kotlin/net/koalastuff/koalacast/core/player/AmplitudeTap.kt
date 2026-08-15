@@ -322,6 +322,7 @@ internal class AmplitudeBufferSink(
     private var fftFill = 0
     private val bandScratch = FloatArray(SPECTRUM_BANDS)
     private var bandEdges = spectrumBandEdges(DEFAULT_SAMPLE_RATE)
+    private val autoGain = AutoGain()
 
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         // Any other encoding is left alone rather than misread as shorts and drawn
@@ -331,6 +332,7 @@ internal class AmplitudeBufferSink(
         windowBytes = envelopeWindowBytes(sampleRateHz, channelCount)
         strideBytes = channelCount.coerceAtLeast(1) * 2
         bandEdges = spectrumBandEdges(sampleRateHz)
+        autoGain.reset()
         fftFill = 0
         bytesInWindow = 0
         sumInWindow = 0.0
@@ -401,6 +403,10 @@ internal class AmplitudeBufferSink(
         }
         fftInPlace(fftReal, fftImaginary)
         reduceToBands(fftReal, fftImaginary, bandEdges, bandScratch)
+        // Normalise against what this display has been hearing rather than
+        // against full scale, so a quietly mastered episode fills the same
+        // height as a loud one. Silence is left alone.
+        autoGain.apply(bandScratch)
         tap.publishBands(bandScratch)
     }
 
