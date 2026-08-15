@@ -26,8 +26,8 @@ android {
 
     defaultConfig {
         applicationId = "net.koalastuff.koalacast"
-        versionCode = 43
-        versionName = "0.11.3"
+        versionCode = 44
+        versionName = "0.11.4"
     }
 
     signingConfigs {
