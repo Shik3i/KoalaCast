@@ -135,6 +135,12 @@ const maxDecodedPixels = 40 * 1000 * 1000
 // artwork arrived, forcing users to reload until a request happened to be fast.
 // Singleflight still coalesces identical requests while this bounded deadline
 // gives DNS, TLS and the first upstream response a realistic window.
+// acceptedImageFormats mirrors the decoders registered by this package's
+// imports (JPEG, PNG, GIF, WebP). Content negotiation is a promise about what
+// the client can read; advertising a format with no decoder turns every
+// negotiating CDN into a broken image.
+const acceptedImageFormats = "image/webp,image/jpeg,image/png,image/gif;q=0.8,*/*;q=0.5"
+
 const imageProxyTimeout = 8 * time.Second
 const maxAudioDownloadBytes = int64(2 * 1024 * 1024 * 1024)
 const maxAudioStreamDuration = 4 * time.Hour
@@ -430,7 +436,14 @@ func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("invalid url")
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-		req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+		// Ask only for what this process can actually decode. Copying a browser's
+		// Accept header meant advertising AVIF, and every CDN that negotiates on
+		// it — imgix, Cloudinary, Cloudflare Images, anything with `auto=format` —
+		// duly returned AVIF. Go has no AVIF decoder here, so the decode below
+		// failed and the handler answered with its own placeholder, at 200, for
+		// artwork that was never broken. SVG is excluded for the same reason it
+		// always was: it is not a raster format this resizer can handle.
+		req.Header.Set("Accept", acceptedImageFormats)
 
 		resp, err := h.httpClient.Do(req)
 		if err != nil {
