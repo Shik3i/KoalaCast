@@ -143,3 +143,68 @@ class SpectrumTest {
         assertTrue("must not reach the top in one frame, got ${out[0]}", out[0] < 1f)
     }
 }
+
+/**
+ * Normalisation against what the display has been hearing, rather than against
+ * full scale. Mirrors the web client's spectrum tests so the two displays keep
+ * answering alike.
+ */
+class AutoGainTest {
+
+    private fun settle(gain: AutoGain, level: Float, frames: Int): Float {
+        var applied = 1f
+        repeat(frames) {
+            val bands = FloatArray(SPECTRUM_BANDS) { level }
+            applied = gain.apply(bands)
+        }
+        return applied
+    }
+
+    @Test
+    fun `lifts a quietly mastered episode towards the target`() {
+        val gain = AutoGain()
+        val applied = settle(gain, level = 0.25f, frames = 400)
+        assertTrue("expected a lift, got $applied", applied > 1f)
+
+        val bands = FloatArray(SPECTRUM_BANDS) { 0.25f }
+        gain.apply(bands)
+        assertTrue("the display should sit higher than the raw level", bands.max() > 0.25f)
+    }
+
+    @Test
+    fun `leaves silence alone rather than amplifying room tone`() {
+        val gain = AutoGain()
+        val applied = settle(gain, level = AGC_SILENCE / 3f, frames = 400)
+        assertEquals(1f, applied, 1e-6f)
+    }
+
+    @Test
+    fun `never pushes a band past full height`() {
+        val gain = AutoGain()
+        repeat(500) {
+            val bands = FloatArray(SPECTRUM_BANDS) { 0.3f }
+            gain.apply(bands)
+            for (value in bands) assertTrue("band exceeded full height: $value", value <= 1f)
+        }
+    }
+
+    @Test
+    fun `backs off quickly when a loud passage arrives`() {
+        val gain = AutoGain()
+        settle(gain, level = 0.2f, frames = 400)
+        val lifted = gain.apply(FloatArray(SPECTRUM_BANDS) { 0.2f })
+
+        var applied = 1f
+        repeat(20) { applied = gain.apply(FloatArray(SPECTRUM_BANDS) { 0.95f }) }
+        assertTrue("gain should fall back, was $lifted then $applied", applied < lifted)
+        assertEquals(1f, applied, 0.15f)
+    }
+
+    @Test
+    fun `a format change forgets the previous reference`() {
+        val gain = AutoGain()
+        settle(gain, level = 0.2f, frames = 400)
+        gain.reset()
+        assertEquals(0f, gain.reference, 1e-6f)
+    }
+}

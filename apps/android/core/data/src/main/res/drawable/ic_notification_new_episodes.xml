@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  New-episode notifications used android.R.drawable.stat_sys_download_done — a
+  download tick, for something that is not a download. There was no suitable
+  glyph in the project, so this is one.
+
+  The feed mark rather than a bell: it is what "new items in a show you follow"
+  means, and it survives being drawn at 24dp in a status bar, which a bell's
+  clapper and shoulders do not. Constructed from exact geometry rather than
+  traced by hand — a dot plus two annular quarter-sectors sharing the origin at
+  (48, 208):
+
+    dot        centre (76, 180) r 26
+    inner arc  radii 72 .. 100
+    outer arc  radii 140 .. 168
+
+  Each sector runs from its topmost point clockwise to its rightmost point, so
+  the outer arc sweeps 1 and the returning inner edge sweeps 0.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M76,154a26,26 0 1,0 0,52a26,26 0 1,0 0,-52Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M48,108A100,100 0 0,1 148,208L120,208A72,72 0 0,0 48,136Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M48,40A168,168 0 0,1 216,208L188,208A140,140 0 0,0 48,68Z" />
+</vector>

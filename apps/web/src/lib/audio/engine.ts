@@ -1,3 +1,13 @@
+import {
+	applyAutoGain,
+	createAutoGainState,
+	reduceToBands,
+	spectrumBandEdges,
+	SPECTRUM_CEILING_DB,
+	SPECTRUM_FLOOR_DB,
+	type AutoGainState
+} from '$lib/audio/spectrum';
+
 // Web Audio API Engine for KoalaCast
 // Handles Volume Boost (Gain + Compressor) and Real-time Silence Detection (Analyser)
 
@@ -10,6 +20,9 @@ export class AudioEngine {
 	private outputGainNode: GainNode | null = null;
 	private levelData: Uint8Array<ArrayBuffer> | null = null;
 	private freqData: Uint8Array<ArrayBuffer> | null = null;
+	/** Cached per-band bin ranges; the sample rate cannot change under a graph. */
+	private bandEdges: Int32Array | null = null;
+	private autoGain: AutoGainState = createAutoGainState();
 
 	public volumeBoost = false;
 	public skipSilence = false;
@@ -38,12 +51,20 @@ export class AudioEngine {
 			this.gainNode = this.audioCtx.createGain();
 			this.compressorNode = this.audioCtx.createDynamicsCompressor();
 			this.analyserNode = this.audioCtx.createAnalyser();
-			// 1024 gives ~43 Hz bins at 44.1 kHz, which is the coarsest resolution
-			// that still separates a voice's fundamental from the band below it.
+			// 2048 gives ~21 Hz bins at 44.1 kHz. 1024 was too coarse for the bottom
+			// of a log-spaced display: at 43 Hz per bin the lowest dozen bands all
+			// landed on the same one or two bins and drew the same number, which is
+			// most of what "only the left edge moves" was.
+			this.analyserNode.fftSize = 2048;
 			// The analyser's own smoothing is lowered from the 0.8 default because
 			// the visualiser is redrawn every frame and 0.8 visibly lags the audio.
-			this.analyserNode.fftSize = 1024;
 			this.analyserNode.smoothingTimeConstant = 0.6;
+			// Without this the defaults apply: -100 to -30. Ordinary mastered speech
+			// spends most of a sentence above a -30 ceiling, so band after band sat
+			// pinned at 255 — and a clipped bar cannot move. The window matches the
+			// Android client's exactly, so both displays answer alike.
+			this.analyserNode.minDecibels = SPECTRUM_FLOOR_DB;
+			this.analyserNode.maxDecibels = SPECTRUM_CEILING_DB;
 			this.levelData = new Uint8Array(this.analyserNode.fftSize);
 			this.freqData = new Uint8Array(this.analyserNode.frequencyBinCount);
 
@@ -90,6 +111,8 @@ export class AudioEngine {
 		this.outputGainNode = null;
 		this.levelData = null;
 		this.freqData = null;
+		this.bandEdges = null;
+		this.autoGain = createAutoGainState();
 		this.volumeBoost = false;
 		this.skipSilence = false;
 	}
@@ -127,11 +150,8 @@ export class AudioEngine {
 	 * Fills [out] with one 0..1 energy per band, low frequencies first, for a
 	 * spectrum display. Returns false when there is no graph to read.
 	 *
-	 * Bands are log-spaced, because linear bins put nine tenths of a spectrum
-	 * display above 4 kHz where speech has almost nothing, and the result is a
-	 * row of bars in which only the leftmost two ever move. They are also tilted
-	 * upwards with frequency to offset the natural rolloff of recorded speech,
-	 * so the right-hand bars are visible rather than technically-correct stubs.
+	 * The mapping itself lives in `spectrum.ts` so it can be tested without a
+	 * browser; this method is only the part that needs a live AnalyserNode.
 	 */
 	public getSpectrum(out: Float32Array): boolean {
 		const analyser = this.analyserNode;
@@ -139,39 +159,16 @@ export class AudioEngine {
 		if (!analyser || !data || !this.audioCtx) return false;
 		analyser.getByteFrequencyData(data);
 
-		const nyquist = this.audioCtx.sampleRate / 2;
-		const bins = data.length;
-		const bands = out.length;
-		const logMin = Math.log(SPECTRUM_MIN_HZ);
-		const logMax = Math.log(SPECTRUM_MAX_HZ);
-
-		for (let band = 0; band < bands; band++) {
-			const lowHz = Math.exp(logMin + ((logMax - logMin) * band) / bands);
-			const highHz = Math.exp(logMin + ((logMax - logMin) * (band + 1)) / bands);
-			let lowBin = Math.floor((lowHz / nyquist) * bins);
-			let highBin = Math.ceil((highHz / nyquist) * bins);
-			lowBin = Math.max(0, Math.min(bins - 1, lowBin));
-			// Narrow bands at the bottom can collapse onto a single bin; never let
-			// a band read zero bins and render as a permanent gap.
-			highBin = Math.max(lowBin + 1, Math.min(bins, highBin));
-
-			// Peak, not mean: averaging across a band that spans several kHz buries
-			// every transient, and transients are the part a listener recognises.
-			let peak = 0;
-			for (let bin = lowBin; bin < highBin; bin++) {
-				if (data[bin] > peak) peak = data[bin];
-			}
-			const tilt = 1 + (SPECTRUM_TILT * band) / Math.max(1, bands - 1);
-			out[band] = Math.max(0, Math.min(1, (peak / 255) * tilt));
+		if (!this.bandEdges || this.bandEdges.length !== out.length + 1) {
+			this.bandEdges = spectrumBandEdges(this.audioCtx.sampleRate, data.length, out.length);
 		}
+		reduceToBands(data, this.bandEdges, out);
+		// Normalise against what this display has been hearing rather than against
+		// full scale, so a quietly mastered episode fills the same height as a loud
+		// one. Silence is left alone.
+		applyAutoGain(out, this.autoGain);
 		return true;
 	}
 }
-
-/** Below this is rumble, above it is hiss; neither says anything about speech. */
-const SPECTRUM_MIN_HZ = 55;
-const SPECTRUM_MAX_HZ = 12_000;
-/** The top band ends up with this much extra gain over the bottom one. */
-const SPECTRUM_TILT = 1.6;
 
 export const audioEngine = new AudioEngine();
