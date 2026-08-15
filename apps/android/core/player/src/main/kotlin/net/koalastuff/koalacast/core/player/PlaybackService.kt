@@ -653,6 +653,17 @@ class PlaybackService : MediaLibraryService() {
             transitionOldPositionMs = null
             outroHandledEpisodeId = null
             automaticSeekTargetMs = null
+            // A "stop at 42:00" timer is about the episode it was set on. Only
+            // the natural end of an episode cleared it, so skipping to the next
+            // track carried the target across and paused the new episode at a
+            // position that meant nothing there. The per-podcast outro setting
+            // is re-read for the same reason: it was cached until the *podcast*
+            // changed, so a change made while a show was playing never took.
+            if (previousTrack != null && previousTrack.episodeId != nextTrack?.episodeId) {
+                sleepAtPositionMs = null
+                sleepAtEpisodeEnd = false
+            }
+            outroSettingsPodcastId = null
             if (player.isPlaying) {
                 TrackMediaItem.toTrack(mediaItem)?.let { track ->
                     recorder.start(

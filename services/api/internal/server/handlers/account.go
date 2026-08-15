@@ -259,7 +259,15 @@ func (h *AuthHandler) ExportAccount(w http.ResponseWriter, r *http.Request) {
 			}
 			collected = append(collected, map[string]any{"id": id, "created_at": created})
 		}
+		// An export is the listener's copy of their own data, and it is offered as
+		// a complete one. A read that stopped early has to fail the request rather
+		// than hand back a shorter file that looks whole.
+		err = rows.Err()
 		rows.Close()
+		if err != nil {
+			http.Error(w, `{"error":"failed to export account"}`, http.StatusInternalServerError)
+			return
+		}
 		export[table.key] = collected
 	}
 

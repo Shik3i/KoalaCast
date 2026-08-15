@@ -16,6 +16,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -130,17 +131,17 @@ func NewProxyHandler(audioProxyEnabled bool) *ProxyHandler {
 // 40 MP comfortably covers legitimate podcast artwork (typically <=3000x3000).
 const maxDecodedPixels = 40 * 1000 * 1000
 
-// Cold publisher/CDN connections routinely exceed one second. A 1.2 s deadline
-// made the proxy return its temporary placeholder before otherwise healthy
-// artwork arrived, forcing users to reload until a request happened to be fast.
-// Singleflight still coalesces identical requests while this bounded deadline
-// gives DNS, TLS and the first upstream response a realistic window.
 // acceptedImageFormats mirrors the decoders registered by this package's
 // imports (JPEG, PNG, GIF, WebP). Content negotiation is a promise about what
 // the client can read; advertising a format with no decoder turns every
 // negotiating CDN into a broken image.
 const acceptedImageFormats = "image/webp,image/jpeg,image/png,image/gif;q=0.8,*/*;q=0.5"
 
+// Cold publisher/CDN connections routinely exceed one second. A 1.2 s deadline
+// made the proxy return its temporary placeholder before otherwise healthy
+// artwork arrived, forcing users to reload until a request happened to be fast.
+// Singleflight still coalesces identical requests while this bounded deadline
+// gives DNS, TLS and the first upstream response a realistic window.
 const imageProxyTimeout = 8 * time.Second
 const maxAudioDownloadBytes = int64(2 * 1024 * 1024 * 1024)
 const maxAudioStreamDuration = 4 * time.Hour
@@ -164,6 +165,23 @@ func writeImageFallback(w http.ResponseWriter) {
 	_, _ = w.Write(imageFallbackWebP)
 }
 
+// proxyTargetAllowed rejects what the SSRF-safe transport cannot see.
+//
+// Address policy belongs to the dialer, which resolves and checks every IP at
+// connect time and again on each redirect — repeating it here would also reject
+// the loopback targets the transport is deliberately allowed to reach in tests.
+// What the dialer never looks at is the userinfo component, and both proxy
+// endpoints take a fully attacker-controlled URL: without this the server
+// presents whatever `https://user:pass@host/` a feed put in an artwork or
+// enclosure tag, turning the instance into a credential relay.
+func proxyTargetAllowed(rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	return true
+}
+
 // GetAudioProxy streams an enclosure through the listener's KoalaCast instance.
 // The browser uses it only as an explicitly enabled fallback when publisher CORS
 // blocks direct downloads or Web Audio effects. Ordinary playback stays direct.
@@ -174,6 +192,10 @@ func (h *ProxyHandler) GetAudioProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
 	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
+		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
+		return
+	}
+	if !proxyTargetAllowed(rawURL) {
 		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
 		return
 	}
@@ -397,6 +419,10 @@ type audioResolveResponse struct {
 func (h *ProxyHandler) GetImageProxy(w http.ResponseWriter, r *http.Request) {
 	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
 	if rawURL == "" || (!strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://")) {
+		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
+		return
+	}
+	if !proxyTargetAllowed(rawURL) {
 		http.Error(w, `{"error":"valid http/https url required"}`, http.StatusBadRequest)
 		return
 	}

@@ -324,10 +324,16 @@ func parseRSS(buf []byte) (*ParsedFeed, error) {
 			ArtworkURL:      strings.TrimSpace(item.ItunesImage.Href),
 			EpisodeNumber:   item.ItunesEpisode,
 			SeasonNumber:    item.ItunesSeason,
-			Explicit:        epExplicit,
-			Link:            strings.TrimSpace(item.Link),
-			ChaptersURL:     strings.TrimSpace(item.PodcastChapters.URL),
-			Transcripts:     transcripts,
+			// Computed above and then dropped on the floor: the field was never
+			// assigned, so every episode ever ingested stored an empty
+			// episode_type. The Inbox's "hide specials" filter keys on
+			// trailer/bonus and had nothing to key on, leaving it to guess from
+			// the title.
+			EpisodeType: epType,
+			Explicit:    epExplicit,
+			Link:        strings.TrimSpace(item.Link),
+			ChaptersURL: strings.TrimSpace(item.PodcastChapters.URL),
+			Transcripts: transcripts,
 		}
 
 		feed.Episodes = append(feed.Episodes, ep)
@@ -438,7 +444,11 @@ func parseAtom(buf []byte) (*ParsedFeed, error) {
 			EnclosureURL:    strings.TrimSpace(enclosureURL),
 			EnclosureType:   strings.TrimSpace(enclosureType),
 			EnclosureLength: enclosureLength,
-			Link:            strings.TrimSpace(epLink),
+			// Atom carries no itunes:episodeType. "full" is what the RSS branch
+			// falls back to for an untagged item, and consumers compare against
+			// trailer/bonus, so an Atom entry is a full episode by the same rule.
+			EpisodeType: "full",
+			Link:        strings.TrimSpace(epLink),
 		}
 
 		feed.Episodes = append(feed.Episodes, ep)

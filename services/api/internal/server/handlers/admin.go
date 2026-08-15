@@ -140,21 +140,10 @@ func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Suspend {
-		// Guard against an admin locking themselves out, or removing the last admin.
-		if authUser != nil && targetID == authUser.ID {
-			http.Error(w, `{"error":"you cannot suspend your own account"}`, http.StatusBadRequest)
-			return
-		}
-		if targetRole == "admin" {
-			var activeAdmins int
-			_ = h.DB.SQL.QueryRowContext(r.Context(),
-				"SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_suspended = 0").Scan(&activeAdmins)
-			if activeAdmins <= 1 {
-				http.Error(w, `{"error":"cannot suspend the last active admin"}`, http.StatusBadRequest)
-				return
-			}
-		}
+	if req.Suspend && authUser != nil && targetID == authUser.ID {
+		// Guard against an admin locking themselves out.
+		http.Error(w, `{"error":"you cannot suspend your own account"}`, http.StatusBadRequest)
+		return
 	}
 
 	suspendInt := 0
@@ -168,6 +157,24 @@ func (h *AdminHandler) SuspendUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+
+	// Counted inside the write transaction. Read outside it, two administrators
+	// suspending each other at the same time both saw two active admins, both
+	// passed, and the instance was left with none — recoverable only by editing
+	// the database by hand. Every transaction here is BEGIN IMMEDIATE, so the
+	// second one waits and sees the first one's effect.
+	if req.Suspend && targetRole == "admin" {
+		var activeAdmins int
+		if err := tx.QueryRowContext(r.Context(),
+			"SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_suspended = 0").Scan(&activeAdmins); err != nil {
+			http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+			return
+		}
+		if activeAdmins <= 1 {
+			http.Error(w, `{"error":"cannot suspend the last active admin"}`, http.StatusBadRequest)
+			return
+		}
+	}
 
 	if _, err := tx.ExecContext(r.Context(), "UPDATE users SET is_suspended = ? WHERE id = ?", suspendInt, targetID); err != nil {
 		http.Error(w, `{"error":"failed to update user status"}`, http.StatusInternalServerError)
