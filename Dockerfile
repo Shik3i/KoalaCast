@@ -28,7 +28,7 @@ RUN npm run build
 # Runs on the native architecture and cross-compiles to the target. CGO is
 # required for the SQLite driver, so a target-matched C toolchain is installed
 # via xx rather than emulating the whole build.
-FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder-api
+FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS builder-api
 COPY --from=xx / /
 RUN apk add --no-cache clang lld
 ARG TARGETPLATFORM
