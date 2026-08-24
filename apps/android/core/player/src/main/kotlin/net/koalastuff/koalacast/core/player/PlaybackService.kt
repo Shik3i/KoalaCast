@@ -143,7 +143,7 @@ class PlaybackService : MediaLibraryService() {
             ): AudioSink =
                 DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setEnableAudioOutputPlaybackParameters(enableAudioTrackPlaybackParams)
                     .setAudioProcessorChain(
                         DefaultAudioSink.DefaultAudioProcessorChain(
                             TeeAudioProcessor(AmplitudeBufferSink(amplitudeTap)),
@@ -285,7 +285,7 @@ class PlaybackService : MediaLibraryService() {
                 return MediaSession.ConnectionResult.reject()
             }
             val default = super.onConnect(session, controller)
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(
                     default.availableSessionCommands.buildUpon()
                         .add(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
@@ -422,16 +422,17 @@ class PlaybackService : MediaLibraryService() {
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> =
-            ResumptionCallback().onPlaybackResumption(mediaSession, controller)
+            ResumptionCallback().onPlaybackResumption(mediaSession, controller, isForPlayback)
     }
 
     /** Labelled with the speed it will show, so the notification reads as a value. */
     private fun speedButton(): CommandButton {
         val current = mediaSession?.player?.playbackParameters?.speed ?: 1f
-        return CommandButton.Builder()
+        return CommandButton.Builder(CommandButton.ICON_PLAYBACK_SPEED)
             .setDisplayName(getString(R.string.player_speed_label, current))
-            .setIconResId(R.drawable.ic_playback_speed)
+            .setCustomIconResId(R.drawable.ic_playback_speed)
             .setSessionCommand(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
             .build()
     }
@@ -474,6 +475,7 @@ class PlaybackService : MediaLibraryService() {
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
             scope.launch {
