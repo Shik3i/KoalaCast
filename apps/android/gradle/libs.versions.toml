@@ -21,7 +21,7 @@ work = "2.11.2"
 documentfile = "1.1.0"
 palette = "1.0.0"
 
-okhttp = "5.4.0"
+okhttp = "5.5.0"
 retrofit = "3.0.0"
 retrofitSerialization = "1.0.0"
 serialization = "1.11.0"
