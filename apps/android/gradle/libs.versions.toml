@@ -11,7 +11,7 @@ targetSdk = "36"
 coreKtx = "1.19.0"
 activityCompose = "1.13.0"
 lifecycle = "2.11.0"
-navigationCompose = "2.9.8"
+navigationCompose = "2.10.0"
 composeBom = "2026.08.00"
 hiltNavigationCompose = "1.4.0"
 
