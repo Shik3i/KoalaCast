@@ -15,7 +15,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0@sha256:c64defb9ed5a91eacb37f9
 # Pinned to BUILDPLATFORM and built exactly once: the output is a bundle of
 # static files with no architecture-specific content, so building it per target
 # platform was pure waste.
-FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS builder-web
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3 AS builder-web
 WORKDIR /app
 RUN npm install --global npm@11.16.0
 COPY apps/web/package.json apps/web/package-lock.json* ./
