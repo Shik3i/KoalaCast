@@ -27,3 +27,17 @@ test('Android backups include only the non-credential preferences file', () => {
 	assert.match(manifest, /android:dataExtractionRules="@xml\/data_extraction_rules"/);
 	assert.doesNotMatch(manifest, /android:backupAgent=/);
 });
+
+test('both publishing jobs enforce the full main gate before credentials or publication', () => {
+	for (const [name, sensitiveStep] of [['android-release.yml', 'Configure release signing'], ['docker-release.yml', 'Log in to GHCR']]) {
+		const workflow = readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), 'utf8');
+		const gate = workflow.indexOf('      - name: Full default-branch security gate\n');
+		const sensitive = workflow.indexOf(`      - name: ${sensitiveStep}\n`);
+		assert.ok(gate >= 0 && sensitive > gate, `${name}: gate must precede credential use`);
+		const step = workflow.slice(gate).split(/\n      - /)[0];
+		assert.match(step, /GH_TOKEN: \$\{\{ github.token \}\}/);
+		assert.match(step, /run: node scripts\/check-main-security\.mjs/);
+		assert.doesNotMatch(step, /continue-on-error:|\bif:|\|\|\s*true/);
+		assert.match(workflow.slice(0, gate), /security-events: read/);
+	}
+});
