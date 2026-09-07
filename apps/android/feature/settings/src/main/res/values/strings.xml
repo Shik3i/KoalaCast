@@ -4,7 +4,7 @@
     <string name="settings_app_version">KoalaCast version %1$s</string>
 
     <string name="settings_account_title">Account</string>
-    <string name="settings_account_signed_out_note">You are using KoalaCast without an account. Everything works, but nothing leaves this device. Sign in to sync subscriptions, progress and settings across your devices.</string>
+    <string name="settings_account_signed_out_note">You are using KoalaCast without an account. Your library and listening progress stay on this device. Online features still contact your selected server and podcast hosts. Sign in to sync subscriptions, progress and settings across your devices.</string>
     <string name="settings_account_signed_in">Signed in as %1$s.</string>
     <string name="settings_account_sign_in">Sign in or create account</string>
     <string name="settings_account_manage">Manage account</string>

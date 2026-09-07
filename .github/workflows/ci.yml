@@ -15,6 +15,10 @@ on:
       - '.github/workflows/ci.yml'
       - '.github/workflows/tests.yml'
       - '.github/workflows/docker-release.yml'
+      - '.github/workflows/android-ci.yml'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/android-release.yml'
+      - 'scripts/check-android-release*'
   pull_request:
     branches: [ main ]
     paths:
@@ -27,6 +31,10 @@ on:
       - '.github/workflows/ci.yml'
       - '.github/workflows/tests.yml'
       - '.github/workflows/docker-release.yml'
+      - '.github/workflows/android-ci.yml'
+      - '.github/workflows/codeql.yml'
+      - '.github/workflows/android-release.yml'
+      - 'scripts/check-android-release*'
 
 permissions:
   contents: read

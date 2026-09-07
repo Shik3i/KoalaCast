@@ -31,6 +31,18 @@ jobs:
       artifact-metadata: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      - name: Release policy and version preflight
+        run: |
+          node apps/web/scripts/check-release-policy.mjs
+          node --test scripts/check-android-release.test.mjs
+          node scripts/check-android-release.mjs
 
       # Fail loudly if the Gradle project is ever missing from the release ref.
       - name: Preflight — Gradle project present?
@@ -42,7 +54,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: 17
@@ -122,7 +134,20 @@ jobs:
           echo "slug=$slug" >> "$GITHUB_OUTPUT"
 
       - name: Verify package signatures
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
+          export LC_ALL=C
+          expected_cert=$(keytool -J-Duser.language=en -list -v \
+            -keystore "$ANDROID_KEYSTORE_FILE" -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS")
+          if grep -q 'CN=Android Debug' <<< "$expected_cert"; then
+            echo '::error::The configured release key is an Android debug key.'
+            exit 1
+          fi
+          expected_sha=$(sed -n 's/.*SHA256: //p' <<< "$expected_cert" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]]
           apksigner_bin="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           if [ -z "$apksigner_bin" ]; then
             echo "::error::apksigner was not found below $ANDROID_HOME/build-tools."
@@ -130,7 +155,9 @@ jobs:
           fi
           for apk in dist/*.apk; do
             [ -e "$apk" ] || continue
-            "$apksigner_bin" verify --verbose --print-certs "$apk"
+            apk_cert=$("$apksigner_bin" verify --verbose --print-certs "$apk")
+            grep -Fq "certificate SHA-256 digest: $expected_sha" <<< "$apk_cert"
+            "$(dirname "$apksigner_bin")/zipalign" -c -P 16 4 "$apk"
           done
           for bundle in dist/*.aab; do
             [ -e "$bundle" ] || continue
@@ -140,8 +167,14 @@ jobs:
             jarsigner -verify "$bundle"
             # `jarsigner -verify` also exits zero for an unsigned archive;
             # requiring a readable signer certificate closes that gap.
-            keytool -printcert -jarfile "$bundle" >/dev/null
+            bundle_cert=$(keytool -J-Duser.language=en -printcert -jarfile "$bundle")
+            bundle_sha=$(sed -n 's/.*SHA256: //p' <<< "$bundle_cert" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+            [ "$bundle_sha" = "$expected_sha" ]
           done
+
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f -- "$GITHUB_WORKSPACE/apps/android/release.keystore"
 
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4

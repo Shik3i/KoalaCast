@@ -15,7 +15,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0@sha256:c64defb9ed5a91eacb37f9
 # Pinned to BUILDPLATFORM and built exactly once: the output is a bundle of
 # static files with no architecture-specific content, so building it per target
 # platform was pure waste.
-FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS builder-web
+FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3 AS builder-web
 WORKDIR /app
 RUN npm install --global npm@11.16.0
 COPY apps/web/package.json apps/web/package-lock.json* ./
@@ -28,7 +28,7 @@ RUN npm run build
 # Runs on the native architecture and cross-compiles to the target. CGO is
 # required for the SQLite driver, so a target-matched C toolchain is installed
 # via xx rather than emulating the whole build.
-FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS builder-api
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS builder-api
 COPY --from=xx / /
 RUN apk add --no-cache clang lld
 ARG TARGETPLATFORM
@@ -39,8 +39,12 @@ COPY services/api/go.mod services/api/go.sum* ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY services/api/ ./
 # Build cache is keyed per target arch so amd64 and arm64 don't evict each other.
+# Scan the symbol-bearing binary first: a stripped binary makes govulncheck
+# conservatively report entire modules, including unused OpenPGP packages.
 RUN --mount=type=cache,target=/root/.cache/go-build,id=go-build-$TARGETPLATFORM \
     --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=1 xx-go build -trimpath -ldflags="-w" -o koalacast.audit ./cmd/server && \
+    CGO_ENABLED=0 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 -mode=binary koalacast.audit && \
     CGO_ENABLED=1 xx-go build -trimpath -ldflags="-w -s" -o koalacast ./cmd/server && \
     xx-verify koalacast
 

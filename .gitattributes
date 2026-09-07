@@ -35,6 +35,8 @@ gradlew text eol=lf
 
 # Encrypted and media assets are never text-normalized.
 *.enc binary
+# This SOPS backup is dotenv text; CRLF breaks older Windows SOPS parsers.
+android-signing.env.enc text eol=lf diff
 *.png binary
 *.jpg binary
 *.jpeg binary

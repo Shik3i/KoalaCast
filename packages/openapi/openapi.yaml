@@ -17,14 +17,23 @@ security: []
 
 tags:
   - name: Health
+    description: Service liveness, database readiness and public configuration.
   - name: Proxy
+    description: Privacy-preserving artwork and media proxy endpoints.
   - name: Podcasts
+    description: Podcast discovery, search, feed metadata and episodes.
   - name: Push
+    description: Optional browser push subscriptions and delivery configuration.
   - name: Authentication
+    description: Accounts, authentication, recovery, devices and sessions.
   - name: Sync
+    description: Versioned cross-device synchronization and conflict handling.
   - name: OPML
+    description: Import and export of podcast subscriptions.
   - name: Statistics
+    description: Personal listening statistics and opt-in community aggregates.
   - name: Admin
+    description: Restricted instance administration.
 
 paths:
   /healthz:
@@ -2022,7 +2031,9 @@ components:
             Full entity payload. playback_state and listening_session require their
             corresponding payload schema. Queue, podcast settings, and global settings
             use versioned JSON objects; subscription/favorite deletes use an empty object.
-          oneOf:
+            The server selects and validates the payload by entity_type and action.
+            These extensible payload shapes overlap, so this is not an exclusive union.
+          anyOf:
             - $ref: '#/components/schemas/SubscriptionSyncPayload'
             - $ref: '#/components/schemas/FavoriteSyncPayload'
             - $ref: '#/components/schemas/PlaybackStatePayload'

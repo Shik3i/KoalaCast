@@ -36,6 +36,10 @@ jobs:
         working-directory: services/api
         run: go vet ./...
 
+      - name: Reachable Go vulnerabilities
+        working-directory: services/api
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
       - name: go test (race)
         working-directory: services/api
         run: go test -race -count=1 ./...
@@ -66,6 +70,9 @@ jobs:
       - name: Unit tests
         working-directory: apps/web
         run: npm test
+
+      - name: Release guard regression tests
+        run: node --test scripts/check-android-release.test.mjs
 
       # Fails on structural translation problems (unknown keys, broken
       # placeholders, missing plural forms). Untranslated keys are reported as

@@ -27,10 +27,30 @@ The exact release gate is available from the repository root:
 make android-release-check
 ```
 
-It runs `test lint assembleRelease bundleRelease`, matching the tagged/manual
-Android release workflow.
+It checks the version and release policy, then runs `testDebugUnitTest`,
+`testReleaseUnitTest`, `lintRelease`, `assembleRelease` and `bundleRelease` in
+separate Gradle invocations, matching the tagged/manual release checks.
+Release signing environment variables must already be configured for this Make
+target; the Windows recovery wrapper below supplies them securely.
+
+Run device instrumentation sequentially on one explicitly selected test device:
+
+```powershell
+$env:ANDROID_SERIAL = 'emulator-5556' # replace with the intended adb devices serial
+./gradlew.bat --no-daemon --no-parallel --max-workers=1 connectedDebugAndroidTest
+```
+
+Parallel module instrumentation on one emulator can time out in
+`AndroidAdditionalTestOutputPlugin` before tests start. Do not restart Docker
+or erase an existing app to recover this test-runner failure.
 
 ### Release signing and recovery
+
+On Windows, run `./scripts/build-android-release.ps1` from the repository root
+with `JAVA_HOME` pointing to a JDK. It decrypts the recovery backup in memory,
+uses an ACL-restricted temporary keystore, runs sequential debug/release tests,
+release lint and signed APK/AAB builds, verifies both signers and APK ZIP
+alignment, and removes the temporary key in `finally`. It does not publish.
 
 The permanent Android release key has two protected copies:
 
@@ -44,7 +64,7 @@ Private age identities, decrypted environment files and raw
 
 ```bash
 sops filestatus --input-type dotenv android-signing.env.enc
-sops decrypt --input-type dotenv --output-type dotenv android-signing.env.enc >/dev/null
+sops --decrypt --input-type dotenv --output-type dotenv android-signing.env.enc >/dev/null
 ```
 
 When adding or replacing a public age recipient, update
