@@ -188,6 +188,9 @@ func (c *Client) doAuthed(endpoint string) ([]byte, error) {
 	}
 
 	epoch := time.Now().Unix()
+	// Podcast Index mandates SHA1(key + secret + epoch) for its wire protocol:
+	// https://github.com/Podcastindex-org/example-code/blob/master/README.md
+	// This is not password storage; replacing it with a password KDF breaks auth.
 	authHeader := fmt.Sprintf("%s%s%d", c.apiKey, c.apiSecret, epoch)
 	hash := sha1.Sum([]byte(authHeader))
 	hashHex := hex.EncodeToString(hash[:])

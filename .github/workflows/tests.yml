@@ -72,7 +72,7 @@ jobs:
         run: npm test
 
       - name: Release guard regression tests
-        run: node --test scripts/check-android-release.test.mjs
+        run: node --test scripts/check-android-release.test.mjs scripts/check-main-security.test.mjs
 
       # Fails on structural translation problems (unknown keys, broken
       # placeholders, missing plural forms). Untranslated keys are reported as

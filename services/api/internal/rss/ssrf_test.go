@@ -122,32 +122,41 @@ func TestSafeHTTPClient_BlockedDNS(t *testing.T) {
 	// Test 1: Host resolves to 127.0.0.1
 	req, _ := http.NewRequest(http.MethodGet, "http://malicious.local/rss", nil)
 	_, err := client.Do(req)
-	if err == nil {
-		t.Errorf("expected error connecting to malicious.local, got nil")
+	if err == nil || !strings.Contains(err.Error(), "restricted IP") {
+		t.Errorf("expected restricted-IP error connecting to malicious.local, got %v", err)
 	}
 
 	// Test 2: Host resolves to mixed IPs (public + private) -> Must be blocked
 	req2, _ := http.NewRequest(http.MethodGet, "http://mixed.local/rss", nil)
 	_, err2 := client.Do(req2)
-	if err2 == nil {
-		t.Errorf("expected error connecting to mixed.local, got nil")
+	if err2 == nil || !strings.Contains(err2.Error(), "restricted IP") {
+		t.Errorf("expected restricted-IP error connecting to mixed.local, got %v", err2)
 	}
 }
 
 func TestSafeHTTPClient_RedirectToBlocked(t *testing.T) {
+	var hits int
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
 		http.Redirect(w, r, "http://127.0.0.1/secret", http.StatusFound)
 	}))
 	defer ts.Close()
 
 	client := NewSafeHTTPClient(SafeTransportConfig{
 		ConnectTimeout: 2 * time.Second,
+		Resolver:       &mockResolver{hosts: map[string][]net.IP{"public.example": {net.ParseIP("93.184.216.34")}}},
+		Dialer: dialFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+			if address != "93.184.216.34:80" {
+				t.Errorf("unexpected dial target %q", address)
+			}
+			return (&net.Dialer{}).DialContext(ctx, network, ts.Listener.Addr().String())
+		}),
 	})
 
-	req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+	req, _ := http.NewRequest(http.MethodGet, "http://public.example/feed", nil)
 	_, err := client.Do(req)
-	if err == nil {
-		t.Errorf("expected error when redirecting to 127.0.0.1, got nil")
+	if err == nil || !strings.Contains(err.Error(), "restricted IP") || hits != 1 {
+		t.Errorf("redirect must reach the public first hop, then reject private target: hits=%d err=%v", hits, err)
 	}
 }
 
@@ -160,11 +169,50 @@ func TestSafeHTTPClient_ExcessiveRedirects(t *testing.T) {
 
 	client := NewSafeHTTPClient(SafeTransportConfig{
 		ConnectTimeout: 2 * time.Second,
+		AllowLoopback:  true,
 	})
 
 	req, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
 	_, err := client.Do(req)
-	if err == nil {
-		t.Errorf("expected error on excessive redirects, got nil")
+	if err == nil || !strings.Contains(err.Error(), "too many redirects") {
+		t.Errorf("expected redirect limit error, got %v", err)
+	}
+}
+
+type dialFunc func(context.Context, string, string) (net.Conn, error)
+
+func (f dialFunc) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return f(ctx, network, address)
+}
+
+func TestSafeHTTPClientInitialCredentialsNeverDial(t *testing.T) {
+	for _, allowLoopback := range []bool{false, true} {
+		dials := 0
+		client := NewSafeHTTPClient(SafeTransportConfig{
+			AllowLoopback: allowLoopback,
+			Dialer: dialFunc(func(context.Context, string, string) (net.Conn, error) {
+				dials++
+				return nil, errors.New("unexpected dial")
+			}),
+		})
+		_, err := client.Get("http://user:secret@127.0.0.1/private")
+		if err == nil || !strings.Contains(err.Error(), "embedded URL credentials") || dials != 0 {
+			t.Fatalf("allowLoopback=%v: credentials reached transport: dials=%d err=%v", allowLoopback, dials, err)
+		}
+	}
+}
+
+func TestSafeHTTPClientPinsValidatedDNSAddress(t *testing.T) {
+	var dialed string
+	client := NewSafeHTTPClient(SafeTransportConfig{
+		Resolver: &mockResolver{hosts: map[string][]net.IP{"public.example": {net.ParseIP("93.184.216.34")}}},
+		Dialer: dialFunc(func(_ context.Context, _, address string) (net.Conn, error) {
+			dialed = address
+			return nil, errors.New("stop after address inspection")
+		}),
+	})
+	_, _ = client.Get("https://public.example/feed")
+	if dialed != "93.184.216.34:443" {
+		t.Fatalf("dial must use validated IP, not re-resolve hostname: %q", dialed)
 	}
 }

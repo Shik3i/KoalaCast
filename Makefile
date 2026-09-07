@@ -62,7 +62,7 @@ tidy:
 android-release-check:
 	@echo "==> Running the release gate (test, lint, APK and AAB)..."
 	@node scripts/check-android-release.mjs
-	@node --test scripts/check-android-release.test.mjs
+	@node --test scripts/check-android-release.test.mjs scripts/check-main-security.test.mjs
 	@node apps/web/scripts/check-release-policy.mjs
 	@cd apps/android && ./gradlew --no-daemon testDebugUnitTest
 	@cd apps/android && ./gradlew --no-daemon testReleaseUnitTest

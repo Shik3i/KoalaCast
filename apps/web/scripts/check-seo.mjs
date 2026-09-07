@@ -32,7 +32,7 @@ if (!robots.includes('Sitemap: https://cast.koalastuff.net/sitemap.xml')) {
 for (const path of ['/admin', '/account', '/settings', '/profile', '/library', '/inbox', '/search']) {
 	if (!robots.includes(`Disallow: ${path}`)) failures.push(`robots.txt must disallow ${path}`);
 }
-if (!llms.startsWith('# KoalaCast') || !llms.includes('https://github.com/Shik3i/KoalaCast')) {
+if (!llms.startsWith('# KoalaCast') || !llms.split(/\r?\n/).some((line) => line === 'Source code: https://github.com/Shik3i/KoalaCast')) {
 	failures.push('llms.txt must identify KoalaCast and its source repository');
 }
 if (!llms.includes('https://cast.koalastuff.net/llms-full.txt')) {

@@ -29,6 +29,7 @@ jobs:
       id-token: write # keyless signing for the artifact attestation
       attestations: write
       artifact-metadata: write
+      security-events: read # verify the full default-branch scan before signing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -41,8 +42,13 @@ jobs:
       - name: Release policy and version preflight
         run: |
           node apps/web/scripts/check-release-policy.mjs
-          node --test scripts/check-android-release.test.mjs
+          node --test scripts/check-android-release.test.mjs scripts/check-main-security.test.mjs
           node scripts/check-android-release.mjs
+
+      - name: Full default-branch security gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-main-security.mjs
 
       # Fail loudly if the Gradle project is ever missing from the release ref.
       - name: Preflight — Gradle project present?

@@ -19,7 +19,7 @@ try {
     $env:JAVA_HOME = $JavaHome
     & node scripts/check-android-release.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Android version preflight failed' }
-    & node --test scripts/check-android-release.test.mjs
+    & node --test scripts/check-android-release.test.mjs scripts/check-main-security.test.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Android release guard tests failed' }
     & node apps/web/scripts/check-release-policy.mjs
     if ($LASTEXITCODE -ne 0) { throw 'Release policy failed' }

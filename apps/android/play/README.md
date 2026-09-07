@@ -13,7 +13,7 @@ so the next submission does not have to reconstruct it from memory.
 | [`store-listing-import.csv`](store-listing-import.csv) | Structured EN/DE reference and translation context |
 | [`data-safety.md`](data-safety.md) | Answers for the Data safety form |
 | [`declarations.md`](declarations.md) | App access, foreground service, permissions, account deletion |
-| [`release-notes-v0.11.6.md`](release-notes-v0.11.6.md) | Current Play release notes, English and German |
+| [`release-notes-v0.11.7.md`](release-notes-v0.11.7.md) | Current Play release notes, English and German |
 | [`feature-graphic.png`](feature-graphic.png) | 1024×500 feature graphic |
 | [`screenshots/`](screenshots) | Phone screenshots, 1080×1920 |
 

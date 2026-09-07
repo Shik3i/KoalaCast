@@ -93,6 +93,22 @@ type SafeTransportConfig struct {
 	AllowLoopback         bool // Set true ONLY in unit tests targeting httptest.NewServer
 }
 
+// Validate the first request as well as redirects. A dialer sees only host:port,
+// so it cannot reject userinfo before net/http turns it into Authorization.
+type safeRoundTripper struct {
+	transport     *http.Transport
+	allowLoopback bool
+}
+
+func (s *safeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := validateURL(req.URL.String(), s.allowLoopback); err != nil {
+		return nil, err
+	}
+	return s.transport.RoundTrip(req)
+}
+
+func (s *safeRoundTripper) CloseIdleConnections() { s.transport.CloseIdleConnections() }
+
 // NewSafeHTTPClient creates a secure http.Client with custom DialContext that validates DNS resolution at connect time.
 func NewSafeHTTPClient(cfg SafeTransportConfig) *http.Client {
 	if cfg.Resolver == nil {
@@ -164,13 +180,13 @@ func NewSafeHTTPClient(cfg SafeTransportConfig) *http.Client {
 		requestTimeout = 0
 	}
 	client := &http.Client{
-		Transport: transport,
+		Transport: &safeRoundTripper{transport: transport, allowLoopback: cfg.AllowLoopback},
 		Timeout:   requestTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects (max 5)")
 			}
-			return ValidateURL(req.URL.String())
+			return validateURL(req.URL.String(), cfg.AllowLoopback)
 		},
 	}
 
@@ -179,6 +195,10 @@ func NewSafeHTTPClient(cfg SafeTransportConfig) *http.Client {
 
 // ValidateURL verifies scheme, embedded credentials, and syntax before initiating a request.
 func ValidateURL(rawURL string) error {
+	return validateURL(rawURL, false)
+}
+
+func validateURL(rawURL string, allowLoopback bool) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL syntax: %w", err)
@@ -199,7 +219,7 @@ func ValidateURL(rawURL string) error {
 
 	// If host is an explicit IP literal, check immediately
 	if ip := net.ParseIP(hostname); ip != nil {
-		if IsIPBlocked(ip) {
+		if !allowLoopback && IsIPBlocked(ip) {
 			return fmt.Errorf("restricted IP address target: %s", hostname)
 		}
 	}
