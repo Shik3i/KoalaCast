@@ -4,7 +4,7 @@
     <string name="settings_app_version">KoalaCast Version %1$s</string>
 
     <string name="settings_account_title">Konto</string>
-    <string name="settings_account_signed_out_note">Du nutzt KoalaCast ohne Konto. Alles funktioniert, aber nichts verlässt dieses Gerät. Melde dich an, um Abos, Fortschritt und Einstellungen über deine Geräte hinweg zu synchronisieren.</string>
+    <string name="settings_account_signed_out_note">Du nutzt KoalaCast ohne Konto. Deine Mediathek und dein Hörfortschritt bleiben auf diesem Gerät. Online-Funktionen kontaktieren weiterhin deinen gewählten Server und Podcast-Anbieter. Melde dich an, um Abos, Fortschritt und Einstellungen über deine Geräte hinweg zu synchronisieren.</string>
     <string name="settings_account_signed_in">Angemeldet als %1$s.</string>
     <string name="settings_account_sign_in">Anmelden oder Konto erstellen</string>
     <string name="settings_account_manage">Konto verwalten</string>

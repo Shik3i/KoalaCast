@@ -81,17 +81,23 @@ expected use of the type — playback is the app.
 
 ### `dataSync`
 
-`EpisodeDownloadWorker` downloads an episode for offline listening, started by
-an explicit user action ("Download") or by the per-show auto-download the
-listener enabled. It is a user-initiated file transfer that must survive the app
-going to the background, shows an ongoing notification with progress, and stops
-when the transfer finishes, fails or is cancelled. It never runs on its own
-schedule and never transfers anything the listener did not ask for.
+`EpisodeDownloadWorker` downloads episodes for offline listening. A transfer is
+queued either by tapping "Download" or by optional per-show auto-download.
+`AutoDownloadWorker` checks opted-in subscriptions every six hours using periodic
+WorkManager work. The exact execution time is scheduled by Android; it is not a
+fresh direct user action. Audio transfers respect the listener's Wi-Fi-only,
+storage budget and concurrency settings.
 
-> If the Console pushes back on `dataSync`, the honest alternative is
-> `androidx.work` with `setForegroundAsync` under a *user-initiated data
-> transfer* job on Android 14+. The behaviour is already exactly that; only the
-> declared type would change.
+Each active transfer uses WorkManager's `dataSync` foreground service and shows
+a progress notification. Users can pause or remove downloads in the app, or
+disable auto-download for a show. The service ends when
+the transfer completes, fails or is cancelled. The declaration and demonstration
+video must show both manual and scheduled transfers, including cancellation.
+
+This implementation uses WorkManager foreground work, **not** the
+user-initiated data transfer jobs API. Migrating to that API would require a
+separate implementation for direct user requests; scheduled auto-downloads must
+not be described as user-initiated data transfer jobs.
 
 ## Permissions
 

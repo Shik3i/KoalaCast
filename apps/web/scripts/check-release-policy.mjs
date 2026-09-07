@@ -5,7 +5,7 @@ const root = resolve(import.meta.dirname, '../../..');
 const workflowDir = resolve(root, '.github/workflows');
 const androidRelease = 'android-release.yml';
 const releaseCreation = /\bgh\s+release\s+create\b|action-gh-release|releases\/create|createRelease/i;
-const androidBuildReference = /apps\/android|\bgradlew\b/i;
+const androidBuildReference = /working-directory:\s*apps\/android|\bgradlew\b/i;
 const errors = [];
 
 for (const name of readdirSync(workflowDir).filter((entry) => /\.ya?ml$/.test(entry))) {
@@ -18,8 +18,19 @@ for (const name of readdirSync(workflowDir).filter((entry) => /\.ya?ml$/.test(en
 	if (name !== androidRelease && releaseCreation.test(source)) {
 		errors.push(`${name}: GitHub Releases may only be created by ${androidRelease}`);
 	}
-	if (name !== androidRelease && androidBuildReference.test(source)) {
-		errors.push(`${name}: Android tests and builds may only run from ${androidRelease} after an android-v* tag`);
+	if (![androidRelease, 'android-ci.yml', 'codeql.yml'].includes(name) && androidBuildReference.test(source)) {
+		errors.push(`${name}: Android verification belongs in android-ci.yml/codeql.yml; packaging belongs in ${androidRelease}`);
+	}
+	if (name === 'codeql.yml' && /secrets\.|(?:contents|packages|id-token|attestations):\s*write\b|\b(?:assembleRelease|bundleRelease|packageRelease|publish)\b/.test(source)) {
+		errors.push(`${name}: code scanning must not load signing secrets, package releases or publish artifacts`);
+	}
+	if (name === 'android-ci.yml') {
+		if (/secrets\.|:\s*write\b|\b(?:assembleRelease|bundleRelease|packageRelease|publish)\b/.test(source)) {
+			errors.push(`${name}: verification must stay read-only, without signing secrets or release packaging`);
+		}
+		for (const task of ['testDebugUnitTest', 'testReleaseUnitTest', 'lintRelease']) {
+			if (!source.includes(task)) errors.push(`${name}: missing ${task}`);
+		}
 	}
 }
 
@@ -70,4 +81,4 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-console.log('Release policy check passed: Android tests/builds require android-v*; website tags publish only Docker images.');
+console.log('Release policy check passed: Android CI verifies without signing; android-v* publishes APK/AAB; website tags publish only Docker images.');

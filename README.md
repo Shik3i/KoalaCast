@@ -15,7 +15,7 @@ Calm, distraction-free listening — with optional account-backed cross-device s
 [![CI](https://github.com/Shik3i/KoalaCast/actions/workflows/ci.yml/badge.svg)](https://github.com/Shik3i/KoalaCast/actions/workflows/ci.yml)
 [![Docker Release](https://github.com/Shik3i/KoalaCast/actions/workflows/docker-release.yml/badge.svg)](https://github.com/Shik3i/KoalaCast/actions/workflows/docker-release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Go 1.26.5](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go&logoColor=white)](services/api)
+[![Go 1.26.8](https://img.shields.io/badge/Go-1.26.8-00ADD8?logo=go&logoColor=white)](services/api)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-5-FF3E00?logo=svelte&logoColor=white)](apps/web)
 
 </div>
@@ -160,7 +160,7 @@ Directory indexes: [applications](apps/README.md),
 
 ### Requirements
 
-- **Go** 1.26.5+
+- **Go** 1.26.8+
 - **Node.js** 24+
 - **Docker** 24+ with Compose (optional, for the container workflow)
 

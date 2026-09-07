@@ -25,7 +25,7 @@ class KoalaCastWidgetProvider : AppWidgetProvider() {
         // private actions. Both therefore carry the token that only this app's own
         // storage holds. A missing token means no widget has ever been rendered,
         // and then there is nothing to refresh either.
-        if (intent.getStringExtra(EXTRA_TOGGLE_TOKEN) != storedToggleToken(context)) return
+        if (!isTrustedWidgetAction(intent.getStringExtra(EXTRA_TOGGLE_TOKEN), storedToggleToken(context))) return
         when (intent.action) {
             ACTION_TOGGLE -> togglePlayback(context)
             ACTION_STATE_CHANGED -> updateAll(context)

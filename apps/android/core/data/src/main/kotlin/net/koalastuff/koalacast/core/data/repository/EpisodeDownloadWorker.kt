@@ -79,10 +79,11 @@ class EpisodeDownloadWorker @AssistedInject constructor(
         val target = createTarget(ownerId, episodeId, storage, treeUri)
             ?: return permanentFailure(episodeId, row.totalBytes, "Storage folder unavailable")
         val existing = target.length()
-        setForeground(createForeground(row.title, 0))
-        update(episodeId, DownloadState.DOWNLOADING, existing, row.totalBytes, target.location)
-
         return try {
+            // Foreground promotion can fail when Android restricts a scheduled
+            // start. Route it through the same bounded retry/state update as IO.
+            setForeground(createForeground(row.title, 0))
+            update(episodeId, DownloadState.DOWNLOADING, existing, row.totalBytes, target.location)
             val request = Request.Builder()
                 .url(row.enclosureUrl)
                 .apply { if (existing > 0) header("Range", "bytes=$existing-") }

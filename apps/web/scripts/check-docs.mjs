@@ -58,7 +58,7 @@ for (const markdownFile of markdownFiles) {
 
 const requiredStatements = [
 	['README.md', 'optional account-backed cross-device sync'],
-	['README.md', '1.26.5+'],
+	['README.md', '1.26.8+'],
 	['apps/README.md', 'P0–P7 shipped'],
 	['docs/current-status.md', 'transactional synchronized-data deletion'],
 	['docs/privacy/privacy-policy.md', 'not encrypted at the application layer'],

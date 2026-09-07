@@ -13,7 +13,7 @@ so the next submission does not have to reconstruct it from memory.
 | [`store-listing-import.csv`](store-listing-import.csv) | Structured EN/DE reference and translation context |
 | [`data-safety.md`](data-safety.md) | Answers for the Data safety form |
 | [`declarations.md`](declarations.md) | App access, foreground service, permissions, account deletion |
-| [`release-notes-v0.11.0.md`](release-notes-v0.11.0.md) | Play release notes, English and German |
+| [`release-notes-v0.11.6.md`](release-notes-v0.11.6.md) | Current Play release notes, English and German |
 | [`feature-graphic.png`](feature-graphic.png) | 1024×500 feature graphic |
 | [`screenshots/`](screenshots) | Phone screenshots, 1080×1920 |
 
@@ -42,7 +42,9 @@ so the next submission does not have to reconstruct it from memory.
 python apps/android/play/generate-feature-graphic.py
 ```
 
-The screenshots were taken on the `koala36` emulator forced to a real phone
+The current screenshots were captured on 2026-09-07 from release `0.11.6 (46)`
+on the isolated `koalacast-release-audit` Android 36 AVD. The existing `koala36`
+AVD and its differently signed installation were preserved. The test AVD uses a real phone
 geometry, because the 320×640 viewport used for the parity comparison is below
 what a store listing should show:
 
