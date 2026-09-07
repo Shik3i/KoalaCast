@@ -19,6 +19,7 @@ on:
       - '.github/workflows/codeql.yml'
       - '.github/workflows/android-release.yml'
       - 'scripts/check-android-release*'
+      - 'scripts/check-main-security*'
   pull_request:
     branches: [ main ]
     paths:
@@ -35,6 +36,7 @@ on:
       - '.github/workflows/codeql.yml'
       - '.github/workflows/android-release.yml'
       - 'scripts/check-android-release*'
+      - 'scripts/check-main-security*'
 
 permissions:
   contents: read

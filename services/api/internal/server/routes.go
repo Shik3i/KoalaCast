@@ -5,10 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
-
-	"strings"
 
 	"github.com/Shik3i/KoalaCast/services/api/internal/config"
 	"github.com/Shik3i/KoalaCast/services/api/internal/db"
@@ -230,36 +227,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 	}
 
 	if _, err := os.Stat(webDir); err == nil {
-		fileServer := http.FileServer(http.Dir(webDir))
-		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api/") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = w.Write([]byte(`{"error":"not found"}`))
-				return
-			}
-			if strings.HasPrefix(r.URL.Path, "/_app/immutable/") {
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-			} else {
-				switch strings.ToLower(filepath.Ext(r.URL.Path)) {
-				case ".avif", ".jpg", ".jpeg", ".png", ".svg", ".webp", ".woff2":
-					// These stable app-shell assets are versioned alongside each
-					// deployment. A week avoids repeat-download warnings without
-					// making a self-hoster's icon update sticky for a year.
-					w.Header().Set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400")
-				case ".txt", ".xml", ".webmanifest":
-					w.Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
-				}
-			}
-
-			path := filepath.Join(webDir, filepath.Clean(r.URL.Path))
-			if info, err := os.Stat(path); err != nil || info.IsDir() {
-				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-				http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
-				return
-			}
-			fileServer.ServeHTTP(w, r)
-		})
+		r.NotFound(staticWebHandler(webDir))
 	}
 
 	return r
