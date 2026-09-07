@@ -48,3 +48,26 @@ No CodeQL query, language, source directory or test is excluded to make this aud
 pass. Proven false positives are triaged individually with these explanations;
 the full scan and publication gate remain enabled. Changes still require local
 regression gates and fresh PR/default-branch scans before the new release.
+
+## Authorized final verification and dual release
+
+The user explicitly authorized reviewing all alerts, fixing genuine defects,
+dismissing proven false positives individually, and publishing both release
+channels. A fresh review of all 19 alerts confirms the dispositions above:
+alerts #1 and #5 were automatically marked `fixed` by the full main scan on
+`61bbe1c930af5d61583fe92cdffd0159d2335f98`, with no manual dismissal. The remaining
+17 alerts were dismissed as `false positive` after re-verification, each with
+its own explanation referencing this evidence. A fresh API read confirms zero
+open main alerts. None is hidden by a query exclusion or a weaker scanner
+configuration.
+
+Both release targets are now `0.11.7`: web/Docker `v0.11.7`, Android
+`android-v0.11.7` with versionCode 47. Existing tags stay unchanged. The Docker
+publishing job now enforces the same exact-main-commit security gate before
+registry login; a regression test checks both publishing jobs. This closes the
+previous release-policy gap where the Android job checked baseline alerts but
+the Docker job only required successful test jobs.
+
+GitHub publication does not submit anything to Google Play. Cast receiver and
+Android Auto head-unit tests remain unverified; no claim of those hardware tests
+is made by a successful release workflow.
