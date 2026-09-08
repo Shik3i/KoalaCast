@@ -90,3 +90,6 @@ tmp/
 CLAUDE.local.md
 GEMINI.md
 .mcp.json
+
+# Assembled Play Console upload pack; rebuilt from apps/android/play/
+play-upload-*/

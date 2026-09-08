@@ -8,14 +8,24 @@ KoalaCast: Podcast Player
 
 ## Short description (80 characters max)
 
-Play flags monetisation claims here as promotional. The previous line said "no
-ads", which the Console rejected with "must not contain keywords that indicate
-price or a promotion" — it is the one field where the app's freedom from
-advertising cannot be stated. The full description below still says it, where
-the rule does not apply.
+This field may not carry price or promotional information, and the Console
+enforces it. The line below is the one that passes; do not change it without
+checking the warning afterwards.
+
+What is actually known: the original wording, "Open-source podcast player with
+offline listening, no ads or analytics tracking", was flagged, and the line below
+is not. Between the two, both "no ads" and "Open-source" were dropped, so which
+of them Play objected to was never isolated — "no ads" is the obvious
+monetisation claim, and "open source" can be read as implying free of charge.
+Google does not publish the keyword list, so the only way to find out is to put
+one of them back and watch the warning.
+
+Both facts — no advertising, MIT-licensed — are in the full description, where
+the rule does not apply. The warning affects promotional eligibility only; it
+never blocks publishing.
 
 ```
-Open-source podcast player: offline downloads, sleep timer, audio visualizers.
+Podcast player with offline downloads, chapters, sleep timer and visualizers.
 ```
 
 ## Full description (4000 characters max)
