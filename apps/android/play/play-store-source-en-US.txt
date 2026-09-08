@@ -12,7 +12,7 @@ APP NAME — MAXIMUM 30 CHARACTERS
 KoalaCast: Podcast Player
 
 SHORT DESCRIPTION — MAXIMUM 80 CHARACTERS
-Open-source podcast player: offline downloads, sleep timer, audio visualizers.
+Podcast player with offline downloads, chapters, sleep timer and visualizers.
 
 FULL DESCRIPTION — MAXIMUM 4000 CHARACTERS
 KoalaCast is a private, open-source podcast player for Android. Discover,

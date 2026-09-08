@@ -1,7 +1,5 @@
-locale,language,is_source,field,character_limit,text,translation_context
-en-US,English,true,app_name,30,KoalaCast: Podcast Player,Keep the KoalaCast brand unchanged. Podcast Player is the single primary search descriptor. Do not add promotional claims or more keywords.
-en-US,English,true,short_description,80,"Open-source podcast player: offline downloads, sleep timer, audio visualizers.","Natural US English. Play rejects monetisation claims in this field as promotional, so the absence of advertising is stated only in the full description. Describe features, never price or promotion."
-en-US,English,true,full_description,4000,"KoalaCast is a private, open-source podcast player for Android. Discover,
+locale,app_name,short_description,full_description
+en-US,KoalaCast: Podcast Player,"Podcast player with offline downloads, chapters, sleep timer and visualizers.","KoalaCast is a private, open-source podcast player for Android. Discover,
 subscribe to, stream and download podcasts without ads or behavioral profiling.
 
 No account is required. Your subscriptions, downloads, queue and private
@@ -56,10 +54,8 @@ instance or host your own. A self-hosted instance provides the same capabilities
 as the official service. The lightweight server uses Go and SQLite.
 
 KoalaCast is MIT-licensed and fully open source. Source code:
-https://github.com/Shik3i/KoalaCast","Translate naturally. Keep the section headings in capitals and the bullet structure. Do not add rankings, awards, price claims, calls to action, competitor names or features the app does not have."
-de-DE,German,false,app_name,30,KoalaCast: Podcast-Player,Die Marke KoalaCast unverändert lassen. Podcast-Player ist der einzige primäre Suchbegriff. Keine werblichen Aussagen oder weiteren Keywords.
-de-DE,German,false,short_description,80,"Open-Source-Podcast-Player: Downloads, Sleeptimer und Audio-Visualisierungen.","Natürliches Deutsch. Play beanstandet Monetarisierungsaussagen in diesem Feld als werblich; die Werbefreiheit steht deshalb nur in der Vollbeschreibung. Funktionen beschreiben, nie Preis oder Promotion."
-de-DE,German,false,full_description,4000,"KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
+https://github.com/Shik3i/KoalaCast"
+de-DE,KoalaCast: Podcast-Player,"Podcast-Player mit Downloads, Kapiteln, Sleeptimer und Visualisierungen.","KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
 abonniere, streame und lade Podcasts herunter – ohne Werbung oder Nutzerprofile.
 
 Du brauchst kein Konto. Abos, Downloads, Warteschlange und private Hörstatistiken
@@ -118,4 +114,4 @@ gehostete Instanz bietet dieselben Funktionen wie der offizielle Dienst. Der
 leichtgewichtige Server verwendet Go und SQLite.
 
 KoalaCast steht unter der MIT-Lizenz und ist vollständig Open Source. Quellcode:
-https://github.com/Shik3i/KoalaCast","Natürlich übersetzen. Abschnittsüberschriften in Großbuchstaben und die Aufzählungsstruktur beibehalten. Keine Rankings, Auszeichnungen, Preisaussagen, Handlungsaufforderungen, Wettbewerbernamen oder Funktionen hinzufügen, die die App nicht hat."
+https://github.com/Shik3i/KoalaCast"

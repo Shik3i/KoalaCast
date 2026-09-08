@@ -9,8 +9,8 @@ script was written. Whoever edits a listing runs this afterwards.
 
     python apps/android/play/build-import-csv.py
 
-The translation_context column is editorial guidance for the translator and is
-kept here rather than in the markdown, because it is not part of the listing.
+Two files come out: the full one and a German-only one, for the case where en-US
+is already the default listing and only the translation is being added.
 """
 
 from __future__ import annotations
@@ -22,35 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-# field -> (character limit, en context, de context)
-CONTEXT = {
-    "app_name": (
-        30,
-        "Keep the KoalaCast brand unchanged. Podcast Player is the single primary "
-        "search descriptor. Do not add promotional claims or more keywords.",
-        "Die Marke KoalaCast unverändert lassen. Podcast-Player ist der einzige "
-        "primäre Suchbegriff. Keine werblichen Aussagen oder weiteren Keywords.",
-    ),
-    "short_description": (
-        80,
-        "Natural US English. Play rejects monetisation claims in this field as "
-        "promotional, so the absence of advertising is stated only in the full "
-        "description. Describe features, never price or promotion.",
-        "Natürliches Deutsch. Play beanstandet Monetarisierungsaussagen in diesem "
-        "Feld als werblich; die Werbefreiheit steht deshalb nur in der "
-        "Vollbeschreibung. Funktionen beschreiben, nie Preis oder Promotion.",
-    ),
-    "full_description": (
-        4000,
-        "Translate naturally. Keep the section headings in capitals and the bullet "
-        "structure. Do not add rankings, awards, price claims, calls to action, "
-        "competitor names or features the app does not have.",
-        "Natürlich übersetzen. Abschnittsüberschriften in Großbuchstaben und die "
-        "Aufzählungsstruktur beibehalten. Keine Rankings, Auszeichnungen, "
-        "Preisaussagen, Handlungsaufforderungen, Wettbewerbernamen oder Funktionen "
-        "hinzufügen, die die App nicht hat.",
-    ),
-}
+LIMITS = {"app_name": 30, "short_description": 80, "full_description": 4000}
 
 # The markdown uses a localised heading per file, so match on the fenced block
 # that follows any level-two heading and take them in document order.
@@ -66,42 +38,54 @@ def blocks(path: Path) -> list[str]:
 
 def main() -> int:
     sources = [
-        ("en-US", "English", "true", HERE / "listing-en.md", 1),
-        ("de-DE", "German", "false", HERE / "listing-de.md", 2),
+        ("en-US", HERE / "listing-en.md"),
+        ("de-DE", HERE / "listing-de.md"),
     ]
+
     rows = []
     problems = []
-    for locale, language, is_source, path, context_index in sources:
-        for field, text in zip(CONTEXT, blocks(path)):
-            limit, *contexts = CONTEXT[field]
-            if len(text) > limit:
-                problems.append(f"{locale} {field}: {len(text)} characters, limit {limit}")
-            rows.append(
-                {
-                    "locale": locale,
-                    "language": language,
-                    "is_source": is_source,
-                    "field": field,
-                    "character_limit": limit,
-                    "text": text,
-                    "translation_context": contexts[context_index - 1],
-                }
-            )
+    for locale, path in sources:
+        app_name, short, full = blocks(path)
+        for field, text in (("app_name", app_name), ("short_description", short), ("full_description", full)):
+            if len(text) > LIMITS[field]:
+                problems.append(f"{locale} {field}: {len(text)} characters, limit {LIMITS[field]}")
+        rows.append(
+            {
+                "locale": locale,
+                "app_name": app_name,
+                "short_description": short,
+                "full_description": full,
+            }
+        )
 
     if problems:
         for problem in problems:
             print(f"error: {problem}", file=sys.stderr)
         return 1
 
+    # One row per locale, and nothing in it that is not listing text. The first
+    # shape had a row per *field* plus is_source, character_limit and
+    # translation_context columns; the Console's importer offered only German
+    # from it, and editorial notes are not listing content and have no business
+    # in a file that gets uploaded.
     out = HERE / "store-listing-import.csv"
     with out.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
 
+    # The German row on its own, for the case where only the translation is being
+    # added and en-US is already the default listing.
+    de_only = HERE / "store-listing-import-de-DE.csv"
+    with de_only.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows([row for row in rows if row["locale"] == "de-DE"])
+
     for row in rows:
-        print(f"{row['locale']:6} {row['field']:18} {len(row['text']):>5} / {row['character_limit']}")
-    print(f"wrote {out.relative_to(HERE.parents[2])}")
+        for field in LIMITS:
+            print(f"{row['locale']:6} {field:18} {len(row[field]):>5} / {LIMITS[field]}")
+    print(f"wrote {out.name} and {de_only.name}")
     return 0
 
 
