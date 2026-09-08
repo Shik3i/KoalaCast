@@ -1,5 +1,5 @@
 locale,language,is_source,field,character_limit,text,translation_context
-en-US,English,true,app_name,30,"KoalaCast: Podcast Player","Keep the KoalaCast brand unchanged. Podcast Player is the single primary search descriptor. Do not add promotional claims or more keywords."
+en-US,English,true,app_name,30,KoalaCast: Podcast Player,Keep the KoalaCast brand unchanged. Podcast Player is the single primary search descriptor. Do not add promotional claims or more keywords.
 en-US,English,true,short_description,80,"Open-source podcast player: offline downloads, sleep timer, audio visualizers.","Natural US English. Play rejects monetisation claims in this field as promotional, so the absence of advertising is stated only in the full description. Describe features, never price or promotion."
 en-US,English,true,full_description,4000,"KoalaCast is a private, open-source podcast player for Android. Discover,
 subscribe to, stream and download podcasts without ads or behavioral profiling.
@@ -18,6 +18,14 @@ LISTEN YOUR WAY
 • Android Auto, Wear OS browsing, Chromecast and a home-screen widget
 • Audio streams directly from each podcast publisher and never passes through a
   KoalaCast server
+
+MAKE IT YOURS
+• Nine colour palettes, each with a light and a dark variant, or follow the
+  system setting
+• Eight audio visualizer styles on the player's progress bar — level, waveform,
+  bars, pulse, spectrum, ribbon, VU meter and constellation — driven by the
+  audio itself and matched to what you hear
+• The visualizer is off by default and honours the system animation setting
 
 FIND PODCASTS
 • Browse charts and search multiple podcast catalogs
@@ -48,8 +56,8 @@ instance or host your own. A self-hosted instance provides the same capabilities
 as the official service. The lightweight server uses Go and SQLite.
 
 KoalaCast is MIT-licensed and fully open source. Source code:
-https://github.com/Shik3i/KoalaCast","Translate naturally rather than literally. Preserve KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite and the GitHub URL. Keep the account optional and the official server optional. Preserve no advertising or behavioral tracking without claiming no functional data transfer or no anonymous Cast SDK telemetry. Do not add rankings, awards, prices, calls to action, competitor names, end-to-end encryption or unsupported features."
-de-DE,German,false,app_name,30,"KoalaCast: Podcast-Player","Markenname KoalaCast unverändert lassen. Podcast-Player ist der einzige primäre Suchbegriff. Keine Werbeaussagen oder weiteren Keywords ergänzen."
+https://github.com/Shik3i/KoalaCast","Translate naturally. Keep the section headings in capitals and the bullet structure. Do not add rankings, awards, price claims, calls to action, competitor names or features the app does not have."
+de-DE,German,false,app_name,30,KoalaCast: Podcast-Player,Die Marke KoalaCast unverändert lassen. Podcast-Player ist der einzige primäre Suchbegriff. Keine werblichen Aussagen oder weiteren Keywords.
 de-DE,German,false,short_description,80,"Open-Source-Podcast-Player: Downloads, Sleeptimer und Audio-Visualisierungen.","Natürliches Deutsch. Play beanstandet Monetarisierungsaussagen in diesem Feld als werblich; die Werbefreiheit steht deshalb nur in der Vollbeschreibung. Funktionen beschreiben, nie Preis oder Promotion."
 de-DE,German,false,full_description,4000,"KoalaCast ist ein privater Open-Source-Podcast-Player für Android. Entdecke,
 abonniere, streame und lade Podcasts herunter – ohne Werbung oder Nutzerprofile.
@@ -68,6 +76,14 @@ HÖREN, WIE DU WILLST
 • Android Auto, Navigation über Wear OS, Chromecast und ein Homescreen-Widget
 • Audio kommt direkt vom jeweiligen Podcast-Publisher und läuft nie über einen
   KoalaCast-Server
+
+MACH ES ZU DEINEM
+• Neun Farbpaletten, jede hell und dunkel, oder der Systemeinstellung folgen
+• Acht Audio-Visualisierungen auf dem Fortschrittsbalken des Players — Pegel,
+  Wellenform, Balken, Puls, Spektrum, Band, VU-Meter und Konstellation — vom
+  Ton selbst angetrieben und synchron zum Gehörten
+• Die Visualisierung ist standardmäßig aus und respektiert die
+  System-Animationseinstellung
 
 PODCASTS FINDEN
 • Charts durchsuchen und in mehreren Podcast-Katalogen suchen
@@ -102,4 +118,4 @@ gehostete Instanz bietet dieselben Funktionen wie der offizielle Dienst. Der
 leichtgewichtige Server verwendet Go und SQLite.
 
 KoalaCast steht unter der MIT-Lizenz und ist vollständig Open Source. Quellcode:
-https://github.com/Shik3i/KoalaCast","Bereits redaktionell geprüfte deutsche Fassung. KoalaCast, Android Auto, Wear OS, Chromecast, RSS, OPML, MIT, Go, SQLite und GitHub unverändert lassen. Konto und offizieller Server bleiben optional. Keine Werbung oder verhaltensbezogene Nutzeranalyse bewahren, ohne funktionale Datenübertragung oder anonyme Cast-SDK-Telemetrie auszuschließen. Keine Rankings, Auszeichnungen, Preise, Handlungsaufforderungen, Mitbewerbernamen, Ende-zu-Ende-Verschlüsselung oder nicht vorhandenen Funktionen ergänzen."
+https://github.com/Shik3i/KoalaCast","Natürlich übersetzen. Abschnittsüberschriften in Großbuchstaben und die Aufzählungsstruktur beibehalten. Keine Rankings, Auszeichnungen, Preisaussagen, Handlungsaufforderungen, Wettbewerbernamen oder Funktionen hinzufügen, die die App nicht hat."
