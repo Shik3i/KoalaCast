@@ -8,8 +8,14 @@ KoalaCast: Podcast Player
 
 ## Short description (80 characters max)
 
+Play flags monetisation claims here as promotional. The previous line said "no
+ads", which the Console rejected with "must not contain keywords that indicate
+price or a promotion" — it is the one field where the app's freedom from
+advertising cannot be stated. The full description below still says it, where
+the rule does not apply.
+
 ```
-Open-source podcast player: offline listening, no ads or behavioral tracking.
+Open-source podcast player: offline downloads, sleep timer, audio visualizers.
 ```
 
 ## Full description (4000 characters max)
@@ -32,6 +38,14 @@ LISTEN YOUR WAY
 • Android Auto, Wear OS browsing, Chromecast and a home-screen widget
 • Audio streams directly from each podcast publisher and never passes through a
   KoalaCast server
+
+MAKE IT YOURS
+• Nine colour palettes, each with a light and a dark variant, or follow the
+  system setting
+• Eight audio visualizer styles on the player's progress bar — level, waveform,
+  bars, pulse, spectrum, ribbon, VU meter and constellation — driven by the
+  audio itself and matched to what you hear
+• The visualizer is off by default and honours the system animation setting
 
 FIND PODCASTS
 • Browse charts and search multiple podcast catalogs

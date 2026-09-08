@@ -9,7 +9,7 @@ KoalaCast: Podcast-Player
 ## Kurzbeschreibung (max. 80 Zeichen)
 
 ```
-Open-Source-Podcast-Player mit Downloads, ohne Werbung oder Nutzer-Tracking.
+Open-Source-Podcast-Player: Downloads, Sleeptimer und Audio-Visualisierungen.
 ```
 
 ## Vollständige Beschreibung (max. 4000 Zeichen)
@@ -32,6 +32,14 @@ HÖREN, WIE DU WILLST
 • Android Auto, Navigation über Wear OS, Chromecast und ein Homescreen-Widget
 • Audio kommt direkt vom jeweiligen Podcast-Publisher und läuft nie über einen
   KoalaCast-Server
+
+MACH ES ZU DEINEM
+• Neun Farbpaletten, jede hell und dunkel, oder der Systemeinstellung folgen
+• Acht Audio-Visualisierungen auf dem Fortschrittsbalken des Players — Pegel,
+  Wellenform, Balken, Puls, Spektrum, Band, VU-Meter und Konstellation — vom
+  Ton selbst angetrieben und synchron zum Gehörten
+• Die Visualisierung ist standardmäßig aus und respektiert die
+  System-Animationseinstellung
 
 PODCASTS FINDEN
 • Charts durchsuchen und in mehreren Podcast-Katalogen suchen

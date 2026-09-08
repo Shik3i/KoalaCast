@@ -8,6 +8,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.sqrt
 
 // Calibrated against spoken-word material: below -48 dBFS is effectively room
@@ -18,18 +20,31 @@ private const val AMPLITUDE_GAIN = 3.8f
 // 30 Hz attack/release timing, but with enough temporal detail for 120 Hz panels.
 private const val AMPLITUDE_ATTACK = 0.3313f
 private const val AMPLITUDE_RELEASE = 0.0342f
-// Applied once per *analysed* spectrum — about 86 a second — not once per drawn
-// frame, so the shape moves at the same speed whatever the display does.
+// Time constants, in seconds, for the band envelope. Expressed as *time* rather
+// than as a per-step blend on purpose: a fixed blend is only frame-rate
+// independent if the number of steps per second is fixed, and it is not. The
+// previous version folded one step per analysed spectrum and one extra step
+// toward silence on every display frame that happened to find the queue empty,
+// which made the shape a function of how the decoder happened to deliver PCM and
+// of the panel's refresh rate. On a 120 Hz phone most frames found the queue
+// empty — the analyser produces about 86 spectra a second — so most frames
+// dragged the bars downward and the display pumped at the decoder's burst rate
+// instead of moving with the audio. That is the "updates once or twice a second"
+// symptom.
 //
-// Retuned after the first version read as a jitter rather than a movement: at 86
-// steps a second an attack of 0.45 reaches full height in three hundredths of a
-// second, which is faster than an eye can follow and shows every glottal pulse
-// in speech. These give roughly 90 ms to rise and 400 ms to fall — quick enough
-// to catch a consonant, slow enough that the shape reads as one thing moving.
-private const val BAND_ATTACK = 0.16f
-private const val BAND_RELEASE = 0.03f
-/** Peak markers fall about a fifth of full scale per second. */
-private const val BAND_PEAK_FALL = 0.0025f
+// Roughly 70 ms to rise and 390 ms to fall: quick enough to catch a consonant,
+// slow enough that the shape reads as one thing moving.
+private const val BAND_ATTACK_TAU_SECONDS = 0.07f
+private const val BAND_RELEASE_TAU_SECONDS = 0.39f
+/**
+ * Peak markers fall a little under half of full scale per second.
+ *
+ * Slower than this and they stop reading as markers belonging to the bars: on
+ * speech, where the loud moments are brief and far apart, a fifth per second left
+ * the caps pinned near the top while the bars worked away underneath, so the row
+ * read as two unrelated things rather than as a meter with a peak hold.
+ */
+private const val BAND_PEAK_FALL_PER_SECOND = 0.45f
 internal const val ENVELOPE_UPDATES_PER_SECOND = 120
 private const val ENVELOPE_FRAME_NANOS = 1_000_000_000L / ENVELOPE_UPDATES_PER_SECOND
 private const val MAX_RENDER_GAP_NANOS = 1_000_000_000L
@@ -81,6 +96,43 @@ class AmplitudeTap @Inject constructor() {
 
     @Volatile
     private var resetGeneration = 0L
+
+    /**
+     * How much audio has gone through the tee, and how much wall-clock time was
+     * spent doing it, since the last flush.
+     *
+     * Together these measure the thing this display could not otherwise know: the
+     * tee sits at the *input* of the audio sink, ahead of the AudioTrack buffer,
+     * which Media3 sizes at 250 ms or more for PCM. Everything the visualiser sees
+     * is therefore audio the listener has not heard yet, and drawing it
+     * immediately puts the picture a quarter of a second ahead of the sound.
+     *
+     * Written on the audio thread, read on the renderer's. They are read
+     * separately rather than as one atomic pair; a torn read is off by at most one
+     * decoder buffer, and the estimate is smoothed over hundreds of frames anyway.
+     */
+    @Volatile
+    private var flowFrames = 0L
+
+    @Volatile
+    private var flowWallNanos = 0L
+
+    @Volatile
+    private var flowSampleRate = 0
+
+    /** Audio thread only. */
+    private var lastFlowNanos = 0L
+
+    /**
+     * The current playback speed, which the UI keeps up to date.
+     *
+     * Needed because the tee runs *before* Sonic: at 1.5x the sink pulls 1.5
+     * seconds of audio out of the tee for every second of wall clock, so media
+     * time and wall time no longer advance together and the lead below would grow
+     * without bound if this were assumed to be 1.
+     */
+    @Volatile
+    var playbackSpeed: Float = 1f
 
     /**
      * Set while something is actually drawing. The processor stays in the chain
@@ -174,14 +226,15 @@ class AmplitudeTap @Inject constructor() {
      * Band energies the audio thread produced, low frequencies first, as a ring
      * of whole spectra.
      *
-     * This was a single flat array holding "the newest spectrum", on the
-     * reasoning that a frame the display never showed is of no interest. That
-     * reasoning is wrong for the same reason it was wrong for the envelope, and
-     * the note above [pending] says why: decoders hand over PCM in bursts of
-     * hundreds of milliseconds, so an entire burst's worth of spectra was
-     * computed and then overwritten, and the display saw exactly one per burst.
-     * That is the two-updates-per-second crawl — the level meter looked fine
-     * next to it only because it had this ring and the spectrum did not.
+     * A ring rather than a single "newest spectrum" slot, for the reason the note
+     * above [pending] gives: decoders hand over PCM in bursts of hundreds of
+     * milliseconds, so a whole burst's worth of spectra would be computed and
+     * overwritten and the display would see exactly one per burst.
+     *
+     * The ring exists so no transient is *lost*. It is deliberately not a queue
+     * the renderer walks one entry per frame — that made the animation's speed a
+     * function of the arrival pattern. [copyBandsInto] takes the peak across
+     * whatever arrived and lets elapsed time set the pace.
      */
     private val pendingBands = Array(PENDING_SPECTRA) { FloatArray(SPECTRUM_BANDS) }
 
@@ -190,56 +243,229 @@ class AmplitudeTap @Inject constructor() {
 
     private var bandsRead = 0L
 
-    // Renderer-only filter state, advanced once per analysed spectrum.
+    // Renderer-only filter state, advanced by elapsed time. The PCM producer
+    // never touches these.
     private val smoothedBands = FloatArray(SPECTRUM_BANDS)
     private val peakBands = FloatArray(SPECTRUM_BANDS)
+
+    /**
+     * What the envelope is currently heading for: the loudest thing the analyser
+     * has reported since the last display frame, held until something newer
+     * arrives.
+     *
+     * Holding is the point. The queue being empty on a given frame says only that
+     * the display is faster than the analyser, which at 120 Hz against 86 spectra
+     * a second is true of most frames; it does not say the audio went quiet.
+     */
+    private val targetBands = FloatArray(SPECTRUM_BANDS)
+    private var lastBandFrameNanos = Long.MIN_VALUE
+    private var dryNanos = 0L
+    private var observedBandResetGeneration = 0L
+
+    /**
+     * How far behind the newest spectrum the display deliberately reads, in
+     * seconds, smoothed. See [rawLeadSeconds] for what it measures.
+     */
+    private var smoothedLead = -1f
+
+    /**
+     * Where the display is reading in the ring, in spectra since the last flush.
+     *
+     * A fractional cursor advanced by elapsed time rather than an index chasing
+     * the writer. Negative until the first frame after a reset.
+     */
+    private var playCursor = -1.0
+
+    /** The lead the display is currently applying, for tests and diagnostics. */
+    val visualDelaySeconds: Float
+        get() = if (smoothedLead < 0f) 0f else smoothedLead
+
+    /**
+     * How many spectra the playout cursor crossed on the last display frame.
+     *
+     * Exposed so a test can assert the thing that actually matters here: that most
+     * frames carry new information, rather than a burst's worth arriving on one
+     * frame and nothing on the next fifteen.
+     */
+    var consumedLastFrame: Int = 0
+        private set
 
     /**
      * Fills [out] with the current band heights and [peaks], if given, with the
      * slow-falling peak markers. Both must be [SPECTRUM_BANDS] long.
      *
-     * Fast up, slow down — the standard bar-meter asymmetry. A symmetric filter
-     * either misses transients or leaves every bar twitching.
+     * [frameTimeNanos] is the display frame's timestamp — the same one
+     * [levelAt] takes. Everything below is a function of the time between
+     * frames, never of the number of frames, so the shape rises and falls at the
+     * same *speed* on a 60 Hz phone, a 120 Hz one and a stuttering emulator.
+     *
+     * Neither parameter carries a default. A caller who forgot the frame time
+     * would get a display that never advanced, which is a silent failure of
+     * exactly the kind this rewrite exists to remove.
      */
-    fun copyBandsInto(out: FloatArray, peaks: FloatArray? = null) {
-        // Every spectrum the audio thread produced since the last display frame
-        // is folded through the filter, not just the newest. That makes the
-        // attack and release run at the rate the audio is analysed — about 86
-        // steps a second — rather than at whatever rate the display happens to
-        // redraw, so the shape moves identically on a 60 Hz phone, a 120 Hz one
-        // and a slow emulator.
-        var steps = 0
-        while (bandsRead < bandsWrite) {
-            if (bandsWrite - bandsRead > PENDING_SPECTRA) {
-                // Fell far behind: skip the stale ones rather than animate through
-                // audio the listener heard a second ago.
-                bandsRead = bandsWrite - PENDING_SPECTRA
-            }
-            advanceBands(pendingBands[(bandsRead % PENDING_SPECTRA).toInt()])
-            bandsRead++
-            steps++
-            if (steps >= MAX_BAND_STEPS_PER_FRAME) break
+    fun copyBandsInto(out: FloatArray, peaks: FloatArray?, frameTimeNanos: Long) {
+        syncBandsAfterReset()
+
+        val elapsedNanos = if (lastBandFrameNanos == Long.MIN_VALUE) {
+            0L
+        } else {
+            (frameTimeNanos - lastBandFrameNanos).coerceIn(0L, MAX_RENDER_GAP_NANOS)
         }
-        // Nothing new — still let the release and the peak markers fall, or a
-        // pause would freeze the bars mid-air.
-        if (steps == 0) advanceBands(null)
+        lastBandFrameNanos = frameTimeNanos
+        val dt = elapsedNanos.toFloat() / 1_000_000_000f
+
+        // Hold the display this far behind the newest spectrum, so what is drawn is
+        // what is coming out of the speaker rather than what is on its way into the
+        // sink. Seeded with the first measurement rather than ramped up from zero:
+        // the very first decoder buffers already fill the AudioTrack, so the number
+        // is right immediately and easing into it would only mean starting out of
+        // sync on purpose.
+        val rawLead = rawLeadSeconds().coerceIn(0f, MAX_VISUAL_LEAD_SECONDS)
+        smoothedLead = if (smoothedLead < 0f) {
+            rawLead
+        } else {
+            // Slow, because the quantity really is constant during steady playback
+            // and every wobble in it would show up as the picture sliding against
+            // the sound.
+            smoothedLead + (rawLead - smoothedLead) * (1f - exp(-dt / LEAD_TAU_SECONDS))
+        }
+        val holdBack = (smoothedLead * SPECTRA_PER_SECOND).toLong()
+            .coerceIn(0L, (PENDING_SPECTRA - MIN_READABLE_SPECTRA).toLong())
+
+        // Played out at a constant rate off the wall clock, NOT drained as it
+        // arrives. This is the difference between a jitter buffer and a queue, and
+        // getting it wrong is what made the display step.
+        //
+        // The audio thread does not hand over spectra evenly. The sink is fed in
+        // bursts — measured on an API 36 emulator: about ten buffers 2 ms apart,
+        // then a wait of around 260 ms — so `bandsWrite` jumps by twenty-odd
+        // spectra and then stands still for a quarter of a second. Consuming
+        // "everything available" therefore moved the target once per burst and
+        // held it in between, and a filter chasing a target that changes four
+        // times a second produces four stills a second however often it is drawn.
+        //
+        // Each spectrum covers a fixed 11.6 ms of audio, so the cursor is advanced
+        // by elapsed time instead: a fresh spectrum every 11.6 ms whatever the
+        // arrival pattern. The hold-back measured above is what makes this
+        // possible — it keeps roughly forty spectra in hand, so the cursor never
+        // runs dry between bursts.
+        val write = bandsWrite
+        val playoutRate = SPECTRA_PER_SECOND * playbackSpeed.coerceIn(0.25f, 4f)
+        val targetCursor = (write - holdBack).toDouble()
+
+        if (playCursor < 0.0) {
+            playCursor = targetCursor.coerceAtLeast(0.0)
+            bandsRead = playCursor.toLong()
+        } else {
+            playCursor += dt * playoutRate
+            // Only a seek, a stall or a badly wrong clock can put the cursor this
+            // far from where the buffer says it should be. Anything smaller is the
+            // burst pattern itself, and correcting for that would hand the display
+            // straight back to it.
+            if (abs(targetCursor - playCursor) > RESYNC_SPECTRA) playCursor = targetCursor
+        }
+
+        val oldest = maxOf(0.0, (write - PENDING_SPECTRA + 1).toDouble())
+        playCursor = playCursor.coerceIn(oldest, write.toDouble())
+        if (bandsRead < oldest.toLong()) bandsRead = oldest.toLong()
+
+        // The peak across whatever the cursor passed over this frame, so a
+        // transient falling between two display frames is still shown.
+        val upTo = playCursor.toLong()
+        var received = 0
+        while (bandsRead < upTo) {
+            val spectrum = pendingBands[(bandsRead % PENDING_SPECTRA).toInt()]
+            if (received == 0) {
+                spectrum.copyInto(targetBands, endIndex = minOf(spectrum.size, targetBands.size))
+            } else {
+                for (band in targetBands.indices) {
+                    val value = spectrum.getOrElse(band) { 0f }
+                    if (value > targetBands[band]) targetBands[band] = value
+                }
+            }
+            bandsRead++
+            received++
+        }
+        consumedLastFrame = received
+
+        if (received > 0) {
+            dryNanos = 0L
+        } else {
+            // Nothing new for long enough that playback has actually stopped or
+            // stalled — as opposed to the display simply outrunning the analyser.
+            // Only now may the target fall, so a pause empties the display instead
+            // of freezing it mid-air.
+            dryNanos += elapsedNanos
+            if (dryNanos >= BAND_STALL_NANOS) targetBands.fill(0f)
+        }
+
+        // 1 - e^(-dt/tau) is the frame-rate-independent form of a one-pole filter:
+        // the same fraction of the remaining distance per unit of *time*, whatever
+        // the frame interval. A fixed per-frame blend is the same thing only if
+        // the frame interval never changes, which is the assumption that broke.
+        val attack = 1f - exp(-dt / BAND_ATTACK_TAU_SECONDS)
+        val release = 1f - exp(-dt / BAND_RELEASE_TAU_SECONDS)
+        val peakDrop = BAND_PEAK_FALL_PER_SECOND * dt
 
         for (band in smoothedBands.indices) {
-            if (band < out.size) out[band] = smoothedBands[band]
+            val target = targetBands[band]
+            val previous = smoothedBands[band]
+            val value = previous + (target - previous) * (if (target > previous) attack else release)
+            smoothedBands[band] = value
+            peakBands[band] = maxOf(value, peakBands[band] - peakDrop)
+            if (band < out.size) out[band] = value
             if (peaks != null && band < peaks.size) peaks[band] = peakBands[band]
         }
     }
 
-    /** One filter step toward [target], or toward silence when it is null. */
-    private fun advanceBands(target: FloatArray?) {
-        for (band in smoothedBands.indices) {
-            val next = target?.getOrElse(band) { 0f } ?: 0f
-            val previous = smoothedBands[band]
-            val blend = if (next > previous) BAND_ATTACK else BAND_RELEASE
-            val value = previous + (next - previous) * blend
-            smoothedBands[band] = value
-            peakBands[band] = maxOf(value, peakBands[band] - BAND_PEAK_FALL)
+    private fun syncBandsAfterReset() {
+        val generation = resetGeneration
+        if (observedBandResetGeneration == generation) return
+        observedBandResetGeneration = generation
+        targetBands.fill(0f)
+        lastBandFrameNanos = Long.MIN_VALUE
+        dryNanos = 0L
+        playCursor = -1.0
+    }
+
+    /**
+     * Records one decoder buffer passing the tee. Audio thread; allocates nothing.
+     *
+     * Wall time is accumulated only across *short* gaps. A pause stops the sink
+     * pulling audio without flushing it, so the buffer stays full and the lead
+     * stays what it was; counting the pause as elapsed time would read as the
+     * buffer having drained and collapse the estimate to nothing.
+     */
+    internal fun publishFlow(frames: Int, nowNanos: Long) {
+        val last = lastFlowNanos
+        lastFlowNanos = nowNanos
+        if (last != 0L) {
+            val gap = nowNanos - last
+            if (gap in 0..MAX_FLOW_GAP_NANOS) flowWallNanos += gap
         }
+        flowFrames += frames
+    }
+
+    internal fun publishSampleRate(sampleRateHz: Int) {
+        flowSampleRate = sampleRateHz
+    }
+
+    /**
+     * Seconds of audio written into the sink but not yet heard.
+     *
+     * Media time through the tee, converted to wall time, minus the wall time that
+     * actually elapsed while it was flowing. At the start of a track the sink
+     * fills its buffer as fast as it can, so this jumps straight to the buffer's
+     * depth and then holds there for as long as playback is steady — which is
+     * exactly the quantity the display has to be delayed by.
+     */
+    private fun rawLeadSeconds(): Float {
+        val rate = flowSampleRate
+        if (rate <= 0) return 0f
+        val speed = playbackSpeed.coerceIn(0.25f, 4f)
+        val mediaSeconds = flowFrames.toFloat() / rate
+        val wallSeconds = flowWallNanos.toFloat() / 1_000_000_000f
+        return mediaSeconds / speed - wallSeconds
     }
 
     internal fun publishBands(source: FloatArray) {
@@ -263,21 +489,83 @@ class AmplitudeTap @Inject constructor() {
         peakBands.fill(0f)
         bandsRead = bandsWrite
         pendingRead = pendingWrite
+        smoothedLead = -1f
+        playCursor = -1.0
+        flowFrames = 0L
+        flowWallNanos = 0L
+        lastFlowNanos = 0L
+        // Bumped last: it is what tells the renderer thread to drop its own
+        // interpolation and filter state on its next frame.
         resetGeneration++
     }
 
     private companion object {
         const val PENDING_CAPACITY = 128
 
-        /** About a third of a second of spectra at the analysis rate. */
-        const val PENDING_SPECTRA = 32
+        /**
+         * The ring is now a delay line as well as a buffer, so it has to hold the
+         * whole visual lead plus enough fresh entries to keep drawing. A second
+         * and a half of spectra at the analysis rate; 48 floats apiece, so 24 kB.
+         */
+        const val PENDING_SPECTRA = 128
+
+        /** Spectra a second the analyser produces: a 2048 window hopped by 512. */
+        const val SPECTRA_PER_SECOND = 86f
 
         /**
-         * A ceiling on catch-up work per display frame. Without it, resuming from
-         * a long stall would run the filter over a full backlog inside one frame
-         * and drop the next one.
+         * The most the display will hold itself back.
+         *
+         * A backstop against a bad measurement — a stall, a torn read — not a
+         * working value: delaying the picture by a second would be worse than not
+         * compensating at all. Media3 sizes the AudioTrack buffer at 250 ms or more
+         * for PCM and the device's own output path adds to that; measured on an
+         * API 36 emulator the total came to a steady 430 ms, so 500 ms would have
+         * been close enough to clip on hardware with a deeper buffer.
          */
-        const val MAX_BAND_STEPS_PER_FRAME = 8
+        const val MAX_VISUAL_LEAD_SECONDS = 0.8f
+
+        /** Never hold back so far that there is nothing left to draw. */
+        const val MIN_READABLE_SPECTRA = 8
+
+        /** The lead is constant in steady playback, so it is filtered hard. */
+        const val LEAD_TAU_SECONDS = 2f
+
+        /**
+         * How far the playout cursor may drift before it is snapped back.
+         *
+         * Deliberately larger than one decoder burst. The gap between where the
+         * cursor is and where the buffer's fill says it should be swings by a whole
+         * burst every burst; correcting for that swing would re-couple the display
+         * to the arrival pattern, which is the entire thing this cursor exists to
+         * escape. Only a seek or a real stall moves it further than this.
+         */
+        const val RESYNC_SPECTRA = 60.0
+
+        /**
+         * The longest gap between decoder buffers that still counts as playback.
+         *
+         * Measured rather than assumed, because the first guess at it — 200 ms, on
+         * the reasoning that the playback thread tops the sink up every 10 ms or so
+         * — was wrong in a way that silently destroyed the estimate. The sink is
+         * actually fed in bursts: about ten buffers 2 ms apart, then a wait of
+         * around 260 ms, repeating. A 200 ms ceiling rejected every one of those
+         * waits, so eighty seconds of playback accumulated six seconds of "elapsed"
+         * time and the lead came out as seventy-four seconds.
+         *
+         * A second is comfortably above the observed 272 ms peak and comfortably
+         * below any pause or rebuffer worth excluding.
+         */
+        const val MAX_FLOW_GAP_NANOS = 1_000_000_000L
+
+        /**
+         * How long the analyser may go quiet before the display treats it as
+         * silence rather than as the panel outrunning it.
+         *
+         * Comfortably longer than one analysis hop (~12 ms) and than the gap a
+         * decoder leaves between buffers, short enough that a pause empties the
+         * bars without a visible hang.
+         */
+        val BAND_STALL_NANOS = 250_000_000L
     }
 }
 
@@ -333,6 +621,7 @@ internal class AmplitudeBufferSink(
         strideBytes = channelCount.coerceAtLeast(1) * 2
         bandEdges = spectrumBandEdges(sampleRateHz)
         autoGain.reset()
+        tap.publishSampleRate(sampleRateHz)
         fftFill = 0
         bytesInWindow = 0
         sumInWindow = 0.0
@@ -341,7 +630,17 @@ internal class AmplitudeBufferSink(
     }
 
     override fun handleBuffer(buffer: ByteBuffer) {
-        if (!pcm16 || !tap.listening) {
+        if (!pcm16) return
+
+        // Counted whether or not anything is drawing. The lead this measures is
+        // anchored at the last flush, and a listener who opens the player halfway
+        // through an episode would otherwise turn the visualiser on to an
+        // unanchored estimate with no way left to take one — the sink's buffer is
+        // full by then, so media time and wall time have long since started
+        // advancing together. Two additions per decoder buffer is not a cost.
+        tap.publishFlow((buffer.limit() - buffer.position()) / strideBytes.coerceAtLeast(1), System.nanoTime())
+
+        if (!tap.listening) {
             if (smoothed != 0f || bytesInWindow != 0) {
                 smoothed = 0f
                 bytesInWindow = 0

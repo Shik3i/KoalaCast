@@ -56,9 +56,18 @@ export class AudioEngine {
 			// landed on the same one or two bins and drew the same number, which is
 			// most of what "only the left edge moves" was.
 			this.analyserNode.fftSize = 2048;
-			// The analyser's own smoothing is lowered from the 0.8 default because
-			// the visualiser is redrawn every frame and 0.8 visibly lags the audio.
-			this.analyserNode.smoothingTimeConstant = 0.6;
+			// Nearly off, rather than the 0.8 default or the 0.6 this used to carry.
+			//
+			// `smoothingTimeConstant` blends each read with the previous *read*, not
+			// with the previous unit of time, so its effect grows with how often the
+			// visualiser samples. Now that sampling happens once per display frame
+			// instead of at a fixed 30 Hz, leaving it at 0.6 would make the display
+			// visibly laggier on a 120 Hz phone than on a 60 Hz laptop — a second
+			// helping of the frame-rate dependence the renderer was rewritten to get
+			// rid of. The envelope that actually shapes the display is the
+			// time-based one in `visualizer-frame.ts`; this only takes the harshest
+			// edge off a single FFT.
+			this.analyserNode.smoothingTimeConstant = 0.2;
 			// Without this the defaults apply: -100 to -30. Ordinary mastered speech
 			// spends most of a sentence above a -30 ceiling, so band after band sat
 			// pinned at 255 — and a clipped bar cannot move. The window matches the
@@ -133,6 +142,30 @@ export class AudioEngine {
 		if (this.gainNode && this.audioCtx) {
 			this.gainNode.gain.setValueAtTime(enabled ? 2.2 : 1.0, this.audioCtx.currentTime);
 		}
+	}
+
+	/**
+	 * Seconds between the analyser reading a frame and that frame leaving the
+	 * speaker.
+	 *
+	 * The analyser is the last node before the output gain and the destination, so
+	 * everything it reports is still ahead of what is audible by the length of the
+	 * output pipeline. Small next to the Android client's AudioTrack buffer — tens
+	 * of milliseconds rather than four hundred — but not nothing, and the two
+	 * clients are supposed to answer alike.
+	 *
+	 * `outputLatency` is the spec's figure for exactly this and is what browsers
+	 * that implement it report; `baseLatency` covers only the graph's own
+	 * buffering and is the fallback where it is missing or still zero before
+	 * playback has begun.
+	 */
+	public get outputLatencySeconds(): number {
+		const context = this.audioCtx;
+		if (!context) return 0;
+		const reported = context.outputLatency || context.baseLatency || 0;
+		// A wild figure is a broken implementation, and delaying the picture by it
+		// would be worse than not compensating at all.
+		return Number.isFinite(reported) ? Math.min(0.5, Math.max(0, reported)) : 0;
 	}
 
 	public getLevel(): number | null {

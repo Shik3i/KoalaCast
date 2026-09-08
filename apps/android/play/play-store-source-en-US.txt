@@ -12,7 +12,7 @@ APP NAME — MAXIMUM 30 CHARACTERS
 KoalaCast: Podcast Player
 
 SHORT DESCRIPTION — MAXIMUM 80 CHARACTERS
-Open-source podcast player: offline listening, no ads or behavioral tracking.
+Open-source podcast player: offline downloads, sleep timer, audio visualizers.
 
 FULL DESCRIPTION — MAXIMUM 4000 CHARACTERS
 KoalaCast is a private, open-source podcast player for Android. Discover,
@@ -32,6 +32,14 @@ LISTEN YOUR WAY
 • Android Auto, Wear OS browsing, Chromecast and a home-screen widget
 • Audio streams directly from each podcast publisher and never passes through a
   KoalaCast server
+
+MAKE IT YOURS
+• Nine colour palettes, each with a light and a dark variant, or follow the
+  system setting
+• Eight audio visualizer styles on the player's progress bar — level, waveform,
+  bars, pulse, spectrum, ribbon, VU meter and constellation — driven by the
+  audio itself and matched to what you hear
+• The visualizer is off by default and honours the system animation setting
 
 FIND PODCASTS
 • Browse charts and search multiple podcast catalogs

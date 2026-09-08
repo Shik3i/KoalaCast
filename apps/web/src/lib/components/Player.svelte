@@ -35,18 +35,6 @@
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
 	import VisualizerSignal from './VisualizerSignal.svelte';
 
-	// How many bars the spectrum styles draw. Enough to fill the width of a
-	// desktop player bar at a readable bar width, few enough that a phone does not
-	// end up drawing hairlines. The visualiser stretches this count across
-	// whatever width it is given rather than clustering it in the middle.
-	const VISUALIZER_BANDS = 48;
-	/** Speech RMS rarely passes 0.2; without this the meter never leaves the floor. */
-	const LEVEL_GAIN = 5;
-	const SPECTRUM_ATTACK = 0.55;
-	const SPECTRUM_RELEASE = 0.16;
-	/** Peak markers fall about a third of full scale per second at 60 Hz. */
-	const PEAK_FALL = 0.006;
-
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let audioElementGeneration = $state(0);
 	let isPlaying = $state(false);
@@ -86,15 +74,6 @@
 	let trackSettings = $state<PodcastPlaybackSettings>(getPodcastPlaybackSettings(''));
 	let remotePlaybackAvailable = $state(false);
 	let remotePlaybackState = $state<RemotePlaybackState>('disconnected');
-	let visualizerLevel = $state(0);
-	// One entry per bar the visualiser draws. Both are fixed-length and rewritten
-	// in place every frame; the arrays are reassigned only so Svelte sees the
-	// change, never grown, because these are read at display refresh rate.
-	let visualizerSpectrum = $state<number[]>(new Array(VISUALIZER_BANDS).fill(0));
-	let visualizerPeaks = $state<number[]>(new Array(VISUALIZER_BANDS).fill(0));
-	const spectrumScratch = new Float32Array(VISUALIZER_BANDS);
-	const spectrumSmoothed = new Float32Array(VISUALIZER_BANDS);
-	const peakScratch = new Float32Array(VISUALIZER_BANDS);
 	const effectiveVolumeBoost = $derived(trackSettings.volumeBoost ?? prefs.volumeBoost);
 	const effectiveSkipSilence = $derived(trackSettings.skipSilence ?? prefs.skipSilence);
 	$effect(() => {
@@ -110,6 +89,7 @@
 	let runtimeConfigPromise: Promise<boolean> | null = null;
 
 	import { audioEngine } from '$lib/audio/engine';
+	import { visualizerFrame } from '$lib/audio/visualizer-frame';
 
 	const silenceGate = new SilenceGate();
 	let chapters = $state<any[]>([]);
@@ -480,55 +460,16 @@
 		return () => clearInterval(timer);
 	});
 
-	function resetVisualizer() {
-		visualizerLevel = 0;
-		spectrumSmoothed.fill(0);
-		peakScratch.fill(0);
-		visualizerSpectrum = new Array(VISUALIZER_BANDS).fill(0);
-		visualizerPeaks = new Array(VISUALIZER_BANDS).fill(0);
-	}
-
-	// Drive scheduling with requestAnimationFrame but publish at 30 FPS. Faster
-	// panels otherwise doubled/quadrupled the per-frame array allocation rate with
-	// no useful extra information for a speech visualiser.
+	// The visualiser samples and paints inside VisualizerSignal's own frame
+	// callback, at the display's rate. It used to be driven from here at a hand-set
+	// 30 Hz, because each publish allocated two forty-eight element arrays and
+	// invalidated forty-eight reactive DOM nodes, and doing that at 120 Hz was not
+	// affordable. Nothing here is on that path any more; all this has to do is
+	// empty the display when there is nothing to show.
 	$effect(() => {
 		if (!audioEl || !isPlaying || prefs.visualizer === 'off') {
-			resetVisualizer();
-			return;
+			visualizerFrame.reset();
 		}
-		let frame = 0;
-		let lastPaintAt = 0;
-		const tick = (timestamp: number) => {
-			frame = requestAnimationFrame(tick);
-			if (timestamp - lastPaintAt < 1000 / 30) return;
-			lastPaintAt = timestamp;
-			const level = audioEngine.getLevel();
-			// Speech sits far below full scale; without the lift the bars would
-			// spend the whole episode in the bottom fifth of the track.
-			visualizerLevel = Math.min(1, (level ?? 0) * LEVEL_GAIN);
-
-			if (!audioEngine.getSpectrum(spectrumScratch)) return;
-			for (let band = 0; band < VISUALIZER_BANDS; band++) {
-				const next = spectrumScratch[band];
-				// Fast up, slow down — the standard bar-meter asymmetry. A symmetric
-				// filter either misses transients or leaves the bars twitching.
-				const previous = spectrumSmoothed[band];
-				spectrumSmoothed[band] =
-					next > previous
-						? previous + (next - previous) * SPECTRUM_ATTACK
-						: previous + (next - previous) * SPECTRUM_RELEASE;
-				// A separate, slower envelope: the peak-hold outline that makes a
-				// spectrum readable rather than a blur of moving sticks.
-				peakScratch[band] = Math.max(spectrumSmoothed[band], peakScratch[band] - PEAK_FALL);
-			}
-			visualizerSpectrum = Array.from(spectrumSmoothed);
-			visualizerPeaks = Array.from(peakScratch);
-		};
-		frame = requestAnimationFrame(tick);
-		return () => {
-			cancelAnimationFrame(frame);
-			resetVisualizer();
-		};
 	});
 
 	// Settings can change while the persistent player keeps playing on another
@@ -1407,7 +1348,7 @@
 				</div>
 				{#if isPlaying && prefs.visualizer !== 'off'}
 					<div class="visualizer-stage compact-visualizer">
-						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} spectrum={visualizerSpectrum} peaks={visualizerPeaks} variant="compact" />
+						<VisualizerSignal style={prefs.visualizer} playing={isPlaying} variant="compact" />
 					</div>
 				{/if}
 
@@ -1535,7 +1476,7 @@
 
 				{#if isPlaying && prefs.visualizer !== 'off'}
 					<div class="visualizer-stage np-visualizer">
-						<VisualizerSignal style={prefs.visualizer} level={visualizerLevel} spectrum={visualizerSpectrum} peaks={visualizerPeaks} variant="full" />
+						<VisualizerSignal style={prefs.visualizer} playing={isPlaying} variant="full" />
 					</div>
 				{/if}
 

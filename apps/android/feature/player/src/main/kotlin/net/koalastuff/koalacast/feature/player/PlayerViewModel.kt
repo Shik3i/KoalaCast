@@ -46,6 +46,15 @@ class PlayerViewModel @Inject constructor(
 
     init {
         player.connect()
+        // The tap converts media time to wall time to work out how far ahead of the
+        // speaker it is running, and the two only agree at 1x. See
+        // AmplitudeTap.playbackSpeed.
+        viewModelScope.launch {
+            player.state
+                .map { it.speed }
+                .distinctUntilChanged()
+                .collect { amplitudeTap.playbackSpeed = it }
+        }
         // Reload only when the episode changes, not on every position tick.
         viewModelScope.launch {
             player.state
@@ -87,9 +96,16 @@ class PlayerViewModel @Inject constructor(
 
     fun amplitudeLevel(frameTimeNanos: Long): Float = amplitudeTap.levelAt(frameTimeNanos)
 
-    /** Band heights into [out] and their peak markers into [peaks], per display frame. */
-    fun copyAmplitudeBands(out: FloatArray, peaks: FloatArray) =
-        amplitudeTap.copyBandsInto(out, peaks)
+    /**
+     * Band heights into [out] and their peak markers into [peaks], for the display
+     * frame at [frameTimeNanos].
+     *
+     * The frame time is load-bearing rather than incidental: the envelope's rise
+     * and fall are computed from the time since the previous frame, so passing a
+     * constant would freeze the filter.
+     */
+    fun copyAmplitudeBands(out: FloatArray, peaks: FloatArray, frameTimeNanos: Long) =
+        amplitudeTap.copyBandsInto(out, peaks, frameTimeNanos)
 
     fun setSleepTimer(minutes: Int?, atEpisodeEnd: Boolean = false, atChapterEnd: Boolean = false) {
         if (!atChapterEnd) {
