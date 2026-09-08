@@ -60,6 +60,8 @@ import net.koalastuff.koalacast.core.ui.component.PhosphorIcon
 import net.koalastuff.koalacast.core.ui.component.MenuAction
 import net.koalastuff.koalacast.core.ui.component.MenuButton
 import net.koalastuff.koalacast.core.ui.component.VisualizerTrack
+import net.koalastuff.koalacast.core.ui.component.visualizerProgressLineFraction
+import net.koalastuff.koalacast.core.ui.component.visualizerTrackHeight
 import net.koalastuff.koalacast.core.ui.icon.PhosphorIcons
 import net.koalastuff.koalacast.core.ui.theme.KoalaIconButton
 import net.koalastuff.koalacast.core.ui.theme.KoalaShapes
@@ -138,7 +140,7 @@ internal fun NowPlayingContent(
     chapters: List<Chapter> = emptyList(),
     visualizer: VisualizerStyle = VisualizerStyle.OFF,
     amplitude: (Long) -> Float = { 0f },
-    amplitudeBands: (FloatArray, FloatArray) -> Unit = { _, _ -> },
+    amplitudeBands: (FloatArray, FloatArray, Long) -> Unit = { _, _, _ -> },
     onCollapse: () -> Unit,
     onOpenEpisode: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -353,7 +355,7 @@ private fun Scrubber(
     visualizer: VisualizerStyle = VisualizerStyle.OFF,
     playing: Boolean = false,
     amplitude: (Long) -> Float = { 0f },
-    amplitudeBands: (FloatArray, FloatArray) -> Unit = { _, _ -> },
+    amplitudeBands: (FloatArray, FloatArray, Long) -> Unit = { _, _, _ -> },
 ) {
     val colors = KoalaTheme.colors
     // While a drag is in flight the slider follows the finger, not the player,
@@ -396,25 +398,34 @@ private fun Scrubber(
                     VisualizerTrack(
                         style = VisualizerStyle.OFF,
                         fraction = fraction,
-                        level = 0f,
+                        level = { 0f },
                         bands = EMPTY_VISUALIZER_BANDS,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
 
+            // The thumb and the chapter marks live on their own canvas stacked over
+            // the visualiser, so they have to be told where that visualiser put its
+            // progress line. It is not always the middle: a style whose bars stand
+            // on the line draws it at the foot of its track, and a thumb left at the
+            // centre would float above the bar it is supposed to be riding.
+            val trackHeight = visualizerTrackHeight(if (visualizer.needsAudio) visualizer else VisualizerStyle.OFF)
+            val lineFraction = visualizerProgressLineFraction(visualizer)
             Canvas(
                 modifier = Modifier
                     .matchParentSize()
                     .padding(horizontal = SLIDER_THUMB_INSET),
             ) {
-                val centreY = size.height / 2f
+                val trackPx = trackHeight.toPx()
+                val centreY = (size.height - trackPx) / 2f + trackPx * lineFraction
+                val markerHalfHeight = MARKER_HALF_HEIGHT.toPx()
                 markers.forEach { markerFraction ->
                     drawLine(
                         color = colors.bgTransport,
-                        start = Offset(size.width * markerFraction, centreY - MARKER_HALF_HEIGHT_PX),
-                        end = Offset(size.width * markerFraction, centreY + MARKER_HALF_HEIGHT_PX),
-                        strokeWidth = MARKER_WIDTH_PX,
+                        start = Offset(size.width * markerFraction, centreY - markerHalfHeight),
+                        end = Offset(size.width * markerFraction, centreY + markerHalfHeight),
+                        strokeWidth = MARKER_WIDTH.toPx(),
                     )
                 }
                 drawCircle(
@@ -480,34 +491,38 @@ private fun LiveVisualizerTrack(
     fraction: Float,
     playing: Boolean,
     amplitude: (Long) -> Float,
-    amplitudeBands: (FloatArray, FloatArray) -> Unit,
+    amplitudeBands: (FloatArray, FloatArray, Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var level by remember { mutableFloatStateOf(0f) }
+    // Held as snapshot state but never *read* here: both are read inside
+    // VisualizerTrack's draw lambda. A read in this composable would put the frame
+    // loop back into the composition phase, which is the work the split exists to
+    // avoid — the arrays and the level change every frame, and none of it changes
+    // what is laid out.
+    val level = remember { mutableFloatStateOf(0f) }
     val bands = remember { FloatArray(SPECTRUM_BANDS) }
     val peaks = remember { FloatArray(SPECTRUM_BANDS) }
-    var bandRevision by remember { mutableIntStateOf(0) }
+    val bandRevision = remember { mutableIntStateOf(0) }
 
     LaunchedEffect(style, playing) {
         if (!playing) {
-            level = 0f
+            level.floatValue = 0f
             bands.fill(0f)
             peaks.fill(0f)
-            bandRevision++
+            bandRevision.intValue++
             return@LaunchedEffect
         }
         while (true) {
             withFrameNanos { frameTimeNanos ->
-                level = amplitude(frameTimeNanos)
+                level.floatValue = amplitude(frameTimeNanos)
                 if (style.needsSpectrum) {
-                    // Smoothing happens per display frame inside the tap, so this
-                    // has to run every frame even when the decoder is between
-                    // buffers — that is what makes the bars settle rather than
-                    // freeze at whatever the last burst left behind.
-                    amplitudeBands(bands, peaks)
-                    // The arrays mutate in place; this integer invalidates only
-                    // this small composable and its Canvas.
-                    bandRevision++
+                    // Every frame, including the ones the decoder has nothing new
+                    // for: the tap's envelope advances by elapsed time, so a frame
+                    // skipped here is motion lost rather than motion deferred.
+                    amplitudeBands(bands, peaks, frameTimeNanos)
+                    // The arrays mutate in place, so nothing else tells the draw
+                    // phase that their contents moved.
+                    bandRevision.intValue++
                 }
             }
         }
@@ -516,10 +531,10 @@ private fun LiveVisualizerTrack(
     VisualizerTrack(
         style = style,
         fraction = fraction,
-        level = level,
+        level = { level.floatValue },
         bands = bands,
         peaks = peaks,
-        revision = bandRevision,
+        revision = { bandRevision.intValue },
         modifier = modifier,
     )
 }
@@ -760,5 +775,7 @@ private val MIN_ARTWORK = 72.dp
 
 /** Material's Slider insets its track by half a thumb; the markers must match. */
 private val SLIDER_THUMB_INSET = THUMB_DIAMETER / 2
-private const val MARKER_WIDTH_PX = 2f
-private const val MARKER_HALF_HEIGHT_PX = 5f
+// In dp, not raw pixels. At 2f these were two thirds of a dp on an ordinary
+// phone — a chapter mark thin enough to disappear against the track behind it.
+private val MARKER_WIDTH = 2.dp
+private val MARKER_HALF_HEIGHT = 5.dp

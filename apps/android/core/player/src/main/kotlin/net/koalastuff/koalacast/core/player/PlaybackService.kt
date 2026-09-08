@@ -130,9 +130,12 @@ class PlaybackService : MediaLibraryService() {
      * own silence-skipping and Sonic speed/pitch stages, so both of those keep
      * working — this app depends on them for `skipSilenceEnabled` and variable
      * playback speed, and losing either silently would be far worse than having no
-     * visualiser. Placing the tap after Sonic also means the envelope is the
-     * time-compressed audio the listener is actually hearing at 1.5x, rather than
-     * the file as published.
+     * visualiser.
+     *
+     * The corollary is that the tap sees the audio *before* Sonic has compressed
+     * it in time, so at 1.5x it passes 1.5 seconds of media for every second of
+     * wall clock. [AmplitudeTap.playbackSpeed] exists so the tap can undo that when
+     * it works out how far ahead of the speaker it is running.
      */
     private fun amplitudeRenderersFactory() =
         object : DefaultRenderersFactory(this) {

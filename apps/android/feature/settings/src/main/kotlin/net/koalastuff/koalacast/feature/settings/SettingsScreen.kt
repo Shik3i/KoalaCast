@@ -13,6 +13,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -808,7 +809,13 @@ private fun VisualizerRow(
                 color = if (selected) colors.accentInk else colors.borderHair,
                 shape = KoalaShapes.card,
             )
-            .clickable(role = Role.RadioButton, onClick = onSelect)
+            // `selectable` rather than `clickable(role = RadioButton)`: the latter
+            // announces the control as a radio button but never says which one is
+            // chosen, so TalkBack read out nine identical options and no way to
+            // tell which was active. The check mark beside it is decorative and
+            // carries no description, so this modifier is the only thing that
+            // conveys the state.
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
             .padding(KoalaSpacing.gap),
         horizontalArrangement = Arrangement.spacedBy(KoalaSpacing.gap),
         verticalAlignment = Alignment.CenterVertically,

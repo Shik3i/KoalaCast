@@ -13,9 +13,9 @@ so the next submission does not have to reconstruct it from memory.
 | [`store-listing-import.csv`](store-listing-import.csv) | Structured EN/DE reference and translation context |
 | [`data-safety.md`](data-safety.md) | Answers for the Data safety form |
 | [`declarations.md`](declarations.md) | App access, foreground service, permissions, account deletion |
-| [`release-notes-v0.11.7.md`](release-notes-v0.11.7.md) | Current Play release notes, English and German |
+| [`release-notes-v0.11.8.md`](release-notes-v0.11.8.md) | Current Play release notes, English and German |
 | [`feature-graphic.png`](feature-graphic.png) | 1024×500 feature graphic |
-| [`screenshots/`](screenshots) | Phone screenshots, 1080×1920 |
+| [`screenshots/`](screenshots) | Phone screenshots, 1080×1920, eight of them |
 
 ## Before an internal test submission
 
@@ -42,18 +42,18 @@ so the next submission does not have to reconstruct it from memory.
 python apps/android/play/generate-feature-graphic.py
 ```
 
-The current screenshots were captured on 2026-09-07 from release `0.11.6 (46)`
-on the isolated `koalacast-release-audit` Android 36 AVD. The existing `koala36`
-AVD and its differently signed installation were preserved. The test AVD uses a real phone
-geometry, because the 320×640 viewport used for the parity comparison is below
-what a store listing should show:
+The current screenshots were captured on 2026-09-08 from `0.11.8 (48)` on the
+`koala36` AVD, which is configured with a real 1080×2400 panel at 420 dpi. The
+full procedure — viewport, demo status bar, English locale, theme switching and
+the rule against empty states — is in [`screenshots/README.md`](screenshots/README.md),
+along with the mistakes that produced a soft, German, empty-looking first
+attempt. Re-capture whenever the visible UI changes; do not upload stale
+screenshots from an older release.
 
-```bash
-adb shell wm size 1080x1920 && adb shell wm density 440
-adb exec-out screencap -p > apps/android/play/screenshots/01-discover.png
-adb shell wm size reset && adb shell wm density reset
-```
+## Copy rules Play enforces
 
-The committed captures use a release build with a real subscription and a fixed
-demo status bar. Re-capture them whenever the visible UI changes; do not upload
-stale screenshots from an older release.
+The **short description** may not carry price or promotional information. The
+Console rejected "no ads or behavioral tracking" on exactly that ground, so that
+field now describes features only; the absence of advertising is stated in the
+full description, where the rule does not apply. The same rule bans
+call-to-actions, accolades, store-performance claims and testimonials there.

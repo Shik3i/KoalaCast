@@ -200,9 +200,37 @@ test('each visualizer uses a dedicated stage instead of covering the timeline', 
 		const stage = page.locator('.compact-visualizer');
 		await expect(stage).toBeVisible();
 		await expect(stage.locator(`[data-visualizer="${style}"]`)).toBeVisible();
-		await expect.poll(() => stage.locator('[data-visualizer]').evaluate((element) =>
-			Number.parseFloat((element as HTMLElement).style.getPropertyValue('--level'))
-		)).toBeGreaterThan(0);
+		// The visualiser is a canvas rather than a stack of styled elements, so
+		// "is it reacting to the audio" is asked of the pixels. It used to be asked
+		// of an inline `--level` custom property, which no longer exists — driving
+		// forty-eight elements' inline styles every frame is the layout cost the
+		// renderer was rewritten to stop paying.
+		await expect.poll(() => stage.locator('[data-visualizer] canvas').evaluate((element) => {
+			const canvas = element as HTMLCanvasElement;
+			const context = canvas.getContext('2d');
+			if (!context || !canvas.width) return 0;
+			const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+			let painted = 0;
+			for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 0) painted++;
+			return painted;
+		})).toBeGreaterThan(0);
+		if (style === 'bars') {
+			// Silence draws every bar at its minimum, close to the baseline, so a bar
+			// reaching the top third can only be audio arriving. This is the check
+			// that the whole signal path — graph, analyser, envelope, painter — is
+			// connected; the timing of that envelope is covered by the unit tests in
+			// `visualizer-frame.test.ts`.
+			await expect.poll(() => stage.locator('[data-visualizer] canvas').evaluate((element) => {
+				const canvas = element as HTMLCanvasElement;
+				const context = canvas.getContext('2d');
+				if (!context || !canvas.width) return 0;
+				const third = Math.max(1, Math.floor(canvas.height / 3));
+				const pixels = context.getImageData(0, 0, canvas.width, third).data;
+				let painted = 0;
+				for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 0) painted++;
+				return painted;
+			})).toBeGreaterThan(0);
+		}
 		await expect(page.locator('.timeline-track [data-visualizer]')).toHaveCount(0);
 
 		const geometry = await page.evaluate(() => {

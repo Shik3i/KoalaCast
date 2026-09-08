@@ -581,7 +581,7 @@
 			<!-- Preview uses the same component and dimensions as the player stage. -->
 			{#if prefs.visualizer !== 'off'}
 				<div class="visualizer-preview">
-					<VisualizerSignal style={prefs.visualizer} variant="preview" level={0.7} />
+					<VisualizerSignal style={prefs.visualizer} variant="preview" />
 				</div>
 			{/if}
 		</div>
