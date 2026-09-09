@@ -48,8 +48,18 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      android-patches:
+      android-build-tools:
+        patterns:
+          - "com.android.tools.build:gradle"
+          - "com.android.application"
+          - "com.android.library"
+      android-libraries:
         patterns:
           - "*"
+        exclude-patterns:
+          - "com.android.tools.build:gradle"
+          - "com.android.application"
+          - "com.android.library"
         update-types:
+          - "minor"
           - "patch"
