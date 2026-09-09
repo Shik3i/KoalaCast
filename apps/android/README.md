@@ -30,6 +30,10 @@ make android-release-check
 It checks the version and release policy, then runs `testDebugUnitTest`,
 `testReleaseUnitTest`, `lintRelease`, `assembleRelease` and `bundleRelease` in
 separate Gradle invocations, matching the tagged/manual release checks.
+Pull-request Android CI also builds the release APK and AAB with a temporary
+CI-only signing key to exercise R8 and packaging. These disposable packages are
+not uploaded; production signing remains in the release workflow.
+
 Release signing environment variables must already be configured for this Make
 target; the Windows recovery wrapper below supplies them securely.
 
