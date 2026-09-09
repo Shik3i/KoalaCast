@@ -62,7 +62,7 @@ jobs:
         working-directory: apps/android
         run: ./gradlew --no-daemon lintRelease
 
-      # Exercise R8 and both package formats on dependency PRs without release secrets.
+      # Exercise R8 and both package formats on dependency PRs without production credentials.
       # These packages are disposable CI outputs and are never published.
       - name: Create temporary CI signing key
         run: |
