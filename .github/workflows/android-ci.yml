@@ -27,7 +27,7 @@ jobs:
   verify:
     name: Unit tests and release lint
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -61,3 +61,28 @@ jobs:
       - name: Release lint
         working-directory: apps/android
         run: ./gradlew --no-daemon lintRelease
+
+      # Exercise R8 and both package formats on dependency PRs without production credentials.
+      # These packages are disposable CI outputs and are never published.
+      - name: Create temporary CI signing key
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/koalacast-ci.p12" -storetype PKCS12 \
+            -storepass ci-only-password -keypass ci-only-password \
+            -alias ci -keyalg RSA -keysize 2048 -validity 2 \
+            -dname "CN=KoalaCast CI Only"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/koalacast-ci.p12" >> "$GITHUB_ENV"
+
+      - name: Build release APK and AAB with CI key
+        working-directory: apps/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ci-only-password
+          ANDROID_KEY_ALIAS: ci
+          ANDROID_KEY_PASSWORD: ci-only-password
+        run: |
+          ./gradlew --no-daemon assembleRelease
+          ./gradlew --no-daemon bundleRelease
+
+      - name: Remove temporary CI signing key
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/koalacast-ci.p12"

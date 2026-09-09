@@ -25,10 +25,13 @@ for (const name of readdirSync(workflowDir).filter((entry) => /\.ya?ml$/.test(en
 		errors.push(`${name}: code scanning must not load signing secrets, package releases or publish artifacts`);
 	}
 	if (name === 'android-ci.yml') {
-		if (/secrets\.|:\s*write\b|\b(?:assembleRelease|bundleRelease|packageRelease|publish)\b/.test(source)) {
-			errors.push(`${name}: verification must stay read-only, without signing secrets or release packaging`);
+		for (const required of ['keytool -genkeypair', 'CN=KoalaCast CI Only', 'ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/koalacast-ci.p12', 'if: always()', 'rm -f -- "$RUNNER_TEMP/koalacast-ci.p12"']) {
+			if (!source.includes(required)) errors.push(`${name}: missing disposable CI signing safeguard: ${required}`);
 		}
-		for (const task of ['testDebugUnitTest', 'testReleaseUnitTest', 'lintRelease']) {
+		if (/secrets\.|:\s*write\b|\bpublish\b|actions\/upload-artifact|push:\s*true\b/.test(source)) {
+			errors.push(`${name}: verification must stay read-only, without production signing secrets or artifact publication`);
+		}
+		for (const task of ['testDebugUnitTest', 'testReleaseUnitTest', 'lintRelease', 'assembleRelease', 'bundleRelease']) {
 			if (!source.includes(task)) errors.push(`${name}: missing ${task}`);
 		}
 	}
@@ -81,4 +84,4 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-console.log('Release policy check passed: Android CI verifies without signing; android-v* publishes APK/AAB; website tags publish only Docker images.');
+console.log('Release policy check passed: Android CI verifies with disposable signing and no publication; android-v* publishes APK/AAB; website tags publish only Docker images.');
