@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -323,6 +324,7 @@ private fun SignedOutContent(
         style = KoalaTheme.type.monoSmall,
     )
     KoalaTextField(
+        autofillContentType = if (mode == 1) ContentType.NewUsername else ContentType.Username,
         value = state.username,
         onValueChange = onUsername,
         placeholder = stringResource(R.string.account_username),
@@ -348,6 +350,7 @@ private fun SignedOutContent(
             style = KoalaTheme.type.monoSmall,
         )
         KoalaTextField(
+            autofillContentType = ContentType.NewPassword,
             value = state.newPassword,
             onValueChange = onNewPassword,
             placeholder = stringResource(R.string.account_new_password),
@@ -370,6 +373,7 @@ private fun SignedOutContent(
             style = KoalaTheme.type.monoSmall,
         )
         KoalaTextField(
+            autofillContentType = if (mode == 0) ContentType.Password else ContentType.NewPassword,
             value = state.password,
             onValueChange = onPassword,
             placeholder = stringResource(R.string.account_password),

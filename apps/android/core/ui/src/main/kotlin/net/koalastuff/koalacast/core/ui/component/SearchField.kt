@@ -19,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -53,6 +55,7 @@ fun KoalaTextField(
     onImeAction: (() -> Unit)? = null,
     singleLine: Boolean = true,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    autofillContentType: ContentType? = null,
 ) {
     val colors = KoalaTheme.colors
     val selectionColors = TextSelectionColors(
@@ -96,6 +99,7 @@ fun KoalaTextField(
                         .fillMaxWidth()
                         .semantics {
                             this.contentDescription = contentDescription
+                            autofillContentType?.let { contentType = it }
                         },
                     textStyle = KoalaTheme.type.bodySmall.copy(color = colors.ink),
                     cursorBrush = SolidColor(colors.accentFill),
