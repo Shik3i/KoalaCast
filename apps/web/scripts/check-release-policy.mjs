@@ -84,4 +84,4 @@ if (errors.length > 0) {
 	process.exit(1);
 }
 
-console.log('Release policy check passed: Android CI verifies without signing; android-v* publishes APK/AAB; website tags publish only Docker images.');
+console.log('Release policy check passed: Android CI verifies with disposable signing and no publication; android-v* publishes APK/AAB; website tags publish only Docker images.');
