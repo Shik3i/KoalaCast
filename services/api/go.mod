@@ -7,12 +7,12 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
-	golang.org/x/crypto v0.56.0
-	golang.org/x/image v0.45.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/image v0.46.0
 	golang.org/x/sync v0.23.0
 )
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 )
