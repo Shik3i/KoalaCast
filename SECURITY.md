@@ -44,6 +44,11 @@ KoalaCast already ships several defensive measures relevant to reports:
 - **Response-size limits** on RSS bodies to guard against decompression/DoS abuse.
 - **Argon2id** password hashing and HttpOnly, same-site session cookies.
 - **Rate limiting** on authentication endpoints.
+- **Hardened container**: read-only root filesystem, no capabilities, `no-new-privileges`.
+
+TLS termination and `Strict-Transport-Security` are the reverse proxy's job (the
+reference deployment uses Caddy); the application itself does not set HSTS.
+A machine-readable contact is published at `/.well-known/security.txt`.
 
 Reports that strengthen or find gaps in these areas are especially valued.
 

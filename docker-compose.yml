@@ -6,6 +6,14 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Hardening: the app writes only to the data volume.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "3000:3000"
     environment:
