@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto, replaceState } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { saveLocalSubscription, getLocalSubscriptions } from '$lib/idb/db';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { confirmDialog } from '$lib/stores/confirm.svelte';
@@ -114,10 +114,10 @@
 		try {
 			recentSearches = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
 		} catch (_) {}
-		const initialQuery = $page.url.searchParams.get('q')?.trim() || '';
-		const initialLanguages = $page.url.searchParams.get('languages')?.split(',').filter(Boolean);
+		const initialQuery = page.url.searchParams.get('q')?.trim() || '';
+		const initialLanguages = page.url.searchParams.get('languages')?.split(',').filter(Boolean);
 		if (initialLanguages?.length) filterLanguages = initialLanguages;
-		filterGenre = $page.url.searchParams.get('genre') || '';
+		filterGenre = page.url.searchParams.get('genre') || '';
 		if (initialQuery) {
 			searchQuery = initialQuery;
 			void executeSearch(initialQuery);

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { t } from '$lib/i18n';
-	import { page } from '$app/stores';
-	import { browser } from '$app/environment';
+	import { page } from '$app/state';
+	import { browser } from '$app/env';
 	import DOMPurify from 'dompurify';
 	import {
 		getLocalPlaybackState,
@@ -47,8 +47,8 @@
 	);
 
 	$effect(() => {
-		episodeId = $page.params.id || '';
-		const seconds = Number($page.url.searchParams.get('t'));
+		episodeId = page.params.id || '';
+		const seconds = Number(page.url.searchParams.get('t'));
 		requestedStartMs = Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : null;
 		if (episodeId) loadEpisodeDetails(episodeId);
 	});
