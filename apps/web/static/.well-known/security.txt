@@ -1,0 +1,4 @@
+Contact: https://github.com/Shik3i/KoalaCast/security/advisories/new
+Expires: 2027-10-09T00:00:00.000Z
+Preferred-Languages: en, de
+Policy: https://github.com/Shik3i/KoalaCast/blob/main/SECURITY.md
