@@ -24,8 +24,7 @@ apps/web/
 │   │   └── theme.ts             System/light/dark mode and nine color palettes
 │   └── routes/                  Discovery, Search, Inbox, Library, Player, Stats, Account, Settings, Admin
 ├── static/                      app icons, empty states, SEO files and social artwork
-├── svelte.config.js             adapter-static config with fallback: 'index.html'
-└── vite.config.ts               Dev server + /api → :3000 proxy
+└── vite.config.ts               SvelteKit config (adapter-static, fallback: 'index.html'), dev server and /api → :3000 proxy
 ```
 
 ---

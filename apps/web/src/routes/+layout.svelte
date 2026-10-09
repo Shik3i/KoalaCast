@@ -2,7 +2,7 @@
 	import '$lib/styles/fonts.css';
 	import '$lib/styles/phosphor-subset.css';
 	import '../lib/styles/app.css';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import RailResizer from '$lib/components/RailResizer.svelte';
 	import RunningOrder from '$lib/components/RunningOrder.svelte';
@@ -33,7 +33,7 @@
 	let DeferredPlayer = $state<any>(null);
 	let playerImport: Promise<void> | null = null;
 
-	const path = $derived($page.url.pathname);
+	const path = $derived(page.url.pathname);
 	const showRunningOrder = $derived(path === '/');
 	const appLinks = $derived([
 		{ href: '/', icon: 'ph-compass', label: t('quiet.nav.discover') },

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { browser } from '$app/environment';
+	import { page } from '$app/state';
+	import { browser } from '$app/env';
 	import { currentLocale } from '$lib/i18n';
 
 	type SeoCopy = {
@@ -102,7 +102,7 @@
 	};
 
 	const routeKey = $derived.by(() => {
-		const path = $page.url.pathname;
+		const path = page.url.pathname;
 		if (path === '/') return 'home';
 		if (path === '/global-stats') return 'globalStats';
 		if (path === '/privacy') return 'privacy';
@@ -114,7 +114,7 @@
 		return 'private';
 	});
 	const copy = $derived((currentLocale() === 'de' ? german : english)[routeKey] ?? english.private);
-	const canonical = $derived(`https://cast.koalastuff.net${$page.url.pathname === '/' ? '/' : $page.url.pathname.replace(/\/+$/, '')}`);
+	const canonical = $derived(`https://cast.koalastuff.net${page.url.pathname === '/' ? '/' : page.url.pathname.replace(/\/+$/, '')}`);
 
 	$effect(() => {
 		const description = copy.description;

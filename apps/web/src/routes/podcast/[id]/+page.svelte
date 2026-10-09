@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { t, type MessageKey } from '$lib/i18n';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import {
 		saveLocalSubscription,
 		removeLocalSubscription,
@@ -118,7 +118,7 @@
 	);
 
 	$effect(() => {
-		podcastId = $page.params.id || '';
+		podcastId = page.params.id || '';
 		if (podcastId) loadPodcastData(podcastId);
 	});
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -17,7 +17,7 @@
 	let recentCount = $state(0);
 	let loadedSyncAt = 0;
 
-	const path = $derived($page.url.pathname);
+	const path = $derived(page.url.pathname);
 	const links = $derived([
 		{ href: '/', icon: 'ph-newspaper', label: t('quiet.nav.discover') },
 		{ href: '/search', icon: 'ph-magnifying-glass', label: t('nav.search') },

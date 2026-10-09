@@ -7,7 +7,8 @@
 // Public catalogue JSON uses stale-while-revalidate so a returning listener gets
 // the last useful screen immediately while the next snapshot is fetched.
 
-import { build, files, version } from '$service-worker';
+import { assets, immutable } from '$app/manifest';
+import { version } from '$app/env';
 import {
 	AUDIO_DOWNLOAD_CACHE_PREFIX,
 	audioDownloadCacheNameForOfflinePath
@@ -23,6 +24,14 @@ import {
 } from '$lib/background/feed-mirror';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
+
+// `$service-worker` was replaced by `$app/manifest`, which lists paths relative to the
+// base path ("_app/immutable/x.js"). Everything below matches against absolute
+// `url.pathname` values, so restore the leading base + "/" the old module provided.
+const basePath = sw.location.pathname.split('/').slice(0, -1).join('/');
+const absolute = ({ path }: { path: string }) => `${basePath}/${path.replace(/^\/+/, '')}`;
+const build = immutable.map(absolute);
+const files = assets.map(absolute);
 
 const CACHE = `koalacast-cache-${version}`;
 const PUBLIC_API_CACHE = `koalacast-public-api-${version}`;
