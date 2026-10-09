@@ -20,7 +20,7 @@ By participating, you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development Setup
 
-Requirements: **Go 1.26.5+**, **Node.js 24+**, and optionally **Docker 24+**.
+Requirements: **Go 1.26.9+**, **Node.js 24+**, and optionally **Docker 24+**.
 
 ```bash
 git clone https://github.com/Shik3i/KoalaCast.git
