@@ -63,6 +63,9 @@ jobs:
           # Reuse the pinned multi-arch Node image from the Dockerfile.
           image=$(awk '/^FROM .*node:/ { print $3; exit }' Dockerfile)
           test -n "$image"
+          # Pull through Google's Docker Hub mirror (same digest) to dodge the
+          # unauthenticated Docker Hub rate limit on shared runner IPs.
+          image="mirror.gcr.io/library/$image"
           # Unauthenticated Docker Hub pulls from shared runner IPs are rate limited
           # (HTTP 429, "toomanyrequests"); retry with backoff instead of failing the job.
           pulled=false
@@ -75,6 +78,11 @@ jobs:
           test "$(docker run --rm --platform linux/arm64 "$image" uname -m)" = aarch64
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+        with:
+          # BuildKit resolves FROM images through the mirror too; digests are unchanged.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Validate docker compose config
         run: docker compose config -q
