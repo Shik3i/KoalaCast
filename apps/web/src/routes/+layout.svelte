@@ -1,31 +1,31 @@
 <script lang="ts">
-	import '$lib/styles/fonts.css';
-	import '$lib/styles/phosphor-subset.css';
+	import '#lib/styles/fonts.css';
+	import '#lib/styles/phosphor-subset.css';
 	import '../lib/styles/app.css';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import RailResizer from '$lib/components/RailResizer.svelte';
-	import RunningOrder from '$lib/components/RunningOrder.svelte';
-	import Seo from '$lib/components/Seo.svelte';
-	import Sidebar from '$lib/components/Sidebar.svelte';
-	import Toast from '$lib/components/Toast.svelte';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { player } from '$lib/stores/player.svelte';
+	import RailResizer from '#lib/components/RailResizer.svelte';
+	import RunningOrder from '#lib/components/RunningOrder.svelte';
+	import Seo from '#lib/components/Seo.svelte';
+	import Sidebar from '#lib/components/Sidebar.svelte';
+	import Toast from '#lib/components/Toast.svelte';
+	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
+	import { player } from '#lib/stores/player.svelte.ts';
 	import {
 		activateAccountContext,
 		activateLoggedInAccount,
 		getLastAccountContext
-	} from '$lib/stores/account-context';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { shell } from '$lib/stores/shell.svelte';
-	import { install } from '$lib/stores/install.svelte';
-	import { opmlBackup } from '$lib/backup/opml-backup.svelte';
-	import { registerPeriodicEpisodeCheck } from '$lib/background/feed-mirror';
-	import { t, loadLocale, getLocaleConfig } from '$lib/i18n';
+	} from '#lib/stores/account-context.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { shell } from '#lib/stores/shell.svelte.ts';
+	import { install } from '#lib/stores/install.svelte.ts';
+	import { opmlBackup } from '#lib/backup/opml-backup.svelte.ts';
+	import { registerPeriodicEpisodeCheck } from '#lib/background/feed-mirror.ts';
+	import { t, loadLocale, getLocaleConfig } from '#lib/i18n/index.ts';
 	import { onMount } from 'svelte';
-	import { getLocalSubscriptions } from '$lib/idb/db';
-	import { appVersion } from '$lib/app-version';
-	import { preloadSubscriptionArtwork, setArtworkProxyEnabled } from '$lib/artwork';
+	import { getLocalSubscriptions } from '#lib/idb/db.ts';
+	import { appVersion } from '#lib/app-version.ts';
+	import { preloadSubscriptionArtwork, setArtworkProxyEnabled } from '#lib/artwork.ts';
 
 	let { children } = $props();
 	let currentUser = $state<{ user_id: string; username: string; role: string } | null>(null);
@@ -97,7 +97,7 @@
 
 	function ensurePlayer() {
 		if (DeferredPlayer || playerImport) return playerImport;
-		playerImport = import('$lib/components/Player.svelte').then((module) => {
+		playerImport = import('#lib/components/Player.svelte').then((module) => {
 			DeferredPlayer = module.default;
 		});
 		return playerImport;

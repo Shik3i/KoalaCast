@@ -1,4 +1,4 @@
-import type { VisualizerStyle } from '$lib/stores/prefs.svelte';
+import type { VisualizerStyle } from '#lib/stores/prefs.svelte.ts';
 
 /**
  * Every visualiser style, drawn into a 2D canvas context.

@@ -7,8 +7,6 @@ export default defineConfig({
 	plugins: [
 		sveltekit({
 			preprocess: vitePreprocess(),
-			// Kit 3 dropped the built-in $lib alias; keep it so imports stay unchanged.
-			alias: { $lib: 'src/lib' },
 			csp: {
 				mode: 'hash',
 				directives: {

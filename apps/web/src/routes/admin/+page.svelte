@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
-	import { confirmDialog } from '$lib/stores/confirm.svelte';
+	import { t } from '#lib/i18n/index.ts';
+	import { confirmDialog } from '#lib/stores/confirm.svelte.ts';
 	import { onMount } from 'svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { toast } from '#lib/stores/toast.svelte.ts';
 
 	let systemStatus = $state<any>(null);
 	let users = $state<any[]>([]);

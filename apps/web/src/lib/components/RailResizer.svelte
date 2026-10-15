@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { shell, railSizes } from '$lib/stores/shell.svelte';
+	import { shell, railSizes } from '#lib/stores/shell.svelte.ts';
 
 	let {
 		side,

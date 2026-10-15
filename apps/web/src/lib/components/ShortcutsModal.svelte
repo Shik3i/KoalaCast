@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
-	import { KEYBOARD_SHORTCUTS } from '$lib/data/shortcuts';
+	import { t } from '#lib/i18n/index.ts';
+	import { KEYBOARD_SHORTCUTS } from '#lib/data/shortcuts.ts';
 
 	let { show = $bindable(false) } = $props();
 	let modalContent: HTMLDivElement | null = $state(null);

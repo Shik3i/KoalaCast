@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
-	import { confirmDialog } from '$lib/stores/confirm.svelte';
+	import { t } from '#lib/i18n/index.ts';
+	import { confirmDialog } from '#lib/stores/confirm.svelte.ts';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -23,7 +23,7 @@
 		getSmartQueues,
 		saveSmartQueue,
 		removeSmartQueue
-	} from '$lib/idb/db';
+	} from '#lib/idb/db.ts';
 	import {
 		DEFAULT_SMART_QUEUE_RULES,
 		evaluateSmartQueue,
@@ -31,17 +31,17 @@
 		totalDurationMs,
 		type SmartQueue,
 		type SmartQueueCandidate
-	} from '$lib/queues/smart';
-	import { readCachedContent } from '$lib/cache/content';
-	import { audioDownloads } from '$lib/downloads/manager.svelte';
-	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '#lib/queues/smart.ts';
+	import { readCachedContent } from '#lib/cache/content.ts';
+	import { audioDownloads } from '#lib/downloads/manager.svelte.ts';
+	import { player, type CurrentTrack } from '#lib/stores/player.svelte.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
 	import { goto } from '$app/navigation';
-	import { reveal } from '$lib/actions/reveal';
-	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
-	import { podcastHref } from '$lib/podcast-link';
-	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
+	import { reveal } from '#lib/actions/reveal.ts';
+	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '#lib/artwork.ts';
+	import { podcastHref } from '#lib/podcast-link.ts';
+	import EpisodeProgressButton from '#lib/components/EpisodeProgressButton.svelte';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
 
 	let subscriptions = $state<LocalSubscription[]>([]);
 	let recentEpisodes = $state<LocalPlaybackState[]>([]);

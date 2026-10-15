@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t, type MessageKey } from '$lib/i18n';
+	import { t, type MessageKey } from '#lib/i18n/index.ts';
 	import { page } from '$app/state';
 	import {
 		saveLocalSubscription,
@@ -12,28 +12,28 @@
 		setEpisodePlayed,
 		setEpisodesPlayed,
 		type LocalPlaybackState
-	} from '$lib/idb/db';
-	import { player } from '$lib/stores/player.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { dominantColor } from '$lib/color';
-	import Skeleton from '$lib/components/Skeleton.svelte';
-	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
+	} from '#lib/idb/db.ts';
+	import { player } from '#lib/stores/player.svelte.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { dominantColor } from '#lib/color.ts';
+	import Skeleton from '#lib/components/Skeleton.svelte';
+	import EpisodeProgressButton from '#lib/components/EpisodeProgressButton.svelte';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
 	import { slide } from 'svelte/transition';
-	import { optimizeArtwork } from '$lib/artwork';
+	import { optimizeArtwork } from '#lib/artwork.ts';
 	import {
 		getAllPodcastPlaybackSettings,
 		getPodcastPlaybackSettings,
 		savePodcastPlaybackSettings,
 		type PodcastPlaybackSettings
-	} from '$lib/stores/podcast-settings';
-	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, readCachedContent } from '$lib/cache/content';
+	} from '#lib/stores/podcast-settings.ts';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, readCachedContent } from '#lib/cache/content.ts';
 	import {
 		disableBrowserNotifications,
 		setBrowserNotificationsEnabled
-	} from '$lib/notifications/browser';
-	import { safeExternalHref } from '$lib/safe-url';
+	} from '#lib/notifications/browser.ts';
+	import { safeExternalHref } from '#lib/safe-url.ts';
 
 	let podcastId = $state('');
 	let podcast = $state<any>(null);

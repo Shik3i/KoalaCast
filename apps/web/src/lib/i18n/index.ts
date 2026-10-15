@@ -2,7 +2,7 @@
 //
 // Components import from here and nowhere deeper:
 //
-//   import { t } from '$lib/i18n';
+//   import { t } from '#lib/i18n/index.ts';
 //   <h1>{t('discover.forYou')}</h1>
 //   <p>{t('discover.showCount', { count: n })}</p>
 //

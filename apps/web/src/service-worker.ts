@@ -12,7 +12,7 @@ import { version } from '$app/env';
 import {
 	AUDIO_DOWNLOAD_CACHE_PREFIX,
 	audioDownloadCacheNameForOfflinePath
-} from '$lib/downloads/offline-audio';
+} from '#lib/downloads/offline-audio.ts';
 import {
 	BACKGROUND_META_STORE,
 	NEW_EPISODES_LABEL_KEY,
@@ -21,7 +21,7 @@ import {
 	trimKnownIds,
 	WATCHED_FEEDS_STORE,
 	type WatchedFeed
-} from '$lib/background/feed-mirror';
+} from '#lib/background/feed-mirror.ts';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 

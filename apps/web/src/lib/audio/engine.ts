@@ -6,7 +6,7 @@ import {
 	SPECTRUM_CEILING_DB,
 	SPECTRUM_FLOOR_DB,
 	type AutoGainState
-} from '$lib/audio/spectrum';
+} from '#lib/audio/spectrum.ts';
 
 // Web Audio API Engine for KoalaCast
 // Handles Volume Boost (Gain + Compressor) and Real-time Silence Detection (Analyser)

@@ -6,11 +6,11 @@ import {
 	detectBrowserLanguages,
 	normalizeLanguageList,
 	regionForLanguage
-} from '$lib/data/languages';
+} from '#lib/data/languages.ts';
 // Only the pure registry is imported here, never the runtime: the runtime reads
 // this store, and importing it back would create a cycle.
-import { isSupportedLocale, resolveLocale } from '$lib/i18n/registry';
-import { storedPlaybackSpeed } from '$lib/player/playback-speed';
+import { isSupportedLocale, resolveLocale } from '#lib/i18n/registry.ts';
+import { storedPlaybackSpeed } from '#lib/player/playback-speed.ts';
 import {
 	foreignSettingsOf,
 	mergeForeignSettings,
@@ -31,7 +31,7 @@ import {
 	setTheme,
 	type PaletteId,
 	type ThemeMode
-} from '$lib/theme';
+} from '#lib/theme.ts';
 
 export type DateFormat = 'absolute' | 'relative';
 export type DefaultInboxMode = 'all' | 'latest';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PRIVACY_SECTIONS } from '$lib/data/privacy';
+	import { PRIVACY_SECTIONS } from '#lib/data/privacy.ts';
 
 	// NOTE: This page is intentionally NOT translated. The privacy policy is a
 	// legal document — a mistranslated clause is a legal problem, not a cosmetic

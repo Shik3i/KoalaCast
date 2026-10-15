@@ -1,4 +1,4 @@
-import { getCachedContent, putCachedContent } from '$lib/idb/db';
+import { getCachedContent, putCachedContent } from '#lib/idb/db.ts';
 
 /**
  * How long cached content can be used without a network revalidation.

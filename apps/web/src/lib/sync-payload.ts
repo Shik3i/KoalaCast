@@ -1,4 +1,4 @@
-import type { LocalListeningSession } from '$lib/idb/db';
+import type { LocalListeningSession } from '#lib/idb/db.ts';
 
 /**
  * The server's own ceilings for a listening session (see

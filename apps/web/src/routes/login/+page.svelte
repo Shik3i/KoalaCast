@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 	import { goto } from '$app/navigation';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { activateLoggedInAccount } from '$lib/stores/account-context';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { activateLoggedInAccount } from '#lib/stores/account-context.ts';
 
 	let usernameInput = $state('');
 	let passwordInput = $state('');

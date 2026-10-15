@@ -17,7 +17,7 @@ const engine = {
 	}
 };
 
-vi.mock('$lib/audio/engine', () => ({ audioEngine: engine }));
+vi.mock('#lib/audio/engine.ts', () => ({ audioEngine: engine }));
 
 const { visualizerFrame, VISUALIZER_BANDS } = await import('./visualizer-frame');
 

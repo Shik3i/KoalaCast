@@ -39,16 +39,16 @@ import {
 	type LocalFavorite,
 	type LocalPlaybackState,
 	type LocalListeningSession
-} from '$lib/idb/db';
+} from '#lib/idb/db.ts';
 import {
 	applySyncedPodcastPlaybackSettings,
 	clearPodcastPlaybackSettingsContext,
 	getAllPodcastPlaybackSettings,
 	removePodcastPlaybackSettings,
 	type PodcastPlaybackSettings
-} from '$lib/stores/podcast-settings';
-import { prefs } from '$lib/stores/prefs.svelte';
-import { shouldUploadListeningSession } from '$lib/stores/sync-selection';
+} from '#lib/stores/podcast-settings.ts';
+import { prefs } from '#lib/stores/prefs.svelte.ts';
+import { shouldUploadListeningSession } from '#lib/stores/sync-selection.ts';
 import {
 	bookmarkForSync,
 	bookmarkIsUploadable,
@@ -57,7 +57,7 @@ import {
 	normalizeBookmarkPayload,
 	normalizeListeningSessionForSync,
 	normalizeNamedQueuePayload
-} from '$lib/sync-payload';
+} from '#lib/sync-payload.ts';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
 
@@ -264,7 +264,7 @@ class SyncStore {
 		// Import lazily: account-context owns the complete browser wipe and imports
 		// this store to stop sync during account switches. A static import here would
 		// create a module cycle during application startup.
-		const { resetAllLocalData } = await import('$lib/stores/account-context');
+		const { resetAllLocalData } = await import('#lib/stores/account-context.ts');
 		await resetAllLocalData();
 		if (runGeneration !== undefined && signal) this.#assertRun(userId, runGeneration, signal);
 		this.#clearSyncMetadata(userId);

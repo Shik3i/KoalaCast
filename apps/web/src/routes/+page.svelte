@@ -1,26 +1,26 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { FEATURED_PODCASTS } from '$lib/data/featured';
-	import { saveLocalSubscription, getLocalSubscriptions, addLocalFavorite } from '$lib/idb/db';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import Onboarding from '$lib/components/Onboarding.svelte';
-	import Skeleton from '$lib/components/Skeleton.svelte';
-	import { GENRES, genreLabel } from '$lib/genres';
-	import { optimizeArtwork, preloadArtwork } from '$lib/artwork';
-	import { detectBrowserLanguages, regionForLanguage } from '$lib/data/languages';
-	import { t } from '$lib/i18n';
-	import { listeningSession, type SessionMinutes } from '$lib/stores/session.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
-	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
+	import { FEATURED_PODCASTS } from '#lib/data/featured.ts';
+	import { saveLocalSubscription, getLocalSubscriptions, addLocalFavorite } from '#lib/idb/db.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import Onboarding from '#lib/components/Onboarding.svelte';
+	import Skeleton from '#lib/components/Skeleton.svelte';
+	import { GENRES, genreLabel } from '#lib/genres.ts';
+	import { optimizeArtwork, preloadArtwork } from '#lib/artwork.ts';
+	import { detectBrowserLanguages, regionForLanguage } from '#lib/data/languages.ts';
+	import { t } from '#lib/i18n/index.ts';
+	import { listeningSession, type SessionMinutes } from '#lib/stores/session.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
+	import { player, type CurrentTrack } from '#lib/stores/player.svelte.ts';
 	import {
 		arrangeDiscover,
 		formatEpisodeMinutes,
 		type DiscoverMood,
 		type DiscoverSort
-	} from '$lib/discover/home';
-	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, contentCacheKey, readCachedContent } from '$lib/cache/content';
+	} from '#lib/discover/home.ts';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, contentCacheKey, readCachedContent } from '#lib/cache/content.ts';
 
 	interface PodcastItem {
 		id: string;

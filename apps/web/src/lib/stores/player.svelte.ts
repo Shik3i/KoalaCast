@@ -15,10 +15,10 @@ import {
 	getLocalCurrentPlayback,
 	saveLocalCurrentPlayback,
 	type LocalQueueItem
-} from '$lib/idb/db';
-import { normalizePlaybackSpeed } from '$lib/player/playback-speed';
-import { resolveOfflineAudioUrl } from '$lib/downloads/offline-audio';
-import { prefs } from '$lib/stores/prefs.svelte';
+} from '#lib/idb/db.ts';
+import { normalizePlaybackSpeed } from '#lib/player/playback-speed.ts';
+import { resolveOfflineAudioUrl } from '#lib/downloads/offline-audio.ts';
+import { prefs } from '#lib/stores/prefs.svelte.ts';
 
 export interface CurrentTrack {
 	episode_id: string;

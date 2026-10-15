@@ -1,12 +1,12 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import { normalizeRules, type SmartQueue } from '$lib/queues/smart';
+import { normalizeRules, type SmartQueue } from '#lib/queues/smart.ts';
 import {
 	namedQueueSyncKey,
 	normalizeBookmarkPayload,
 	normalizeNamedQueuePayload,
 	type SyncedNamedQueue,
 	type SyncedTimeBookmark
-} from '$lib/sync-payload';
+} from '#lib/sync-payload.ts';
 
 export type InboxMode = 'all' | 'latest';
 

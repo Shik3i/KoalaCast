@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 
 	let username = $state('');
 	let recoveryCode = $state('');

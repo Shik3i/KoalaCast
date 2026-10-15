@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { confirmDialog } from '$lib/stores/confirm.svelte';
-	import { t } from '$lib/i18n';
+	import { confirmDialog } from '#lib/stores/confirm.svelte.ts';
+	import { t } from '#lib/i18n/index.ts';
 	let dialogCard: HTMLDivElement | null = $state(null);
 	let confirmButton: HTMLButtonElement | null = $state(null);
 

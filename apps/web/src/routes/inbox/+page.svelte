@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -10,30 +10,30 @@
 		type LocalSubscription,
 		type LocalPlaybackState,
 		type InboxMode
-	} from '$lib/idb/db';
-	import { player } from '$lib/stores/player.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
-	import { podcastHref } from '$lib/podcast-link';
-	import { reveal } from '$lib/actions/reveal';
+	} from '#lib/idb/db.ts';
+	import { player } from '#lib/stores/player.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '#lib/artwork.ts';
+	import { podcastHref } from '#lib/podcast-link.ts';
+	import { reveal } from '#lib/actions/reveal.ts';
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
-	import Skeleton from '$lib/components/Skeleton.svelte';
-	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
-	import { listeningSession } from '$lib/stores/session.svelte';
+	import Skeleton from '#lib/components/Skeleton.svelte';
+	import EpisodeProgressButton from '#lib/components/EpisodeProgressButton.svelte';
+	import { listeningSession } from '#lib/stores/session.svelte.ts';
 	import {
 		cacheContent,
 		CONTENT_REVALIDATION_INTERVAL,
 		readCachedContent,
 		revalidateOnce
-	} from '$lib/cache/content';
-	import { getPodcastPlaybackSettings } from '$lib/stores/podcast-settings';
-	import { notifyNewPodcastEpisodes } from '$lib/notifications/browser';
-	import { audioDownloads } from '$lib/downloads/manager.svelte';
-	import { replaceWatchedFeeds, type WatchedFeed } from '$lib/background/feed-mirror';
-	import { dedupeInboxEpisodes, fetchInboxBatch } from '$lib/inbox';
+	} from '#lib/cache/content.ts';
+	import { getPodcastPlaybackSettings } from '#lib/stores/podcast-settings.ts';
+	import { notifyNewPodcastEpisodes } from '#lib/notifications/browser.ts';
+	import { audioDownloads } from '#lib/downloads/manager.svelte.ts';
+	import { replaceWatchedFeeds, type WatchedFeed } from '#lib/background/feed-mirror.ts';
+	import { dedupeInboxEpisodes, fetchInboxBatch } from '#lib/inbox.ts';
 
 	interface InboxEpisode {
 		id: string;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { browser } from '$app/env';
-	import { currentLocale } from '$lib/i18n';
+	import { currentLocale } from '#lib/i18n/index.ts';
 
 	type SeoCopy = {
 		title: string;
