@@ -1,4 +1,4 @@
-import { t } from '$lib/i18n';
+import { t } from '#lib/i18n/index.ts';
 
 export async function setBrowserNotificationsEnabled(enabled: boolean): Promise<boolean> {
 	if (!enabled) {

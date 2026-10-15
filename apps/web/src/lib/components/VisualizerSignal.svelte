@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { VisualizerStyle } from '$lib/stores/prefs.svelte';
-	import { visualizerFrame } from '$lib/audio/visualizer-frame';
+	import type { VisualizerStyle } from '#lib/stores/prefs.svelte.ts';
+	import { visualizerFrame } from '#lib/audio/visualizer-frame.ts';
 	import {
 		PREVIEW_BANDS,
 		PREVIEW_LEVEL,
@@ -8,7 +8,7 @@
 		VisualizerPainter,
 		type RenderInput,
 		type VisualizerVariant
-	} from '$lib/audio/visualizer-render';
+	} from '#lib/audio/visualizer-render.ts';
 
 	let {
 		style,

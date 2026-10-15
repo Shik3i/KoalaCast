@@ -17,7 +17,7 @@ const secondFavorite = {
 	title: 'Another episode'
 };
 
-vi.mock('$lib/idb/db', () => ({
+vi.mock('#lib/idb/db.ts', () => ({
 	getLocalSubscriptions: async () => [],
 	getLocalFavorites: async () => [favorite, secondFavorite],
 	getAllLocalPlaybackStates: async () => [],
@@ -25,6 +25,12 @@ vi.mock('$lib/idb/db', () => ({
 	getLocalListeningSession: async () => undefined,
 	getLocalQueue: async () => [],
 	getLocalQueueUpdatedAt: async () => 0,
+	getLocalNamedQueues: async () => [],
+	getAllLocalTimeBookmarks: async () => [],
+	applySyncedNamedQueue: async () => true,
+	removeSyncedNamedQueue: async () => {},
+	applySyncedTimeBookmark: async () => true,
+	removeSyncedTimeBookmark: async () => {},
 	getTombstones: async () => [],
 	getTombstone: async () => undefined,
 	acknowledgeTombstone: async () => {},
@@ -39,14 +45,14 @@ vi.mock('$lib/idb/db', () => ({
 	replaceLocalSyncSnapshot: async () => {}
 }));
 
-vi.mock('$lib/stores/podcast-settings', () => ({
+vi.mock('#lib/stores/podcast-settings.ts', () => ({
 	applySyncedPodcastPlaybackSettings: () => {},
 	clearPodcastPlaybackSettingsContext: () => {},
 	getAllPodcastPlaybackSettings: () => [],
 	removePodcastPlaybackSettings: () => {}
 }));
 
-vi.mock('$lib/stores/prefs.svelte', () => ({
+vi.mock('#lib/stores/prefs.svelte.ts', () => ({
 	prefs: {
 		updatedAt: 0,
 		syncPayload: () => ({ updated_at: 0 }),

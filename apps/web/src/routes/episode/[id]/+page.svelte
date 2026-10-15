@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 	import { page } from '$app/state';
 	import { browser } from '$app/env';
 	import DOMPurify from 'dompurify';
@@ -13,17 +13,17 @@
 		addLocalTimeBookmark,
 		removeLocalTimeBookmark,
 		type LocalTimeBookmark
-	} from '$lib/idb/db';
-	import { player } from '$lib/stores/player.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { dominantColor } from '$lib/color';
-	import { optimizeArtwork } from '$lib/artwork';
+	} from '#lib/idb/db.ts';
+	import { player } from '#lib/stores/player.svelte.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { dominantColor } from '#lib/color.ts';
+	import { optimizeArtwork } from '#lib/artwork.ts';
 	import { slide } from 'svelte/transition';
-	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, readCachedContent } from '$lib/cache/content';
-	import { isAudioDownloaded } from '$lib/downloads/offline-audio';
-	import { audioDownloads } from '$lib/downloads/manager.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
+	import { cacheContent, CONTENT_REVALIDATION_INTERVAL, readCachedContent } from '#lib/cache/content.ts';
+	import { isAudioDownloaded } from '#lib/downloads/offline-audio.ts';
+	import { audioDownloads } from '#lib/downloads/manager.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
 
 	let episodeId = $state('');
 	let episode = $state<any>(null);

@@ -7,7 +7,7 @@
 // sampling neither leaks the user's IP to third-party CDNs nor taints the canvas
 // (remote CDNs rarely send CORS headers, which used to make this silently fail).
 
-import { optimizeArtwork } from '$lib/artwork';
+import { optimizeArtwork } from '#lib/artwork.ts';
 
 const cache = new Map<string, string | null>();
 

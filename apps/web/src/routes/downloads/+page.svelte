@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { t } from '$lib/i18n';
-	import { audioDownloads, DOWNLOAD_ERROR, type AudioDownload } from '$lib/downloads/manager.svelte';
-	import { optimizeArtwork } from '$lib/artwork';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
+	import { t } from '#lib/i18n/index.ts';
+	import { audioDownloads, DOWNLOAD_ERROR, type AudioDownload } from '#lib/downloads/manager.svelte.ts';
+	import { optimizeArtwork } from '#lib/artwork.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
 
 	onMount(async () => {
 		await waitForAccountContext();

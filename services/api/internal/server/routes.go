@@ -50,6 +50,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		DB:     database,
 		Config: cfg,
 	}
+	instanceHandler := &handlers.InstanceHandler{Config: cfg, Auth: authHandler}
 	pushService := pushservice.NewService(database, cfg, logger)
 	feedWorker.SetNotifier(pushService)
 	pushHandler := &handlers.PushHandler{DB: database, Config: cfg}
@@ -90,6 +91,11 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			})
 		})
 
+		// Operator identity and legal links of this deployment (static config plus
+		// one registration-setting read). Throttled like the other public reads.
+		instanceLimiter := customMiddleware.NewRateLimiter(120, 1*time.Minute)
+		r.With(instanceLimiter.Limit).Get("/instance", instanceHandler.Get)
+
 		// Proxy endpoints for CORS-safe chapters/transcripts and privacy-safe cached
 		// images. Each fetches an arbitrary client-supplied URL server-side, so the
 		// group is throttled per client IP to bound outbound-fetch, open-relay and
@@ -127,6 +133,11 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 			r.Get("/podcasts/discover", podcastHandler.Discover)
 			r.Get("/podcasts/search", podcastHandler.Search)
 		})
+		// The Inbox for many feeds in one request. Same per-feed semantics (and the
+		// same on-demand refresh gate) as GET /podcasts/{id}/episodes, so it is
+		// throttled per client IP like the other public reads that can fan out.
+		inboxLimiter := customMiddleware.NewRateLimiter(20, 1*time.Minute)
+		r.With(inboxLimiter.Limit).Post("/inbox/episodes", podcastHandler.InboxBatch)
 		r.Get("/podcasts/{id}", podcastHandler.GetPodcast)
 		r.Get("/podcasts/{id}/episodes", podcastHandler.GetEpisodes)
 		r.Get("/episodes/{id}", podcastHandler.GetEpisode)

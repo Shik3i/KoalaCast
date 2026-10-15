@@ -5,12 +5,12 @@
 		getLocalSubscriptions,
 		getRecentPlaybackStates,
 		type LocalSubscription
-	} from '$lib/idb/db';
-	import { t } from '$lib/i18n';
-	import { appVersion } from '$lib/app-version';
-	import { podcastHref } from '$lib/podcast-link';
-	import { sync } from '$lib/stores/sync.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
+	} from '#lib/idb/db.ts';
+	import { t } from '#lib/i18n/index.ts';
+	import { appVersion } from '#lib/app-version.ts';
+	import { podcastHref } from '#lib/podcast-link.ts';
+	import { sync } from '#lib/stores/sync.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
 
 	let { isAdmin = false }: { isAdmin?: boolean } = $props();
 	let subscriptions = $state<LocalSubscription[]>([]);

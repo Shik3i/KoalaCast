@@ -1,14 +1,14 @@
-import { clearAllLocalData, switchLocalDataContext, wasGuestContextActive } from '$lib/idb/db';
-import { player } from '$lib/stores/player.svelte';
-import { sync } from '$lib/stores/sync.svelte';
-import { prefs } from '$lib/stores/prefs.svelte';
+import { clearAllLocalData, switchLocalDataContext, wasGuestContextActive } from '#lib/idb/db.ts';
+import { player } from '#lib/stores/player.svelte.ts';
+import { sync } from '#lib/stores/sync.svelte.ts';
+import { prefs } from '#lib/stores/prefs.svelte.ts';
 import {
 	activatePodcastSettingsContext,
 	clearPodcastPlaybackSettingsContext
-} from '$lib/stores/podcast-settings';
-import { audioDownloads } from '$lib/downloads/manager.svelte';
-import { clearWatchedFeeds } from '$lib/background/feed-mirror';
-import { disableBrowserNotifications } from '$lib/notifications/browser';
+} from '#lib/stores/podcast-settings.ts';
+import { audioDownloads } from '#lib/downloads/manager.svelte.ts';
+import { clearWatchedFeeds } from '#lib/background/feed-mirror.ts';
+import { disableBrowserNotifications } from '#lib/notifications/browser.ts';
 
 let transition: Promise<void> = Promise.resolve();
 let requestedUserId: string | null | undefined;

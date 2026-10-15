@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
-	import { appVersion } from '$lib/app-version';
+	import { t } from '#lib/i18n/index.ts';
+	import { appVersion } from '#lib/app-version.ts';
 
 	// The policy body stays in reviewed English; navigation labels follow the UI locale.
 </script>

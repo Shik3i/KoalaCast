@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 
 	type Range = '90days' | 'year' | 'all';
 	type RankedPodcast = { rank: number; id: string; title: string; ms: number; episodes: number };

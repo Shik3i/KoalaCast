@@ -117,6 +117,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicConfigResponse'
 
+  /api/v1/instance:
+    get:
+      tags: [Health]
+      operationId: getInstanceInfo
+      summary: Read this deployment's operator identity and legal links
+      description: >
+        Values come from validated server configuration, never from request
+        headers. Optional fields are omitted until the operator configures them
+        (`KC_OPERATOR_NAME`, `KC_PRIVACY_POLICY_URL`, `KC_LEGAL_NOTICE_URL`).
+        Legal URLs are absolute `https` URLs, or `http` for loopback hosts only.
+      responses:
+        '200':
+          description: Instance identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceInfo'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /api/v1/proxy/audio:
     parameters:
       - $ref: '#/components/parameters/ProxyURL'
@@ -426,6 +446,40 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /api/v1/inbox/episodes:
+    post:
+      tags: [Podcasts]
+      operationId: listInboxEpisodes
+      summary: Fetch the newest episodes of many feeds in one request
+      description: >
+        Batched equivalent of `GET /podcasts/{id}/episodes?since=…` for the Inbox.
+        Every feed keeps the per-feed semantics: the same on-demand refresh (only
+        when the stored copy is older than 15 minutes, so ordinary subscriptions
+        are not refreshed unconditionally), the inclusive `since` watermark and
+        newest-first order. Results are grouped per feed and bounded per feed;
+        there is deliberately no global page, because watermarks are per feed and a
+        global cut-off could hide a quiet show's new episodes behind a busy one's
+        backlog. A feed the server does not store is returned with `found: false`
+        and should be resolved through the per-feed route. Public, like the
+        per-feed route, and throttled per client IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboxBatchRequest'
+      responses:
+        '200':
+          description: One result per distinct requested feed, in request order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboxBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/v1/podcasts/{id}/episodes:
     parameters:
@@ -1462,6 +1516,34 @@ components:
           type: boolean
           description: Whether this self-hosted instance permits audio relay fallback for browser effects and downloads.
 
+    InstanceInfo:
+      type: object
+      required: [service_name, registration_enabled]
+      additionalProperties: false
+      properties:
+        service_name:
+          type: string
+          maxLength: 200
+          example: KoalaCast
+        operator_name:
+          type: string
+          maxLength: 200
+          example: Example e.V.
+          description: Omitted until the operator sets `KC_OPERATOR_NAME`.
+        privacy_policy_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Defaults to this instance's own `/privacy` page when `PUBLIC_BASE_URL` is https or loopback.
+        legal_notice_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Omitted until the operator sets `KC_LEGAL_NOTICE_URL`.
+        registration_enabled:
+          type: boolean
+          description: Effective registration state (environment override first, then the admin setting).
+
     WebPushConfig:
       type: object
       required: [configured, vapid_public_key]
@@ -1768,6 +1850,61 @@ components:
         chapters_url:
           type: string
 
+    InboxBatchRequest:
+      type: object
+      required: [feeds]
+      properties:
+        feeds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [podcast_id]
+            properties:
+              podcast_id:
+                type: string
+                maxLength: 256
+              since:
+                type: integer
+                format: int64
+                minimum: 0
+                description: Inclusive Unix-second watermark; 0 or omitted means no lower bound. A repeated podcast_id keeps the smallest value.
+        limit_per_feed:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 15
+
+    InboxBatchResponse:
+      type: object
+      required: [feeds]
+      properties:
+        feeds:
+          type: array
+          items:
+            type: object
+            required: [podcast_id, found, episodes]
+            properties:
+              podcast_id:
+                type: string
+              found:
+                type: boolean
+              episodes:
+                type: array
+                items:
+                  type: object
+                  required: [id, podcast_id, title, description, pub_date, duration_ms, enclosure_url, artwork_url]
+                  properties:
+                    id: {type: string}
+                    podcast_id: {type: string}
+                    title: {type: string}
+                    description: {type: string}
+                    pub_date: {type: integer, format: int64}
+                    duration_ms: {type: integer, format: int64}
+                    enclosure_url: {type: string}
+                    artwork_url: {type: string}
+
     EpisodesResponse:
       type: object
       required: [episodes, count, limit, offset]
@@ -2002,7 +2139,7 @@ components:
 
     SyncEntityType:
       type: string
-      enum: [subscription, favorite, playback_state, listening_session, queue, podcast_settings, settings]
+      enum: [subscription, favorite, playback_state, listening_session, queue, podcast_settings, settings, named_queue, time_bookmark]
 
     SyncAction:
       type: string
@@ -2440,6 +2577,22 @@ components:
         settings:
           type: array
           description: Latest portable global settings payload; device-local paths and credentials are excluded.
+          items:
+            type: object
+            additionalProperties: true
+        named_queues:
+          type: array
+          description: >
+            Latest non-deleted named-queue payloads (`name`, `items`, `updated_at`), keyed by the
+            case-insensitive queue name. Clients that predate this field ignore it.
+          items:
+            type: object
+            additionalProperties: true
+        time_bookmarks:
+          type: array
+          description: >
+            Latest non-deleted timestamp bookmarks (`id`, `episode_id`, `position_ms`, `label`,
+            `created_at`). Clients that predate this field ignore it.
           items:
             type: object
             additionalProperties: true

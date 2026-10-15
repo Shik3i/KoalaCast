@@ -1,4 +1,4 @@
-import type { LocalSubscription } from '$lib/idb/db';
+import type { LocalSubscription } from '#lib/idb/db.ts';
 
 export function podcastHref(subscription: LocalSubscription): string {
 	if (subscription.podcast_id === subscription.feed_url) {

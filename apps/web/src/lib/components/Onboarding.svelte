@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { GENRES, genreLabel } from '$lib/genres';
-	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
-	import { t } from '$lib/i18n';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { GENRES, genreLabel } from '#lib/genres.ts';
+	import { SUPPORTED_LANGUAGES } from '#lib/data/languages.ts';
+	import { t } from '#lib/i18n/index.ts';
 	import { fade, scale } from 'svelte/transition';
 
 	let cardEl: HTMLElement | null = $state(null);

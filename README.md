@@ -210,6 +210,8 @@ The backend is configured entirely through environment variables. Copy [`.env.ex
 | `WEB_PUSH_VAPID_PUBLIC_KEY` / `_PRIVATE_KEY` | empty | Enables server-sent browser notifications; generate once with `cd services/api && go run ./cmd/vapid` |
 | `WEB_PUSH_VAPID_SUBJECT` | `PUBLIC_BASE_URL` | VAPID contact URI (`https:` or `mailto:`) |
 | `KC_AUDIO_EFFECTS_PROXY_ENABLED` | `true` | Relay fallback for CORS-blocked browser effects/downloads; set `false` to avoid relay bandwidth |
+| `KC_SERVICE_NAME` / `KC_OPERATOR_NAME` | `KoalaCast` / empty | Instance identity published by `GET /api/v1/instance`; the operator name is omitted until set |
+| `KC_PRIVACY_POLICY_URL` / `KC_LEGAL_NOTICE_URL` | `PUBLIC_BASE_URL/privacy` / empty | Absolute `https` legal links published by `GET /api/v1/instance` (`http` only for localhost) |
 
 Full precedence rules: [docs/architecture/overview.md](docs/architecture/overview.md).
 

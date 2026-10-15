@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { podcastHref } from './podcast-link';
-import type { LocalSubscription } from '$lib/idb/db';
+import type { LocalSubscription } from '#lib/idb/db.ts';
 
 function subscription(overrides: Partial<LocalSubscription> = {}): LocalSubscription {
 	return {

@@ -1,5 +1,5 @@
-import { loadLocale } from '$lib/i18n';
-import { initialUILanguage } from '$lib/stores/prefs.svelte';
+import { loadLocale } from '#lib/i18n/index.ts';
+import { initialUILanguage } from '#lib/stores/prefs.svelte.ts';
 
 export const ssr = false;
 export const prerender = false;

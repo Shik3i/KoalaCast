@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { t } from '#lib/i18n/index.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 

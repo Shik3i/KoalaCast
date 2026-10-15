@@ -1,4 +1,4 @@
-import type { MessageKey } from '$lib/i18n';
+import type { MessageKey } from '#lib/i18n/index.ts';
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 export type PaletteId =

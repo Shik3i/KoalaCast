@@ -48,3 +48,4 @@ KoalaCast enforces strict configuration rules to ensure self-hosters and securit
 | Web Push VAPID Keys | `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` | No | Enables authenticated server-to-browser push delivery |
 | Web Push Contact | `WEB_PUSH_VAPID_SUBJECT` | No | VAPID contact URI, defaults to the public URL |
 | Audio Relay | `KC_AUDIO_EFFECTS_PROXY_ENABLED` | No | Optional relay for CORS-blocked browser effects/downloads; disabled by default |
+| Instance Identity | `KC_SERVICE_NAME`, `KC_OPERATOR_NAME`, `KC_PRIVACY_POLICY_URL`, `KC_LEGAL_NOTICE_URL` | No | Published by `GET /api/v1/instance`; URLs must be absolute `https` (loopback `http` allowed), unset fields are omitted |

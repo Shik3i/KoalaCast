@@ -10,8 +10,8 @@
  * not rendered at all, and the manual export remains the way to get a copy out.
  */
 
-import { getLocalDB, getLocalSubscriptions } from '$lib/idb/db';
-import { buildOpml } from '$lib/opml';
+import { getLocalDB, getLocalSubscriptions } from '#lib/idb/db.ts';
+import { buildOpml } from '#lib/opml.ts';
 
 const HANDLE_KEY = 'opml_backup_handle';
 const WRITTEN_AT_KEY = 'opml_backup_written_at';

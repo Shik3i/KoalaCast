@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 	import { onMount, tick } from 'svelte';
 	import {
 		saveLocalPlaybackState,
@@ -11,27 +11,27 @@
 			saveLocalCurrentPlayback,
 		type LocalListeningSession
 	} from '../idb/db';
-	import { player } from '$lib/stores/player.svelte';
-	import { dominantColor } from '$lib/color';
+	import { player } from '#lib/stores/player.svelte.ts';
+	import { dominantColor } from '#lib/color.ts';
 	import ShortcutsModal from './ShortcutsModal.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { sync } from '$lib/stores/sync.svelte';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { sync } from '#lib/stores/sync.svelte.ts';
 	import {
 		getPodcastPlaybackSettings,
 		savePodcastPlaybackSettings,
 		type PodcastPlaybackSettings
-	} from '$lib/stores/podcast-settings';
-	import { optimizeArtwork } from '$lib/artwork';
+	} from '#lib/stores/podcast-settings.ts';
+	import { optimizeArtwork } from '#lib/artwork.ts';
 	import { slide } from 'svelte/transition';
-	import { parsePlaybackSpeed } from '$lib/player/playback-speed';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { SilenceGate } from '$lib/audio/silence-gate';
+	import { parsePlaybackSpeed } from '#lib/player/playback-speed.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { SilenceGate } from '#lib/audio/silence-gate.ts';
 	import {
 		audioEffectsProxyUrl,
 		isCrossOriginAudio,
 		publisherAllowsAudioEffects,
 		resolveAudioRedirect
-	} from '$lib/audio/source';
+	} from '#lib/audio/source.ts';
 	import PlayPauseIcon from './PlayPauseIcon.svelte';
 	import VisualizerSignal from './VisualizerSignal.svelte';
 
@@ -88,8 +88,8 @@
 	const graphSources = new Map<string, { source: string; crossOrigin: boolean }>();
 	let runtimeConfigPromise: Promise<boolean> | null = null;
 
-	import { audioEngine } from '$lib/audio/engine';
-	import { visualizerFrame } from '$lib/audio/visualizer-frame';
+	import { audioEngine } from '#lib/audio/engine.ts';
+	import { visualizerFrame } from '#lib/audio/visualizer-frame.ts';
 
 	const silenceGate = new SilenceGate();
 	let chapters = $state<any[]>([]);

@@ -69,12 +69,35 @@ into the client's object rather than replacing it; unknown keys round-trip.
 - `queue`
 - `podcast_settings`
 - `settings`
+- `named_queue`
+- `time_bookmark`
 
-The web and Android clients push and apply those types. The queue uses a
+The web client pushes and applies all of those types; Android handles every type
+except the last two, which it ignores. The queue uses a
 last-writer-wins whole-object payload; the global `settings` blob is merged per
 field (see below); device-specific server URLs, credentials, onboarding state,
 and storage paths remain local. Listening sessions contain the aggregates needed
 for private and separately opt-in global statistics.
+
+### Named queues and timestamp bookmarks
+
+Both live only in the append-only sync log, like `queue` and `settings`; the newest
+non-deleted payload per entity is the snapshot, and the order is the usual
+`(client_timestamp, device_id)` last-writer-wins.
+
+- `named_queue`: `entity_id` is the case-insensitive queue name (trimmed and
+  lower-cased), because the name is what identifies a queue in the interface — two
+  devices that independently save "Commute" must converge on one queue rather than
+  end up with two of the same name. The payload is `{ id, name, items, updated_at }`
+  with at most 500 items; `client_timestamp` is `updated_at`. Delete is a tombstone.
+- `time_bookmark`: `entity_id` is the bookmark id. The payload is
+  `{ id, episode_id, position_ms, label, created_at }` (`id` must equal `entity_id`,
+  `position_ms` 0 – 7 days, `label` at most 2000 characters); a bookmark is
+  immutable, so create and delete are its only operations.
+- A receiver keeps a local deletion until the delete reaches the server, unless the
+  incoming record is newer than that deletion.
+- Folders are not a separate entity: a podcast's folder travels in its
+  `subscription` payload.
 
 ### Settings conflict handling
 

@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { activateAccountContext, resetAllLocalData } from '$lib/stores/account-context';
-	import { confirmDialog } from '$lib/stores/confirm.svelte';
-	import { sync } from '$lib/stores/sync.svelte';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { activateAccountContext, resetAllLocalData } from '#lib/stores/account-context.ts';
+	import { confirmDialog } from '#lib/stores/confirm.svelte.ts';
+	import { sync } from '#lib/stores/sync.svelte.ts';
 
 	interface UserSession {
 		id: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeListening, type ListeningAnalytics } from './analytics';
-import type { LocalListeningSession, LocalPlaybackState } from '$lib/idb/db';
+import type { LocalListeningSession, LocalPlaybackState } from '#lib/idb/db.ts';
 
 function session(overrides: Partial<LocalListeningSession> = {}): LocalListeningSession {
 	return {

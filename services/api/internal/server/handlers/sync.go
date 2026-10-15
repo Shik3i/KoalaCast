@@ -435,6 +435,16 @@ func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
 		return
 	}
+	namedQueues, err := latestSyncPayloads(tx, r.Context(), authUser.ID, "named_queue")
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
+	timeBookmarks, err := latestSyncPayloads(tx, r.Context(), authUser.ID, "time_bookmark")
+	if err != nil {
+		http.Error(w, `{"error":"database error"}`, http.StatusInternalServerError)
+		return
+	}
 
 	if err := tx.Commit(); err != nil {
 		http.Error(w, `{"error":"failed to complete snapshot"}`, http.StatusInternalServerError)
@@ -445,6 +455,7 @@ func (h *SyncHandler) Snapshot(w http.ResponseWriter, r *http.Request) {
 		"cursor": cursor, "subscriptions": subscriptions, "favorites": favorites,
 		"playback_states": playbackStates, "listening_sessions": listeningSessions,
 		"queue": queueItems, "podcast_settings": podcastSettings, "settings": settings,
+		"named_queues": namedQueues, "time_bookmarks": timeBookmarks,
 		"data_generation": dataGeneration,
 	})
 }
@@ -690,6 +701,9 @@ func (h *SyncHandler) Push(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// maxBookmarkPositionMS bounds a bookmark position to a plausible episode length.
+const maxBookmarkPositionMS = int64(7 * 24 * 60 * 60 * 1000)
+
 func validateSyncOperation(op *SyncPushOperation) error {
 	op.ClientOpID = strings.TrimSpace(op.ClientOpID)
 	op.DeviceID = strings.TrimSpace(op.DeviceID)
@@ -802,6 +816,51 @@ func validateSyncOperation(op *SyncPushOperation) error {
 		if err := json.Unmarshal(op.Payload, &payload); err != nil ||
 			payload.UpdatedAt <= 0 || len(payload.Items) > 500 {
 			return fmt.Errorf("invalid queue payload")
+		}
+	case "named_queue":
+		if op.Action != "upsert" && op.Action != "delete" {
+			return fmt.Errorf("named_queue action must be upsert or delete")
+		}
+		if len(op.EntityID) > 200 || op.ClientTimestamp <= 0 {
+			return fmt.Errorf("invalid named_queue identity or timestamp")
+		}
+		if op.Action == "upsert" {
+			var payload struct {
+				Name      string            `json:"name"`
+				Items     []json.RawMessage `json:"items"`
+				UpdatedAt int64             `json:"updated_at"`
+			}
+			if err := json.Unmarshal(op.Payload, &payload); err != nil {
+				return fmt.Errorf("invalid named_queue payload")
+			}
+			name := strings.TrimSpace(payload.Name)
+			if name == "" || len(name) > 200 || payload.UpdatedAt <= 0 ||
+				payload.Items == nil || len(payload.Items) > 500 {
+				return fmt.Errorf("invalid named_queue payload")
+			}
+		}
+	case "time_bookmark":
+		if op.Action != "upsert" && op.Action != "delete" {
+			return fmt.Errorf("time_bookmark action must be upsert or delete")
+		}
+		if len(op.EntityID) > 128 || op.ClientTimestamp <= 0 {
+			return fmt.Errorf("invalid time_bookmark identity or timestamp")
+		}
+		if op.Action == "upsert" {
+			var payload struct {
+				ID         string `json:"id"`
+				EpisodeID  string `json:"episode_id"`
+				PositionMS int64  `json:"position_ms"`
+				Label      string `json:"label"`
+				CreatedAt  int64  `json:"created_at"`
+			}
+			if err := json.Unmarshal(op.Payload, &payload); err != nil ||
+				payload.ID != op.EntityID || strings.TrimSpace(payload.EpisodeID) == "" ||
+				len(payload.EpisodeID) > 512 || payload.PositionMS < 0 ||
+				payload.PositionMS > maxBookmarkPositionMS || len(payload.Label) > 2000 ||
+				payload.CreatedAt <= 0 {
+				return fmt.Errorf("invalid time_bookmark payload")
+			}
 		}
 	case "settings":
 		if op.Action != "upsert" || op.EntityID != "global" {
@@ -924,7 +983,7 @@ func (h *SyncHandler) applyOperation(ctx context.Context, tx *sql.Tx, userID str
 		return h.applySubscription(ctx, tx, userID, op, syncVer)
 	case "favorite":
 		return h.applyFavorite(ctx, tx, userID, op, syncVer)
-	case "queue", "settings", "podcast_settings":
+	case "queue", "settings", "podcast_settings", "named_queue", "time_bookmark":
 		// The append-only sync_log written by Push is the materialized record for
 		// these denormalized entities; deterministic LWW ordering is therefore
 		// enforced against the existing log before appending a new version.

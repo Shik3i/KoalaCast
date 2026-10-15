@@ -1,4 +1,4 @@
-import type { LocalSubscription } from '$lib/idb/db';
+import type { LocalSubscription } from '#lib/idb/db.ts';
 
 export function escapeXml(value: string): string {
 	return (value || '').replace(

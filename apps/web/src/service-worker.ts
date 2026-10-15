@@ -12,7 +12,7 @@ import { version } from '$app/env';
 import {
 	AUDIO_DOWNLOAD_CACHE_PREFIX,
 	audioDownloadCacheNameForOfflinePath
-} from '$lib/downloads/offline-audio';
+} from '#lib/downloads/offline-audio.ts';
 import {
 	BACKGROUND_META_STORE,
 	NEW_EPISODES_LABEL_KEY,
@@ -21,7 +21,7 @@ import {
 	trimKnownIds,
 	WATCHED_FEEDS_STORE,
 	type WatchedFeed
-} from '$lib/background/feed-mirror';
+} from '#lib/background/feed-mirror.ts';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -337,8 +337,14 @@ sw.addEventListener('fetch', (event) => {
 
 	// Cache-first for immutable build assets and static files.
 	if (PRECACHE.includes(url.pathname)) {
+		// ignoreVary: a response that says `Vary: Origin` (the dev/preview server always
+		// does; the Go server does once ALLOWED_CORS_ORIGINS matches) never matches a
+		// module-script request that carries an `Origin` header, which a reloading page
+		// sends, while the precache request had none. These files are content-addressed
+		// and not negotiated, so a cache miss there only turns an offline reload into a
+		// blank page.
 		event.respondWith(
-			caches.match(request).then((cached) => cached ?? fetch(request))
+			caches.match(request, { ignoreVary: true }).then((cached) => cached ?? fetch(request))
 		);
 		return;
 	}

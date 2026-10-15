@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n';
+	import { t } from '#lib/i18n/index.ts';
 	import { onMount } from 'svelte';
 	import {
 		getLocalSubscriptions,
@@ -10,30 +10,30 @@
 		type LocalSubscription,
 		type LocalPlaybackState,
 		type InboxMode
-	} from '$lib/idb/db';
-	import { player } from '$lib/stores/player.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
-	import { podcastHref } from '$lib/podcast-link';
-	import { reveal } from '$lib/actions/reveal';
+	} from '#lib/idb/db.ts';
+	import { player } from '#lib/stores/player.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '#lib/artwork.ts';
+	import { podcastHref } from '#lib/podcast-link.ts';
+	import { reveal } from '#lib/actions/reveal.ts';
 	import { slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
-	import Skeleton from '$lib/components/Skeleton.svelte';
-	import EpisodeProgressButton from '$lib/components/EpisodeProgressButton.svelte';
-	import { listeningSession } from '$lib/stores/session.svelte';
+	import Skeleton from '#lib/components/Skeleton.svelte';
+	import EpisodeProgressButton from '#lib/components/EpisodeProgressButton.svelte';
+	import { listeningSession } from '#lib/stores/session.svelte.ts';
 	import {
 		cacheContent,
 		CONTENT_REVALIDATION_INTERVAL,
 		readCachedContent,
 		revalidateOnce
-	} from '$lib/cache/content';
-	import { getPodcastPlaybackSettings } from '$lib/stores/podcast-settings';
-	import { notifyNewPodcastEpisodes } from '$lib/notifications/browser';
-	import { audioDownloads } from '$lib/downloads/manager.svelte';
-	import { replaceWatchedFeeds, type WatchedFeed } from '$lib/background/feed-mirror';
-	import { dedupeInboxEpisodes } from '$lib/inbox';
+	} from '#lib/cache/content.ts';
+	import { getPodcastPlaybackSettings } from '#lib/stores/podcast-settings.ts';
+	import { notifyNewPodcastEpisodes } from '#lib/notifications/browser.ts';
+	import { audioDownloads } from '#lib/downloads/manager.svelte.ts';
+	import { replaceWatchedFeeds, type WatchedFeed } from '#lib/background/feed-mirror.ts';
+	import { dedupeInboxEpisodes, fetchInboxBatch } from '#lib/inbox.ts';
 
 	interface InboxEpisode {
 		id: string;
@@ -110,19 +110,44 @@
 				isLoading = false;
 			}
 
+			const newestKnownOf = (entry: { value: InboxEpisode[] } | null) =>
+				Math.max(0, ...(entry?.value ?? []).map((episode) => episode.pub_date ?? 0));
+
+			// Several stale feeds are refreshed with one request instead of one each.
+			// It only replaces the transport: a feed the batch did not return (failed
+			// request, unknown to the server) falls through to the per-feed route.
+			const stale = cached.filter(({ entry }) => !entry?.fresh);
+			const batched =
+				stale.length >= 2
+					? await fetchInboxBatch(
+							stale.map(({ sub, entry }) => ({
+								podcast_id: sub.podcast_id,
+								since: newestKnownOf(entry)
+							})),
+							PER_FEED
+						)
+					: new Map<string, { episodes: any[] }>();
+
 			const results = await mapWithConcurrency(cached, 6, async ({ sub, entry }) => {
 				if (entry?.fresh) return entry.value;
 				const refreshed = await revalidateOnce(`inbox:${sub.podcast_id}`, async () => {
-					const newestKnown = Math.max(0, ...(entry?.value ?? []).map((episode) => episode.pub_date ?? 0));
-					const params = new URLSearchParams();
-					if (newestKnown > 0) params.set('since', String(newestKnown));
-					const suffix = params.size ? `?${params}` : '';
-					const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes${suffix}`, {
-						cache: 'no-cache'
-					});
-					if (!res.ok) throw new Error(`Inbox refresh failed: ${res.status}`);
-					const data = await res.json();
-					const episodes = ((data.episodes || []) as any[]).slice(0, PER_FEED).map((ep) => ({
+					const newestKnown = newestKnownOf(entry);
+					let fetchedEpisodes: any[];
+					const prefetched = batched.get(sub.podcast_id);
+					if (prefetched) {
+						fetchedEpisodes = prefetched.episodes;
+					} else {
+						const params = new URLSearchParams();
+						if (newestKnown > 0) params.set('since', String(newestKnown));
+						const suffix = params.size ? `?${params}` : '';
+						const res = await fetch(`/api/v1/podcasts/${sub.podcast_id}/episodes${suffix}`, {
+							cache: 'no-cache'
+						});
+						if (!res.ok) throw new Error(`Inbox refresh failed: ${res.status}`);
+						const data = await res.json();
+						fetchedEpisodes = data.episodes || [];
+					}
+					const episodes = fetchedEpisodes.slice(0, PER_FEED).map((ep) => ({
 						id: ep.id,
 						podcast_id: sub.podcast_id,
 						podcast_title: sub.title,

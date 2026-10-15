@@ -1,4 +1,4 @@
-import type { LocalListeningSession, LocalPlaybackState } from '$lib/idb/db';
+import type { LocalListeningSession, LocalPlaybackState } from '#lib/idb/db.ts';
 
 export interface ListeningAnalytics {
 	totalWallMs: number;

@@ -7,13 +7,13 @@
 		getCachedContent,
 		type LocalListeningSession,
 		type LocalPlaybackState
-	} from '$lib/idb/db';
-	import { localDayKey, summarizeListening } from '$lib/listening/analytics';
-	import { sync } from '$lib/stores/sync.svelte';
-	import { prefs } from '$lib/stores/prefs.svelte';
-	import { t } from '$lib/i18n';
-	import { waitForAccountContext } from '$lib/stores/account-context';
-	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '$lib/artwork';
+	} from '#lib/idb/db.ts';
+	import { localDayKey, summarizeListening } from '#lib/listening/analytics.ts';
+	import { sync } from '#lib/stores/sync.svelte.ts';
+	import { prefs } from '#lib/stores/prefs.svelte.ts';
+	import { t } from '#lib/i18n/index.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
+	import { optimizeArtwork, SUBSCRIPTION_ARTWORK_SIZE } from '#lib/artwork.ts';
 
 	type Range = 'year' | '90days' | 'all';
 

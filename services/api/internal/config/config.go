@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -37,6 +38,13 @@ type Config struct {
 	WebPushVAPIDSubject      string
 	AllowedCORSOrigins       []string
 	AudioEffectsProxyEnabled bool
+
+	// Instance identity served by GET /api/v1/instance. Only ever read from the
+	// environment, never from request headers.
+	ServiceName      string
+	OperatorName     string
+	PrivacyPolicyURL string
+	LegalNoticeURL   string
 }
 
 var knownInsecureSecrets = []string{
@@ -141,7 +149,72 @@ func LoadConfig() (*Config, error) {
 		cfg.AllowedCORSOrigins = splitClean(cors, ",")
 	}
 
+	if err := loadInstanceIdentity(cfg); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// loadInstanceIdentity reads the optional operator metadata. Nothing here is
+// required, so an existing deployment keeps starting; a value that is set must be
+// valid, and a malformed one fails startup instead of being published to clients.
+func loadInstanceIdentity(cfg *Config) error {
+	cfg.ServiceName = strings.TrimSpace(getEnv("KC_SERVICE_NAME", "KoalaCast"))
+	cfg.OperatorName = strings.TrimSpace(os.Getenv("KC_OPERATOR_NAME"))
+	for name, value := range map[string]string{"KC_SERVICE_NAME": cfg.ServiceName, "KC_OPERATOR_NAME": cfg.OperatorName} {
+		if len(value) > 200 || strings.ContainsFunc(value, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+			return fmt.Errorf("%s must be at most 200 characters without control characters", name)
+		}
+	}
+	if cfg.ServiceName == "" {
+		cfg.ServiceName = "KoalaCast"
+	}
+
+	privacy := strings.TrimSpace(os.Getenv("KC_PRIVACY_POLICY_URL"))
+	if privacy != "" {
+		if !ValidLegalURL(privacy) {
+			return fmt.Errorf("KC_PRIVACY_POLICY_URL must be an absolute https URL (http only for loopback)")
+		}
+		cfg.PrivacyPolicyURL = privacy
+	} else if derived := strings.TrimRight(cfg.PublicBaseURL, "/") + "/privacy"; ValidLegalURL(derived) {
+		// The web app ships its own privacy page, so a plain deployment has one.
+		cfg.PrivacyPolicyURL = derived
+	}
+
+	legal := strings.TrimSpace(os.Getenv("KC_LEGAL_NOTICE_URL"))
+	if legal != "" {
+		if !ValidLegalURL(legal) {
+			return fmt.Errorf("KC_LEGAL_NOTICE_URL must be an absolute https URL (http only for loopback)")
+		}
+		cfg.LegalNoticeURL = legal
+	}
+	return nil
+}
+
+// ValidLegalURL reports whether raw is an absolute https URL without credentials.
+// Plain http is accepted only for loopback hosts so local development works.
+func ValidLegalURL(raw string) bool {
+	if len(raw) > 2048 {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+		return true
+	case "http":
+		host := parsed.Hostname()
+		if strings.EqualFold(host, "localhost") {
+			return true
+		}
+		ip := net.ParseIP(host)
+		return ip != nil && ip.IsLoopback()
+	default:
+		return false
+	}
 }
 
 func validVAPIDSubject(subject string) bool {

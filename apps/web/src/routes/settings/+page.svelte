@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { saveLocalSubscriptions, getLocalSubscriptions } from '$lib/idb/db';
-	import { resetAllLocalData } from '$lib/stores/account-context';
+	import { saveLocalSubscriptions, getLocalSubscriptions } from '#lib/idb/db.ts';
+	import { resetAllLocalData } from '#lib/stores/account-context.ts';
 	import {
 		COLOR_PALETTES,
 		DEFAULT_PALETTE,
@@ -11,19 +11,19 @@
 		setTheme,
 		type PaletteId,
 		type ThemeMode
-	} from '$lib/theme';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { prefs, type DownloadRetention } from '$lib/stores/prefs.svelte';
-	import { sync } from '$lib/stores/sync.svelte';
-	import { activateAccountContext, activateLoggedInAccount } from '$lib/stores/account-context';
-	import { GENRES, genreLabel } from '$lib/genres';
-	import { SUPPORTED_LANGUAGES } from '$lib/data/languages';
-	import { LOCALES, t } from '$lib/i18n';
-	import { confirmDialog } from '$lib/stores/confirm.svelte';
-	import { install } from '$lib/stores/install.svelte';
-	import { opmlBackup, opmlBackupSupported } from '$lib/backup/opml-backup.svelte';
-	import { buildOpml } from '$lib/opml';
-	import VisualizerSignal from '$lib/components/VisualizerSignal.svelte';
+	} from '#lib/theme.ts';
+	import { toast } from '#lib/stores/toast.svelte.ts';
+	import { prefs, type DownloadRetention } from '#lib/stores/prefs.svelte.ts';
+	import { sync } from '#lib/stores/sync.svelte.ts';
+	import { activateAccountContext, activateLoggedInAccount } from '#lib/stores/account-context.ts';
+	import { GENRES, genreLabel } from '#lib/genres.ts';
+	import { SUPPORTED_LANGUAGES } from '#lib/data/languages.ts';
+	import { LOCALES, t } from '#lib/i18n/index.ts';
+	import { confirmDialog } from '#lib/stores/confirm.svelte.ts';
+	import { install } from '#lib/stores/install.svelte.ts';
+	import { opmlBackup, opmlBackupSupported } from '#lib/backup/opml-backup.svelte.ts';
+	import { buildOpml } from '#lib/opml.ts';
+	import VisualizerSignal from '#lib/components/VisualizerSignal.svelte';
 
 	// Tri-state cycle per genre: neutral → interested → hidden → neutral.
 	function cycleGenre(name: string) {

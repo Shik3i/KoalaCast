@@ -4,6 +4,9 @@
   "private": true,
   "packageManager": "npm@11.16.0",
   "type": "module",
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
   "engines": {
     "node": ">=24"
   },

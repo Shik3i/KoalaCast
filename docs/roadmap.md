@@ -4,6 +4,17 @@ Planned work only. Shipped behavior belongs in
 [current-status.md](current-status.md); protocol invariants belong in their
 specification. Scope and priority can change.
 
+## Android sync for named queues and bookmarks
+
+**Status:** planned.
+
+The server and the web client synchronise `named_queue` and `time_bookmark` (see
+[sync-protocol/specification.md](sync-protocol/specification.md#named-queues-and-timestamp-bookmarks)).
+Android still keeps both locally and ignores them in pulled data, so a queue or
+bookmark made on the web does not appear on a phone and vice versa. Android needs
+to push the two entity types, apply them with the same last-writer-wins and
+deletion rules, and read `named_queues` / `time_bookmarks` from the snapshot.
+
 ## Weblate integration
 
 **Status:** planned
@@ -43,40 +54,37 @@ changing product semantics. See
 
 ## Batched Inbox endpoint
 
-**Status:** planned.
+**Status:** server endpoint and web client shipped; Android adoption planned.
 
-Web and Android currently refresh each subscribed feed separately and merge the
-results locally. Add one authenticated endpoint that accepts the account's
-subscriptions plus per-feed watermarks, preserves the existing incremental
-semantics, and returns a bounded publication-date-ordered page. The endpoint
-must not turn ordinary subscriptions into unconditional background refreshes.
+`POST /api/v1/inbox/episodes` takes up to 100 `{podcast_id, since}` watermarks and
+returns the newest episodes of each feed in one response. Every feed keeps the
+per-feed semantics (on-demand refresh only when the stored copy is older than 15
+minutes, inclusive `since`, newest first), so ordinary subscriptions are still not
+refreshed unconditionally. Results are grouped and bounded per feed rather than
+returned as one global page: watermarks are per feed, and a global cut-off could
+hide a quiet show's new episodes behind a busy show's backlog. The endpoint is
+public like the per-feed route, because local-first listeners use the Inbox too,
+and is throttled per client IP. The web Inbox uses it when two or more feeds are
+stale and falls back to the per-feed route for any feed the batch does not
+return.
+
+Remaining work: Android refreshes its Inbox through the batched endpoint.
 
 ## Instance-owned legal metadata
 
-**Status:** planned.
+**Status:** server endpoint shipped; Android adoption planned.
 
-Android currently links official-instance operator information even after a
-listener selects a self-hosted server. Add an unauthenticated `GET /instance`
-contract so each deployment can provide its own identity and legal links:
+`GET /api/v1/instance` returns the deployment's `service_name`, `operator_name`,
+`privacy_policy_url`, `legal_notice_url` and the effective `registration_enabled`
+state, from validated server configuration only (never request headers). Legal
+URLs are absolute HTTPS, except loopback HTTP in development. So that existing
+deployments keep starting, only `service_name` and `registration_enabled` are
+always present; `privacy_policy_url` defaults to the instance's own `/privacy`
+page and `operator_name` / `legal_notice_url` are omitted until configured.
 
-```json
-{
-  "service_name": "KoalaCast",
-  "operator_name": "Example e.V.",
-  "privacy_policy_url": "https://cast.example.org/privacy",
-  "legal_notice_url": "https://cast.example.org/legal",
-  "registration_enabled": true
-}
-```
-
-Requirements:
-
-- values come from validated server configuration, never request headers;
-- legal URLs are absolute HTTPS, except loopback HTTP in development;
-- operator name and privacy URL are required;
-- Android displays the selected instance's metadata before registration and in
-  Settings;
-- the OpenAPI contract and official/self-host tests ship with the endpoint.
+Remaining work: Android shows the selected instance's metadata before
+registration and in Settings instead of the official instance's operator
+information.
 
 ## Language filtering accuracy on search
 

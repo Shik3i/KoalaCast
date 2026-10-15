@@ -1,4 +1,4 @@
-import { audioEngine } from '$lib/audio/engine';
+import { audioEngine } from '#lib/audio/engine.ts';
 
 /**
  * The one set of numbers every visualiser on screen draws from.

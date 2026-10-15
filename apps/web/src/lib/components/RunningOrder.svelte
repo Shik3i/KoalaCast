@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { player, type CurrentTrack } from '$lib/stores/player.svelte';
-	import { reorderLocalQueue } from '$lib/idb/db';
-	import { t } from '$lib/i18n';
-	import { listeningSession } from '$lib/stores/session.svelte';
-	import { waitForAccountContext } from '$lib/stores/account-context';
-	import { calculateQueueTiming } from '$lib/player/queue-timing';
+	import { player, type CurrentTrack } from '#lib/stores/player.svelte.ts';
+	import { reorderLocalQueue } from '#lib/idb/db.ts';
+	import { t } from '#lib/i18n/index.ts';
+	import { listeningSession } from '#lib/stores/session.svelte.ts';
+	import { waitForAccountContext } from '#lib/stores/account-context.ts';
+	import { calculateQueueTiming } from '#lib/player/queue-timing.ts';
 
 	let now = $state(Date.now());
 	let dragIndex = $state<number | null>(null);

@@ -7,14 +7,14 @@ import {
 	purgeAudioDownloadsForOwner,
 	purgeAudioDownloadsExcept,
 	removeAudioDownload
-} from '$lib/downloads/offline-audio';
+} from '#lib/downloads/offline-audio.ts';
 import {
 	audioEffectsProxyUrl,
 	publisherAllowsAudioEffects
-} from '$lib/audio/source';
-import { prefs } from '$lib/stores/prefs.svelte';
-import { getLocalPlaybackState } from '$lib/idb/db';
-import { blocksWifiOnlyAutoDownload, type NetworkConnectionInfo } from '$lib/downloads/policy';
+} from '#lib/audio/source.ts';
+import { prefs } from '#lib/stores/prefs.svelte.ts';
+import { getLocalPlaybackState } from '#lib/idb/db.ts';
+import { blocksWifiOnlyAutoDownload, type NetworkConnectionInfo } from '#lib/downloads/policy.ts';
 
 export type DownloadState = 'queued' | 'downloading' | 'downloaded' | 'cancelled' | 'failed';
 

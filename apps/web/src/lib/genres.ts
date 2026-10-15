@@ -6,7 +6,7 @@
 // `name` is therefore a protocol value and must stay English. `id` is the
 // translation key used for display — see `genreLabel`.
 
-import { t, type MessageKey } from '$lib/i18n';
+import { t, type MessageKey } from '#lib/i18n/index.ts';
 
 export interface Genre {
 	/** Translation key suffix under `genres.*`. Display only. */
