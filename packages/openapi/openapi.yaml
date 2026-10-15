@@ -447,6 +447,40 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /api/v1/inbox/episodes:
+    post:
+      tags: [Podcasts]
+      operationId: listInboxEpisodes
+      summary: Fetch the newest episodes of many feeds in one request
+      description: >
+        Batched equivalent of `GET /podcasts/{id}/episodes?since=…` for the Inbox.
+        Every feed keeps the per-feed semantics: the same on-demand refresh (only
+        when the stored copy is older than 15 minutes, so ordinary subscriptions
+        are not refreshed unconditionally), the inclusive `since` watermark and
+        newest-first order. Results are grouped per feed and bounded per feed;
+        there is deliberately no global page, because watermarks are per feed and a
+        global cut-off could hide a quiet show's new episodes behind a busy one's
+        backlog. A feed the server does not store is returned with `found: false`
+        and should be resolved through the per-feed route. Public, like the
+        per-feed route, and throttled per client IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboxBatchRequest'
+      responses:
+        '200':
+          description: One result per distinct requested feed, in request order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboxBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /api/v1/podcasts/{id}/episodes:
     parameters:
       - $ref: '#/components/parameters/ResourceID'
@@ -1815,6 +1849,61 @@ components:
             $ref: '#/components/schemas/TranscriptReference'
         chapters_url:
           type: string
+
+    InboxBatchRequest:
+      type: object
+      required: [feeds]
+      properties:
+        feeds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [podcast_id]
+            properties:
+              podcast_id:
+                type: string
+                maxLength: 256
+              since:
+                type: integer
+                format: int64
+                minimum: 0
+                description: Inclusive Unix-second watermark; 0 or omitted means no lower bound. A repeated podcast_id keeps the smallest value.
+        limit_per_feed:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 15
+
+    InboxBatchResponse:
+      type: object
+      required: [feeds]
+      properties:
+        feeds:
+          type: array
+          items:
+            type: object
+            required: [podcast_id, found, episodes]
+            properties:
+              podcast_id:
+                type: string
+              found:
+                type: boolean
+              episodes:
+                type: array
+                items:
+                  type: object
+                  required: [id, podcast_id, title, description, pub_date, duration_ms, enclosure_url, artwork_url]
+                  properties:
+                    id: {type: string}
+                    podcast_id: {type: string}
+                    title: {type: string}
+                    description: {type: string}
+                    pub_date: {type: integer, format: int64}
+                    duration_ms: {type: integer, format: int64}
+                    enclosure_url: {type: string}
+                    artwork_url: {type: string}
 
     EpisodesResponse:
       type: object
