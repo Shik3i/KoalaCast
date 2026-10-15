@@ -17,6 +17,12 @@ import {
 	getLocalListeningSession,
 	getLocalQueue,
 	getLocalQueueUpdatedAt,
+	getLocalNamedQueues,
+	getAllLocalTimeBookmarks,
+	applySyncedNamedQueue,
+	removeSyncedNamedQueue,
+	applySyncedTimeBookmark,
+	removeSyncedTimeBookmark,
 	getTombstones,
 	getTombstone,
 	acknowledgeTombstone,
@@ -43,7 +49,15 @@ import {
 } from '$lib/stores/podcast-settings';
 import { prefs } from '$lib/stores/prefs.svelte';
 import { shouldUploadListeningSession } from '$lib/stores/sync-selection';
-import { normalizeListeningSessionForSync } from '$lib/sync-payload';
+import {
+	bookmarkForSync,
+	bookmarkIsUploadable,
+	namedQueueIsUploadable,
+	namedQueueSyncKey,
+	normalizeBookmarkPayload,
+	normalizeListeningSessionForSync,
+	normalizeNamedQueuePayload
+} from '$lib/sync-payload';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'error';
 
@@ -60,7 +74,9 @@ interface SyncOperation {
 		| 'listening_session'
 		| 'queue'
 		| 'podcast_settings'
-		| 'settings';
+		| 'settings'
+		| 'named_queue'
+		| 'time_bookmark';
 	action: 'upsert' | 'delete';
 	entity_id: string;
 	payload: unknown;
@@ -84,8 +100,14 @@ const GENERAL_SYNC_ENTITIES: GeneralSyncEntity[] = [
 	'playback_state',
 	'queue',
 	'podcast_settings',
-	'settings'
+	'settings',
+	'named_queue',
+	'time_bookmark'
 ];
+// Entities that shipped after the single legacy watermark existed. Their history
+// predates any watermark, so a missing value means "nothing uploaded yet" — falling
+// back to the legacy value would silently skip every record older than it.
+const WATERMARK_FROM_ZERO = new Set<GeneralSyncEntity>(['subscription', 'named_queue', 'time_bookmark']);
 
 function deviceId(): string {
 	if (typeof localStorage === 'undefined') return 'ssr';
@@ -156,7 +178,7 @@ class SyncStore {
 	#getPushWatermarks(userId: string): PushWatermarks {
 		const legacy = this.#getPushWatermark(userId);
 		const fallback = Object.fromEntries(
-			GENERAL_SYNC_ENTITIES.map((entity) => [entity, entity === 'subscription' ? 0 : legacy])
+			GENERAL_SYNC_ENTITIES.map((entity) => [entity, WATERMARK_FROM_ZERO.has(entity) ? 0 : legacy])
 		) as PushWatermarks;
 		try {
 			const parsed = JSON.parse(localStorage.getItem(this.#pushWatermarksKey(userId)) || 'null');
@@ -568,9 +590,57 @@ class SyncStore {
 			});
 		}
 
+		// Named queues are identified by name; should an older install hold two that
+		// share a key, only the newest goes up. Records the server would refuse are
+		// kept local instead of failing on every run.
+		const newestByKey = new Map<string, Awaited<ReturnType<typeof getLocalNamedQueues>>[number]>();
+		for (const queue of await getLocalNamedQueues()) {
+			const key = namedQueueSyncKey(queue.name);
+			const current = newestByKey.get(key);
+			if (!current || queue.updated_at > current.updated_at) newestByKey.set(key, queue);
+		}
+		for (const [key, queue] of newestByKey) {
+			if (queue.updated_at <= previousWatermarks.named_queue) continue;
+			if (!namedQueueIsUploadable(queue)) {
+				console.warn(`sync: named queue "${queue.name}" exceeds the server limits and stays on this device`);
+				continue;
+			}
+			ops.push({
+				client_op_id: `nq:${key}:${queue.updated_at}`,
+				device_id: dev,
+				entity_type: 'named_queue',
+				action: 'upsert',
+				entity_id: key,
+				payload: { id: queue.id, name: queue.name, items: queue.items, updated_at: queue.updated_at },
+				client_timestamp: queue.updated_at
+			});
+		}
+
+		for (const bookmark of await getAllLocalTimeBookmarks()) {
+			if (bookmark.created_at <= previousWatermarks.time_bookmark) continue;
+			const payload = bookmarkForSync(bookmark);
+			if (!bookmarkIsUploadable(payload)) continue;
+			ops.push({
+				client_op_id: `tb:${payload.id}:${payload.created_at}`,
+				device_id: dev,
+				entity_type: 'time_bookmark',
+				action: 'upsert',
+				entity_id: payload.id,
+				payload,
+				client_timestamp: payload.created_at
+			});
+		}
+
 		const tombstones = await getTombstones();
 		for (const t of tombstones) {
-			if (t.entity_type !== 'subscription' && t.entity_type !== 'favorite') continue;
+			if (
+				t.entity_type !== 'subscription' &&
+				t.entity_type !== 'favorite' &&
+				t.entity_type !== 'named_queue' &&
+				t.entity_type !== 'time_bookmark'
+			) {
+				continue;
+			}
 			if (t.deleted_at <= previousWatermarks[t.entity_type]) continue;
 			ops.push({
 				client_op_id: `d:${t.entity_type}:${t.entity_id}:${t.deleted_at}`,
@@ -705,7 +775,9 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 			'listening_session',
 			'queue',
 			'podcast_settings',
-			'settings'
+			'settings',
+			'named_queue',
+			'time_bookmark'
 		].includes(cs.entity_type)
 	) {
 		throw new Error('invalid sync changeset');
@@ -825,6 +897,22 @@ async function applyChangeset(cs: Changeset): Promise<void> {
 		else applyPodcastSettingsPayload(cs.payload, cs.entity_id);
 	} else if (cs.entity_type === 'settings') {
 		if (!isDelete) applySettingsPayload(cs.payload);
+	} else if (cs.entity_type === 'named_queue') {
+		if (isDelete) {
+			await removeSyncedNamedQueue(cs.entity_id, cs.client_timestamp || 0);
+		} else {
+			const queue = normalizeNamedQueuePayload(cs.payload, cs.entity_id);
+			if (!queue) throw new Error('invalid named queue changeset payload');
+			await applySyncedNamedQueue(queue);
+		}
+	} else if (cs.entity_type === 'time_bookmark') {
+		if (isDelete) {
+			await removeSyncedTimeBookmark(cs.entity_id);
+		} else {
+			const bookmark = normalizeBookmarkPayload(cs.payload, cs.entity_id);
+			if (!bookmark) throw new Error('invalid time bookmark changeset payload');
+			await applySyncedTimeBookmark(bookmark);
+		}
 	}
 }
 

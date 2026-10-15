@@ -1,5 +1,12 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import { normalizeRules, type SmartQueue } from '$lib/queues/smart';
+import {
+	namedQueueSyncKey,
+	normalizeBookmarkPayload,
+	normalizeNamedQueuePayload,
+	type SyncedNamedQueue,
+	type SyncedTimeBookmark
+} from '$lib/sync-payload';
 
 export type InboxMode = 'all' | 'latest';
 
@@ -709,9 +716,26 @@ export async function addLocalTimeBookmark(
 	return bookmark;
 }
 
+export async function getAllLocalTimeBookmarks(): Promise<LocalTimeBookmark[]> {
+	const db = await getLocalDB();
+	return db.getAll('time_bookmarks');
+}
+
 export async function removeLocalTimeBookmark(id: string): Promise<void> {
 	const db = await getLocalDB();
-	await db.delete('time_bookmarks', id);
+	const tx = db.transaction(['time_bookmarks', 'tombstones'], 'readwrite');
+	const existing = await tx.objectStore('time_bookmarks').get(id);
+	if (existing) {
+		await tx.objectStore('time_bookmarks').delete(id);
+		// Remember the deletion so sync can propagate it (see the sync applier).
+		await tx.objectStore('tombstones').put({
+			id: tombstoneId('time_bookmark', id),
+			entity_type: 'time_bookmark',
+			entity_id: id,
+			deleted_at: Date.now()
+		} satisfies LocalTombstone);
+	}
+	await tx.done;
 }
 
 export async function getLocalNamedQueues(): Promise<LocalNamedQueue[]> {
@@ -727,27 +751,118 @@ export async function saveLocalNamedQueue(
 	const normalizedName = name.trim();
 	if (!normalizedName) throw new Error('named queue requires a name');
 	const db = await getLocalDB();
-	const existing: LocalNamedQueue[] = await db.getAll('named_queues');
-	const current = existing.find(
-		(queue) => queue.name.localeCompare(normalizedName, undefined, { sensitivity: 'base' }) === 0
-	);
+	const key = namedQueueSyncKey(normalizedName);
+	const tx = db.transaction(['named_queues', 'tombstones'], 'readwrite');
+	const existing: LocalNamedQueue[] = await tx.objectStore('named_queues').getAll();
+	// The sync key is the queue's identity, so saving over a queue means matching
+	// it by that key — the same rule other devices use.
+	const current = existing.find((queue) => namedQueueSyncKey(queue.name) === key);
 	const namedQueue: LocalNamedQueue = {
 		id: current?.id ?? crypto.randomUUID(),
 		name: normalizedName,
 		items: plainJSON(items),
 		updated_at: Date.now()
 	};
-	await db.put('named_queues', namedQueue);
+	await tx.objectStore('named_queues').put(namedQueue);
+	// Saving a queue again clears any earlier deletion of the same name.
+	await tx.objectStore('tombstones').delete(tombstoneId('named_queue', key));
+	await tx.done;
 	return namedQueue;
 }
 
 export async function removeLocalNamedQueue(id: string): Promise<void> {
 	const db = await getLocalDB();
-	await db.delete('named_queues', id);
+	const tx = db.transaction(['named_queues', 'tombstones'], 'readwrite');
+	const existing = (await tx.objectStore('named_queues').get(id)) as LocalNamedQueue | undefined;
+	if (existing) {
+		await tx.objectStore('named_queues').delete(id);
+		const key = namedQueueSyncKey(existing.name);
+		await tx.objectStore('tombstones').put({
+			id: tombstoneId('named_queue', key),
+			entity_type: 'named_queue',
+			entity_id: key,
+			deleted_at: Date.now()
+		} satisfies LocalTombstone);
+	}
+	await tx.done;
+}
+
+// Appliers used by sync for records that arrive from another device. They never
+// create a tombstone (that would echo the change back out) and never bump
+// `updated_at`/`created_at`, so applying a remote record does not make it look like
+// a new local edit.
+
+/** Applies a received named queue; false when a newer local version or deletion wins. */
+export async function applySyncedNamedQueue(incoming: SyncedNamedQueue): Promise<boolean> {
+	const key = namedQueueSyncKey(incoming.name);
+	const db = await getLocalDB();
+	const tx = db.transaction(['named_queues', 'tombstones'], 'readwrite');
+	const tombstone = (await tx.objectStore('tombstones').get(tombstoneId('named_queue', key))) as
+		| LocalTombstone
+		| undefined;
+	// A local deletion newer than the incoming write stays deleted until its own
+	// delete has reached the server.
+	if (tombstone && tombstone.deleted_at >= incoming.updated_at) {
+		await tx.done;
+		return false;
+	}
+	const all: LocalNamedQueue[] = await tx.objectStore('named_queues').getAll();
+	const current = all.find((queue) => namedQueueSyncKey(queue.name) === key);
+	if (current && current.updated_at >= incoming.updated_at) {
+		await tx.done;
+		return false;
+	}
+	await tx.objectStore('named_queues').put({
+		id: current?.id ?? (incoming.id || crypto.randomUUID()),
+		name: incoming.name,
+		items: plainJSON(incoming.items as LocalQueueItem[]),
+		updated_at: incoming.updated_at
+	} satisfies LocalNamedQueue);
+	// Someone recreated the queue after our deletion; theirs is the newer intent.
+	if (tombstone) await tx.objectStore('tombstones').delete(tombstone.id);
+	await tx.done;
+	return true;
+}
+
+/** Applies a received deletion; a local copy edited after the deletion survives. */
+export async function removeSyncedNamedQueue(key: string, deletedAt: number): Promise<void> {
+	const db = await getLocalDB();
+	const tx = db.transaction(['named_queues', 'tombstones'], 'readwrite');
+	const all: LocalNamedQueue[] = await tx.objectStore('named_queues').getAll();
+	for (const queue of all) {
+		if (namedQueueSyncKey(queue.name) === key && queue.updated_at <= deletedAt) {
+			await tx.objectStore('named_queues').delete(queue.id);
+		}
+	}
+	await tx.objectStore('tombstones').delete(tombstoneId('named_queue', key));
+	await tx.done;
+}
+
+/** Applies a received bookmark; false when it is already here or was deleted locally. */
+export async function applySyncedTimeBookmark(incoming: SyncedTimeBookmark): Promise<boolean> {
+	const db = await getLocalDB();
+	const tx = db.transaction(['time_bookmarks', 'tombstones'], 'readwrite');
+	const deleted = await tx.objectStore('tombstones').get(tombstoneId('time_bookmark', incoming.id));
+	const existing = await tx.objectStore('time_bookmarks').get(incoming.id);
+	if (deleted || existing) {
+		await tx.done;
+		return false;
+	}
+	await tx.objectStore('time_bookmarks').put(incoming satisfies LocalTimeBookmark);
+	await tx.done;
+	return true;
+}
+
+export async function removeSyncedTimeBookmark(id: string): Promise<void> {
+	const db = await getLocalDB();
+	const tx = db.transaction(['time_bookmarks', 'tombstones'], 'readwrite');
+	await tx.objectStore('time_bookmarks').delete(id);
+	await tx.objectStore('tombstones').delete(tombstoneId('time_bookmark', id));
+	await tx.done;
 }
 
 // ---- Deletion tombstones (for cross-device sync) ----
-export type TombstoneEntity = 'subscription' | 'favorite';
+export type TombstoneEntity = 'subscription' | 'favorite' | 'named_queue' | 'time_bookmark';
 export interface LocalTombstone {
 	id: string; // `${entity_type}:${entity_id}`
 	entity_type: TombstoneEntity;
@@ -844,6 +959,12 @@ export interface LocalSyncSnapshot {
 	favorites?: LocalFavorite[];
 	playback_states?: LocalPlaybackState[];
 	listening_sessions?: LocalListeningSession[];
+	/**
+	 * Absent from servers that predate named-queue / bookmark sync. Absence must
+	 * leave the local collection alone — treating it as "empty" would wipe it.
+	 */
+	named_queues?: unknown[];
+	time_bookmarks?: unknown[];
 }
 
 function validateLocalSyncSnapshot(snapshot: LocalSyncSnapshot): void {
@@ -879,6 +1000,37 @@ function validateLocalSyncSnapshot(snapshot: LocalSyncSnapshot): void {
 	}
 }
 
+function readSnapshotNamedQueues(payloads: unknown[]): LocalNamedQueue[] {
+	const byKey = new Map<string, LocalNamedQueue>();
+	for (const payload of payloads) {
+		const name = payload && typeof payload === 'object' ? (payload as { name?: unknown }).name : null;
+		if (typeof name !== 'string') continue;
+		const key = namedQueueSyncKey(name);
+		const queue = normalizeNamedQueuePayload(payload, key);
+		if (!queue) continue;
+		const current = byKey.get(key);
+		if (current && current.updated_at >= queue.updated_at) continue;
+		byKey.set(key, {
+			id: queue.id || crypto.randomUUID(),
+			name: queue.name,
+			items: plainJSON(queue.items as LocalQueueItem[]),
+			updated_at: queue.updated_at
+		});
+	}
+	return [...byKey.values()];
+}
+
+function readSnapshotBookmarks(payloads: unknown[]): LocalTimeBookmark[] {
+	const byId = new Map<string, LocalTimeBookmark>();
+	for (const payload of payloads) {
+		const id = payload && typeof payload === 'object' ? (payload as { id?: unknown }).id : null;
+		if (typeof id !== 'string') continue;
+		const bookmark = normalizeBookmarkPayload(payload, id);
+		if (bookmark) byId.set(id, bookmark);
+	}
+	return [...byId.values()];
+}
+
 export async function replaceLocalSyncSnapshot(
 	snapshot: LocalSyncSnapshot,
 	pushWatermarks: Record<string, number>
@@ -891,11 +1043,32 @@ export async function replaceLocalSyncSnapshot(
 		.filter((item) => item.added_at > (pushWatermarks.favorite || 0));
 	const pendingTombstones = (await db.getAll('tombstones') as LocalTombstone[])
 		.filter((item) => item.deleted_at > (pushWatermarks[item.entity_type] || 0));
+	// Named queues and bookmarks are replaced only when the server actually sent
+	// the collection; a server that predates them sends nothing, and "nothing" must
+	// not read as "the account has none".
+	const snapshotNamedQueues = Array.isArray(snapshot.named_queues)
+		? readSnapshotNamedQueues(snapshot.named_queues)
+		: null;
+	const snapshotBookmarks = Array.isArray(snapshot.time_bookmarks)
+		? readSnapshotBookmarks(snapshot.time_bookmarks)
+		: null;
+	const pendingNamedQueues = snapshotNamedQueues
+		? ((await db.getAll('named_queues')) as LocalNamedQueue[]).filter(
+				(item) => item.updated_at > (pushWatermarks.named_queue || 0)
+			)
+		: [];
+	const pendingBookmarks = snapshotBookmarks
+		? ((await db.getAll('time_bookmarks')) as LocalTimeBookmark[]).filter(
+				(item) => item.created_at > (pushWatermarks.time_bookmark || 0)
+			)
+		: [];
 	const stores = [
 		'subscriptions',
 		'favorites',
 		'playback_states',
 		'listening_sessions',
+		'named_queues',
+		'time_bookmarks',
 		'tombstones'
 	] as const;
 	const tx = db.transaction([...stores], 'readwrite');
@@ -925,12 +1098,39 @@ export async function replaceLocalSyncSnapshot(
 			categories: plainCategories(item.categories)
 		});
 	}
+	if (snapshotNamedQueues) {
+		await tx.objectStore('named_queues').clear();
+		for (const item of snapshotNamedQueues) await tx.objectStore('named_queues').put(item);
+		// Local edits newer than the last push still win over the snapshot's copy
+		// of the same queue and are uploaded on this run.
+		for (const item of pendingNamedQueues) {
+			const key = namedQueueSyncKey(item.name);
+			for (const other of snapshotNamedQueues) {
+				if (namedQueueSyncKey(other.name) === key) await tx.objectStore('named_queues').delete(other.id);
+			}
+			await tx.objectStore('named_queues').put(item);
+		}
+	}
+	if (snapshotBookmarks) {
+		await tx.objectStore('time_bookmarks').clear();
+		for (const item of snapshotBookmarks) await tx.objectStore('time_bookmarks').put(item);
+		for (const item of pendingBookmarks) await tx.objectStore('time_bookmarks').put(item);
+	}
 	for (const item of pendingTombstones) {
 		await tx.objectStore('tombstones').put(item);
 		if (item.entity_type === 'subscription') {
 			await tx.objectStore('subscriptions').delete(item.entity_id);
-		} else {
+		} else if (item.entity_type === 'favorite') {
 			await tx.objectStore('favorites').delete(item.entity_id);
+		} else if (item.entity_type === 'time_bookmark') {
+			await tx.objectStore('time_bookmarks').delete(item.entity_id);
+		} else if (item.entity_type === 'named_queue') {
+			const queues = (await tx.objectStore('named_queues').getAll()) as LocalNamedQueue[];
+			for (const queue of queues) {
+				if (namedQueueSyncKey(queue.name) === item.entity_id) {
+					await tx.objectStore('named_queues').delete(queue.id);
+				}
+			}
 		}
 	}
 	for (const item of snapshot.playback_states ?? []) {

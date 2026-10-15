@@ -4,6 +4,17 @@ Planned work only. Shipped behavior belongs in
 [current-status.md](current-status.md); protocol invariants belong in their
 specification. Scope and priority can change.
 
+## Android sync for named queues and bookmarks
+
+**Status:** planned.
+
+The server and the web client synchronise `named_queue` and `time_bookmark` (see
+[sync-protocol/specification.md](sync-protocol/specification.md#named-queues-and-timestamp-bookmarks)).
+Android still keeps both locally and ignores them in pulled data, so a queue or
+bookmark made on the web does not appear on a phone and vice versa. Android needs
+to push the two entity types, apply them with the same last-writer-wins and
+deletion rules, and read `named_queues` / `time_bookmarks` from the snapshot.
+
 ## Weblate integration
 
 **Status:** planned
