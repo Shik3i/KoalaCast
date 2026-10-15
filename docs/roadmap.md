@@ -43,13 +43,21 @@ changing product semantics. See
 
 ## Batched Inbox endpoint
 
-**Status:** planned.
+**Status:** server endpoint and web client shipped; Android adoption planned.
 
-Web and Android currently refresh each subscribed feed separately and merge the
-results locally. Add one authenticated endpoint that accepts the account's
-subscriptions plus per-feed watermarks, preserves the existing incremental
-semantics, and returns a bounded publication-date-ordered page. The endpoint
-must not turn ordinary subscriptions into unconditional background refreshes.
+`POST /api/v1/inbox/episodes` takes up to 100 `{podcast_id, since}` watermarks and
+returns the newest episodes of each feed in one response. Every feed keeps the
+per-feed semantics (on-demand refresh only when the stored copy is older than 15
+minutes, inclusive `since`, newest first), so ordinary subscriptions are still not
+refreshed unconditionally. Results are grouped and bounded per feed rather than
+returned as one global page: watermarks are per feed, and a global cut-off could
+hide a quiet show's new episodes behind a busy show's backlog. The endpoint is
+public like the per-feed route, because local-first listeners use the Inbox too,
+and is throttled per client IP. The web Inbox uses it when two or more feeds are
+stale and falls back to the per-feed route for any feed the batch does not
+return.
+
+Remaining work: Android refreshes its Inbox through the batched endpoint.
 
 ## Instance-owned legal metadata
 
