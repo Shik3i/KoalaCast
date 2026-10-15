@@ -23,7 +23,7 @@ This document records shipped behavior. Proposed work belongs in
 | **Notifications** | Implemented | VAPID Web Push wakes the service worker and shows system notifications while the site is closed; foreground notifications remain available as a fallback, and turning them off unsubscribes the browser and deletes the server-side registration. Where Periodic Background Sync exists (Chromium, installed app), the worker also checks watched shows from a small page-maintained mirror without any tab being open. |
 | **Downloads (web)** | Implemented | Streamed to the Cache API with a queue, an enforced storage budget, retention policy, parallel-transfer limit and a metered-connection check for automatic downloads. Auto-download honours the configured episode count. |
 | **Installation and backup** | Implemented | Installable as a standalone app where the browser offers it, and — where the File System Access API exists — an OPML file chosen once is kept in step with the subscription list. |
-| **API and persistence** | Implemented | Go/chi API, SQLite WAL, embedded migrations, health/readiness endpoints, request IDs, rate limiting, and static SPA serving from one process. |
+| **API and persistence** | Implemented | Go/chi API, SQLite WAL, embedded migrations, health/readiness endpoints, a public instance-identity endpoint (`/api/v1/instance`), request IDs, rate limiting, and static SPA serving from one process. |
 
 ## Android
 

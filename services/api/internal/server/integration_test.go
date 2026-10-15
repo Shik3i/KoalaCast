@@ -231,3 +231,41 @@ func TestFullE2E_UserRegistrationLoginSyncAndAdminFlow(t *testing.T) {
 		t.Errorf("expected 1 registered user in system status, got %v", adminResp["user_count"])
 	}
 }
+
+func TestInstanceEndpointIsPublicAndConfigDriven(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	dbPath := filepath.Join(t.TempDir(), "instance.db")
+	database, err := db.OpenDB(dbPath, logger)
+	if err != nil {
+		t.Fatalf("OpenDB failed: %v", err)
+	}
+	defer database.Close()
+
+	cfg := &config.Config{
+		Port:                 "8080",
+		DatabasePath:         dbPath,
+		SessionSecret:        "e2e-test-secret-with-at-least-32-characters-length",
+		FeedMaxResponseBytes: 10485760,
+		ServiceName:          "KoalaCast",
+		OperatorName:         "Example e.V.",
+		PrivacyPolicyURL:     "https://example.org/privacy",
+	}
+	router := NewRouter(cfg, database, worker.NewFeedWorker(database, cfg, logger), logger)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/instance", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected anonymous 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["operator_name"] != "Example e.V." || body["privacy_policy_url"] != "https://example.org/privacy" || body["registration_enabled"] != true {
+		t.Fatalf("unexpected body: %v", body)
+	}
+	if _, present := body["legal_notice_url"]; present {
+		t.Fatalf("unconfigured legal_notice_url must be omitted: %v", body)
+	}
+}

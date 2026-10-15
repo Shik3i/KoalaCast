@@ -50,6 +50,7 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 		DB:     database,
 		Config: cfg,
 	}
+	instanceHandler := &handlers.InstanceHandler{Config: cfg, Auth: authHandler}
 	pushService := pushservice.NewService(database, cfg, logger)
 	feedWorker.SetNotifier(pushService)
 	pushHandler := &handlers.PushHandler{DB: database, Config: cfg}
@@ -89,6 +90,11 @@ func NewRouter(cfg *config.Config, database *db.DB, feedWorker *worker.FeedWorke
 				"audio_effects_proxy_enabled": cfg.AudioEffectsProxyEnabled,
 			})
 		})
+
+		// Operator identity and legal links of this deployment (static config plus
+		// one registration-setting read). Throttled like the other public reads.
+		instanceLimiter := customMiddleware.NewRateLimiter(120, 1*time.Minute)
+		r.With(instanceLimiter.Limit).Get("/instance", instanceHandler.Get)
 
 		// Proxy endpoints for CORS-safe chapters/transcripts and privacy-safe cached
 		// images. Each fetches an arbitrary client-supplied URL server-side, so the

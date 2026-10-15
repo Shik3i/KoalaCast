@@ -53,30 +53,19 @@ must not turn ordinary subscriptions into unconditional background refreshes.
 
 ## Instance-owned legal metadata
 
-**Status:** planned.
+**Status:** server endpoint shipped; Android adoption planned.
 
-Android currently links official-instance operator information even after a
-listener selects a self-hosted server. Add an unauthenticated `GET /instance`
-contract so each deployment can provide its own identity and legal links:
+`GET /api/v1/instance` returns the deployment's `service_name`, `operator_name`,
+`privacy_policy_url`, `legal_notice_url` and the effective `registration_enabled`
+state, from validated server configuration only (never request headers). Legal
+URLs are absolute HTTPS, except loopback HTTP in development. So that existing
+deployments keep starting, only `service_name` and `registration_enabled` are
+always present; `privacy_policy_url` defaults to the instance's own `/privacy`
+page and `operator_name` / `legal_notice_url` are omitted until configured.
 
-```json
-{
-  "service_name": "KoalaCast",
-  "operator_name": "Example e.V.",
-  "privacy_policy_url": "https://cast.example.org/privacy",
-  "legal_notice_url": "https://cast.example.org/legal",
-  "registration_enabled": true
-}
-```
-
-Requirements:
-
-- values come from validated server configuration, never request headers;
-- legal URLs are absolute HTTPS, except loopback HTTP in development;
-- operator name and privacy URL are required;
-- Android displays the selected instance's metadata before registration and in
-  Settings;
-- the OpenAPI contract and official/self-host tests ship with the endpoint.
+Remaining work: Android shows the selected instance's metadata before
+registration and in Settings instead of the official instance's operator
+information.
 
 ## Language filtering accuracy on search
 

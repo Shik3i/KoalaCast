@@ -117,6 +117,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/PublicConfigResponse'
 
+  /api/v1/instance:
+    get:
+      tags: [Health]
+      operationId: getInstanceInfo
+      summary: Read this deployment's operator identity and legal links
+      description: >
+        Values come from validated server configuration, never from request
+        headers. Optional fields are omitted until the operator configures them
+        (`KC_OPERATOR_NAME`, `KC_PRIVACY_POLICY_URL`, `KC_LEGAL_NOTICE_URL`).
+        Legal URLs are absolute `https` URLs, or `http` for loopback hosts only.
+      responses:
+        '200':
+          description: Instance identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceInfo'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /api/v1/proxy/audio:
     parameters:
       - $ref: '#/components/parameters/ProxyURL'
@@ -1461,6 +1481,34 @@ components:
         audio_effects_proxy_enabled:
           type: boolean
           description: Whether this self-hosted instance permits audio relay fallback for browser effects and downloads.
+
+    InstanceInfo:
+      type: object
+      required: [service_name, registration_enabled]
+      additionalProperties: false
+      properties:
+        service_name:
+          type: string
+          maxLength: 200
+          example: KoalaCast
+        operator_name:
+          type: string
+          maxLength: 200
+          example: Example e.V.
+          description: Omitted until the operator sets `KC_OPERATOR_NAME`.
+        privacy_policy_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Defaults to this instance's own `/privacy` page when `PUBLIC_BASE_URL` is https or loopback.
+        legal_notice_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Omitted until the operator sets `KC_LEGAL_NOTICE_URL`.
+        registration_enabled:
+          type: boolean
+          description: Effective registration state (environment override first, then the admin setting).
 
     WebPushConfig:
       type: object
