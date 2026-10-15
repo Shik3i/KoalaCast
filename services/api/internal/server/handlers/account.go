@@ -287,6 +287,8 @@ func (h *AuthHandler) ExportAccount(w http.ResponseWriter, r *http.Request) {
 		{"settings", "settings"},
 		{"podcast_settings", "podcast_settings"},
 		{"queue", "queue"},
+		{"named_queues", "named_queue"},
+		{"time_bookmarks", "time_bookmark"},
 	} {
 		payloads, err := latestSyncPayloads(tx, r.Context(), authUser.ID, entity.entityType)
 		if err != nil {

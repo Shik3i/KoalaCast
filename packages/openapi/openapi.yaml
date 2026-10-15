@@ -2139,7 +2139,7 @@ components:
 
     SyncEntityType:
       type: string
-      enum: [subscription, favorite, playback_state, listening_session, queue, podcast_settings, settings]
+      enum: [subscription, favorite, playback_state, listening_session, queue, podcast_settings, settings, named_queue, time_bookmark]
 
     SyncAction:
       type: string
@@ -2577,6 +2577,22 @@ components:
         settings:
           type: array
           description: Latest portable global settings payload; device-local paths and credentials are excluded.
+          items:
+            type: object
+            additionalProperties: true
+        named_queues:
+          type: array
+          description: >
+            Latest non-deleted named-queue payloads (`name`, `items`, `updated_at`), keyed by the
+            case-insensitive queue name. Clients that predate this field ignore it.
+          items:
+            type: object
+            additionalProperties: true
+        time_bookmarks:
+          type: array
+          description: >
+            Latest non-deleted timestamp bookmarks (`id`, `episode_id`, `position_ms`, `label`,
+            `created_at`). Clients that predate this field ignore it.
           items:
             type: object
             additionalProperties: true
