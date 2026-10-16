@@ -116,3 +116,38 @@ jobs:
           docker logs kc
           docker rm -f kc >/dev/null
           exit 1
+
+      # Same runtime restrictions as docker-compose.yml (read-only root filesystem,
+      # tmpfs /tmp, no capabilities, no-new-privileges) with a volume for the data,
+      # so a write outside /app/data and /tmp would fail here instead of in production.
+      - name: Smoke test with the hardened runtime from docker-compose.yml
+        run: |
+          cleanup() { docker rm -f kc-hardened >/dev/null 2>&1 || true; docker volume rm -f kc-hardened-data >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker volume create kc-hardened-data >/dev/null
+          docker run -d --name kc-hardened \
+            --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+            -v kc-hardened-data:/app/data \
+            -e SESSION_SECRET=ci-session-secret-0123456789abcdef \
+            -p 3001:3000 koalacast:ci
+          ready=false
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3001/readyz >/dev/null 2>&1; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "::error::hardened container did not become ready"
+            docker logs kc-hardened
+            exit 1
+          fi
+          # A real database write (registration) must work with the restrictions on.
+          curl -fsS -X POST http://localhost:3001/api/v1/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"HardenedCi","password":"Password123!"}' >/dev/null
+          # The data directory is writable; the rest of the filesystem is not.
+          docker exec kc-hardened touch /app/data/.write-check
+          if docker exec kc-hardened touch /app/.must-fail 2>/dev/null; then
+            echo "::error::root filesystem is writable although --read-only is set"
+            exit 1
+          fi
+          echo "hardened runtime OK"
