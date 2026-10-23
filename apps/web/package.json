@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "koalacast-web",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "private": true,
   "packageManager": "npm@11.16.0",
   "type": "module",
@@ -47,3 +47,4 @@
     "idb": "^8.0.0"
   }
 }
+
