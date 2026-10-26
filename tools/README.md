@@ -17,4 +17,4 @@ python tools/vendor-fonts.py c
 Run without an argument to list available stacks. The current stack is
 Nunito/Nunito Sans (`c`). Review every generated asset and CSS change before
 committing. The script requires network access and Python `fonttools` with
-Brotli support; it is never a runtime dependency.
+Brotli support (`brotli>=1.2.1`); it is never a runtime dependency.
