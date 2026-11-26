@@ -2,6 +2,8 @@ module github.com/Shik3i/KoalaCast/services/api
 
 go 1.26.10
 
+toolchain go1.26.11
+
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/go-chi/chi/v5 v5.5.0
